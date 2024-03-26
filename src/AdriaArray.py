@@ -1,8 +1,10 @@
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 import re
+import io
 import obspy
 import pickle
+import requests
 import argparse
 import itertools
 import numpy as np
@@ -57,7 +59,7 @@ BEG_DATE_STR = "BEGDT"
 BEG_TIME_STR = "BEGTM"
 END_DATE_STR = "ENDDT"
 END_TIME_STR = "ENDTM"
-MSEED_FILENAME_RGX = re.compile(fr"(?P<ñ{NETWORK_STR}>\w+)\."
+MSEED_FILENAME_RGX = re.compile(fr"(?P<{NETWORK_STR}>\w+)\."
                                 fr"(?P<{STATION_STR}>\w+)\.\."
                                 fr"(?P<{CHANNEL_STR}>\w+)\_\_"
                                 fr"(?P<{BEG_DATE_STR}>\d{{8}})T"
@@ -97,7 +99,7 @@ def parse_arguments():
                       help="Key to download the data from server.")
   parser.add_argument('-M', "--models", choices=MODEL_WEIGHTS_DICT.keys(),
                       required=False, default=[PHASENET_STR], nargs='+',
-                      metavar="",
+                      metavar="", type=str,
                       help="Select a specific Machine Learning based model",)
   parser.add_argument('-N', "--network", default=None, type=str, nargs='*',
                       metavar="", required=False,
@@ -110,7 +112,7 @@ def parse_arguments():
                            "available, then a key must be provided in order "
                            "to download the data")
   parser.add_argument('-W', "--weights", default=[INSTANCE_STR], nargs='+',
-                      required=False, metavar="",
+                      required=False, metavar="", type=str,
                       help="Select a specific pretrained weights for the "
                            "selected Machine Learning based model. "
                            "WARNING: Weights which are not available for the "
@@ -118,26 +120,54 @@ def parse_arguments():
   parser.add_argument('-v', "--verbose", default=False, action='store_true')
   return parser.parse_args()
 
-def waveform_table(args):
+def waveform_table(args, data_folder=RAW_DATA_PATH):
   WAVEFORMS_DATA = []
-  for f in os.listdir(RAW_DATA_PATH):
-    if os.path.isfile(os.path.join(RAW_DATA_PATH, f)):
+  for f in os.listdir(data_folder):
+    if os.path.isfile(os.path.join(data_folder, f)):
       match = MSEED_FILENAME_RGX.match(str(f))
-      if match: WAVEFORMS_DATA.append([*match.groups()[:-3], f])
-  return pd.DataFrame(WAVEFORMS_DATA, columns=HEADER)
+      if match:
+        os.makedirs(
+          os.path.join(PRC_DATA_PATH, match.group(BEG_DATE_STR),
+                       match.group(NETWORK_STR), match.group(STATION_STR)),
+          exist_ok=True)
+        outcome = True
+        if args.network:
+          outcome *= True if any([n == match.group(NETWORK_STR)
+                                  for n in args.network]) else False
+        if args.station:
+          outcome *= True if any([n == match.group(STATION_STR)
+                                  for n in args.station]) else False
+        if args.channel:
+          outcome *= True if any([n == match.group(CHANNEL_STR)
+                                  for n in args.channel]) else False
+        outcome *= True if args.dates[0] <= match.group(BEG_DATE_STR) and \
+                           match.group(END_DATE_STR) <= args.dates[1] \
+                        else False
+        if outcome:
+          WAVEFORMS_DATA.append([*match.groups()[:-3], f])
+  return pd.DataFrame(WAVEFORMS_DATA,
+                      columns=HEADER).sort_values(by=HEADER, ignore_index=True)
+
+def read_traces(group, headonly=False):
+  stream = obspy.Stream()
+  clean = False
+  for _, row in group.iterrows():
+    prc_data = os.path.join(PRC_DATA_PATH,
+                            PRC_MSEED_FMT.format(NETWORK=row[NETWORK_STR],
+                                                 STATION=row[STATION_STR],
+                                                 CHANNEL=row[CHANNEL_STR],
+                                                 BEGDT=row[BEG_DATE_STR]))
+    if os.path.exists(prc_data):
+      stream += obspy.read(prc_data, headonly=headonly)
+    else:
+      stream += obspy.read(os.path.join(RAW_DATA_PATH, row[FILENAME_STR]),
+                           headonly=headonly)
+      clean = True
+  return stream, clean
 
 def main(args):
   WAVEFORMS_DATA = waveform_table(args)
   GROUPS = args.groups
-  groupMap = {
-    NETWORK_STR : "*",
-    STATION_STR : "*",
-    CHANNEL_STR : "*",
-    BEG_DATE_STR : "*",
-    BEG_TIME_STR : "*",
-    END_DATE_STR : "*",
-    END_TIME_STR : "*",
-  }
   for x, y in list(itertools.product(args.models, args.weights)):
     try:
       model = MODEL_WEIGHTS_DICT[x][CLASS_STR].from_pretrained(y)
@@ -147,37 +177,22 @@ def main(args):
         print(f"WARNING: Pretrained weights {y} not found for model {x}")
       continue
     for group in WAVEFORMS_DATA.groupby(GROUPS):
-      for a, b in zip(GROUPS, group[0]): groupMap[a] = b
-      mseed_file = MSEED_FMT.format(NETWORK=groupMap[NETWORK_STR],
-                                    STATION=groupMap[STATION_STR],
-                                    CHANNEL=groupMap[CHANNEL_STR],
-                                    BEGDT=groupMap[BEG_DATE_STR],
-                                    BEGTM=groupMap[BEG_TIME_STR],
-                                    ENDDT=groupMap[END_DATE_STR],
-                                    ENDTM=groupMap[END_TIME_STR])
-      if args.verbose: print(f"Searching for the following files {mseed_file}")
-      if args.verbose: print(f"Found {group[1]}")
-      exit()
-      # TODO: Review
-      start = obspy.UTCDateTime(groupMap[BEG_DATE_STR])
-      end = start + DAY2SEC
-      stream = \
-        obspy.read(
-          os.path.join(RAW_DATA_PATH, mseed_file)
-                  ).merge(method=1, fill_value='interpolate')
+      stream, clean = read_traces(group[1])
+      if args.verbose: print(stream, clean)
       # Clean the stream
-      for trc in stream:
-        prc_data = os.path.join(PRC_DATA_PATH, groupMap[BEG_DATE_STR],
-                                trc.stats.network, trc.stats.station)
-        os.makedirs(prc_data, exist_ok=True)
-        TRC_FILE = os.path.join(prc_data,
-                                PRC_MSEED_FMT.format(
-                                  NETWORK=trc.stats.network,
-                                  STATION=trc.stats.station,
-                                  CHANNEL=trc.stats.channel,
-                                  BEGDT=groupMap[BEG_DATE_STR]
-                                ))
-        if not os.path.isfile(TRC_FILE):
+      if clean:
+        for trc in stream:
+          start = obspy.UTCDateTime(trc.stats.starttime.date)
+          if trc.stats.starttime.hour == 23: start += DAY2SEC
+          end = start + DAY2SEC
+          d = DATE_FMT.format(YYYY=start.year, MM=start.month, DD=start.day)
+          TRC_FILE = os.path.join(PRC_DATA_PATH, d, trc.stats.network,
+                                  trc.stats.station,
+                                  PRC_MSEED_FMT.format(
+                                    NETWORK=trc.stats.network,
+                                    STATION=trc.stats.station,
+                                    CHANNEL=trc.stats.channel,
+                                    BEGDT=start))
           # Remove Stream.Trace if it contains NaN or Inf
           # TODO: Consider optimizing the removal using the following:
           # import numba as nb
@@ -206,6 +221,9 @@ def main(args):
           trc.trim(start, end, pad=True, fill_value=0,
                     nearest_sample=(trc.stats.starttime.hour != 23))
           trc.write(TRC_FILE, format=MSEED_STR)
+      stream = stream.merge(method=1, fill_value='interpolate')
+      print(stream)
+      exit()
       CLF_FILE = os.path.join(CLF_DATA_PATH, "_".join([*group[0], x, y]) + \
                                               PICKLE_EXT)
       if not os.path.isfile(CLF_FILE):
