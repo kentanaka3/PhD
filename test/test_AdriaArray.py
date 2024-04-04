@@ -1,7 +1,14 @@
 #!/bin/python
 import unittest
+import shutil
 from unittest.mock import patch
 from src.AdriaArray import *
+
+TEST_PATH = os.path.join(DATA_PATH, "test")
+RAW_TEST_PATH = os.path.join(TEST_PATH, "waveforms")
+PRC_TEST_PATH = os.path.join(TEST_PATH, "processed")
+ANT_TEST_PATH = os.path.join(TEST_PATH, "annotated")
+CLF_TEST_PATH = os.path.join(TEST_PATH, "classified")
 
 class TestArgparse(unittest.TestCase):
   @patch("sys.argv", ["AdriaArray.py"])
@@ -117,71 +124,133 @@ class TestWaveformTable(unittest.TestCase):
   @patch("sys.argv", ["AdriaArray.py"])
   def test_non_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, os.path.join(DATA_PATH, "test"))
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
     self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 75)
 
   @patch("sys.argv", ["AdriaArray.py", '-N', "IV"])
   def test_network_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, os.path.join(DATA_PATH, "test"))
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
     self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 45)
 
   @patch("sys.argv", ["AdriaArray.py", '-N', "SI", "ST"])
   def test_networks_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, os.path.join(DATA_PATH, "test"))
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
     self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 30)
 
   @patch("sys.argv", ["AdriaArray.py", '-S', "LUSI"])
   def test_station_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, os.path.join(DATA_PATH, "test"))
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
     self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 15)
 
   @patch("sys.argv", ["AdriaArray.py", '-S', "LUSI", "PANI"])
   def test_stations_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, os.path.join(DATA_PATH, "test"))
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
     self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 30)
 
   @patch("sys.argv", ["AdriaArray.py", '-C', "EHZ"])
   def test_channel_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, os.path.join(DATA_PATH, "test"))
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
     self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 5)
 
   @patch("sys.argv", ["AdriaArray.py", '-C', "HHZ", "HHN"])
   def test_channels_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, os.path.join(DATA_PATH, "test"))
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
     self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 40)
 
   @patch("sys.argv", ["AdriaArray.py", '-N', "SI", "ST", '-S', "MAGA", "LUSI"])
   def test_networks_stations_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, os.path.join(DATA_PATH, "test"))
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
     self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 15)
 
   @patch("sys.argv", ["AdriaArray.py", '-N', "SI", "ST", '-C', "HHN", "HHZ"])
   def test_networks_channels_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, os.path.join(DATA_PATH, "test"))
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
     self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 10)
 
   @patch("sys.argv", ["AdriaArray.py", '-S', "MAGA", "LUSI", '-C', "HHN",
                       "HHZ"])
   def test_stations_channels_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, os.path.join(DATA_PATH, "test"))
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
     self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 20)
 
   @patch("sys.argv", ["AdriaArray.py", '-S', "MAGA", "LUSI", '-C', "HHN",
                       "HHZ", '-D', "20230605", "20230606"])
   def test_stations_channels_dates_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, os.path.join(DATA_PATH, "test"))
-    print(WAVEFORMS_DATA)
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
     self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 4)
+
+class TestReadTraces(unittest.TestCase):
+  def tearDown(self) -> None:
+    shutil.rmtree(PRC_TEST_PATH)
+
+  @patch("sys.argv", ["AdriaArray.py"])
+  def test_non_args(self):
+    args = parse_arguments()
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
+    for clean in [True, False]:
+      for group in WAVEFORMS_DATA.groupby(args.groups):
+        stream, output = read_traces(group[1], PRC_TEST_PATH)
+        self.assertEqual(clean, output)
+        if clean: clean_stream(stream, PRC_TEST_PATH)
+
+  @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR])
+  def test_group_args(self):
+    args = parse_arguments()
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
+    for clean in [True, False]:
+      for group in WAVEFORMS_DATA.groupby(args.groups):
+        stream, output = read_traces(group[1], PRC_TEST_PATH)
+        self.assertEqual(clean, output)
+        if clean: clean_stream(stream, PRC_TEST_PATH)
+
+  @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR, NETWORK_STR,
+                      STATION_STR])
+  def test_groups_args(self):
+    args = parse_arguments()
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
+    for clean in [True, False]:
+      for group in WAVEFORMS_DATA.groupby(args.groups):
+        stream, output = read_traces(group[1], PRC_TEST_PATH)
+        self.assertEqual(clean, output)
+        if clean: clean_stream(stream, PRC_TEST_PATH)
+
+class TestAnnotation(unittest.TestCase):
+  def tearDown(self) -> None:
+    shutil.rmtree(PRC_TEST_PATH)
+
+  @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR, NETWORK_STR,
+                      STATION_STR, "-M", PHASENET_STR, EQTRANSFORMER_STR])
+  def test_annotation(self):
+    args = parse_arguments()
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
+    for x, y in list(itertools.product(args.models, args.weights)):
+      model = MODEL_WEIGHTS_DICT[x][CLASS_STR].from_pretrained(y)
+      for group in WAVEFORMS_DATA.groupby(args.groups):
+        stream, _ = read_traces(group[1], PRC_TEST_PATH)
+        clean_stream(stream, PRC_TEST_PATH)
+        output = model.classify(stream, batch_size=256, P_threshold=0.2,
+                                S_threshold=0.1, parallelism=8).picks
+        CLF_FILE = os.path.join(CLF_TEST_PATH, "_".join([*group[0], x, y]) + \
+                                               PICKLE_EXT)
+        pickle.dump(output, open(CLF_FILE, 'wb'))
+        expected = PickList
+        with open(CLF_FILE, 'rb') as fr:
+          while True:
+            try:
+              expected += pickle.load(fr)
+            except EOFError:
+              break
+        self.assertEqual(expected, output)
 
 if __name__ == "__main__":
   unittest.main()
