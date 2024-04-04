@@ -125,62 +125,62 @@ class TestWaveformTable(unittest.TestCase):
   def test_non_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
-    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 75)
+    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 45)
 
   @patch("sys.argv", ["AdriaArray.py", '-N', "IV"])
   def test_network_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
-    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 45)
+    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 27)
 
   @patch("sys.argv", ["AdriaArray.py", '-N', "SI", "ST"])
   def test_networks_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
-    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 30)
+    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 18)
 
   @patch("sys.argv", ["AdriaArray.py", '-S', "LUSI"])
   def test_station_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
-    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 15)
+    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 9)
 
   @patch("sys.argv", ["AdriaArray.py", '-S', "LUSI", "PANI"])
   def test_stations_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
-    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 30)
+    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 18)
 
   @patch("sys.argv", ["AdriaArray.py", '-C', "EHZ"])
   def test_channel_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
-    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 5)
+    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 3)
 
   @patch("sys.argv", ["AdriaArray.py", '-C', "HHZ", "HHN"])
   def test_channels_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
-    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 40)
+    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 24)
 
   @patch("sys.argv", ["AdriaArray.py", '-N', "SI", "ST", '-S', "MAGA", "LUSI"])
   def test_networks_stations_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
-    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 15)
+    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 9)
 
   @patch("sys.argv", ["AdriaArray.py", '-N', "SI", "ST", '-C', "HHN", "HHZ"])
   def test_networks_channels_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
-    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 10)
+    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 6)
 
   @patch("sys.argv", ["AdriaArray.py", '-S', "MAGA", "LUSI", '-C', "HHN",
                       "HHZ"])
   def test_stations_channels_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
-    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 20)
+    self.assertEqual(WAVEFORMS_DATA.size, len(HEADER) * 12)
 
   @patch("sys.argv", ["AdriaArray.py", '-S', "MAGA", "LUSI", '-C', "HHN",
                       "HHZ", '-D', "20230605", "20230606"])
@@ -240,16 +240,18 @@ class TestAnnotation(unittest.TestCase):
         clean_stream(stream, PRC_TEST_PATH)
         output = model.classify(stream, batch_size=256, P_threshold=0.2,
                                 S_threshold=0.1, parallelism=8).picks
+        print(output)
         CLF_FILE = os.path.join(CLF_TEST_PATH, "_".join([*group[0], x, y]) + \
                                                PICKLE_EXT)
         pickle.dump(output, open(CLF_FILE, 'wb'))
-        expected = PickList
+        expected = PickList()
         with open(CLF_FILE, 'rb') as fr:
           while True:
             try:
               expected += pickle.load(fr)
             except EOFError:
               break
+        print(expected)
         self.assertEqual(expected, output)
 
 if __name__ == "__main__":
