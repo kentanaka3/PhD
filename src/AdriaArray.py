@@ -257,7 +257,7 @@ def main(args):
       else:
         if args.verbose:
           print("Found and loading previously classified results")
-        output = PickList
+        output = PickList()
         with open(CLF_FILE, 'rb') as fr:
           while True:
             try:

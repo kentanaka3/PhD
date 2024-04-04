@@ -240,19 +240,20 @@ class TestAnnotation(unittest.TestCase):
         clean_stream(stream, PRC_TEST_PATH)
         output = model.classify(stream, batch_size=256, P_threshold=0.2,
                                 S_threshold=0.1, parallelism=8).picks
-        print(output)
+        expected = PickList()
         CLF_FILE = os.path.join(CLF_TEST_PATH, "_".join([*group[0], x, y]) + \
                                                PICKLE_EXT)
-        pickle.dump(output, open(CLF_FILE, 'wb'))
-        expected = PickList()
         with open(CLF_FILE, 'rb') as fr:
           while True:
             try:
               expected += pickle.load(fr)
             except EOFError:
               break
-        print(expected)
-        self.assertEqual(expected, output)
+        for a, b in zip(output, expected):
+          self.assertEqual(a.trace_id, b.trace_id)
+          self.assertEqual(a.peak_time, b.peak_time)
+          self.assertEqual(a.peak_value, b.peak_value)
+          self.assertEqual(a.phase, b.phase)
 
 if __name__ == "__main__":
   unittest.main()
