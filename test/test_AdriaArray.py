@@ -224,9 +224,46 @@ class TestReadTraces(unittest.TestCase):
         self.assertEqual(clean, output)
         if clean: clean_stream(stream, PRC_TEST_PATH)
 
-class TestAnnotation(unittest.TestCase):
-  def tearDown(self) -> None:
+class TestModel(unittest.TestCase):
+  @classmethod
+  def setUpClass(cls):
+    args = parse_arguments()
+    args.verbose = True
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
+    for group in WAVEFORMS_DATA.groupby(args.groups):
+      stream, _ = read_traces(group[1], PRC_TEST_PATH)
+      clean_stream(stream, PRC_TEST_PATH)
+
+  @classmethod
+  def tearDownClass(cls):
     shutil.rmtree(PRC_TEST_PATH)
+
+  @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR, NETWORK_STR,
+                      STATION_STR, "-M", PHASENET_STR, EQTRANSFORMER_STR])
+  def test_classification(self):
+    args = parse_arguments()
+    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
+    for x, y in list(itertools.product(args.models, args.weights)):
+      model = MODEL_WEIGHTS_DICT[x][CLASS_STR].from_pretrained(y)
+      for i, group in enumerate(WAVEFORMS_DATA.groupby(args.groups)):
+        stream, _ = read_traces(group[1], PRC_TEST_PATH)
+        print(f"{i}. Classifying: {stream}")
+        output = model.classify(stream, batch_size=256, P_threshold=0.2,
+                                S_threshold=0.1, parallelism=8).picks
+        print(f"Picks: {output}")
+        expected = PickList()
+        CLF_FILE = os.path.join(CLF_TEST_PATH, "_".join([*group[0], x, y]) + \
+                                               PICKLE_EXT)
+        with open(CLF_FILE, 'rb') as fr:
+          try:
+            expected += pickle.load(fr)
+          except EOFError:
+            break
+        for a, b in zip(output, expected):
+          self.assertEqual(a.trace_id, b.trace_id)
+          self.assertEqual(a.peak_time, b.peak_time)
+          self.assertEqual(a.peak_value, b.peak_value)
+          self.assertEqual(a.phase, b.phase)
 
   @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR, NETWORK_STR,
                       STATION_STR, "-M", PHASENET_STR, EQTRANSFORMER_STR])
@@ -235,21 +272,21 @@ class TestAnnotation(unittest.TestCase):
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
     for x, y in list(itertools.product(args.models, args.weights)):
       model = MODEL_WEIGHTS_DICT[x][CLASS_STR].from_pretrained(y)
-      for group in WAVEFORMS_DATA.groupby(args.groups):
+      for i, group in enumerate(WAVEFORMS_DATA.groupby(args.groups)):
         stream, _ = read_traces(group[1], PRC_TEST_PATH)
-        clean_stream(stream, PRC_TEST_PATH)
-        output = model.classify(stream, batch_size=256, P_threshold=0.2,
-                                S_threshold=0.1, parallelism=8).picks
-        expected = PickList()
-        CLF_FILE = os.path.join(CLF_TEST_PATH, "_".join([*group[0], x, y]) + \
+        print(f"{i}. Annotating {stream}")
+        annotations = model.annotate(stream, parallelism=8)
+        print(f"Annotations: {annotations}")
+        expected = obspy.Stream()
+        ANT_FILE = os.path.join(ANT_TEST_PATH, "_".join([*group[0], x, y]) + \
                                                PICKLE_EXT)
-        with open(CLF_FILE, 'rb') as fr:
-          while True:
-            try:
-              expected += pickle.load(fr)
-            except EOFError:
-              break
-        for a, b in zip(output, expected):
+        pickle.dump(annotations, open(ANT_FILE, 'wb'))
+        with open(ANT_FILE, 'rb') as fr:
+          try:
+            expected += pickle.load(fr)
+          except EOFError:
+            break
+        for a, b in zip(annotations, expected):
           self.assertEqual(a.trace_id, b.trace_id)
           self.assertEqual(a.peak_time, b.peak_time)
           self.assertEqual(a.peak_value, b.peak_value)

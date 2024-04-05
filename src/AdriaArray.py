@@ -51,6 +51,12 @@ MODEL_WEIGHTS_DICT = {
   }
 }
 
+COLORS = {
+  "P": "C0",
+  "S": "C1",
+  "Detection": "C2"
+}
+
 DATA_PATH = "data"
 IMG_PATH = "img"
 MSEED_STR = "MSEED"
@@ -60,16 +66,6 @@ NETWORK_STR = "NETWORK"
 STATION_STR = "STATION"
 CHANNEL_STR = "CHANNEL"
 BEG_DATE_STR = "BEGDT"
-BEG_TIME_STR = "BEGTM"
-END_DATE_STR = "ENDDT"
-END_TIME_STR = "ENDTM"
-MSEED_FILENAME_RGX = re.compile(fr"(?P<{NETWORK_STR}>\w+)\."
-                                fr"(?P<{STATION_STR}>\w+)\.\."
-                                fr"(?P<{CHANNEL_STR}>\w+)\_\_"
-                                fr"(?P<{BEG_DATE_STR}>\d{{8}})T"
-                                fr"(?P<{BEG_TIME_STR}>\d{{6}})Z\_\_"
-                                fr"(?P<{END_DATE_STR}>\d{{8}})T"
-                                fr"(?P<{END_TIME_STR}>\d{{6}})Z{MSEED_EXT}")
 HEADER = [NETWORK_STR, STATION_STR, CHANNEL_STR, BEG_DATE_STR, FILENAME_STR]
 
 # Pretrained model weights (Alphabetically Ordered)
@@ -92,6 +88,8 @@ def is_file_path(string):
 # def is_date(string):
 #   if 
 
+IMG_ANT_OFFSET = 2
+
 def parse_arguments():
   parser = argparse.ArgumentParser(description="Process AdriaArray Dataset")
   parser.add_argument('-C', "--channel", default=None, type=str, nargs='*',
@@ -107,6 +105,7 @@ def parse_arguments():
                       required=False, metavar="",
                       help="Analize the data based on a specified "
                            "categorically ordered list")
+  # TODO: Implement data retrieval
   parser.add_argument('-K', "--key", default=None, nargs=1, required=False,
                       type=is_file_path,
                       help="Key to download the data from server.")
@@ -130,6 +129,7 @@ def parse_arguments():
                            "selected Machine Learning based model. "
                            "WARNING: Weights which are not available for the "
                            "selected models will not be considered")
+  # TODO: Add verbose LEVEL
   parser.add_argument('-v', "--verbose", default=False, action='store_true')
   return parser.parse_args()
 
@@ -256,7 +256,8 @@ def main(args):
         pickle.dump(output, open(CLF_FILE, 'wb'))
       else:
         if args.verbose:
-          print("Found and loading previously classified results")
+          print("Found and loading previously classified results for "
+                f"{x}({y})")
         output = PickList()
         with open(CLF_FILE, 'rb') as fr:
           while True:
@@ -264,7 +265,11 @@ def main(args):
               output += pickle.load(fr)
             except EOFError:
               break
-      if args.verbose: print(output)
+      if args.verbose:
+        print(f"Classification results for model: {x}, with preloaded "
+              f"weight: {y}, grouped by {[*group[0]]}")
+        print(output)
+      # Annotation
       if len(output):
         ANT_FILE = os.path.join(ANT_DATA_PATH,
                                 "_".join([*group[0], x, y]) + PICKLE_EXT)
@@ -273,7 +278,8 @@ def main(args):
           pickle.dump(annotations, open(ANT_FILE, 'wb'))
         else:
           if args.verbose:
-            print("Found and loading previously annotated results")
+            print("Found and loading previously annotated results for "
+                  f"{x}({y})")
           annotations = obspy.Stream()
           with open(ANT_FILE, 'rb') as fr:
             while True:
