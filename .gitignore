@@ -1,3 +1,4 @@
 *.mseed
 *.pyc
+*.pkl
 !data/test/waveforms/*

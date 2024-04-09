@@ -140,27 +140,27 @@ def waveform_table(args, data_folder=RAW_DATA_PATH):
     if os.path.isfile(fr):
       try:
         trc = obspy.read(fr, headonly=True)[0].stats
-        start = obspy.UTCDateTime(trc.starttime.date)
-        if trc.starttime.hour == 23: start += DAY2SEC
-        sdate = DATE_FMT.format(YYYY=start.year, MM=start.month, DD=start.day)
-        end = start + DAY2SEC
-        edate = DATE_FMT.format(YYYY=end.year, MM=end.month, DD=end.day)
       except:
         continue
+      start = obspy.UTCDateTime(trc.starttime.date)
+      if trc.starttime.hour == 23: start += DAY2SEC
+      sdate = DATE_FMT.format(YYYY=start.year, MM=start.month, DD=start.day)
+      end = start + DAY2SEC
+      edate = DATE_FMT.format(YYYY=end.year, MM=end.month, DD=end.day)
       outcome = True
       if args.network:
-        outcome = outcome and True if any([n == trc.network
-                                           for n in args.network]) else False
+        outcome = outcome and (True if any([n == trc.network
+                                            for n in args.network]) else False)
       if outcome and args.station:
-        outcome = outcome and True if any([n == trc.station
-                                           for n in args.station]) else False
+        outcome = outcome and (True if any([n == trc.station
+                                            for n in args.station]) else False)
       if outcome and args.channel:
-        outcome = outcome and True if any([n == trc.channel
-                                           for n in args.channel]) else False
+        outcome = outcome and (True if any([n == trc.channel
+                                            for n in args.channel]) else False)
       if outcome:
-        outcome = outcome and True if int(args.dates[0]) <= int(sdate) and \
-                                      int(edate) <= int(args.dates[1]) \
-                                   else False
+        outcome = outcome and (True if int(args.dates[0]) <= int(sdate) and \
+                                       int(edate) <= int(args.dates[1]) \
+                                    else False)
       if outcome:
         WAVEFORMS_DATA.append([trc.network, trc.station, trc.channel, sdate,
                                fr])
@@ -170,7 +170,7 @@ def waveform_table(args, data_folder=RAW_DATA_PATH):
 def read_traces(group, data_folder=PRC_DATA_PATH, verbose=False,
                 headonly=False):
   stream = obspy.Stream()
-  clean = False
+  clean = True
   for _, row in group.iterrows():
     fpath = os.path.join(data_folder, row[BEG_DATE_STR], row[NETWORK_STR],
                          row[STATION_STR])
@@ -187,7 +187,7 @@ def read_traces(group, data_folder=PRC_DATA_PATH, verbose=False,
     else:
       if verbose: print(f"Attempting to read from raw data")
       stream += obspy.read(row[FILENAME_STR], headonly=headonly)
-      clean = True
+      clean = False
   return stream, clean
 
 def clean_stream(stream, data_folder=PRC_DATA_PATH):
@@ -195,14 +195,14 @@ def clean_stream(stream, data_folder=PRC_DATA_PATH):
     start = obspy.UTCDateTime(trc.stats.starttime.date)
     if trc.stats.starttime.hour == 23: start += DAY2SEC
     end = start + DAY2SEC
-    date = DATE_FMT.format(YYYY=start.year, MM=start.month, DD=start.day)
-    fpath = os.path.join(data_folder, date, trc.stats.network,
+    sdate = DATE_FMT.format(YYYY=start.year, MM=start.month, DD=start.day)
+    fpath = os.path.join(data_folder, sdate, trc.stats.network,
                          trc.stats.station)
     TRC_FILE = os.path.join(fpath,
                             PRC_MSEED_FMT.format(NETWORK=trc.stats.network,
                                                  STATION=trc.stats.station,
                                                  CHANNEL=trc.stats.channel,
-                                                 BEGDT=date))
+                                                 BEGDT=sdate))
     # Remove Stream.Trace if it contains NaN or Inf
     # TODO: Consider optimizing the removal using the following:
     # import numba as nb
@@ -238,18 +238,18 @@ def main(args):
   for x, y in list(itertools.product(args.models, args.weights)):
     try:
       model = MODEL_WEIGHTS_DICT[x][CLASS_STR].from_pretrained(y)
-      print(model.weights_docstring)
+      print(x, model.weights_docstring)
     except:
       if args.verbose:
         print(f"WARNING: Pretrained weights {y} not found for model {x}")
       continue
     for group in WAVEFORMS_DATA.groupby(GROUPS):
-      stream, clean = read_traces(group[1], args.verbose)
+      stream, clean = read_traces(group[1], verbose=args.verbose)
       # Clean the stream
-      if clean: clean_stream(stream)
+      if not clean: clean_stream(stream)
       stream = stream.merge(method=1, fill_value='interpolate')
       CLF_FILE = os.path.join(CLF_DATA_PATH, "_".join([*group[0], x, y]) + \
-                                              PICKLE_EXT)
+                                             PICKLE_EXT)
       if not os.path.isfile(CLF_FILE):
         output = model.classify(stream, batch_size=256, P_threshold=0.2,
                                 S_threshold=0.1, parallelism=8).picks
