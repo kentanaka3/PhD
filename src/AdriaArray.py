@@ -92,7 +92,7 @@ IMG_ANT_OFFSET = 2
 
 def parse_arguments():
   parser = argparse.ArgumentParser(description="Process AdriaArray Dataset")
-  parser.add_argument('-C', "--channel", default=None, type=str, nargs='*',
+  parser.add_argument('-C', "--channels", default=None, type=str, nargs='*',
                       help="Specify the Channel to analyze. If file is not "
                            "available, then a key must be provided in order "
                            "to download the data")
@@ -101,7 +101,8 @@ def parse_arguments():
                       metavar="DATE", default=["20230601", "20230731"],
                       help="Specify the date range to work with. If files are "
                            "not present")
-  parser.add_argument('-G', "--groups", default=[BEG_DATE_STR], nargs='+',
+  parser.add_argument('-G', "--groups", default=[BEG_DATE_STR, NETWORK_STR,
+                                                 STATION_STR], nargs='+',
                       required=False, metavar="",
                       help="Analize the data based on a specified "
                            "categorically ordered list")
@@ -113,12 +114,12 @@ def parse_arguments():
                       required=False, default=[PHASENET_STR], nargs='+',
                       metavar="", type=str,
                       help="Select a specific Machine Learning based model",)
-  parser.add_argument('-N', "--network", default=None, type=str, nargs='*',
+  parser.add_argument('-N', "--networks", default=None, type=str, nargs='*',
                       metavar="", required=False,
                       help="Specify the Network to analyze. If file is not "
                            "available, then a key must be provided in order "
                            "to download the data")
-  parser.add_argument('-S', "--station", default=None, type=str, nargs='*',
+  parser.add_argument('-S', "--stations", default=None, type=str, nargs='*',
                       metavar="", required=False,
                       help="Specify the Station to analyze. If file is not "
                            "available, then a key must be provided in order "
@@ -129,6 +130,9 @@ def parse_arguments():
                            "selected Machine Learning based model. "
                            "WARNING: Weights which are not available for the "
                            "selected models will not be considered")
+  parser.add_argument("--directory", default=RAW_DATA_PATH, type=str,
+                      required=False,
+                      help="Directory path to the raw files")
   # TODO: Add verbose LEVEL
   parser.add_argument('-v', "--verbose", default=False, action='store_true')
   return parser.parse_args()
@@ -228,12 +232,10 @@ def clean_stream(stream, data_folder=PRC_DATA_PATH):
       trc.resample(SAMPLING_RATE)
     trc.trim(start, end, pad=True, fill_value=0,
               nearest_sample=(trc.stats.starttime.hour != 23))
-    trc.trim(start, end, pad=True, fill_value=0,
-              nearest_sample=(trc.stats.starttime.hour != 23))
     trc.write(TRC_FILE, format=MSEED_STR)
 
 def main(args):
-  WAVEFORMS_DATA = waveform_table(args)
+  WAVEFORMS_DATA = waveform_table(args, data_folder=args.directory)
   GROUPS = args.groups
   for x, y in list(itertools.product(args.models, args.weights)):
     try:
@@ -300,6 +302,7 @@ def main(args):
         axs[0].legend()
         axs[1].legend()
         fig.suptitle(f"{trc.stats.starttime.date} - {x}({y})")
+        # Zoom in-out
         plt.savefig(os.path.join(IMG_PATH, "_".join([*group[0], x, y]) + \
                                            PNG_EXT))
         if args.verbose:
