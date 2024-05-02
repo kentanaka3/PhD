@@ -13,6 +13,7 @@ import pandas as pd
 import seisbench.models as sbm
 import matplotlib.pyplot as plt
 from seisbench.util import PickList
+from obspy.clients.fdsn import Client
 
 SAMPLING_RATE = 100
 

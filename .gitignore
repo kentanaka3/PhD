@@ -3,4 +3,4 @@
 *.pkl
 !data/test/waveforms/*
 */__pycache__/
-./doc/References/*
+./doc/References/*.pdf
