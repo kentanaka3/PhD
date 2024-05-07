@@ -67,20 +67,23 @@ NETWORK_STR = "NETWORK"
 STATION_STR = "STATION"
 CHANNEL_STR = "CHANNEL"
 BEG_DATE_STR = "BEGDT"
-HEADER = [NETWORK_STR, STATION_STR, CHANNEL_STR, BEG_DATE_STR, FILENAME_STR]
+HEADER = [FILENAME_STR, NETWORK_STR, STATION_STR, CHANNEL_STR, BEG_DATE_STR]
 
 # Pretrained model weights (Alphabetically Ordered)
 INSTANCE_STR = "instance"
 ORIGINAL_STR = "original"
+STEAD_STR = "stead"
+SCEDC_STR = "scedc"
+
+# TODO: Run 
+# TODO: Study GaMMA associator with folder
+# TODO: Colab PyOcto associator to be tested with GaMMA
+# TODO: Get Vel Model
 
 RAW_DATA_PATH = os.path.join(DATA_PATH, "waveforms")
 PRC_DATA_PATH = os.path.join(DATA_PATH, "processed")
 ANT_DATA_PATH = os.path.join(DATA_PATH, "annotated")
 CLF_DATA_PATH = os.path.join(DATA_PATH, "classified")
-os.makedirs(ANT_DATA_PATH, exist_ok=True)
-os.makedirs(CLF_DATA_PATH, exist_ok=True)
-os.makedirs(PRC_DATA_PATH, exist_ok=True)
-os.makedirs(IMG_PATH, exist_ok=True)
 
 def is_file_path(string):
   if os.path.isfile(string): return string
@@ -93,45 +96,45 @@ IMG_ANT_OFFSET = 2
 
 def parse_arguments():
   parser = argparse.ArgumentParser(description="Process AdriaArray Dataset")
-  parser.add_argument('-C', "--channels", default=None, type=str, nargs='*',
+  parser.add_argument('-C', "--channel", default=None, type=str, nargs='*',
                       help="Specify the Channel to analyze. If file is not "
                            "available, then a key must be provided in order "
                            "to download the data")
-  # TODO: Change type to UTCDatetime
+  # TODO: Change type to UTCDatetime to include
   parser.add_argument('-D', "--dates", nargs=2, required=False, type=str,
                       metavar="DATE", default=["20230601", "20230731"],
                       help="Specify the date range to work with. If files are "
                            "not present")
-  parser.add_argument('-G', "--groups", default=[BEG_DATE_STR, NETWORK_STR,
-                                                 STATION_STR], nargs='+',
-                      required=False, metavar="",
-                      help="Analize the data based on a specified "
-                           "categorically ordered list")
+  parser.add_argument('-G', "--groups", nargs='+', required=False, metavar="",
+                      default=[BEG_DATE_STR, NETWORK_STR, STATION_STR],
+                      help="Analize the data based on a specified list")
   # TODO: Implement data retrieval
   parser.add_argument('-K', "--key", default=None, nargs=1, required=False,
                       type=is_file_path,
                       help="Key to download the data from server.")
   parser.add_argument('-M', "--models", choices=MODEL_WEIGHTS_DICT.keys(),
-                      required=False, default=[PHASENET_STR], nargs='+',
-                      metavar="", type=str,
+                      required=False, metavar="", type=str, nargs='+',
+                      default=[PHASENET_STR, EQTRANSFORMER_STR],
                       help="Select a specific Machine Learning based model",)
-  parser.add_argument('-N', "--networks", default=None, type=str, nargs='*',
+  parser.add_argument('-N', "--network", default=None, type=str, nargs='*',
                       metavar="", required=False,
                       help="Specify the Network to analyze. If file is not "
                            "available, then a key must be provided in order "
                            "to download the data")
-  parser.add_argument('-S', "--stations", default=None, type=str, nargs='*',
+  parser.add_argument('-S', "--station", default=None, type=str, nargs='*',
                       metavar="", required=False,
                       help="Specify the Station to analyze. If file is not "
                            "available, then a key must be provided in order "
                            "to download the data")
-  parser.add_argument('-W', "--weights", default=[INSTANCE_STR], nargs='+',
-                      required=False, metavar="", type=str,
+  parser.add_argument('-T', "--train", default=False, action='store_true')
+  parser.add_argument('-W', "--weights", required=False, metavar="", type=str,
+                      default=[INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
+                               SCEDC_STR], nargs='+',
                       help="Select a specific pretrained weights for the "
                            "selected Machine Learning based model. "
                            "WARNING: Weights which are not available for the "
                            "selected models will not be considered")
-  parser.add_argument("--directory", default=RAW_DATA_PATH, type=str,
+  parser.add_argument('-d', "--directory", default=RAW_DATA_PATH, type=str,
                       required=False,
                       help="Directory path to the raw files")
   # TODO: Add verbose LEVEL
@@ -139,6 +142,7 @@ def parse_arguments():
   return parser.parse_args()
 
 def waveform_table(args, data_folder=RAW_DATA_PATH):
+  if args.verbose: print("Constructing the Table of Files")
   WAVEFORMS_DATA = []
   for f in os.listdir(data_folder):
     fr = os.path.join(data_folder, f)
@@ -154,48 +158,46 @@ def waveform_table(args, data_folder=RAW_DATA_PATH):
       edate = DATE_FMT.format(YYYY=end.year, MM=end.month, DD=end.day)
       outcome = True
       if args.network:
-        outcome = outcome and (True if any([n == trc.network
-                                            for n in args.network]) else False)
-      if outcome and args.station:
-        outcome = outcome and (True if any([n == trc.station
-                                            for n in args.station]) else False)
-      if outcome and args.channel:
-        outcome = outcome and (True if any([n == trc.channel
-                                            for n in args.channel]) else False)
+        outcome = outcome and any([n == trc.network for n in args.network])
+      if args.station and outcome:
+        outcome = outcome and any([n == trc.station for n in args.station])
+      if args.channel and outcome:
+        outcome = outcome and any([n == trc.channel for n in args.channel])
       if outcome:
-        outcome = outcome and (True if int(args.dates[0]) <= int(sdate) and \
-                                       int(edate) <= int(args.dates[1]) \
-                                    else False)
+        outcome = outcome and (int(args.dates[0]) <= int(sdate) and \
+                               int(edate) <= int(args.dates[1]))
       if outcome:
-        WAVEFORMS_DATA.append([trc.network, trc.station, trc.channel, sdate,
-                               fr])
-  return pd.DataFrame(WAVEFORMS_DATA,
-                      columns=HEADER).sort_values(by=HEADER, ignore_index=True)
+        WAVEFORMS_DATA.append([fr, trc.network, trc.station, trc.channel,
+                               sdate])
+  return pd.DataFrame(WAVEFORMS_DATA, columns=HEADER).set_index(FILENAME_STR)\
+                                                     .groupby(args.groups)
 
 def read_traces(group, data_folder=PRC_DATA_PATH, verbose=False,
                 headonly=False):
+  if args.verbose: print("Reading the Traces")
   stream = obspy.Stream()
   clean = True
   for _, row in group.iterrows():
     fpath = os.path.join(data_folder, row[BEG_DATE_STR], row[NETWORK_STR],
                          row[STATION_STR])
     os.makedirs(fpath, exist_ok=True)
-    prc_data = os.path.join(fpath,
+    TRC_FILE = os.path.join(fpath,
                             PRC_MSEED_FMT.format(NETWORK=row[NETWORK_STR],
                                                  STATION=row[STATION_STR],
                                                  CHANNEL=row[CHANNEL_STR],
                                                  BEGDT=row[BEG_DATE_STR]))
-    if os.path.exists(prc_data):
+    if os.path.exists(TRC_FILE):
       if verbose:
-        print(f"Found and reading previously processed file {prc_data}")
-      stream += obspy.read(prc_data, headonly=headonly)
+        print(f"Found and reading previously processed file {TRC_FILE}")
+      stream += obspy.read(TRC_FILE, headonly=headonly)
     else:
       if verbose: print(f"Attempting to read from raw data")
-      stream += obspy.read(row[FILENAME_STR], headonly=headonly)
+      stream += obspy.read(row.name, headonly=headonly)
       clean = False
   return stream, clean
 
 def clean_stream(stream, data_folder=PRC_DATA_PATH):
+  if args.verbose: print("Cleaning the Stream")
   for trc in stream:
     start = obspy.UTCDateTime(trc.stats.starttime.date)
     if trc.stats.starttime.hour == 23: start += DAY2SEC
@@ -203,6 +205,7 @@ def clean_stream(stream, data_folder=PRC_DATA_PATH):
     sdate = DATE_FMT.format(YYYY=start.year, MM=start.month, DD=start.day)
     fpath = os.path.join(data_folder, sdate, trc.stats.network,
                          trc.stats.station)
+    os.makedirs(fpath, exist_ok=True)
     TRC_FILE = os.path.join(fpath,
                             PRC_MSEED_FMT.format(NETWORK=trc.stats.network,
                                                  STATION=trc.stats.station,
@@ -235,80 +238,102 @@ def clean_stream(stream, data_folder=PRC_DATA_PATH):
               nearest_sample=(trc.stats.starttime.hour != 23))
     trc.write(TRC_FILE, format=MSEED_STR)
 
+def classify_stream(group : list, stream : obspy.Stream, model: sbm, x : str,
+                    y : str, data_folder = CLF_DATA_PATH, verbose = False) :
+  if args.verbose: print("Classifying the Stream")
+  # Classification
+  fpath = os.path.join(data_folder, *group, x, y)
+  os.makedirs(fpath, exist_ok=True)
+  CLF_FILE = os.path.join(fpath, "_".join([*group, x, y]) + PICKLE_EXT)
+  if not os.path.isfile(CLF_FILE):
+    output = model.classify(stream, batch_size=256, P_threshold=0.2,
+                            S_threshold=0.1).picks
+    pickle.dump(output, open(CLF_FILE, 'wb'))
+  else:
+    if args.verbose:
+      print(f"Found and loading previously classified results for {x}({y})")
+    output = PickList()
+    with open(CLF_FILE, 'rb') as fr:
+      while True:
+        try:
+          output += pickle.load(fr)
+        except EOFError:
+          break
+  if verbose:
+    print(f"Classification results for model: {x}, with preloaded weight: "
+          f"{y}, grouped by {group}")
+    print(output)
+
+def get_model(x: str, y: str) -> sbm:
+  try:
+    model = MODEL_WEIGHTS_DICT[x][CLASS_STR].from_pretrained(y)
+    print(x, model.weights_docstring)
+  except:
+    if args.verbose:
+      print(f"WARNING: Pretrained weights {y} not found for model {x}")
+    return None
+  return model
+
 def main(args):
+  RAW_DATA_PATH = args.directory
+  DATA_PATH = os.path.dirname(RAW_DATA_PATH)
+  global PRC_DATA_PATH
+  PRC_DATA_PATH = os.path.join(DATA_PATH, "processed")
+  global ANT_DATA_PATH
+  ANT_DATA_PATH = os.path.join(DATA_PATH, "annotated")
+  global CLF_DATA_PATH
+  CLF_DATA_PATH = os.path.join(DATA_PATH, "classified")
   WAVEFORMS_DATA = waveform_table(args, data_folder=args.directory)
-  GROUPS = args.groups
-  for x, y in list(itertools.product(args.models, args.weights)):
-    try:
-      model = MODEL_WEIGHTS_DICT[x][CLASS_STR].from_pretrained(y)
-      print(x, model.weights_docstring)
-    except:
-      if args.verbose:
-        print(f"WARNING: Pretrained weights {y} not found for model {x}")
-      continue
-    for group in WAVEFORMS_DATA.groupby(GROUPS):
-      stream, clean = read_traces(group[1], verbose=args.verbose)
-      # Clean the stream
-      if not clean: clean_stream(stream)
-      stream = stream.merge(method=1, fill_value='interpolate')
-      CLF_FILE = os.path.join(CLF_DATA_PATH, "_".join([*group[0], x, y]) + \
-                                             PICKLE_EXT)
-      if not os.path.isfile(CLF_FILE):
-        output = model.classify(stream, batch_size=256, P_threshold=0.2,
-                                S_threshold=0.1, parallelism=8).picks
-        pickle.dump(output, open(CLF_FILE, 'wb'))
-      else:
-        if args.verbose:
-          print("Found and loading previously classified results for "
-                f"{x}({y})")
-        output = PickList()
-        with open(CLF_FILE, 'rb') as fr:
-          while True:
-            try:
-              output += pickle.load(fr)
-            except EOFError:
-              break
-      if args.verbose:
-        print(f"Classification results for model: {x}, with preloaded "
-              f"weight: {y}, grouped by {[*group[0]]}")
-        print(output)
-      # Annotation
-      if len(output):
-        ANT_FILE = os.path.join(ANT_DATA_PATH,
-                                "_".join([*group[0], x, y]) + PICKLE_EXT)
-        if not os.path.isfile(ANT_FILE):
-          annotations = model.annotate(stream, parallelism=8)
-          pickle.dump(annotations, open(ANT_FILE, 'wb'))
-        else:
-          if args.verbose:
-            print("Found and loading previously annotated results for "
-                  f"{x}({y})")
-          annotations = obspy.Stream()
-          with open(ANT_FILE, 'rb') as fr:
-            while True:
-              try:
-                annotations += pickle.load(fr)
-              except EOFError:
-                break
-        if args.verbose:
-          print(f"Annotations results for model: {x}, with preloaded "
-                f"weight: {y}, grouped by {[*group[0]]}")
-          print(annotations)
-        fig = plt.figure(figsize=(15, 10))
-        axs = fig.subplots(2, 1, sharex=True, gridspec_kw={'hspace': 0})
-        for trc, ant in zip(stream, annotations):
-          axs[0].plot(trc.times("matplotlib"), trc.data, label=trc.id)
-          if ant.stats.channel[-1] != "N":  # Do not plot noise curve
-            axs[1].plot(ant.times("matplotlib"), ant.data, label=ant.id)
-        axs[0].legend()
-        axs[1].legend()
-        fig.suptitle(f"{trc.stats.starttime.date} - {x}({y})")
-        # Zoom in-out
-        plt.savefig(os.path.join(IMG_PATH, "_".join([*group[0], x, y]) + \
-                                           PNG_EXT))
-        if args.verbose:
-          plt.show()
-        plt.close()
+  if not args.train: # Test
+    for x, y in list(itertools.product(args.models, args.weights)):
+      model = get_model(x, y)
+      for group in WAVEFORMS_DATA:
+        stream, clean = read_traces(group[1], verbose=args.verbose)
+        # Clean the stream
+        if not clean: clean_stream(stream)
+        stream = stream.merge(method=1, fill_value='interpolate')
+        # Classification
+        classify_stream(group[0], stream, model, x, y, verbose=args.verbose)
+        # # Annotation
+        # os.makedirs(ANT_DATA_PATH, exist_ok=True)
+        # if len(output):
+        #   ANT_FILE = os.path.join(ANT_DATA_PATH,
+        #                           "_".join([*group[0], x, y]) + PICKLE_EXT)
+        #   if not os.path.isfile(ANT_FILE):
+        #     annotations = model.annotate(stream)
+        #     pickle.dump(annotations, open(ANT_FILE, 'wb'))
+        #   else:
+        #     if args.verbose:
+        #       print("Found and loading previously annotated results for "
+        #             f"{x}({y})")
+        #     annotations = obspy.Stream()
+        #     with open(ANT_FILE, 'rb') as fr:
+        #       while True:
+        #         try:
+        #           annotations += pickle.load(fr)
+        #         except EOFError:
+        #           break
+        #   if args.verbose:
+        #     print(f"Annotations results for model: {x}, with preloaded "
+        #           f"weight: {y}, grouped by {[*group[0]]}")
+        #     print(annotations)
+        #   fig = plt.figure(figsize=(15, 10))
+        #   axs = fig.subplots(2, 1, sharex=True, gridspec_kw={'hspace': 0})
+        #   for trc, ant in zip(stream, annotations):
+        #     axs[0].plot(trc.times("matplotlib"), trc.data, label=trc.id)
+        #     if ant.stats.channel[-1] != "N":  # Do not plot noise curve
+        #       axs[1].plot(ant.times("matplotlib"), ant.data, label=ant.id)
+        #   axs[0].legend()
+        #   axs[1].legend()
+        #   fig.suptitle(f"{trc.stats.starttime.date} - {x}({y})")
+        #   # Zoom in-out
+        #   plt.savefig(os.path.join(IMG_PATH, "_".join([*group[0], x, y]) + \
+        #                                      PNG_EXT))
+        #   if args.verbose:
+        #     plt.show()
+        #   plt.close()
+  else: # Train
+    pass
   return
 
 if __name__ == "__main__":

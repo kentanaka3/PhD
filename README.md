@@ -60,9 +60,7 @@ The data saved in the test are either randomly sampled data or they provide
 specific data to which we can cuantitatively measure the results obtained by 
 the program.
 
-## AdriaArray Pipeline
-
-### AdriaArray
+## AdriaArray
 AdriaArray allows the user to either customize by predefining the default 
 behaviour or specify all the variables on demand.
 
@@ -70,27 +68,33 @@ behaviour or specify all the variables on demand.
 
 AdriaArray allows the following commands on demand:
 - ```-h``` or ```--help```: show help message and exit
-- ```-C``` or ```--channels```: The user requests a sequence of channels to be
-analyzed. If file is not available, then a key must be provided in order to download the data.
+- ```-C``` or ```--channel```: The user requests a sequence of channels to be
+analyzed. If file is not available, then a key must be provided in order to 
+download the data.
 - ```-D``` or ```--dates```: The user must define the initial date and the 
 last date (inclusive) (*i.e.* range of dates) to be analyzed.
 - ```-G``` or ```--groups```: Analyze the data based on *groups* which are 
 categorical list of files which meet the criteria.
 - ```-K``` or ```--key```: Key to have access to download the data from server.
 - ```-M``` or ```--models```: Select a specific Machine Learning based model.
-- ```-N``` or ```--networks```: The user requests a sequence of networks to be
-analyzed. If file is not available, then a key must be provided in order to download the data.
-- ```-S``` or ```--stations```: The user requests a sequence of stations to be
-analyzed. If file is not available, then a key must be provided in order to download the data.
-- ```-W```  or ```--weights```: Select a specific pretrained weights for the selected Machine Learning based model. WARNING: Weights which are not available 
+- ```-N``` or ```--network```: The user requests a sequence of networks to be
+analyzed. If file is not available, then a key must be provided in order to 
+download the data.
+- ```-S``` or ```--station```: The user requests a sequence of stations to be
+analyzed. If file is not available, then a key must be provided in order to 
+download the data.
+- ```-T``` or ```--train```: The user establishes the code to execute in 
+TRAINING mode.
+- ```-W``` or ```--weights```: Select a specific pretrained weights for the 
+selected Machine Learning based model. WARNING: Weights which are not available 
 for the selected models will not be considered.
-- ```--directory```: The user defines the directory in which the raw data are
-stored.
+- ```-d``` or ```--directory```: The user defines the directory in which the 
+raw data are stored.
 - ```-v``` or ```--verbose```: The user establishes the maximum level of
 communication of the program towards the user. It is useful if the user wants 
 to interact with the output of the program.
 
-#### How to get started?
+### How to get started?
 An easy way to get started is by executing the following command:
 
     % python src/AdriaArray.py -v --directory data/test/waveforms
@@ -101,11 +105,14 @@ the execution of the program and the user will be able to pause and interact
 indefenetely to analyze the output of the program. In order to continue to the 
 next results the user must close the graph plot such that the program may 
 continue executing.
-#### Next steps
+### Next steps
 The following command:
 
     % python src/AdriaArray.py -v -D 19980101 19980110 --directory path/to/waveforms -M PhaseNet EQTransformer -W instance stead original
 
-will try to search the existance of ```path/to/waveforms``` during the dates ```1998/01/01``` and ```1998/01/10``` and apply all the possible combinations between the models ```Phasenet, EQTransformer``` and the pretrained weights ```instance, stead, original```
+will try to search the existance of ```path/to/waveforms``` during the dates 
+```1998/01/01``` and ```1998/01/10``` and apply all the possible combinations 
+between the models ```Phasenet, EQTransformer``` and the pretrained weights 
+```instance, stead, original```
 
 Good luck!
