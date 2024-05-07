@@ -137,11 +137,15 @@ def parse_arguments():
   parser.add_argument('-d', "--directory", default=RAW_DATA_PATH, type=str,
                       required=False,
                       help="Directory path to the raw files")
+  parser.add_argument('-p', "--pwave", default=0.2, type=float, required=False,
+                      help="P wave threshold.")
+  parser.add_argument('-s', "--swave", default=0.1, type=float, required=False,
+                      help="S wave threshold.")
   # TODO: Add verbose LEVEL
   parser.add_argument('-v', "--verbose", default=False, action='store_true')
   return parser.parse_args()
 
-def waveform_table(args, data_folder=RAW_DATA_PATH):
+def waveform_table(args, data_folder = RAW_DATA_PATH):
   if args.verbose: print("Constructing the Table of Files")
   WAVEFORMS_DATA = []
   for f in os.listdir(data_folder):
@@ -172,8 +176,8 @@ def waveform_table(args, data_folder=RAW_DATA_PATH):
   return pd.DataFrame(WAVEFORMS_DATA, columns=HEADER).set_index(FILENAME_STR)\
                                                      .groupby(args.groups)
 
-def read_traces(group, data_folder=PRC_DATA_PATH, verbose=False,
-                headonly=False):
+def read_traces(group, data_folder = PRC_DATA_PATH, verbose = False,
+                headonly = False):
   if args.verbose: print("Reading the Traces")
   stream = obspy.Stream()
   clean = True
@@ -196,7 +200,7 @@ def read_traces(group, data_folder=PRC_DATA_PATH, verbose=False,
       clean = False
   return stream, clean
 
-def clean_stream(stream, data_folder=PRC_DATA_PATH):
+def clean_stream(stream, data_folder = PRC_DATA_PATH):
   if args.verbose: print("Cleaning the Stream")
   for trc in stream:
     start = obspy.UTCDateTime(trc.stats.starttime.date)
@@ -238,16 +242,16 @@ def clean_stream(stream, data_folder=PRC_DATA_PATH):
               nearest_sample=(trc.stats.starttime.hour != 23))
     trc.write(TRC_FILE, format=MSEED_STR)
 
-def classify_stream(group : list, stream : obspy.Stream, model: sbm, x : str,
-                    y : str, data_folder = CLF_DATA_PATH, verbose = False) :
+def classify_stream(group : list, stream : obspy.Stream, model : sbm, x : str,
+                    y : str, data_folder = CLF_DATA_PATH, verbose = False):
   if args.verbose: print("Classifying the Stream")
   # Classification
   fpath = os.path.join(data_folder, *group, x, y)
   os.makedirs(fpath, exist_ok=True)
   CLF_FILE = os.path.join(fpath, "_".join([*group, x, y]) + PICKLE_EXT)
   if not os.path.isfile(CLF_FILE):
-    output = model.classify(stream, batch_size=256, P_threshold=0.2,
-                            S_threshold=0.1).picks
+    output = model.classify(stream, batch_size=256, P_threshold=args.pwave,
+                            S_threshold=args.swave).picks
     pickle.dump(output, open(CLF_FILE, 'wb'))
   else:
     if args.verbose:
@@ -267,11 +271,11 @@ def classify_stream(group : list, stream : obspy.Stream, model: sbm, x : str,
 def get_model(x: str, y: str) -> sbm:
   try:
     model = MODEL_WEIGHTS_DICT[x][CLASS_STR].from_pretrained(y)
-    print(x, model.weights_docstring)
   except:
     if args.verbose:
       print(f"WARNING: Pretrained weights {y} not found for model {x}")
     return None
+  print(x, model.weights_docstring)
   return model
 
 def main(args):
@@ -287,6 +291,7 @@ def main(args):
   if not args.train: # Test
     for x, y in list(itertools.product(args.models, args.weights)):
       model = get_model(x, y)
+      if model is None: continue
       for group in WAVEFORMS_DATA:
         stream, clean = read_traces(group[1], verbose=args.verbose)
         # Clean the stream

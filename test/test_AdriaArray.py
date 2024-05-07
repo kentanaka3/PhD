@@ -363,8 +363,8 @@ class TestModel(unittest.TestCase):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
     for x, y in list(itertools.product(args.models, args.weights)):
-      model = MODEL_WEIGHTS_DICT[x][CLASS_STR].from_pretrained(y)
-      for i, group in enumerate(WAVEFORMS_DATA):
+      model = get_model(x, y)
+      for group in WAVEFORMS_DATA:
         stream, _ = read_traces(group[1], PRC_TEST_PATH)
         output = model.classify(stream, batch_size=256, P_threshold=0.2,
                                 S_threshold=0.1).picks
