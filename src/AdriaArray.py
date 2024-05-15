@@ -1,7 +1,7 @@
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 import re
-import io
+# import json
 import torch
 import obspy
 import pickle
@@ -12,8 +12,12 @@ import numpy as np
 import pandas as pd
 import seisbench.models as sbm
 import matplotlib.pyplot as plt
+# TODO: Read Stations XML
+import xml.etree.ElementTree as ET
 from seisbench.util import PickList
+# TODO: Implement downloading data
 from obspy.clients.fdsn import Client
+from datetime import datetime, timedelta
 
 SAMPLING_RATE = 100
 
@@ -69,6 +73,49 @@ CHANNEL_STR = "CHANNEL"
 BEG_DATE_STR = "BEGDT"
 HEADER = [FILENAME_STR, NETWORK_STR, STATION_STR, CHANNEL_STR, BEG_DATE_STR]
 
+P_TYPE_STR = "P_TYPE"
+S_TYPE_STR = "S_TYPE"
+P_WEIGHT_STR = "P_WEIGHT"
+S_WEIGHT_STR = "S_WEIGHT"
+P_TIME_STR = "P_TIME"
+S_TIME_STR = "S_TIME"
+PHASE_EXTRACTOR = \
+  re.compile(fr"^(?P<{STATION_STR}>(\w{{4}}|\w{{3}}\s))"            # Station
+             fr"(?P<{P_TYPE_STR}>[ei?]P[cd\s])"                     # P Type
+             fr"(?P<{P_WEIGHT_STR}>[0-4])"                          # P Weight
+             fr"1(?P<{BEG_DATE_STR}>\d{{10}})"                      # Date
+             fr"\s(?P<{P_TIME_STR}>\d{{4}})"                        # P Time
+             fr"\s+((?P<{S_TIME_STR}>\d{{4}}|\d{{3}})"              # S Time
+             fr"(?P<{S_TYPE_STR}>[ei?]S\s)"                         # S Type
+             fr"(?P<{S_WEIGHT_STR}>[0-4]))*")                       # S Weight
+EVENT_EXTRACTOR = re.compile(r"^1(\s+D)*\s*$")                      # Event
+
+def event_parser(filename: str) -> dict:
+  with open(filename, 'r') as fr:
+    lines = fr.readlines()
+  events = {}
+  event = 0
+  events.setdefault(event, [])
+  for line in [l.strip() for l in lines]:
+    if EVENT_EXTRACTOR.match(line):
+      event += 1
+      events.setdefault(event, [])
+      continue
+    match = PHASE_EXTRACTOR.match(line)
+    if match:
+      result = match.groupdict()
+      date = result[BEG_DATE_STR]
+      result[BEG_DATE_STR] = datetime.strptime(date, "%y%m%d%H%M").timestamp()
+      result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
+      sec = float(result[P_TIME_STR][:2] + "." + result[P_TIME_STR][2:])
+      result[P_TIME_STR] = sec
+      if result[S_TIME_STR]:
+        result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
+      events[event].append(result)
+  # with open(os.path.splitext(filename)[0] + JSON_EXT, 'w') as fr:
+  #   json.dump(events, fr, indent=2)
+  return events
+
 # Pretrained model weights (Alphabetically Ordered)
 INSTANCE_STR = "instance"
 ORIGINAL_STR = "original"
@@ -80,6 +127,7 @@ SCEDC_STR = "scedc"
 # TODO: Colab PyOcto associator to be tested with GaMMA
 # TODO: Get Vel Model
 
+MNL_DATA_PATH = os.path.join(DATA_PATH, "manual")
 RAW_DATA_PATH = os.path.join(DATA_PATH, "waveforms")
 PRC_DATA_PATH = os.path.join(DATA_PATH, "processed")
 ANT_DATA_PATH = os.path.join(DATA_PATH, "annotated")
@@ -178,7 +226,7 @@ def waveform_table(args, data_folder = RAW_DATA_PATH):
 
 def read_traces(group, data_folder = PRC_DATA_PATH, verbose = False,
                 headonly = False):
-  if args.verbose: print("Reading the Traces")
+  if verbose: print("Reading the Traces")
   stream = obspy.Stream()
   clean = True
   for _, row in group.iterrows():
@@ -200,8 +248,8 @@ def read_traces(group, data_folder = PRC_DATA_PATH, verbose = False,
       clean = False
   return stream, clean
 
-def clean_stream(stream, data_folder = PRC_DATA_PATH):
-  if args.verbose: print("Cleaning the Stream")
+def clean_stream(stream, data_folder = PRC_DATA_PATH, verbose = False):
+  if verbose: print("Cleaning the Stream")
   for trc in stream:
     start = obspy.UTCDateTime(trc.stats.starttime.date)
     if trc.stats.starttime.hour == 23: start += DAY2SEC

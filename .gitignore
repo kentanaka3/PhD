@@ -1,6 +1,7 @@
 *.mseed
 *.pyc
 *.pkl
+*.DS_Store
 !data/test/waveforms/*
 */__pycache__/
 doc/References/*

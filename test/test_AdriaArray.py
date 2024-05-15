@@ -1,10 +1,14 @@
 #!/bin/python
 import unittest
 import shutil
+import json
 from unittest.mock import patch
 from src.AdriaArray import *
 
+EXPECTED_STR = "expected"
+
 TEST_PATH = os.path.join(DATA_PATH, "test")
+MNL_TEST_PATH = os.path.join(TEST_PATH, "manual")
 RAW_TEST_PATH = os.path.join(TEST_PATH, "waveforms")
 PRC_TEST_PATH = os.path.join(TEST_PATH, "processed")
 ANT_TEST_PATH = os.path.join(TEST_PATH, "annotated")
@@ -407,6 +411,17 @@ class TestModel(unittest.TestCase):
           self.assertEqual(a.peak_time, b.peak_time)
           self.assertEqual(a.peak_value, b.peak_value)
           self.assertEqual(a.phase, b.phase)
+
+class TestPickParser(unittest.TestCase):
+  def test_parse_pick(self):
+    filename = os.path.join(MNL_TEST_PATH, "manual.dat")
+    with open(os.path.join(MNL_TEST_PATH, EXPECTED_STR + JSON_EXT), 'r') as fr:
+      expected = json.load(fr)
+    events = event_parser(filename)
+    for key, event in events.items():
+      for s, station in enumerate(event):
+        for k, v in station.items():
+          self.assertEqual(v, expected[str(key)][s][k])
 
 if __name__ == "__main__":
   unittest.main()
