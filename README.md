@@ -1,4 +1,8 @@
 # PhD
+## Objective
+Develop, apply and test machine learning (ML) techniques for training and labeling the increasing number of seismological datasets in a complete earthquake detection workflow, aiming to improve real-time earthquake monitoring capabilities, including the recognition of micro-seismic patterns leading to main shocks.
+
+## 
 The PhD Workspace has the following file organization structure.
 
     ├── data
