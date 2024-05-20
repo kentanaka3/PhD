@@ -6,3 +6,4 @@
 */__pycache__/
 doc/References/*
 doc/Reports/*
+!data/classified/*/*/*/*/*/*.pkl
