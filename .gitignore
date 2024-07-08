@@ -7,3 +7,14 @@
 doc/References/*
 doc/Reports/*
 !data/classified/*/*/*/*/*/*.pkl
+env/*
+env3/*
+ACTIVATEME.sh
+Analyze.sh
+andrea.sh
+*.out
+*.err
+.vscode/*
+etna_data/*
+run.sh
+doc/*
