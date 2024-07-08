@@ -1,7 +1,14 @@
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+from pathlib import Path
+# Set the "./../inc" from the script folder
+lib_path = os.path.join(Path(os.path.dirname(__file__)).parent, "inc")
+import sys
+# Add to path
+if lib_path not in sys.path: sys.path.append(lib_path)
+from constants import *
 import re
-# import json
+import json
 import torch
 import obspy
 import pickle
@@ -9,20 +16,24 @@ import requests
 import argparse
 import itertools
 import numpy as np
+import numba as nb
 import pandas as pd
 import seisbench.models as sbm
 import matplotlib.pyplot as plt
+from datetime import timedelta
 # TODO: Read Stations XML
 import xml.etree.ElementTree as ET
 from seisbench.util import PickList
 # TODO: Implement downloading data
 from obspy.clients.fdsn import Client
-from datetime import datetime, timedelta
+from obspy.core.utcdatetime import UTCDateTime
 
 SAMPLING_RATE = 100
 
-DATE_FMT = "{YYYY}{MM:02}{DD:02}"
-DAY2SEC = 24 * 60 * 60
+DATE_FMT = "%y%m%d"
+ONE_DAY = timedelta(days=1)
+PICK_OFFSET = timedelta(seconds=0.5)
+ASSOCIATE_OFFSET = timedelta(seconds=1)
 
 # Extensions
 PICKLE_EXT = ".pkl"
@@ -90,7 +101,20 @@ PHASE_EXTRACTOR = \
              fr"(?P<{S_WEIGHT_STR}>[0-4]))*")                       # S Weight
 EVENT_EXTRACTOR = re.compile(r"^1(\s+D)*\s*$")                      # Event
 
-def event_parser(filename: str) -> dict:
+def event_parser(filename : str) -> dict:
+  """
+  input  :
+    - filename (str)
+
+  output :
+    - dictionary (str : value)
+
+  errors :
+    - None
+
+  notes  :
+
+  """
   with open(filename, 'r') as fr:
     lines = fr.readlines()
   events = {}
@@ -104,13 +128,13 @@ def event_parser(filename: str) -> dict:
     match = PHASE_EXTRACTOR.match(line)
     if match:
       result = match.groupdict()
-      date = result[BEG_DATE_STR]
-      result[BEG_DATE_STR] = datetime.strptime(date, "%y%m%d%H%M").timestamp()
+      result[BEG_DATE_STR] = UTCDateTime.strptime(result[BEG_DATE_STR],
+                                                  "%y%m%d%H%M")
       result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
-      sec = float(result[P_TIME_STR][:2] + "." + result[P_TIME_STR][2:])
-      result[P_TIME_STR] = sec
-      if result[S_TIME_STR]:
-        result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
+      result[P_TIME_STR] = \
+        timedelta(seconds=float(result[P_TIME_STR][:2] + "." + \
+                                result[P_TIME_STR][2:]))
+      if result[S_TIME_STR]: result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
       events[event].append(result)
   # with open(os.path.splitext(filename)[0] + JSON_EXT, 'w') as fr:
   #   json.dump(events, fr, indent=2)
@@ -133,12 +157,25 @@ PRC_DATA_PATH = os.path.join(DATA_PATH, "processed")
 ANT_DATA_PATH = os.path.join(DATA_PATH, "annotated")
 CLF_DATA_PATH = os.path.join(DATA_PATH, "classified")
 
-def is_file_path(string):
+def is_file_path(string : str) -> str:
+  """
+  input:
+    - string (str)
+
+  output:
+    - str
+
+  errors:
+    - NotADirectoryError
+
+  notes:
+
+  """
   if os.path.isfile(string): return string
   else: raise NotADirectoryError(string)
 
-# def is_date(string):
-#   if 
+def is_date(string) -> UTCDateTime:
+  return UTCDateTime.strptime(string, DATE_FMT)
 
 IMG_ANT_OFFSET = 2
 
@@ -148,14 +185,17 @@ def parse_arguments():
                       help="Specify the Channel to analyze. If file is not "
                            "available, then a key must be provided in order "
                            "to download the data")
-  # TODO: Change type to UTCDatetime to include
-  parser.add_argument('-D', "--dates", nargs=2, required=False, type=str,
-                      metavar="DATE", default=["20230601", "20230731"],
+  parser.add_argument('-D', "--dates", nargs=2, required=False, type=is_date,
+                      metavar="DATE",
+                      default=[UTCDateTime.strptime("230601", DATE_FMT),
+                               UTCDateTime.strptime("230731", DATE_FMT)],
                       help="Specify the date range to work with. If files are "
                            "not present")
   parser.add_argument('-G', "--groups", nargs='+', required=False, metavar="",
                       default=[BEG_DATE_STR, NETWORK_STR, STATION_STR],
                       help="Analize the data based on a specified list")
+  parser.add_argument('-J', "--julian", default=False, action="store_true",
+                      help="Transform the selected dates into Julian date.")
   # TODO: Implement data retrieval
   parser.add_argument('-K', "--key", default=None, nargs=1, required=False,
                       type=is_file_path,
@@ -193,7 +233,22 @@ def parse_arguments():
   parser.add_argument('-v', "--verbose", default=False, action='store_true')
   return parser.parse_args()
 
-def waveform_table(args, data_folder = RAW_DATA_PATH):
+def waveform_table(args, data_folder = RAW_DATA_PATH) -> pd.DataFrame:
+  """
+  input:
+    - arguments ()
+    - data_folder (os.path)
+
+  output:
+    - pandas.DataFrame
+
+  errors:
+    - None
+
+  notes:
+    If the starttime of the trace is 23:00 hrs, then we assume the date to be
+    recorded is the next day
+  """
   if args.verbose: print("Constructing the Table of Files")
   WAVEFORMS_DATA = []
   for f in os.listdir(data_folder):
@@ -203,11 +258,9 @@ def waveform_table(args, data_folder = RAW_DATA_PATH):
         trc = obspy.read(fr, headonly=True)[0].stats
       except:
         continue
-      start = obspy.UTCDateTime(trc.starttime.date)
-      if trc.starttime.hour == 23: start += DAY2SEC
-      sdate = DATE_FMT.format(YYYY=start.year, MM=start.month, DD=start.day)
-      end = start + DAY2SEC
-      edate = DATE_FMT.format(YYYY=end.year, MM=end.month, DD=end.day)
+      start = UTCDateTime._set_day(value=trc.starttime.date)
+      if trc.starttime.hour == 23: start += ONE_DAY
+      end = start + ONE_DAY
       outcome = True
       if args.network:
         outcome = outcome and any([n == trc.network for n in args.network])
@@ -216,16 +269,32 @@ def waveform_table(args, data_folder = RAW_DATA_PATH):
       if args.channel and outcome:
         outcome = outcome and any([n == trc.channel for n in args.channel])
       if outcome:
-        outcome = outcome and (int(args.dates[0]) <= int(sdate) and \
-                               int(edate) <= int(args.dates[1]))
+        outcome = outcome and (args.dates[0] <= start and end <= args.dates[1])
       if outcome:
         WAVEFORMS_DATA.append([fr, trc.network, trc.station, trc.channel,
-                               sdate])
+                               start])
   return pd.DataFrame(WAVEFORMS_DATA, columns=HEADER).set_index(FILENAME_STR)\
                                                      .groupby(args.groups)
 
 def read_traces(group, data_folder = PRC_DATA_PATH, verbose = False,
                 headonly = False):
+  """
+  input:
+    - group (pandas.api.typing.DataFrameGroupBy)
+    - data_folder (os.path)
+    - verbose (bool)
+    - headonly (bool)
+
+  output:
+    - stream (obspy.Stream)
+    - clean (bool)
+
+  errors:
+    - None
+
+  notes:
+
+  """
   if verbose: print("Reading the Traces")
   stream = obspy.Stream()
   clean = True
@@ -241,57 +310,83 @@ def read_traces(group, data_folder = PRC_DATA_PATH, verbose = False,
     if os.path.exists(TRC_FILE):
       if verbose:
         print(f"Found and reading previously processed file {TRC_FILE}")
-      stream += obspy.read(TRC_FILE, headonly=headonly)
+      stream += obspy.read(TRC_FILE, headonly=headonly, dtype=np.float16)
     else:
       if verbose: print(f"Attempting to read from raw data")
-      stream += obspy.read(row.name, headonly=headonly)
+      stream += obspy.read(row.name, headonly=headonly, dtype=np.float16)
       clean = False
   return stream, clean
 
-def clean_stream(stream, data_folder = PRC_DATA_PATH, verbose = False):
+@nb.njit(nogil=True)
+def filter_data_(data : np.array) -> bool:
+  for d in data:
+    if np.isnan(d) or np.isinf(d): return True
+  return False
+
+@nb.jit
+def filter_data(data : np.array) -> bool:
+  # if np.isnan(trc.data).any() or np.isinf(trc.data).any(): return True
+  return filter_data_(data)
+
+def clean_stream(stream : obspy.Stream, data_folder = PRC_DATA_PATH,
+                 verbose = False):
+  """
+  input:
+    - stream          (obspy.Stream)
+    - data_folder     (os.path)
+    - verbose         (bool)
+  output:
+    - None
+
+  errors:
+    - None
+
+  notes:
+  
+  """
   if verbose: print("Cleaning the Stream")
   for trc in stream:
-    start = obspy.UTCDateTime(trc.stats.starttime.date)
-    if trc.stats.starttime.hour == 23: start += DAY2SEC
-    end = start + DAY2SEC
-    sdate = DATE_FMT.format(YYYY=start.year, MM=start.month, DD=start.day)
-    fpath = os.path.join(data_folder, sdate, trc.stats.network,
-                         trc.stats.station)
+    start = UTCDateTime._set_day(value=trc.starttime.date)
+    if trc.stats.starttime.hour == 23: start += ONE_DAY
+    end = start + ONE_DAY
+    fpath = os.path.join(data_folder, UTCDateTime.strftime(start, DATE_FMT),
+                         trc.stats.network, trc.stats.station)
     os.makedirs(fpath, exist_ok=True)
-    TRC_FILE = os.path.join(fpath,
-                            PRC_MSEED_FMT.format(NETWORK=trc.stats.network,
-                                                 STATION=trc.stats.station,
-                                                 CHANNEL=trc.stats.channel,
-                                                 BEGDT=sdate))
+    TRC_FILE = \
+      os.path.join(fpath,
+                   PRC_MSEED_FMT.format(NETWORK=trc.stats.network,
+                                        STATION=trc.stats.station,
+                                        CHANNEL=trc.stats.channel,
+                                        BEGDT=UTCDateTime.strftime(start, DATE_FMT)))
     # Remove Stream.Trace if it contains NaN or Inf
-    # TODO: Consider optimizing the removal using the following:
-    # import numba as nb
-    # import numpy as np
-    # @nb.njit(nogil=True)
-    # def _any_nans(a):
-    #   for x in a: if np.isnan(x): return True
-    #   return False
-    # @nb.jit
-    # def any_nans(a):
-    #   if not a.dtype.kind == 'f': return False
-    #   return _any_nans(a.flat)
-    # array1M = np.random.rand(1000000)
-    # assert any_nans(array1M) == False
-    # %timeit any_nans(array1M)  # 573us
-    # array1M[0] = float("nan")
-    # assert any_nans(array1M) == True
-    # %timeit any_nans(array1M)  # 774ns  (!nanoseconds)
-    if np.isnan(trc.data).any() or np.isinf(trc.data).any():
-      stream.remove(trc)
+    if filter_data(trc.data): stream.remove(trc)
     # Sample has to be 100 Hz
-    if trc.stats.sampling_rate != SAMPLING_RATE:
-      trc.resample(SAMPLING_RATE)
+    if trc.stats.sampling_rate != SAMPLING_RATE: trc.resample(SAMPLING_RATE)
     trc.trim(start, end, pad=True, fill_value=0,
-              nearest_sample=(trc.stats.starttime.hour != 23))
+             nearest_sample=(trc.stats.starttime.hour != 23))
     trc.write(TRC_FILE, format=MSEED_STR)
 
 def classify_stream(group : list, stream : obspy.Stream, model : sbm, x : str,
                     y : str, data_folder = CLF_DATA_PATH, verbose = False):
+  """
+  input:
+    - group         (list)
+    - stream        (obspy.Stream)
+    - model         (seisbench.models)
+    - x             (str)
+    - y             (str)
+    - data_folder   ()
+    - verbose       (bool)
+
+  output:
+    - None
+
+  errors:
+    - None
+
+  notes:
+
+  """
   if args.verbose: print("Classifying the Stream")
   # Classification
   fpath = os.path.join(data_folder, *group, x, y)
@@ -316,7 +411,24 @@ def classify_stream(group : list, stream : obspy.Stream, model : sbm, x : str,
           f"{y}, grouped by {group}")
     print(output)
 
-def get_model(x: str, y: str) -> sbm:
+def get_model(x : str, y : str) -> sbm:
+  """
+  From a given model (x) trained on the dataset (y), return the associated
+  testing model.
+
+  input:
+    - x (str)
+    - y (str)
+
+  output:
+    - seisbench.models
+
+  errors:
+    - None
+
+  notes:
+
+  """
   try:
     model = MODEL_WEIGHTS_DICT[x][CLASS_STR].from_pretrained(y)
   except:

@@ -1,9 +1,18 @@
 #!/bin/python
+import os
+import sys
+from pathlib import Path
+# Set the "./../src" from the script folder
+lib_path = os.path.join(Path(os.path.dirname(__file__)).parent, "src")
+# Add to path
+if lib_path not in sys.path: sys.path.append(lib_path)
+
 import unittest
 import shutil
 import json
+from datetime import datetime
 from unittest.mock import patch
-from src.AdriaArray import *
+from AdriaArray import *
 
 EXPECTED_STR = "expected"
 
@@ -15,121 +24,11 @@ ANT_TEST_PATH = os.path.join(TEST_PATH, "annotated")
 CLF_TEST_PATH = os.path.join(TEST_PATH, "classified")
 
 class TestArgparse(unittest.TestCase):
-  @patch("sys.argv", ["AdriaArray.py"])
+  @patch("sys.argv", ["AdriaArray.py", "-v"])
   def test_non_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, ["20230601", "20230731"])
-    self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
-    self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
-    self.assertEqual(args.network, None)
-    self.assertEqual(args.station, None)
-    self.assertEqual(args.train, False)
-    self.assertEqual(args.verbose, False)
-    self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
-                                    SCEDC_STR])
-
-  @patch("sys.argv", ["AdriaArray.py", "-M", PHASENET_STR])
-  def test_model_args(self):
-    args = parse_arguments()
-    self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, ["20230601", "20230731"])
-    self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
-    self.assertEqual(args.models, [PHASENET_STR])
-    self.assertEqual(args.network, None)
-    self.assertEqual(args.station, None)
-    self.assertEqual(args.train, False)
-    self.assertEqual(args.verbose, False)
-    self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
-                                    SCEDC_STR])
-
-  @patch("sys.argv", ["AdriaArray.py", "-M", PHASENET_STR])
-  def test_models_args(self):
-    args = parse_arguments()
-    self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, ["20230601", "20230731"])
-    self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
-    self.assertEqual(args.models, [PHASENET_STR])
-    self.assertEqual(args.network, None)
-    self.assertEqual(args.station, None)
-    self.assertEqual(args.train, False)
-    self.assertEqual(args.verbose, False)
-    self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
-                                    SCEDC_STR])
-
-  @patch("sys.argv", ["AdriaArray.py", "-W", INSTANCE_STR])
-  def test_weight_args(self):
-    args = parse_arguments()
-    self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, ["20230601", "20230731"])
-    self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
-    self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
-    self.assertEqual(args.network, None)
-    self.assertEqual(args.station, None)
-    self.assertEqual(args.train, False)
-    self.assertEqual(args.verbose, False)
-    self.assertEqual(args.weights, [INSTANCE_STR])
-
-  @patch("sys.argv", ["AdriaArray.py", "-W", INSTANCE_STR, ORIGINAL_STR])
-  def test_weights_args(self):
-    args = parse_arguments()
-    self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, ["20230601", "20230731"])
-    self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
-    self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
-    self.assertEqual(args.network, None)
-    self.assertEqual(args.station, None)
-    self.assertEqual(args.train, False)
-    self.assertEqual(args.verbose, False)
-    self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR])
-
-  @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR])
-  def test_group_args(self):
-    args = parse_arguments()
-    self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, ["20230601", "20230731"])
-    self.assertEqual(args.groups, [BEG_DATE_STR])
-    self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
-    self.assertEqual(args.network, None)
-    self.assertEqual(args.station, None)
-    self.assertEqual(args.train, False)
-    self.assertEqual(args.verbose, False)
-    self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
-                                    SCEDC_STR])
-
-  @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR, NETWORK_STR])
-  def test_groups_args(self):
-    args = parse_arguments()
-    self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, ["20230601", "20230731"])
-    self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR])
-    self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
-    self.assertEqual(args.network, None)
-    self.assertEqual(args.station, None)
-    self.assertEqual(args.train, False)
-    self.assertEqual(args.verbose, False)
-    self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
-                                    SCEDC_STR])
-
-  @patch("sys.argv", ["AdriaArray.py", "-D", "20230601", "20230731"])
-  def test_range_args(self):
-    args = parse_arguments()
-    self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, ["20230601", "20230731"])
-    self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
-    self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
-    self.assertEqual(args.network, None)
-    self.assertEqual(args.station, None)
-    self.assertEqual(args.train, False)
-    self.assertEqual(args.verbose, False)
-    self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
-                                    SCEDC_STR])
-
-  @patch("sys.argv", ["AdriaArray.py", "-v"])
-  def test_verbose_args(self):
-    args = parse_arguments()
-    self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, ["20230601", "20230731"])
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
     self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
     self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
     self.assertEqual(args.network, None)
@@ -139,22 +38,132 @@ class TestArgparse(unittest.TestCase):
     self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
                                     SCEDC_STR])
 
-  @patch("sys.argv", ["AdriaArray.py", "-T"])
+  @patch("sys.argv", ["AdriaArray.py", "-M", PHASENET_STR, "-v"])
+  def test_model_args(self):
+    args = parse_arguments()
+    self.assertEqual(args.channel, None)
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
+    self.assertEqual(args.models, [PHASENET_STR])
+    self.assertEqual(args.network, None)
+    self.assertEqual(args.station, None)
+    self.assertEqual(args.train, False)
+    self.assertEqual(args.verbose, True)
+    self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
+                                    SCEDC_STR])
+
+  @patch("sys.argv", ["AdriaArray.py", "-M", PHASENET_STR, "-v"])
+  def test_models_args(self):
+    args = parse_arguments()
+    self.assertEqual(args.channel, None)
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
+    self.assertEqual(args.models, [PHASENET_STR])
+    self.assertEqual(args.network, None)
+    self.assertEqual(args.station, None)
+    self.assertEqual(args.train, False)
+    self.assertEqual(args.verbose, True)
+    self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
+                                    SCEDC_STR])
+
+  @patch("sys.argv", ["AdriaArray.py", "-W", INSTANCE_STR, "-v"])
+  def test_weight_args(self):
+    args = parse_arguments()
+    self.assertEqual(args.channel, None)
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
+    self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
+    self.assertEqual(args.network, None)
+    self.assertEqual(args.station, None)
+    self.assertEqual(args.train, False)
+    self.assertEqual(args.verbose, True)
+    self.assertEqual(args.weights, [INSTANCE_STR])
+
+  @patch("sys.argv", ["AdriaArray.py", "-W", INSTANCE_STR, ORIGINAL_STR, "-v"])
+  def test_weights_args(self):
+    args = parse_arguments()
+    self.assertEqual(args.channel, None)
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
+    self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
+    self.assertEqual(args.network, None)
+    self.assertEqual(args.station, None)
+    self.assertEqual(args.train, False)
+    self.assertEqual(args.verbose, True)
+    self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR])
+
+  @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR, "-v"])
+  def test_group_args(self):
+    args = parse_arguments()
+    self.assertEqual(args.channel, None)
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.groups, [BEG_DATE_STR])
+    self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
+    self.assertEqual(args.network, None)
+    self.assertEqual(args.station, None)
+    self.assertEqual(args.train, False)
+    self.assertEqual(args.verbose, True)
+    self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
+                                    SCEDC_STR])
+
+  @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR, NETWORK_STR, "-v"])
+  def test_groups_args(self):
+    args = parse_arguments()
+    self.assertEqual(args.channel, None)
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR])
+    self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
+    self.assertEqual(args.network, None)
+    self.assertEqual(args.station, None)
+    self.assertEqual(args.train, False)
+    self.assertEqual(args.verbose, True)
+    self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
+                                    SCEDC_STR])
+
+  @patch("sys.argv", ["AdriaArray.py", "-D", "230601", "230731", "-v"])
+  def test_range_args(self):
+    args = parse_arguments()
+    self.assertEqual(args.channel, None)
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
+    self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
+    self.assertEqual(args.network, None)
+    self.assertEqual(args.station, None)
+    self.assertEqual(args.train, False)
+    self.assertEqual(args.verbose, True)
+    self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
+                                    SCEDC_STR])
+
+  @patch("sys.argv", ["AdriaArray.py", "-v"])
+  def test_verbose_args(self):
+    args = parse_arguments()
+    self.assertEqual(args.channel, None)
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
+    self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
+    self.assertEqual(args.network, None)
+    self.assertEqual(args.station, None)
+    self.assertEqual(args.train, False)
+    self.assertEqual(args.verbose, True)
+    self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
+                                    SCEDC_STR])
+
+  @patch("sys.argv", ["AdriaArray.py", "-T", "-v"])
   def test_train_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, ["20230601", "20230731"])
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
     self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
     self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
     self.assertEqual(args.network, None)
     self.assertEqual(args.station, None)
     self.assertEqual(args.train, True)
-    self.assertEqual(args.verbose, False)
+    self.assertEqual(args.verbose, True)
     self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
                                     SCEDC_STR])
 
 class TestWaveformTable(unittest.TestCase):
-  @patch("sys.argv", ["AdriaArray.py"])
+  @patch("sys.argv", ["AdriaArray.py", "-v"])
   def test_non_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
@@ -177,7 +186,7 @@ class TestWaveformTable(unittest.TestCase):
     for group, size in zip(WAVEFORMS_DATA, SIZE):
       self.assertEqual(group[1].size, size)
 
-  @patch("sys.argv", ["AdriaArray.py", '-N', "IV"])
+  @patch("sys.argv", ["AdriaArray.py", '-N', "IV", "-v"])
   def test_network_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
@@ -194,7 +203,7 @@ class TestWaveformTable(unittest.TestCase):
     for group, size in zip(WAVEFORMS_DATA, SIZE):
       self.assertEqual(group[1].size, size)
 
-  @patch("sys.argv", ["AdriaArray.py", '-N', "SI", "ST"])
+  @patch("sys.argv", ["AdriaArray.py", '-N', "SI", "ST", "-v"])
   def test_networks_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
@@ -208,7 +217,7 @@ class TestWaveformTable(unittest.TestCase):
     for group, size in zip(WAVEFORMS_DATA, SIZE):
       self.assertEqual(group[1].size, size)
 
-  @patch("sys.argv", ["AdriaArray.py", '-S', "LUSI"])
+  @patch("sys.argv", ["AdriaArray.py", '-S', "LUSI", "-v"])
   def test_station_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
@@ -219,7 +228,7 @@ class TestWaveformTable(unittest.TestCase):
     for group, size in zip(WAVEFORMS_DATA, SIZE):
       self.assertEqual(group[1].size, size)
 
-  @patch("sys.argv", ["AdriaArray.py", '-S', "LUSI", "PANI"])
+  @patch("sys.argv", ["AdriaArray.py", '-S', "LUSI", "PANI", "-v"])
   def test_stations_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
@@ -233,7 +242,7 @@ class TestWaveformTable(unittest.TestCase):
     for group, size in zip(WAVEFORMS_DATA, SIZE):
       self.assertEqual(group[1].size, size)
 
-  @patch("sys.argv", ["AdriaArray.py", '-C', "EHZ"])
+  @patch("sys.argv", ["AdriaArray.py", '-C', "EHZ", "-v"])
   def test_channel_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
@@ -244,7 +253,7 @@ class TestWaveformTable(unittest.TestCase):
     for group, size in zip(WAVEFORMS_DATA, SIZE):
       self.assertEqual(group[1].size, size)
 
-  @patch("sys.argv", ["AdriaArray.py", '-C', "HHZ", "HHN"])
+  @patch("sys.argv", ["AdriaArray.py", '-C', "HHZ", "HHN", "-v"])
   def test_channels_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
@@ -264,7 +273,8 @@ class TestWaveformTable(unittest.TestCase):
     for group, size in zip(WAVEFORMS_DATA, SIZE):
       self.assertEqual(group[1].size, size)
 
-  @patch("sys.argv", ["AdriaArray.py", '-N', "SI", "ST", '-S', "MAGA", "LUSI"])
+  @patch("sys.argv", ["AdriaArray.py", '-N', "SI", "ST", '-S', "MAGA", "LUSI",
+                      "-v"])
   def test_networks_stations_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
@@ -275,7 +285,8 @@ class TestWaveformTable(unittest.TestCase):
     for group, size in zip(WAVEFORMS_DATA, SIZE):
       self.assertEqual(group[1].size, size)
 
-  @patch("sys.argv", ["AdriaArray.py", '-N', "SI", "ST", '-C', "HHN", "HHZ"])
+  @patch("sys.argv", ["AdriaArray.py", '-N', "SI", "ST", '-C', "HHN", "HHZ",
+                      "-v"])
   def test_networks_channels_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
@@ -287,7 +298,7 @@ class TestWaveformTable(unittest.TestCase):
       self.assertEqual(group[1].size, size)
 
   @patch("sys.argv", ["AdriaArray.py", '-S', "MAGA", "LUSI", '-C', "HHN",
-                      "HHZ"])
+                      "HHZ", "-v"])
   def test_stations_channels_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
@@ -302,7 +313,7 @@ class TestWaveformTable(unittest.TestCase):
       self.assertEqual(group[1].size, size)
 
   @patch("sys.argv", ["AdriaArray.py", '-S', "MAGA", "LUSI", '-C', "HHN",
-                      "HHZ", '-D', "20230605", "20230606"])
+                      "HHZ", '-D', "230605", "230606", "-v"])
   def test_stations_channels_dates_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
@@ -316,7 +327,7 @@ class TestReadTraces(unittest.TestCase):
   def tearDown(self) -> None:
     shutil.rmtree(PRC_TEST_PATH)
 
-  @patch("sys.argv", ["AdriaArray.py"])
+  @patch("sys.argv", ["AdriaArray.py", "-v"])
   def test_non_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
@@ -326,7 +337,7 @@ class TestReadTraces(unittest.TestCase):
         self.assertEqual(clean, output)
         if clean: clean_stream(stream, PRC_TEST_PATH)
 
-  @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR])
+  @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR, "-v"])
   def test_group_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
@@ -337,7 +348,7 @@ class TestReadTraces(unittest.TestCase):
         if clean: clean_stream(stream, PRC_TEST_PATH)
 
   @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR, NETWORK_STR,
-                      STATION_STR])
+                      STATION_STR, "-v"])
   def test_groups_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
@@ -362,7 +373,7 @@ class TestModel(unittest.TestCase):
     shutil.rmtree(PRC_TEST_PATH)
 
   @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR, NETWORK_STR,
-                      STATION_STR, "-M", PHASENET_STR])
+                      STATION_STR, "-M", PHASENET_STR, "-v"])
   def test_classification(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
@@ -388,7 +399,7 @@ class TestModel(unittest.TestCase):
           self.assertEqual(a.phase, b.phase)
 
   @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR, NETWORK_STR,
-                      STATION_STR, "-M", PHASENET_STR])
+                      STATION_STR, "-M", PHASENET_STR, "-v"])
   def test_annotation(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)

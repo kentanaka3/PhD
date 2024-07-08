@@ -103,6 +103,7 @@ download the data.
 last date (inclusive) (*i.e.* range of dates) to be analyzed.
 - ```-G``` or ```--groups```: Analyze the data based on *groups* which are 
 categorical list of files which meet the criteria.
+- ```-J``` or ```--julian```: ß
 - ```-K``` or ```--key```: Key to have access to download the data from server.
 - ```-M``` or ```--models```: Select a specific Machine Learning based model.
 - ```-N``` or ```--network```: The user requests a sequence of networks to be
