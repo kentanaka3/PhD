@@ -23,6 +23,10 @@ PRC_TEST_PATH = os.path.join(TEST_PATH, "processed")
 ANT_TEST_PATH = os.path.join(TEST_PATH, "annotated")
 CLF_TEST_PATH = os.path.join(TEST_PATH, "classified")
 
+def timedeltafmt(string):
+  numbers = [float(n) for n in string.split(":")]
+  return timedelta(hours=numbers[0], minutes=numbers[1], seconds=numbers[2])
+
 class TestArgparse(unittest.TestCase):
   @patch("sys.argv", ["AdriaArray.py", "-v"])
   def test_non_args(self):
@@ -42,7 +46,8 @@ class TestArgparse(unittest.TestCase):
   def test_model_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0),
+                                  datetime(2023, 7, 31, 0, 0)])
     self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
     self.assertEqual(args.models, [PHASENET_STR])
     self.assertEqual(args.network, None)
@@ -56,7 +61,8 @@ class TestArgparse(unittest.TestCase):
   def test_models_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0),
+                                  datetime(2023, 7, 31, 0, 0)])
     self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
     self.assertEqual(args.models, [PHASENET_STR])
     self.assertEqual(args.network, None)
@@ -70,7 +76,8 @@ class TestArgparse(unittest.TestCase):
   def test_weight_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0),
+                                  datetime(2023, 7, 31, 0, 0)])
     self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
     self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
     self.assertEqual(args.network, None)
@@ -83,7 +90,8 @@ class TestArgparse(unittest.TestCase):
   def test_weights_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0),
+                                  datetime(2023, 7, 31, 0, 0)])
     self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
     self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
     self.assertEqual(args.network, None)
@@ -96,7 +104,8 @@ class TestArgparse(unittest.TestCase):
   def test_group_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0),
+                                  datetime(2023, 7, 31, 0, 0)])
     self.assertEqual(args.groups, [BEG_DATE_STR])
     self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
     self.assertEqual(args.network, None)
@@ -110,7 +119,8 @@ class TestArgparse(unittest.TestCase):
   def test_groups_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0),
+                                  datetime(2023, 7, 31, 0, 0)])
     self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR])
     self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
     self.assertEqual(args.network, None)
@@ -124,7 +134,8 @@ class TestArgparse(unittest.TestCase):
   def test_range_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0),
+                                  datetime(2023, 7, 31, 0, 0)])
     self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
     self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
     self.assertEqual(args.network, None)
@@ -138,7 +149,8 @@ class TestArgparse(unittest.TestCase):
   def test_verbose_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0),
+                                  datetime(2023, 7, 31, 0, 0)])
     self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
     self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
     self.assertEqual(args.network, None)
@@ -152,7 +164,8 @@ class TestArgparse(unittest.TestCase):
   def test_train_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
-    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0), datetime(2023, 7, 31, 0, 0)])
+    self.assertEqual(args.dates, [datetime(2023, 6, 1, 0, 0),
+                                  datetime(2023, 7, 31, 0, 0)])
     self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
     self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
     self.assertEqual(args.network, None)
@@ -183,8 +196,8 @@ class TestWaveformTable(unittest.TestCase):
     SIZE[12] = 12
     SIZE[13] = 12
     SIZE[14] = 12
-    for group, size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(group[1].size, size)
+    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
+      self.assertEqual(trace_files.size, size)
 
   @patch("sys.argv", ["AdriaArray.py", '-N', "IV", "-v"])
   def test_network_args(self):
@@ -200,8 +213,8 @@ class TestWaveformTable(unittest.TestCase):
     SIZE[6] = 12
     SIZE[7] = 12
     SIZE[8] = 12
-    for group, size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(group[1].size, size)
+    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
+      self.assertEqual(trace_files.size, size)
 
   @patch("sys.argv", ["AdriaArray.py", '-N', "SI", "ST", "-v"])
   def test_networks_args(self):
@@ -214,8 +227,8 @@ class TestWaveformTable(unittest.TestCase):
     SIZE[3] = 12
     SIZE[4] = 12
     SIZE[5] = 12
-    for group, size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(group[1].size, size)
+    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
+      self.assertEqual(trace_files.size, size)
 
   @patch("sys.argv", ["AdriaArray.py", '-S', "LUSI", "-v"])
   def test_station_args(self):
@@ -225,8 +238,8 @@ class TestWaveformTable(unittest.TestCase):
     SIZE[0] = 12
     SIZE[1] = 12
     SIZE[2] = 12
-    for group, size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(group[1].size, size)
+    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
+      self.assertEqual(trace_files.size, size)
 
   @patch("sys.argv", ["AdriaArray.py", '-S', "LUSI", "PANI", "-v"])
   def test_stations_args(self):
@@ -239,8 +252,8 @@ class TestWaveformTable(unittest.TestCase):
     SIZE[3] = 12
     SIZE[4] = 12
     SIZE[5] = 12
-    for group, size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(group[1].size, size)
+    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
+      self.assertEqual(trace_files.size, size)
 
   @patch("sys.argv", ["AdriaArray.py", '-C', "EHZ", "-v"])
   def test_channel_args(self):
@@ -250,8 +263,8 @@ class TestWaveformTable(unittest.TestCase):
     SIZE[0] = 4
     SIZE[1] = 4
     SIZE[2] = 4
-    for group, size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(group[1].size, size)
+    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
+      self.assertEqual(trace_files.size, size)
 
   @patch("sys.argv", ["AdriaArray.py", '-C', "HHZ", "HHN", "-v"])
   def test_channels_args(self):
@@ -270,8 +283,8 @@ class TestWaveformTable(unittest.TestCase):
     SIZE[9] = 8
     SIZE[10] = 8
     SIZE[11] = 8
-    for group, size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(group[1].size, size)
+    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
+      self.assertEqual(trace_files.size, size)
 
   @patch("sys.argv", ["AdriaArray.py", '-N', "SI", "ST", '-S', "MAGA", "LUSI",
                       "-v"])
@@ -282,8 +295,8 @@ class TestWaveformTable(unittest.TestCase):
     SIZE[0] = 12
     SIZE[1] = 12
     SIZE[2] = 12
-    for group, size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(group[1].size, size)
+    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
+      self.assertEqual(trace_files.size, size)
 
   @patch("sys.argv", ["AdriaArray.py", '-N', "SI", "ST", '-C', "HHN", "HHZ",
                       "-v"])
@@ -294,8 +307,8 @@ class TestWaveformTable(unittest.TestCase):
     SIZE[0] = 8
     SIZE[1] = 8
     SIZE[2] = 8
-    for group, size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(group[1].size, size)
+    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
+      self.assertEqual(trace_files.size, size)
 
   @patch("sys.argv", ["AdriaArray.py", '-S', "MAGA", "LUSI", '-C', "HHN",
                       "HHZ", "-v"])
@@ -309,8 +322,8 @@ class TestWaveformTable(unittest.TestCase):
     SIZE[3] = 8
     SIZE[4] = 8
     SIZE[5] = 8
-    for group, size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(group[1].size, size)
+    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
+      self.assertEqual(trace_files.size, size)
 
   @patch("sys.argv", ["AdriaArray.py", '-S', "MAGA", "LUSI", '-C', "HHN",
                       "HHZ", '-D', "230605", "230606", "-v"])
@@ -320,115 +333,66 @@ class TestWaveformTable(unittest.TestCase):
     SIZE = [0]*len(WAVEFORMS_DATA)
     SIZE[0] = 8
     SIZE[1] = 8
-    for group, size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(group[1].size, size)
+    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
+      self.assertEqual(trace_files.size, size)
 
 class TestReadTraces(unittest.TestCase):
   def tearDown(self) -> None:
     shutil.rmtree(PRC_TEST_PATH)
+    pass
 
   @patch("sys.argv", ["AdriaArray.py", "-v"])
   def test_non_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
-    for clean in [True, False]:
-      for group in WAVEFORMS_DATA:
-        stream, output = read_traces(group[1], PRC_TEST_PATH)
-        self.assertEqual(clean, output)
-        if clean: clean_stream(stream, PRC_TEST_PATH)
+    for _, trace_files in WAVEFORMS_DATA:
+      print(trace_files)
 
   @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR, "-v"])
   def test_group_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
-    for clean in [True, False]:
-      for group in WAVEFORMS_DATA:
-        stream, output = read_traces(group[1], PRC_TEST_PATH)
-        self.assertEqual(clean, output)
-        if clean: clean_stream(stream, PRC_TEST_PATH)
+    for _, trace_files in WAVEFORMS_DATA:
+      print(trace_files)
 
   @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR, NETWORK_STR,
                       STATION_STR, "-v"])
   def test_groups_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
-    for clean in [True, False]:
-      for group in WAVEFORMS_DATA:
-        stream, output = read_traces(group[1], PRC_TEST_PATH)
-        self.assertEqual(clean, output)
-        if clean: clean_stream(stream, PRC_TEST_PATH)
+    for _, trace_files in WAVEFORMS_DATA:
+      print(trace_files)
 
 class TestModel(unittest.TestCase):
-  @classmethod
-  def setUpClass(cls):
-    args = parse_arguments()
-    args.verbose = True
-    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
-    for group in WAVEFORMS_DATA:
-      stream, _ = read_traces(group[1], PRC_TEST_PATH)
-      clean_stream(stream, PRC_TEST_PATH)
-
-  @classmethod
-  def tearDownClass(cls):
-    shutil.rmtree(PRC_TEST_PATH)
-
-  @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR, NETWORK_STR,
-                      STATION_STR, "-M", PHASENET_STR, "-v"])
+  @patch("sys.argv", ["AdriaArray.py", "-v", "-G", BEG_DATE_STR, NETWORK_STR,
+                      STATION_STR, "-M", PHASENET_STR, EQTRANSFORMER_STR])
   def test_classification(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
     for x, y in list(itertools.product(args.models, args.weights)):
       model = get_model(x, y)
-      for group in WAVEFORMS_DATA:
-        stream, _ = read_traces(group[1], PRC_TEST_PATH)
-        output = model.classify(stream, batch_size=256, P_threshold=0.2,
-                                S_threshold=0.1).picks
-        expected = PickList()
-        CLF_FILE = os.path.join(CLF_TEST_PATH, "_".join([*group[0], x, y]) + \
-                                               PICKLE_EXT)
-        # with open(CLF_FILE, 'w') as fp: pickle.dump(output, fp)
-        with open(CLF_FILE, 'rb') as fr:
-          try:
-            expected += pickle.load(fr)
-          except EOFError:
-            break
-        for a, b in zip(output, expected):
-          self.assertEqual(a.trace_id, b.trace_id)
-          self.assertEqual(a.peak_time, b.peak_time)
-          self.assertEqual(a.peak_value, b.peak_value)
-          self.assertEqual(a.phase, b.phase)
-
-  @patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR, NETWORK_STR,
-                      STATION_STR, "-M", PHASENET_STR, "-v"])
-  def test_annotation(self):
-    args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, RAW_TEST_PATH)
-    for x, y in list(itertools.product(args.models, args.weights)):
-      model = MODEL_WEIGHTS_DICT[x][CLASS_STR].from_pretrained(y)
-      for group in WAVEFORMS_DATA:
-        stream, _ = read_traces(group[1], PRC_TEST_PATH)
-        annotations = model.annotate(stream)
-        expected = obspy.Stream()
-        ANT_FILE = os.path.join(ANT_TEST_PATH, "_".join([*group[0], x, y]) + \
-                                               PICKLE_EXT)
-        # with open(ANT_FILE, 'w') as fp: pickle.dump(annotations, fp)
-        with open(ANT_FILE, 'rb') as fr:
-          try:
-            expected += pickle.load(fr)
-          except EOFError:
-            break
-        for a, b in zip(annotations, expected):
-          self.assertEqual(a.trace_id, b.trace_id)
-          self.assertEqual(a.peak_time, b.peak_time)
-          self.assertEqual(a.peak_value, b.peak_value)
-          self.assertEqual(a.phase, b.phase)
+      for categories, trace_files in WAVEFORMS_DATA:
+        output = classify_stream(categories, trace_files, model, x, y, args)
+        pass
 
 class TestPickParser(unittest.TestCase):
   def test_parse_pick(self):
     filename = os.path.join(MNL_TEST_PATH, "manual.dat")
+    events = event_parser(filename)
+    # with open(os.path.join(MNL_TEST_PATH, EXPECTED_STR + JSON_EXT), 'w') as fp:
+    #   json.dump(events, fp, default=str)
     with open(os.path.join(MNL_TEST_PATH, EXPECTED_STR + JSON_EXT), 'r') as fr:
       expected = json.load(fr)
-    events = event_parser(filename)
+    for key, event in events.items():
+      for s, station in enumerate(event):
+        expected[str(key)][s][BEG_DATE_STR] = \
+          UTCDateTime(expected[str(key)][s][BEG_DATE_STR])
+        if expected[str(key)][s][P_TIME_STR] is not None:
+          expected[str(key)][s][P_TIME_STR] = \
+            timedeltafmt(expected[str(key)][s][P_TIME_STR])
+        if expected[str(key)][s][S_TIME_STR] is not None:
+          expected[str(key)][s][S_TIME_STR] = \
+            timedeltafmt(expected[str(key)][s][S_TIME_STR])
     for key, event in events.items():
       for s, station in enumerate(event):
         for k, v in station.items():

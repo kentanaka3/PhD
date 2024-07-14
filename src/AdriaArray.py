@@ -31,6 +31,7 @@ from obspy.core.utcdatetime import UTCDateTime
 SAMPLING_RATE = 100
 
 DATE_FMT = "%y%m%d"
+DATETIME_FMT = "%y%m%d%H%M%S"
 ONE_DAY = timedelta(days=1)
 PICK_OFFSET = timedelta(seconds=0.5)
 ASSOCIATE_OFFSET = timedelta(seconds=1)
@@ -134,7 +135,11 @@ def event_parser(filename : str) -> dict:
       result[P_TIME_STR] = \
         timedelta(seconds=float(result[P_TIME_STR][:2] + "." + \
                                 result[P_TIME_STR][2:]))
-      if result[S_TIME_STR]: result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
+      if result[S_TIME_STR]:
+        result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
+        result[S_TIME_STR] = \
+          timedelta(seconds=float(result[S_TIME_STR][:2] + "." + \
+                                  result[S_TIME_STR][2:]))
       events[event].append(result)
   # with open(os.path.splitext(filename)[0] + JSON_EXT, 'w') as fr:
   #   json.dump(events, fr, indent=2)
@@ -233,10 +238,10 @@ def parse_arguments():
   parser.add_argument('-v', "--verbose", default=False, action='store_true')
   return parser.parse_args()
 
-def waveform_table(args, data_folder = RAW_DATA_PATH) -> pd.DataFrame:
+def waveform_table(args, data_folder = RAW_DATA_PATH):
   """
   input:
-    - arguments ()
+    - args        ()
     - data_folder (os.path)
 
   output:
@@ -255,10 +260,10 @@ def waveform_table(args, data_folder = RAW_DATA_PATH) -> pd.DataFrame:
     fr = os.path.join(data_folder, f)
     if os.path.isfile(fr):
       try:
-        trc = obspy.read(fr, headonly=True)[0].stats
+        trc = obspy.read(fr, headonly=True, dtype=np.float32)[0].stats
       except:
         continue
-      start = UTCDateTime._set_day(value=trc.starttime.date)
+      start = UTCDateTime(trc.starttime.date)
       if trc.starttime.hour == 23: start += ONE_DAY
       end = start + ONE_DAY
       outcome = True
@@ -272,22 +277,21 @@ def waveform_table(args, data_folder = RAW_DATA_PATH) -> pd.DataFrame:
         outcome = outcome and (args.dates[0] <= start and end <= args.dates[1])
       if outcome:
         WAVEFORMS_DATA.append([fr, trc.network, trc.station, trc.channel,
-                               start])
+                               UTCDateTime.strftime(start, DATE_FMT)])
   return pd.DataFrame(WAVEFORMS_DATA, columns=HEADER).set_index(FILENAME_STR)\
                                                      .groupby(args.groups)
 
-def read_traces(group, data_folder = PRC_DATA_PATH, verbose = False,
-                headonly = False):
+def read_traces(trace_files, data_folder = PRC_DATA_PATH, verbose = False,
+                headonly = False) -> obspy.Stream:
   """
   input:
-    - group (pandas.api.typing.DataFrameGroupBy)
-    - data_folder (os.path)
-    - verbose (bool)
-    - headonly (bool)
+    - trace_files   (pandas.api.typing.DataFrameGroupBy)
+    - data_folder   (os.path)
+    - verbose       (bool)
+    - headonly      (bool)
 
   output:
-    - stream (obspy.Stream)
-    - clean (bool)
+    - stream        (obspy.Stream)
 
   errors:
     - None
@@ -297,8 +301,7 @@ def read_traces(group, data_folder = PRC_DATA_PATH, verbose = False,
   """
   if verbose: print("Reading the Traces")
   stream = obspy.Stream()
-  clean = True
-  for _, row in group.iterrows():
+  for _, row in trace_files.iterrows():
     fpath = os.path.join(data_folder, row[BEG_DATE_STR], row[NETWORK_STR],
                          row[STATION_STR])
     os.makedirs(fpath, exist_ok=True)
@@ -310,12 +313,13 @@ def read_traces(group, data_folder = PRC_DATA_PATH, verbose = False,
     if os.path.exists(TRC_FILE):
       if verbose:
         print(f"Found and reading previously processed file {TRC_FILE}")
-      stream += obspy.read(TRC_FILE, headonly=headonly, dtype=np.float16)
+      stream += obspy.read(TRC_FILE, headonly=headonly, dtype=np.float32)
     else:
       if verbose: print(f"Attempting to read from raw data")
-      stream += obspy.read(row.name, headonly=headonly, dtype=np.float16)
-      clean = False
-  return stream, clean
+      stream += obspy.read(row.name, headonly=headonly, dtype=np.float32)
+      # Clean the stream
+      clean_stream(stream)
+  return stream
 
 @nb.njit(nogil=True)
 def filter_data_(data : np.array) -> bool:
@@ -329,12 +333,13 @@ def filter_data(data : np.array) -> bool:
   return filter_data_(data)
 
 def clean_stream(stream : obspy.Stream, data_folder = PRC_DATA_PATH,
-                 verbose = False):
+                 verbose = False) -> None:
   """
   input:
     - stream          (obspy.Stream)
     - data_folder     (os.path)
     - verbose         (bool)
+
   output:
     - None
 
@@ -346,7 +351,7 @@ def clean_stream(stream : obspy.Stream, data_folder = PRC_DATA_PATH,
   """
   if verbose: print("Cleaning the Stream")
   for trc in stream:
-    start = UTCDateTime._set_day(value=trc.starttime.date)
+    start = UTCDateTime(trc.stats.starttime.date)
     if trc.stats.starttime.hour == 23: start += ONE_DAY
     end = start + ONE_DAY
     fpath = os.path.join(data_folder, UTCDateTime.strftime(start, DATE_FMT),
@@ -362,24 +367,26 @@ def clean_stream(stream : obspy.Stream, data_folder = PRC_DATA_PATH,
     if filter_data(trc.data): stream.remove(trc)
     # Sample has to be 100 Hz
     if trc.stats.sampling_rate != SAMPLING_RATE: trc.resample(SAMPLING_RATE)
-    trc.trim(start, end, pad=True, fill_value=0,
+    trc.trim(start, end, pad=True, fill_value=0, dtype=np.float32,
              nearest_sample=(trc.stats.starttime.hour != 23))
     trc.write(TRC_FILE, format=MSEED_STR)
 
-def classify_stream(group : list, stream : obspy.Stream, model : sbm, x : str,
-                    y : str, data_folder = CLF_DATA_PATH, verbose = False):
+def classify_stream(categories : tuple, trace_files : pd.core.frame.DataFrame,
+                    model : sbm, x : str, y : str, args,
+                    data_folder = CLF_DATA_PATH) -> PickList:
   """
   input:
-    - group         (list)
-    - stream        (obspy.Stream)
+    - categories    (tuple)
+    - trace_files   (pd.core.frame.DataFrame)
     - model         (seisbench.models)
     - x             (str)
     - y             (str)
-    - data_folder   ()
+    - args          ()
+    - data_folder   (os.path)
     - verbose       (bool)
 
   output:
-    - None
+    - output        (seisbench.util.PickList)
 
   errors:
     - None
@@ -387,18 +394,11 @@ def classify_stream(group : list, stream : obspy.Stream, model : sbm, x : str,
   notes:
 
   """
-  if args.verbose: print("Classifying the Stream")
-  # Classification
-  fpath = os.path.join(data_folder, *group, x, y)
+  fpath = os.path.join(data_folder, *categories, x, y)
   os.makedirs(fpath, exist_ok=True)
-  CLF_FILE = os.path.join(fpath, "_".join([*group, x, y]) + PICKLE_EXT)
-  if not os.path.isfile(CLF_FILE):
-    output = model.classify(stream, batch_size=256, P_threshold=args.pwave,
-                            S_threshold=args.swave).picks
-    pickle.dump(output, open(CLF_FILE, 'wb'))
-  else:
-    if args.verbose:
-      print(f"Found and loading previously classified results for {x}({y})")
+  CLF_FILE = os.path.join(fpath, "_".join([*categories, x, y]) + PICKLE_EXT)
+  if os.path.isfile(CLF_FILE):
+    if args.verbose: print("Found and loading previously classified results")
     output = PickList()
     with open(CLF_FILE, 'rb') as fr:
       while True:
@@ -406,10 +406,17 @@ def classify_stream(group : list, stream : obspy.Stream, model : sbm, x : str,
           output += pickle.load(fr)
         except EOFError:
           break
-  if verbose:
+  else:
+    stream = read_traces(trace_files, verbose=args.verbose)
+    if args.verbose: print("Classifying the Stream")
+    output = model.classify(stream, batch_size=256, P_threshold=args.pwave,
+                            S_threshold=args.swave).picks
+    pickle.dump(output, open(CLF_FILE, 'wb'))
+  if args.verbose:
     print(f"Classification results for model: {x}, with preloaded weight: "
-          f"{y}, grouped by {group}")
+          f"{y}, categorized by {categories}")
     print(output)
+  return output
 
 def get_model(x : str, y : str) -> sbm:
   """
@@ -452,13 +459,9 @@ def main(args):
     for x, y in list(itertools.product(args.models, args.weights)):
       model = get_model(x, y)
       if model is None: continue
-      for group in WAVEFORMS_DATA:
-        stream, clean = read_traces(group[1], verbose=args.verbose)
-        # Clean the stream
-        if not clean: clean_stream(stream)
-        stream = stream.merge(method=1, fill_value='interpolate')
+      for categories, trace_files in WAVEFORMS_DATA:
         # Classification
-        classify_stream(group[0], stream, model, x, y, verbose=args.verbose)
+        output = classify_stream(categories, trace_files, model, x, y, args)
         # # Annotation
         # os.makedirs(ANT_DATA_PATH, exist_ok=True)
         # if len(output):
