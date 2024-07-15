@@ -393,7 +393,7 @@ def classify_stream(categories : tuple, trace_files : pd.core.frame.DataFrame,
   DATA_PATH = Path(args.directory).parent
   fpath = os.path.join(DATA_PATH, CLF_STR, *categories)
   os.makedirs(fpath, exist_ok=True)
-  CLF_FILE = os.path.join(fpath, "_".join(categories) + PICKLE_EXT)
+  CLF_FILE = os.path.join(fpath, "_".join([*categories, x, y]) + PICKLE_EXT)
   if os.path.isfile(CLF_FILE):
     if args.verbose: print("Found and loading previously classified results")
     output = PickList()
