@@ -1,11 +1,15 @@
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 from pathlib import Path
-# Set the "./../inc" from the script folder
-lib_path = os.path.join(Path(os.path.dirname(__file__)).parent, "inc")
+# Set the project folder
+PRJ_PATH = Path(os.path.dirname(__file__)).parent
+INC_PATH = os.path.join(PRJ_PATH, "inc")
+IMG_PATH = os.path.join(PRJ_PATH, "img")
+DATA_PATH = os.path.join(PRJ_PATH, "data")
+RAW_DATA_PATH = os.path.join(DATA_PATH, "waveforms")
 import sys
 # Add to path
-if lib_path not in sys.path: sys.path.append(lib_path)
+if INC_PATH not in sys.path: sys.path.append(INC_PATH)
 from constants import *
 import re
 import json
@@ -36,12 +40,16 @@ ONE_DAY = timedelta(days=1)
 PICK_OFFSET = timedelta(seconds=0.5)
 ASSOCIATE_OFFSET = timedelta(seconds=1)
 
+PRC_STR = "processed"
+CLF_STR = "classified"
+
 # Extensions
 PICKLE_EXT = ".pkl"
 TORCH_EXT = ".pt"
 MSEED_EXT = ".mseed"
 JSON_EXT = ".json"
 PNG_EXT = ".png"
+PUN_EXT = ".pun"
 
 PRC_MSEED_FMT = "{NETWORK}.{STATION}..{CHANNEL}__{BEGDT}" + MSEED_EXT
 
@@ -74,8 +82,6 @@ COLORS = {
   "Detection": "C2"
 }
 
-DATA_PATH = "data"
-IMG_PATH = "img"
 MSEED_STR = "MSEED"
 
 FILENAME_STR = "FILENAME"
@@ -156,12 +162,6 @@ SCEDC_STR = "scedc"
 # TODO: Colab PyOcto associator to be tested with GaMMA
 # TODO: Get Vel Model
 
-MNL_DATA_PATH = os.path.join(DATA_PATH, "manual")
-RAW_DATA_PATH = os.path.join(DATA_PATH, "waveforms")
-PRC_DATA_PATH = os.path.join(DATA_PATH, "processed")
-ANT_DATA_PATH = os.path.join(DATA_PATH, "annotated")
-CLF_DATA_PATH = os.path.join(DATA_PATH, "classified")
-
 def is_file_path(string : str) -> str:
   """
   input:
@@ -238,11 +238,10 @@ def parse_arguments():
   parser.add_argument('-v', "--verbose", default=False, action='store_true')
   return parser.parse_args()
 
-def waveform_table(args, data_folder = RAW_DATA_PATH):
+def waveform_table(args):
   """
   input:
     - args        ()
-    - data_folder (os.path)
 
   output:
     - pandas.DataFrame
@@ -254,10 +253,11 @@ def waveform_table(args, data_folder = RAW_DATA_PATH):
     If the starttime of the trace is 23:00 hrs, then we assume the date to be
     recorded is the next day
   """
+  global RAW_DATA_PATH
   if args.verbose: print("Constructing the Table of Files")
   WAVEFORMS_DATA = []
-  for f in os.listdir(data_folder):
-    fr = os.path.join(data_folder, f)
+  for f in os.listdir(RAW_DATA_PATH):
+    fr = os.path.join(RAW_DATA_PATH, f)
     if os.path.isfile(fr):
       try:
         trc = obspy.read(fr, headonly=True, dtype=np.float32)[0].stats
@@ -281,12 +281,11 @@ def waveform_table(args, data_folder = RAW_DATA_PATH):
   return pd.DataFrame(WAVEFORMS_DATA, columns=HEADER).set_index(FILENAME_STR)\
                                                      .groupby(args.groups)
 
-def read_traces(trace_files, data_folder = PRC_DATA_PATH, verbose = False,
-                headonly = False) -> obspy.Stream:
+def read_traces(trace_files, verbose = False, headonly = False) -> \
+  obspy.Stream:
   """
   input:
     - trace_files   (pandas.api.typing.DataFrameGroupBy)
-    - data_folder   (os.path)
     - verbose       (bool)
     - headonly      (bool)
 
@@ -299,11 +298,12 @@ def read_traces(trace_files, data_folder = PRC_DATA_PATH, verbose = False,
   notes:
 
   """
+  global DATA_PATH
   if verbose: print("Reading the Traces")
   stream = obspy.Stream()
   for _, row in trace_files.iterrows():
-    fpath = os.path.join(data_folder, row[BEG_DATE_STR], row[NETWORK_STR],
-                         row[STATION_STR])
+    fpath = os.path.join(DATA_PATH, PRC_STR, row[BEG_DATE_STR],
+                         row[NETWORK_STR], row[STATION_STR])
     os.makedirs(fpath, exist_ok=True)
     TRC_FILE = os.path.join(fpath,
                             PRC_MSEED_FMT.format(NETWORK=row[NETWORK_STR],
@@ -332,12 +332,10 @@ def filter_data(data : np.array) -> bool:
   # if np.isnan(trc.data).any() or np.isinf(trc.data).any(): return True
   return filter_data_(data)
 
-def clean_stream(stream : obspy.Stream, data_folder = PRC_DATA_PATH,
-                 verbose = False) -> None:
+def clean_stream(stream : obspy.Stream, verbose = False) -> None:
   """
   input:
     - stream          (obspy.Stream)
-    - data_folder     (os.path)
     - verbose         (bool)
 
   output:
@@ -349,12 +347,13 @@ def clean_stream(stream : obspy.Stream, data_folder = PRC_DATA_PATH,
   notes:
   
   """
+  global DATA_PATH
   if verbose: print("Cleaning the Stream")
   for trc in stream:
     start = UTCDateTime(trc.stats.starttime.date)
     if trc.stats.starttime.hour == 23: start += ONE_DAY
     end = start + ONE_DAY
-    fpath = os.path.join(data_folder, UTCDateTime.strftime(start, DATE_FMT),
+    fpath = os.path.join(DATA_PATH, UTCDateTime.strftime(start, DATE_FMT),
                          trc.stats.network, trc.stats.station)
     os.makedirs(fpath, exist_ok=True)
     TRC_FILE = \
@@ -367,13 +366,12 @@ def clean_stream(stream : obspy.Stream, data_folder = PRC_DATA_PATH,
     if filter_data(trc.data): stream.remove(trc)
     # Sample has to be 100 Hz
     if trc.stats.sampling_rate != SAMPLING_RATE: trc.resample(SAMPLING_RATE)
-    trc.trim(start, end, pad=True, fill_value=0, dtype=np.float32,
+    trc.trim(start, end, pad=True, fill_value=0,
              nearest_sample=(trc.stats.starttime.hour != 23))
     trc.write(TRC_FILE, format=MSEED_STR)
 
 def classify_stream(categories : tuple, trace_files : pd.core.frame.DataFrame,
-                    model : sbm, x : str, y : str, args,
-                    data_folder = CLF_DATA_PATH) -> PickList:
+                    model : sbm, x : str, y : str, args) -> PickList:
   """
   input:
     - categories    (tuple)
@@ -382,8 +380,6 @@ def classify_stream(categories : tuple, trace_files : pd.core.frame.DataFrame,
     - x             (str)
     - y             (str)
     - args          ()
-    - data_folder   (os.path)
-    - verbose       (bool)
 
   output:
     - output        (seisbench.util.PickList)
@@ -394,7 +390,8 @@ def classify_stream(categories : tuple, trace_files : pd.core.frame.DataFrame,
   notes:
 
   """
-  fpath = os.path.join(data_folder, *categories, x, y)
+  global DATA_PATH
+  fpath = os.path.join(DATA_PATH, CLF_STR, *categories, x, y)
   os.makedirs(fpath, exist_ok=True)
   CLF_FILE = os.path.join(fpath, "_".join([*categories, x, y]) + PICKLE_EXT)
   if os.path.isfile(CLF_FILE):
@@ -446,14 +443,6 @@ def get_model(x : str, y : str) -> sbm:
   return model
 
 def main(args):
-  RAW_DATA_PATH = args.directory
-  DATA_PATH = os.path.dirname(RAW_DATA_PATH)
-  global PRC_DATA_PATH
-  PRC_DATA_PATH = os.path.join(DATA_PATH, "processed")
-  global ANT_DATA_PATH
-  ANT_DATA_PATH = os.path.join(DATA_PATH, "annotated")
-  global CLF_DATA_PATH
-  CLF_DATA_PATH = os.path.join(DATA_PATH, "classified")
   WAVEFORMS_DATA = waveform_table(args, data_folder=args.directory)
   if not args.train: # Test
     for x, y in list(itertools.product(args.models, args.weights)):
@@ -463,47 +452,12 @@ def main(args):
         # Classification
         output = classify_stream(categories, trace_files, model, x, y, args)
         # # Annotation
-        # os.makedirs(ANT_DATA_PATH, exist_ok=True)
-        # if len(output):
-        #   ANT_FILE = os.path.join(ANT_DATA_PATH,
-        #                           "_".join([*group[0], x, y]) + PICKLE_EXT)
-        #   if not os.path.isfile(ANT_FILE):
-        #     annotations = model.annotate(stream)
-        #     pickle.dump(annotations, open(ANT_FILE, 'wb'))
-        #   else:
-        #     if args.verbose:
-        #       print("Found and loading previously annotated results for "
-        #             f"{x}({y})")
-        #     annotations = obspy.Stream()
-        #     with open(ANT_FILE, 'rb') as fr:
-        #       while True:
-        #         try:
-        #           annotations += pickle.load(fr)
-        #         except EOFError:
-        #           break
-        #   if args.verbose:
-        #     print(f"Annotations results for model: {x}, with preloaded "
-        #           f"weight: {y}, grouped by {[*group[0]]}")
-        #     print(annotations)
-        #   fig = plt.figure(figsize=(15, 10))
-        #   axs = fig.subplots(2, 1, sharex=True, gridspec_kw={'hspace': 0})
-        #   for trc, ant in zip(stream, annotations):
-        #     axs[0].plot(trc.times("matplotlib"), trc.data, label=trc.id)
-        #     if ant.stats.channel[-1] != "N":  # Do not plot noise curve
-        #       axs[1].plot(ant.times("matplotlib"), ant.data, label=ant.id)
-        #   axs[0].legend()
-        #   axs[1].legend()
-        #   fig.suptitle(f"{trc.stats.starttime.date} - {x}({y})")
-        #   # Zoom in-out
-        #   plt.savefig(os.path.join(IMG_PATH, "_".join([*group[0], x, y]) + \
-        #                                      PNG_EXT))
-        #   if args.verbose:
-        #     plt.show()
-        #   plt.close()
   else: # Train
     pass
   return
 
 if __name__ == "__main__":
   args = parse_arguments()
+  RAW_DATA_PATH = args.directory
+  DATA_PATH = os.path.dirname(RAW_DATA_PATH)
   main(args)

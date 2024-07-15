@@ -5,7 +5,7 @@ testing:
 	python -m test.test_AdriaArray
 
 clean:
-	rm -f K*.err K*.out
+	rm -f K*.err K*.out; clear
 
 clean_annotate:
 	rm -rf data/annotated && clear
