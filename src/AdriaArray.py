@@ -6,7 +6,6 @@ PRJ_PATH = Path(os.path.dirname(__file__)).parent
 INC_PATH = os.path.join(PRJ_PATH, "inc")
 IMG_PATH = os.path.join(PRJ_PATH, "img")
 DATA_PATH = os.path.join(PRJ_PATH, "data")
-RAW_DATA_PATH = os.path.join(DATA_PATH, "waveforms")
 import sys
 # Add to path
 if INC_PATH not in sys.path: sys.path.append(INC_PATH)
@@ -157,7 +156,7 @@ ORIGINAL_STR = "original"
 STEAD_STR = "stead"
 SCEDC_STR = "scedc"
 
-# TODO: Run 
+# TODO: Run
 # TODO: Study GaMMA associator with folder
 # TODO: Colab PyOcto associator to be tested with GaMMA
 # TODO: Get Vel Model
@@ -227,8 +226,8 @@ def parse_arguments():
                            "selected Machine Learning based model. "
                            "WARNING: Weights which are not available for the "
                            "selected models will not be considered")
-  parser.add_argument('-d', "--directory", default=RAW_DATA_PATH, type=str,
-                      required=False,
+  parser.add_argument('-d', "--directory", required=False, type=str,
+                      default=os.path.join(DATA_PATH, "waveforms"),
                       help="Directory path to the raw files")
   parser.add_argument('-p', "--pwave", default=0.2, type=float, required=False,
                       help="P wave threshold.")
@@ -280,12 +279,11 @@ def waveform_table(args):
   return pd.DataFrame(WAVEFORMS_DATA, columns=HEADER).set_index(FILENAME_STR)\
                                                      .groupby(args.groups)
 
-def read_traces(trace_files, verbose = False, headonly = False) -> \
-  obspy.Stream:
+def read_traces(trace_files, args, headonly = False) -> obspy.Stream:
   """
   input:
     - trace_files   (pandas.api.typing.DataFrameGroupBy)
-    - verbose       (bool)
+    - args          (bool)
     - headonly      (bool)
 
   output:
@@ -298,7 +296,8 @@ def read_traces(trace_files, verbose = False, headonly = False) -> \
 
   """
   global DATA_PATH
-  if verbose: print("Reading the Traces")
+  DATA_PATH = Path(args.directory).parent
+  if args.verbose: print("Reading the Traces")
   stream = obspy.Stream()
   for _, row in trace_files.iterrows():
     fpath = os.path.join(DATA_PATH, PRC_STR, row[BEG_DATE_STR],
@@ -310,14 +309,14 @@ def read_traces(trace_files, verbose = False, headonly = False) -> \
                                                  CHANNEL=row[CHANNEL_STR],
                                                  BEGDT=row[BEG_DATE_STR]))
     if os.path.exists(TRC_FILE):
-      if verbose:
+      if args.verbose:
         print(f"Found and reading previously processed file {TRC_FILE}")
       stream += obspy.read(TRC_FILE, headonly=headonly)
     else:
-      if verbose: print(f"Attempting to read from raw data")
+      if args.verbose: print(f"Attempting to read from raw data")
       stream += obspy.read(row.name, headonly=headonly)
       # Clean the stream
-      clean_stream(stream)
+      clean_stream(stream, args)
   return stream
 
 @nb.njit(nogil=True)
@@ -326,16 +325,16 @@ def filter_data_(data : np.array) -> bool:
     if np.isnan(d) or np.isinf(d): return True
   return False
 
-@nb.jit
+@nb.jit()
 def filter_data(data : np.array) -> bool:
   # if np.isnan(trc.data).any() or np.isinf(trc.data).any(): return True
   return filter_data_(data)
 
-def clean_stream(stream : obspy.Stream, verbose = False) -> None:
+def clean_stream(stream : obspy.Stream, args) -> None:
   """
   input:
-    - stream          (obspy.Stream)
-    - verbose         (bool)
+    - stream      (obspy.Stream)
+    - args        ()
 
   output:
     - None
@@ -344,17 +343,18 @@ def clean_stream(stream : obspy.Stream, verbose = False) -> None:
     - None
 
   notes:
-  
+
   """
   global DATA_PATH
-  if verbose: print("Cleaning the Stream")
+  DATA_PATH = Path(args.directory).parent
+  if args.verbose: print("Cleaning the Stream")
   for trc in stream:
     start = UTCDateTime(trc.stats.starttime.date)
     if trc.stats.starttime.hour == 23: start += ONE_DAY
     end = start + ONE_DAY
-    fpath = os.path.join(DATA_PATH, UTCDateTime.strftime(start, DATE_FMT),
+    fpath = os.path.join(DATA_PATH, PRC_STR,
+                         UTCDateTime.strftime(start, DATE_FMT),
                          trc.stats.network, trc.stats.station)
-    os.makedirs(fpath, exist_ok=True)
     TRC_FILE = \
       os.path.join(fpath,
                    PRC_MSEED_FMT.format(NETWORK=trc.stats.network,
@@ -390,9 +390,10 @@ def classify_stream(categories : tuple, trace_files : pd.core.frame.DataFrame,
 
   """
   global DATA_PATH
-  fpath = os.path.join(DATA_PATH, CLF_STR, *categories, x, y)
+  DATA_PATH = Path(args.directory).parent
+  fpath = os.path.join(DATA_PATH, CLF_STR, *categories)
   os.makedirs(fpath, exist_ok=True)
-  CLF_FILE = os.path.join(fpath, "_".join([*categories, x, y]) + PICKLE_EXT)
+  CLF_FILE = os.path.join(fpath, "_".join(categories) + PICKLE_EXT)
   if os.path.isfile(CLF_FILE):
     if args.verbose: print("Found and loading previously classified results")
     output = PickList()
@@ -403,7 +404,7 @@ def classify_stream(categories : tuple, trace_files : pd.core.frame.DataFrame,
         except EOFError:
           break
   else:
-    stream = read_traces(trace_files, verbose=args.verbose)
+    stream = read_traces(trace_files, args)
     if args.verbose: print("Classifying the Stream")
     output = model.classify(stream, batch_size=256, P_threshold=args.pwave,
                             S_threshold=args.swave).picks
@@ -457,6 +458,4 @@ def main(args):
 
 if __name__ == "__main__":
   args = parse_arguments()
-  RAW_DATA_PATH = args.directory
-  DATA_PATH = os.path.dirname(RAW_DATA_PATH)
   main(args)

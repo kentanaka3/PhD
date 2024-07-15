@@ -3,12 +3,14 @@ import os
 from pathlib import Path
 PRJ_PATH = Path(os.path.dirname(__file__)).parent
 SRC_PATH = os.path.join(PRJ_PATH, "src")
+DATA_PATH = os.path.join(PRJ_PATH, "data", "test")
 import sys
 # Add to path
 if SRC_PATH not in sys.path: sys.path.append(SRC_PATH)
 import unittest
 import shutil
 import json
+import AdriaArray as AA
 from AdriaArray import *
 
 EXPECTED_STR = "expected"
@@ -18,8 +20,7 @@ def timedeltafmt(string):
   return timedelta(hours=numbers[0], minutes=numbers[1], seconds=numbers[2])
 
 class TestArgparse(unittest.TestCase):
-  @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-v", "-d", RAW_DATA_PATH])
+  @unittest.mock.patch("sys.argv", ["AdriaArray.py", "-v"])
   def test_non_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
@@ -35,9 +36,7 @@ class TestArgparse(unittest.TestCase):
     self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
                                     SCEDC_STR])
 
-  @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-M", PHASENET_STR, "-v", "-d",
-                        RAW_DATA_PATH])
+  @unittest.mock.patch("sys.argv", ["AdriaArray.py", "-M", PHASENET_STR, "-v"])
   def test_model_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
@@ -53,8 +52,7 @@ class TestArgparse(unittest.TestCase):
     self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
                                     SCEDC_STR])
 
-  @unittest.mock.patch("sys.argv", ["AdriaArray.py", "-M", PHASENET_STR, "-v",
-                                    "-d", RAW_DATA_PATH])
+  @unittest.mock.patch("sys.argv", ["AdriaArray.py", "-M", PHASENET_STR, "-v"])
   def test_models_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
@@ -70,9 +68,7 @@ class TestArgparse(unittest.TestCase):
     self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
                                     SCEDC_STR])
 
-  @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-W", INSTANCE_STR, "-v", "-d",
-                        RAW_DATA_PATH])
+  @unittest.mock.patch("sys.argv", ["AdriaArray.py", "-W", INSTANCE_STR, "-v"])
   def test_weight_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
@@ -89,7 +85,7 @@ class TestArgparse(unittest.TestCase):
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", "-W", INSTANCE_STR, ORIGINAL_STR,
-                        "-d", RAW_DATA_PATH, "-v"])
+                        "-v"])
   def test_weights_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
@@ -104,9 +100,7 @@ class TestArgparse(unittest.TestCase):
     self.assertEqual(args.verbose, True)
     self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR])
 
-  @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-G", BEG_DATE_STR, "-v", "-d",
-                        RAW_DATA_PATH])
+  @unittest.mock.patch("sys.argv", ["AdriaArray.py", "-G", BEG_DATE_STR, "-v"])
   def test_group_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
@@ -123,8 +117,8 @@ class TestArgparse(unittest.TestCase):
                                     SCEDC_STR])
 
   @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-G", BEG_DATE_STR, NETWORK_STR, "-d",
-                        RAW_DATA_PATH, "-v"])
+                       ["AdriaArray.py", "-G", BEG_DATE_STR, NETWORK_STR,
+                        "-v"])
   def test_groups_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
@@ -141,8 +135,7 @@ class TestArgparse(unittest.TestCase):
                                     SCEDC_STR])
 
   @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-D", "230601", "230731", "-v", "-d",
-                        RAW_DATA_PATH])
+                       ["AdriaArray.py", "-D", "230601", "230731", "-v"])
   def test_range_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
@@ -158,8 +151,7 @@ class TestArgparse(unittest.TestCase):
     self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
                                     SCEDC_STR])
 
-  @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-v", "-d", RAW_DATA_PATH])
+  @unittest.mock.patch("sys.argv", ["AdriaArray.py", "-v"])
   def test_verbose_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
@@ -175,8 +167,7 @@ class TestArgparse(unittest.TestCase):
     self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
                                     SCEDC_STR])
 
-  @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-T", "-v", "-d", RAW_DATA_PATH])
+  @unittest.mock.patch("sys.argv", ["AdriaArray.py", "-T", "-v"])
   def test_train_args(self):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
@@ -193,8 +184,7 @@ class TestArgparse(unittest.TestCase):
                                     SCEDC_STR])
 
 class TestWaveformTable(unittest.TestCase):
-  @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-v", "-d", RAW_DATA_PATH])
+  @unittest.mock.patch("sys.argv", ["AdriaArray.py", "-v"])
   def test_non_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
@@ -217,9 +207,7 @@ class TestWaveformTable(unittest.TestCase):
     for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
       self.assertEqual(trace_files.size, size)
 
-  @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", '-N', "IV", "-d", RAW_DATA_PATH,
-                        "-v"])
+  @unittest.mock.patch("sys.argv", ["AdriaArray.py", '-N', "IV", "-v"])
   def test_network_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
@@ -236,9 +224,7 @@ class TestWaveformTable(unittest.TestCase):
     for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
       self.assertEqual(trace_files.size, size)
 
-  @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", '-N', "SI", "ST", "-v", "-d",
-                        RAW_DATA_PATH])
+  @unittest.mock.patch("sys.argv", ["AdriaArray.py", '-N', "SI", "ST", "-v"])
   def test_networks_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
@@ -252,9 +238,7 @@ class TestWaveformTable(unittest.TestCase):
     for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
       self.assertEqual(trace_files.size, size)
 
-  @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", '-S', "LUSI", "-v", "-d",
-                        RAW_DATA_PATH])
+  @unittest.mock.patch("sys.argv", ["AdriaArray.py", '-S', "LUSI", "-v"])
   def test_station_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
@@ -266,8 +250,7 @@ class TestWaveformTable(unittest.TestCase):
       self.assertEqual(trace_files.size, size)
 
   @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", '-S', "LUSI", "PANI", "-v", "-d",
-                        RAW_DATA_PATH])
+                       ["AdriaArray.py", '-S', "LUSI", "PANI", "-v"])
   def test_stations_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
@@ -281,9 +264,7 @@ class TestWaveformTable(unittest.TestCase):
     for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
       self.assertEqual(trace_files.size, size)
 
-  @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", '-C', "EHZ", "-v", "-d",
-                        RAW_DATA_PATH])
+  @unittest.mock.patch("sys.argv", ["AdriaArray.py", '-C', "EHZ", "-v"])
   def test_channel_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
@@ -295,8 +276,7 @@ class TestWaveformTable(unittest.TestCase):
       self.assertEqual(trace_files.size, size)
 
   @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", '-C', "HHZ", "HHN", "-v", "-d",
-                        RAW_DATA_PATH])
+                       ["AdriaArray.py", '-C', "HHZ", "HHN", "-v"])
   def test_channels_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
@@ -318,7 +298,7 @@ class TestWaveformTable(unittest.TestCase):
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", "-v", '-N', "SI", "ST", '-S', "MAGA",
-                        "LUSI", "-d", RAW_DATA_PATH])
+                        "LUSI"])
   def test_networks_stations_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
@@ -331,7 +311,7 @@ class TestWaveformTable(unittest.TestCase):
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", '-N', "SI", "ST", '-C', "HHN", "HHZ",
-                        "-v", "-d", RAW_DATA_PATH])
+                        "-v"])
   def test_networks_channels_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
@@ -344,7 +324,7 @@ class TestWaveformTable(unittest.TestCase):
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", '-S', "MAGA", "LUSI", '-C', "HHN",
-                        "HHZ", "-v", "-d", RAW_DATA_PATH])
+                        "HHZ", "-v"])
   def test_stations_channels_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
@@ -360,8 +340,7 @@ class TestWaveformTable(unittest.TestCase):
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", '-S', "MAGA", "LUSI", '-C', "HHN",
-                        "HHZ", '-D', "230605", "230606", "-v", "-d",
-                        RAW_DATA_PATH])
+                        "HHZ", '-D', "230605", "230606", "-v"])
   def test_stations_channels_dates_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
@@ -372,43 +351,35 @@ class TestWaveformTable(unittest.TestCase):
       self.assertEqual(trace_files.size, size)
 
 class TestReadTraces(unittest.TestCase):
-  def tearDown(self) -> None:
-    shutil.rmtree(os.path.join(DATA_PATH, PRC_STR))
-    pass
-
-  @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-v", "-d", RAW_DATA_PATH])
+  @unittest.mock.patch("sys.argv", ["AdriaArray.py", "-v"])
   def test_non_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
-    for _, trace_files in WAVEFORMS_DATA:
-      print(trace_files)
 
   @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-G", BEG_DATE_STR, "-v", "-d",
-                        RAW_DATA_PATH])
+                       ["AdriaArray.py", "-G", BEG_DATE_STR, "-v"])
   def test_group_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
-    for _, trace_files in WAVEFORMS_DATA:
-      print(trace_files)
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", "-v", "-G", BEG_DATE_STR, NETWORK_STR,
-                        STATION_STR, "-d", RAW_DATA_PATH])
+                        STATION_STR])
   def test_groups_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
-    for _, trace_files in WAVEFORMS_DATA:
-      print(trace_files)
 
 class TestModel(unittest.TestCase):
   @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-v", "-G", BEG_DATE_STR, NETWORK_STR,
-                        STATION_STR, "-M", PHASENET_STR, EQTRANSFORMER_STR,
-                        "-d", RAW_DATA_PATH])
+                       ["AdriaArray.py", "-v", "--directory", RAW_DATA_PATH,
+                        "-G", BEG_DATE_STR, NETWORK_STR, STATION_STR, "-M",
+                        PHASENET_STR, EQTRANSFORMER_STR])
   def test_classification(self):
     args = parse_arguments()
+    global RAW_DATA_PATH
+    args.directory = RAW_DATA_PATH
+    global DATA_PATH
+    DATA_PATH = Path(RAW_DATA_PATH).parent
     WAVEFORMS_DATA = waveform_table(args)
     for x, y in list(itertools.product(args.models, args.weights)):
       model = get_model(x, y)
@@ -418,13 +389,13 @@ class TestModel(unittest.TestCase):
 
 class TestPickParser(unittest.TestCase):
   def test_parse_pick(self):
-    global DATA_PATH
-    MNL_DATA_PATH = os.path.join(DATA_PATH, "manual")
-    filename = os.path.join(MNL_DATA_PATH, "manual.dat")
+    global TEST_PATH
+    MNL_TEST_PATH = os.path.join(TEST_PATH, "manual")
+    filename = os.path.join(MNL_TEST_PATH, "manual.dat")
     events = event_parser(filename)
-    # with open(os.path.join(MNL_DATA_PATH, EXPECTED_STR + JSON_EXT), 'w') as fp:
+    # with open(os.path.join(MNL_TEST_PATH, EXPECTED_STR + JSON_EXT), 'w') as fp:
     #   json.dump(events, fp, default=str)
-    with open(os.path.join(MNL_DATA_PATH, EXPECTED_STR + JSON_EXT), 'r') as fr:
+    with open(os.path.join(MNL_TEST_PATH, EXPECTED_STR + JSON_EXT), 'r') as fr:
       expected = json.load(fr)
     for key, event in events.items():
       for s, station in enumerate(event):
@@ -442,6 +413,6 @@ class TestPickParser(unittest.TestCase):
           self.assertEqual(v, expected[str(key)][s][k])
 
 if __name__ == "__main__":
-  DATA_PATH = os.path.join(DATA_PATH, "test")
+  DATA_PATH = os.path.join(PRJ_PATH, "data", "test")
   RAW_DATA_PATH = os.path.join(DATA_PATH, "waveforms")
   unittest.main()
