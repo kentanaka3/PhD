@@ -11,9 +11,6 @@ import shutil
 import json
 from AdriaArray import *
 
-DATA_PATH = os.path.join(DATA_PATH, "test")
-RAW_DATA_PATH = os.path.join(DATA_PATH, "waveforms")
-
 EXPECTED_STR = "expected"
 
 def timedeltafmt(string):
@@ -200,7 +197,7 @@ class TestWaveformTable(unittest.TestCase):
                        ["AdriaArray.py", "-v", "-d", RAW_DATA_PATH])
   def test_non_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, RAW_DATA_PATH)
+    WAVEFORMS_DATA = waveform_table(args)
     SIZE = [0]*len(WAVEFORMS_DATA)
     SIZE[0] = 12
     SIZE[1] = 12
@@ -225,7 +222,7 @@ class TestWaveformTable(unittest.TestCase):
                         "-v"])
   def test_network_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, RAW_DATA_PATH)
+    WAVEFORMS_DATA = waveform_table(args)
     SIZE = [0]*len(WAVEFORMS_DATA)
     SIZE[0] = 12
     SIZE[1] = 12
@@ -244,7 +241,7 @@ class TestWaveformTable(unittest.TestCase):
                         RAW_DATA_PATH])
   def test_networks_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, RAW_DATA_PATH)
+    WAVEFORMS_DATA = waveform_table(args)
     SIZE = [0]*len(WAVEFORMS_DATA)
     SIZE[0] = 12
     SIZE[1] = 12
@@ -260,7 +257,7 @@ class TestWaveformTable(unittest.TestCase):
                         RAW_DATA_PATH])
   def test_station_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, RAW_DATA_PATH)
+    WAVEFORMS_DATA = waveform_table(args)
     SIZE = [0]*len(WAVEFORMS_DATA)
     SIZE[0] = 12
     SIZE[1] = 12
@@ -273,7 +270,7 @@ class TestWaveformTable(unittest.TestCase):
                         RAW_DATA_PATH])
   def test_stations_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, RAW_DATA_PATH)
+    WAVEFORMS_DATA = waveform_table(args)
     SIZE = [0]*len(WAVEFORMS_DATA)
     SIZE[0] = 12
     SIZE[1] = 12
@@ -289,7 +286,7 @@ class TestWaveformTable(unittest.TestCase):
                         RAW_DATA_PATH])
   def test_channel_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, RAW_DATA_PATH)
+    WAVEFORMS_DATA = waveform_table(args)
     SIZE = [0]*len(WAVEFORMS_DATA)
     SIZE[0] = 4
     SIZE[1] = 4
@@ -302,7 +299,7 @@ class TestWaveformTable(unittest.TestCase):
                         RAW_DATA_PATH])
   def test_channels_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, RAW_DATA_PATH)
+    WAVEFORMS_DATA = waveform_table(args)
     SIZE = [0]*len(WAVEFORMS_DATA)
     SIZE[0] = 8
     SIZE[1] = 8
@@ -324,7 +321,7 @@ class TestWaveformTable(unittest.TestCase):
                         "LUSI", "-d", RAW_DATA_PATH])
   def test_networks_stations_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, RAW_DATA_PATH)
+    WAVEFORMS_DATA = waveform_table(args)
     SIZE = [0]*len(WAVEFORMS_DATA)
     SIZE[0] = 12
     SIZE[1] = 12
@@ -337,7 +334,7 @@ class TestWaveformTable(unittest.TestCase):
                         "-v", "-d", RAW_DATA_PATH])
   def test_networks_channels_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, RAW_DATA_PATH)
+    WAVEFORMS_DATA = waveform_table(args)
     SIZE = [0]*len(WAVEFORMS_DATA)
     SIZE[0] = 8
     SIZE[1] = 8
@@ -350,7 +347,7 @@ class TestWaveformTable(unittest.TestCase):
                         "HHZ", "-v", "-d", RAW_DATA_PATH])
   def test_stations_channels_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, RAW_DATA_PATH)
+    WAVEFORMS_DATA = waveform_table(args)
     SIZE = [0]*len(WAVEFORMS_DATA)
     SIZE[0] = 8
     SIZE[1] = 8
@@ -367,7 +364,7 @@ class TestWaveformTable(unittest.TestCase):
                         RAW_DATA_PATH])
   def test_stations_channels_dates_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, RAW_DATA_PATH)
+    WAVEFORMS_DATA = waveform_table(args)
     SIZE = [0]*len(WAVEFORMS_DATA)
     SIZE[0] = 8
     SIZE[1] = 8
@@ -376,14 +373,14 @@ class TestWaveformTable(unittest.TestCase):
 
 class TestReadTraces(unittest.TestCase):
   def tearDown(self) -> None:
-    shutil.rmtree(PRC_DATA_PATH)
+    shutil.rmtree(os.path.join(DATA_PATH, PRC_STR))
     pass
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", "-v", "-d", RAW_DATA_PATH])
   def test_non_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, RAW_DATA_PATH)
+    WAVEFORMS_DATA = waveform_table(args)
     for _, trace_files in WAVEFORMS_DATA:
       print(trace_files)
 
@@ -392,7 +389,7 @@ class TestReadTraces(unittest.TestCase):
                         RAW_DATA_PATH])
   def test_group_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, RAW_DATA_PATH)
+    WAVEFORMS_DATA = waveform_table(args)
     for _, trace_files in WAVEFORMS_DATA:
       print(trace_files)
 
@@ -401,7 +398,7 @@ class TestReadTraces(unittest.TestCase):
                         STATION_STR, "-d", RAW_DATA_PATH])
   def test_groups_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, RAW_DATA_PATH)
+    WAVEFORMS_DATA = waveform_table(args)
     for _, trace_files in WAVEFORMS_DATA:
       print(trace_files)
 
@@ -412,7 +409,7 @@ class TestModel(unittest.TestCase):
                         "-d", RAW_DATA_PATH])
   def test_classification(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args, RAW_DATA_PATH)
+    WAVEFORMS_DATA = waveform_table(args)
     for x, y in list(itertools.product(args.models, args.weights)):
       model = get_model(x, y)
       for categories, trace_files in WAVEFORMS_DATA:
@@ -421,6 +418,7 @@ class TestModel(unittest.TestCase):
 
 class TestPickParser(unittest.TestCase):
   def test_parse_pick(self):
+    global DATA_PATH
     MNL_DATA_PATH = os.path.join(DATA_PATH, "manual")
     filename = os.path.join(MNL_DATA_PATH, "manual.dat")
     events = event_parser(filename)
@@ -444,4 +442,6 @@ class TestPickParser(unittest.TestCase):
           self.assertEqual(v, expected[str(key)][s][k])
 
 if __name__ == "__main__":
+  DATA_PATH = os.path.join(DATA_PATH, "test")
+  RAW_DATA_PATH = os.path.join(DATA_PATH, "waveforms")
   unittest.main()

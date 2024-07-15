@@ -253,14 +253,13 @@ def waveform_table(args):
     If the starttime of the trace is 23:00 hrs, then we assume the date to be
     recorded is the next day
   """
-  global RAW_DATA_PATH
   if args.verbose: print("Constructing the Table of Files")
   WAVEFORMS_DATA = []
-  for f in os.listdir(RAW_DATA_PATH):
-    fr = os.path.join(RAW_DATA_PATH, f)
+  for f in os.listdir(args.directory):
+    fr = os.path.join(args.directory, f)
     if os.path.isfile(fr):
       try:
-        trc = obspy.read(fr, headonly=True, dtype=np.float32)[0].stats
+        trc = obspy.read(fr, headonly=True)[0].stats
       except:
         continue
       start = UTCDateTime(trc.starttime.date)
@@ -313,10 +312,10 @@ def read_traces(trace_files, verbose = False, headonly = False) -> \
     if os.path.exists(TRC_FILE):
       if verbose:
         print(f"Found and reading previously processed file {TRC_FILE}")
-      stream += obspy.read(TRC_FILE, headonly=headonly, dtype=np.float32)
+      stream += obspy.read(TRC_FILE, headonly=headonly)
     else:
       if verbose: print(f"Attempting to read from raw data")
-      stream += obspy.read(row.name, headonly=headonly, dtype=np.float32)
+      stream += obspy.read(row.name, headonly=headonly)
       # Clean the stream
       clean_stream(stream)
   return stream
@@ -408,7 +407,7 @@ def classify_stream(categories : tuple, trace_files : pd.core.frame.DataFrame,
     if args.verbose: print("Classifying the Stream")
     output = model.classify(stream, batch_size=256, P_threshold=args.pwave,
                             S_threshold=args.swave).picks
-    pickle.dump(output, open(CLF_FILE, 'wb'))
+    with open(CLF_FILE, 'wb') as fp: pickle.dump(output, fp)
   if args.verbose:
     print(f"Classification results for model: {x}, with preloaded weight: "
           f"{y}, categorized by {categories}")
@@ -443,7 +442,7 @@ def get_model(x : str, y : str) -> sbm:
   return model
 
 def main(args):
-  WAVEFORMS_DATA = waveform_table(args, data_folder=args.directory)
+  WAVEFORMS_DATA = waveform_table(args)
   if not args.train: # Test
     for x, y in list(itertools.product(args.models, args.weights)):
       model = get_model(x, y)
