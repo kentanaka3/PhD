@@ -1,6 +1,9 @@
 all:
 	python src/AdriaArray.py -G BEGDT NETWORK STATION -v
 
+Leo:
+  bash Analyze.sh src/AdriaArray.py
+
 testing:
 	python -m test.test_AdriaArray
 

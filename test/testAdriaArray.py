@@ -3,8 +3,6 @@ import os
 from pathlib import Path
 PRJ_PATH = Path(os.path.dirname(__file__)).parent
 SRC_PATH = os.path.join(PRJ_PATH, "src")
-DATA_PATH = os.path.join(PRJ_PATH, "data", "test")
-TEST_PATH = os.path.join(DATA_PATH, "waveforms")
 import sys
 # Add to path
 if SRC_PATH not in sys.path: sys.path.append(SRC_PATH)
@@ -12,6 +10,9 @@ import unittest
 import shutil
 import json
 from AdriaArray import *
+
+DATA_PATH = os.path.join(PRJ_PATH, "data", "test")
+TEST_PATH = os.path.join(DATA_PATH, "waveforms")
 
 EXPECTED_STR = "expected"
 
