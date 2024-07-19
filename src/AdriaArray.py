@@ -11,68 +11,67 @@ import sys
 if INC_PATH not in sys.path: sys.path.append(INC_PATH)
 from constants import *
 import re
-import json
 import torch
-import obspy
 import pickle
-import requests
 import argparse
 import itertools
 import numpy as np
 import numba as nb
 import pandas as pd
-import seisbench.models as sbm
 import matplotlib.pyplot as plt
-from datetime import timedelta
-# TODO: Read Stations XML
-import xml.etree.ElementTree as ET
-from seisbench.util import PickList
-# TODO: Implement downloading data
-from obspy.clients.fdsn import Client
+from datetime import timedelta as td
+
+# ObsPy
+import obspy
 from obspy.core.utcdatetime import UTCDateTime
+
+# SeisBench
+import seisbench.util as sbu
+import seisbench.data as sbd
+import seisbench.models as sbm
+import seisbench.generate as sbg
 
 SAMPLING_RATE = 100
 
+NORM = "peak" # "peak" or "std"
+
+# DateTime, TimeDelta and Format constants
 DATE_FMT = "%y%m%d"
 DATETIME_FMT = "%y%m%d%H%M%S"
-ONE_DAY = timedelta(days=1)
-PICK_OFFSET = timedelta(seconds=0.5)
-ASSOCIATE_OFFSET = timedelta(seconds=1)
+ONE_DAY = td(days=1)
+PICK_OFFSET = td(seconds=0.5)
+ASSOCIATE_OFFSET = td(seconds=1)
 
+EMPTY_STR = ''
+ALL_WILDCHAR_STR = '*'
 PRC_STR = "processed"
 CLF_STR = "classified"
 
 # Extensions
-PICKLE_EXT = ".pkl"
-TORCH_EXT = ".pt"
-MSEED_EXT = ".mseed"
-JSON_EXT = ".json"
-PNG_EXT = ".png"
-PUN_EXT = ".pun"
+CSV_EXT       = ".csv"
+HDF5_EXT      = ".h5"
+JSON_EXT      = ".json"
+MSEED_EXT     = ".mseed"
+PICKLE_EXT    = ".pkl"
+PNG_EXT       = ".png"
+PUN_EXT       = ".pun"
+TORCH_EXT     = ".pt"
 
-PRC_MSEED_FMT = "{NETWORK}.{STATION}..{CHANNEL}__{BEGDT}" + MSEED_EXT
+PRC_MSEED_FMT = "{NETWORK}.{STATION}.{CHANNEL}.{BEGDT}" + MSEED_EXT
 
-MSEED_FMT = "{NETWORK}.{STATION}..{CHANNEL}__{BEGDT}T{BEGTM}Z" \
-                                          "__{ENDDT}T{ENDTM}Z" + MSEED_EXT
-
-# Models (Alphabetically Ordered)
+# Models
+DEEPDENOISER_STR  = "DeepDenoiser"
 EQTRANSFORMER_STR = "EQTransformer"
-GPD_STR           = "GPD"
 PHASENET_STR      = "PhaseNet"
-
-CLASS_STR = "class"
 
 # Various pre-trained weights for each model (Add if new are available)
 MODEL_WEIGHTS_DICT = {
-  EQTRANSFORMER_STR : {
-    CLASS_STR : sbm.EQTransformer()
-  },
-  GPD_STR           : {
-    CLASS_STR : sbm.GPD()
-  },
-  PHASENET_STR      : {
-    CLASS_STR : sbm.PhaseNet()
-  }
+  DEEPDENOISER_STR  : sbm.DeepDenoiser(sampling_rate=SAMPLING_RATE),
+  EQTRANSFORMER_STR : sbm.EQTransformer(phases="PS",
+                                        sampling_rate=SAMPLING_RATE,
+                                        norm=NORM),
+  PHASENET_STR      : sbm.PhaseNet(phases="PS", sampling_rate=SAMPLING_RATE,
+                                   norm=NORM)
 }
 
 COLORS = {
@@ -90,12 +89,13 @@ CHANNEL_STR = "CHANNEL"
 BEG_DATE_STR = "BEGDT"
 HEADER = [FILENAME_STR, NETWORK_STR, STATION_STR, CHANNEL_STR, BEG_DATE_STR]
 
-P_TYPE_STR = "P_TYPE"
-S_TYPE_STR = "S_TYPE"
-P_WEIGHT_STR = "P_WEIGHT"
-S_WEIGHT_STR = "S_WEIGHT"
-P_TIME_STR = "P_TIME"
-S_TIME_STR = "S_TIME"
+# Labelled Data components
+P_TIME_STR      = "P_TIME"
+P_TYPE_STR      = "P_TYPE"
+P_WEIGHT_STR    = "P_WEIGHT"
+S_TIME_STR      = "S_TIME"
+S_TYPE_STR      = "S_TYPE"
+S_WEIGHT_STR    = "S_WEIGHT"
 PHASE_EXTRACTOR = \
   re.compile(fr"^(?P<{STATION_STR}>(\w{{4}}|\w{{3}}\s))"            # Station
              fr"(?P<{P_TYPE_STR}>[ei?]P[cd\s])"                     # P Type
@@ -121,8 +121,7 @@ def event_parser(filename : str) -> dict:
   notes  :
 
   """
-  with open(filename, 'r') as fr:
-    lines = fr.readlines()
+  with open(filename, 'r') as fr: lines = fr.readlines()
   events = {}
   event = 0
   events.setdefault(event, [])
@@ -137,97 +136,89 @@ def event_parser(filename : str) -> dict:
       result[BEG_DATE_STR] = UTCDateTime.strptime(result[BEG_DATE_STR],
                                                   "%y%m%d%H%M")
       result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
-      result[P_TIME_STR] = \
-        timedelta(seconds=float(result[P_TIME_STR][:2] + "." + \
-                                result[P_TIME_STR][2:]))
+      result[P_TIME_STR] = td(seconds=float(result[P_TIME_STR][:2] + "." + \
+                                            result[P_TIME_STR][2:]))
       if result[S_TIME_STR]:
         result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
-        result[S_TIME_STR] = \
-          timedelta(seconds=float(result[S_TIME_STR][:2] + "." + \
-                                  result[S_TIME_STR][2:]))
+        result[S_TIME_STR] = td(seconds=float(result[S_TIME_STR][:2] + "." + \
+                                              result[S_TIME_STR][2:]))
       events[event].append(result)
   # with open(os.path.splitext(filename)[0] + JSON_EXT, 'w') as fr:
   #   json.dump(events, fr, indent=2)
   return events
 
-# Pretrained model weights (Alphabetically Ordered)
-INSTANCE_STR = "instance"
-ORIGINAL_STR = "original"
-STEAD_STR = "stead"
-SCEDC_STR = "scedc"
+# Pretrained model weights
+ADRIAARRAY_STR  = "adriaarray"
+INSTANCE_STR    = "instance"
+ORIGINAL_STR    = "original"
+SCEDC_STR       = "scedc"
+STEAD_STR       = "stead"
 
-# TODO: Run
+# Clients
+INGV_STR = "INGV"
+IRIS_STR = "IRIS"
+
 # TODO: Study GaMMA associator with folder
 # TODO: Colab PyOcto associator to be tested with GaMMA
 # TODO: Get Vel Model
 
-def is_file_path(string : str) -> str:
-  """
-  input:
-    - string (str)
-
-  output:
-    - str
-
-  errors:
-    - NotADirectoryError
-
-  notes:
-
-  """
-  if os.path.isfile(string): return string
-  else: raise NotADirectoryError(string)
-
-def is_date(string) -> UTCDateTime:
+def is_date(string : str) -> UTCDateTime:
   return UTCDateTime.strptime(string, DATE_FMT)
 
-IMG_ANT_OFFSET = 2
+def is_file_path(string : str) -> Path:
+  if os.path.isfile(string): return Path(string)
+  else: raise NotADirectoryError(string)
+
+def is_dir_path(string : str) -> Path:
+  if os.path.isdir(string): return Path(string)
+  else: raise NotADirectoryError(string)
 
 def parse_arguments():
   parser = argparse.ArgumentParser(description="Process AdriaArray Dataset")
-  parser.add_argument('-C', "--channel", default=None, type=str, nargs='*',
-                      help="Specify the Channel to analyze. If file is not "
-                           "available, then a key must be provided in order "
-                           "to download the data")
+  parser.add_argument('-C', "--channel", default=None, nargs=ALL_WILDCHAR_STR,
+                      metavar=EMPTY_STR, required=False, type=str,
+                      help="Specify the Channel to analyze. To allow "
+                           "downloading data for any channel, set this option "
+                           f"to \'{ALL_WILDCHAR_STR}\'.")
   parser.add_argument('-D', "--dates", nargs=2, required=False, type=is_date,
                       metavar="DATE",
                       default=[UTCDateTime.strptime("230601", DATE_FMT),
                                UTCDateTime.strptime("230731", DATE_FMT)],
                       help="Specify the date range to work with. If files are "
                            "not present")
-  parser.add_argument('-G', "--groups", nargs='+', required=False, metavar="",
+  parser.add_argument('-G', "--groups", nargs='+', required=False, metavar=EMPTY_STR,
                       default=[BEG_DATE_STR, NETWORK_STR, STATION_STR],
                       help="Analize the data based on a specified list")
   parser.add_argument('-J', "--julian", default=False, action="store_true",
                       help="Transform the selected dates into Julian date.")
   # TODO: Implement data retrieval
-  parser.add_argument('-K', "--key", default=None, nargs=1, required=False,
-                      type=is_file_path,
+  parser.add_argument('-K', "--key", default=None, required=False,
+                      type=is_file_path, metavar=EMPTY_STR,
                       help="Key to download the data from server.")
   parser.add_argument('-M', "--models", choices=MODEL_WEIGHTS_DICT.keys(),
-                      required=False, metavar="", type=str, nargs='+',
+                      required=False, metavar=EMPTY_STR, type=str, nargs='+',
                       default=[PHASENET_STR, EQTRANSFORMER_STR],
                       help="Select a specific Machine Learning based model",)
-  parser.add_argument('-N', "--network", default=None, type=str, nargs='*',
-                      metavar="", required=False,
-                      help="Specify the Network to analyze. If file is not "
-                           "available, then a key must be provided in order "
-                           "to download the data")
-  parser.add_argument('-S', "--station", default=None, type=str, nargs='*',
-                      metavar="", required=False,
-                      help="Specify the Station to analyze. If file is not "
-                           "available, then a key must be provided in order "
-                           "to download the data")
+  parser.add_argument('-N', "--network", default=None, nargs=ALL_WILDCHAR_STR,
+                      metavar=EMPTY_STR, required=False, type=str,
+                      help="Specify the Network to analyze. To allow "
+                           "downloading data for any channel, set this option "
+                           f"to \'{ALL_WILDCHAR_STR}\'.")
+  parser.add_argument('-S', "--station", default=None, nargs=ALL_WILDCHAR_STR,
+                      metavar=EMPTY_STR, required=False, type=str,
+                      help="Specify the Station to analyze. To allow "
+                           "downloading data for any channel, set this option "
+                           f"to \'{ALL_WILDCHAR_STR}\'.")
   parser.add_argument('-T', "--train", default=False, action='store_true')
-  parser.add_argument('-W', "--weights", required=False, metavar="", type=str,
+  parser.add_argument('-W', "--weights", required=False, metavar=EMPTY_STR,
                       default=[INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
-                               SCEDC_STR], nargs='+',
+                               SCEDC_STR], nargs='+', type=str,
                       help="Select a specific pretrained weights for the "
                            "selected Machine Learning based model. "
                            "WARNING: Weights which are not available for the "
                            "selected models will not be considered")
-  parser.add_argument('-d', "--directory", required=False, type=str,
-                      default=os.path.join(DATA_PATH, "waveforms"),
+  parser.add_argument('-d', "--directory", required=False, type=is_dir_path,
+                      default=Path(DATA_PATH, "waveforms"),
                       help="Directory path to the raw files")
   parser.add_argument('-p', "--pwave", default=0.2, type=float, required=False,
                       help="P wave threshold.")
@@ -235,12 +226,66 @@ def parse_arguments():
                       help="S wave threshold.")
   # TODO: Add verbose LEVEL
   parser.add_argument('-v', "--verbose", default=False, action='store_true')
+  parser.add_argument("--client", default=[INGV_STR], type=str, required=False,
+                      nargs='+', help="Client to download the data")
+  parser.add_argument("--domain", default=[44.5, 47, 10, 14], required=False,
+                      nargs=4, type=float, help="Domain to download the data")
+  parser.add_argument("--download", default=False, action='store_true',
+                      help="Download the data from the server.")
+  parser.add_argument("--pyrocko", default=False, action='store_true',
+                      help="Enable PyRocko calls")
   return parser.parse_args()
 
-def waveform_table(args):
+def data_downloader(args : argparse.Namespace) -> list:
   """
+  Download the data from the server
   input:
-    - args        ()
+    - args          (argparse.Namespace)
+
+  output:
+    - list
+
+  errors:
+    - None
+
+  notes:
+  """
+  if args.pyrocko:
+    # We enable the option to use the PyRocko module to download the data as it
+    # is more efficient than the ObsPy module by multithreading the download.
+    import pyrocko as pr
+
+  else:
+    from obspy.clients.fdsn import Client
+    from obspy.clients.fdsn.mass_downloader import \
+      RectangularDomain, Restrictions, MassDownloader
+    domain = RectangularDomain(minlatitude=args.domain[0],
+                               maxlatitude=args.domain[1],
+                               minlongitude=args.domain[2],
+                               maxlongitude=args.domain[3])
+    restrictions = Restrictions(starttime=args.dates[0], endtime=args.dates[1],
+                                channel_priorities=args.channel,
+                                network=args.network, station=args.station)
+    # NOTE: It is assumed that a single token file is applicable for all
+    #       clients
+    obspy.clients.fdsn.client._validate_eida_token(args.key)
+    for client in args.client:
+      cl = Client(client)
+      # NOTE: It is assumed that a single token file is applicable for all
+      #       clients
+      cl.set_eida_token(args.key, validate=True)
+      mdl = MassDownloader(providers=[cl])
+      mdl.download(domain, restrictions, mseed_storage=args.directory)
+  return []
+
+def waveform_table(args : argparse.Namespace):
+  """
+  Construct a table of files based on the specified arguments. If the download
+  option is enabled, the data will be downloaded directly from the server and
+  replace all existing files in the directory.
+  TODO: Consider generating a catalog of the downloaded data for future use.
+  input:
+    - args        (argparse.Namespace)
 
   output:
     - pandas.DataFrame
@@ -253,41 +298,48 @@ def waveform_table(args):
     recorded is the next day
   """
   if args.verbose: print("Constructing the Table of Files")
-  WAVEFORMS_DATA = []
-  for f in os.listdir(args.directory):
-    fr = os.path.join(args.directory, f)
-    if os.path.isfile(fr):
-      try:
-        trc = obspy.read(fr, headonly=True)[0].stats
-      except:
-        continue
-      start = UTCDateTime(trc.starttime.date)
-      if trc.starttime.hour == 23: start += ONE_DAY
-      end = start + ONE_DAY
-      outcome = True
-      if args.network:
-        outcome = outcome and any([n == trc.network for n in args.network])
-      if args.station and outcome:
-        outcome = outcome and any([n == trc.station for n in args.station])
-      if args.channel and outcome:
-        outcome = outcome and any([n == trc.channel for n in args.channel])
-      if outcome:
+  WAVEFORMS_DATA = list()
+  if args.download: WAVEFORMS_DATA = data_downloader(args)
+  else:
+    for trc_file in args.directory.iterdir():
+      fr = Path(args.directory, trc_file)
+      if fr.is_file():
+        try:
+          trc = obspy.read(fr, headonly=True)[0].stats
+        except:
+          continue
+        start = UTCDateTime(trc.starttime.date)
+        if trc.starttime.hour == 23: start += ONE_DAY
+        end = start + ONE_DAY
+        outcome = True
+        if args.network and args.network != ALL_WILDCHAR_STR:
+          outcome = outcome and any([n == trc.network for n in args.network])
+        if args.station and args.station != ALL_WILDCHAR_STR and outcome:
+          outcome = outcome and any([n == trc.station for n in args.station])
+        if args.channel and args.channel != ALL_WILDCHAR_STR and outcome:
+          outcome = outcome and any([n == trc.channel for n in args.channel])
         outcome = outcome and (args.dates[0] <= start and end <= args.dates[1])
-      if outcome:
-        WAVEFORMS_DATA.append([fr, trc.network, trc.station, trc.channel,
-                               UTCDateTime.strftime(start, DATE_FMT)])
+        if outcome:
+          WAVEFORMS_DATA.append([fr, trc.network, trc.station, trc.channel,
+                                UTCDateTime.strftime(start, DATE_FMT)])
+    if WAVEFORMS_DATA == [] and args.network is not None and \
+       args.station is not None and args.channel is not None:
+      # If no files are found in the specified directory, download the data
+      # only if the user has specified the network, station, channel and date
+      # range, as these are the minimum requirements to download the data.
+      data_downloader(args)
   return pd.DataFrame(WAVEFORMS_DATA, columns=HEADER).set_index(FILENAME_STR)\
                                                      .groupby(args.groups)
 
-def read_traces(trace_files, args, headonly = False) -> obspy.Stream:
+def read_traces(trace_files : pd.api.typing.DataFrameGroupBy,
+                args : argparse.Namespace) -> obspy.Stream:
   """
   input:
     - trace_files   (pandas.api.typing.DataFrameGroupBy)
-    - args          (bool)
-    - headonly      (bool)
+    - args          (argparse.Namespace)
 
   output:
-    - stream        (obspy.Stream)
+    - obspy.Stream
 
   errors:
     - None
@@ -296,27 +348,35 @@ def read_traces(trace_files, args, headonly = False) -> obspy.Stream:
 
   """
   global DATA_PATH
-  DATA_PATH = Path(args.directory).parent
-  if args.verbose: print("Reading the Traces")
+  DATA_PATH = args.directory.parent
   stream = obspy.Stream()
-  for _, row in trace_files.iterrows():
-    fpath = os.path.join(DATA_PATH, PRC_STR, row[BEG_DATE_STR],
-                         row[NETWORK_STR], row[STATION_STR])
-    os.makedirs(fpath, exist_ok=True)
-    TRC_FILE = os.path.join(fpath,
-                            PRC_MSEED_FMT.format(NETWORK=row[NETWORK_STR],
-                                                 STATION=row[STATION_STR],
-                                                 CHANNEL=row[CHANNEL_STR],
-                                                 BEGDT=row[BEG_DATE_STR]))
-    if os.path.exists(TRC_FILE):
-      if args.verbose:
-        print(f"Found and reading previously processed file {TRC_FILE}")
-      stream += obspy.read(TRC_FILE, headonly=headonly)
-    else:
-      if args.verbose: print(f"Attempting to read from raw data")
-      stream += obspy.read(row.name, headonly=headonly)
-      # Clean the stream
-      clean_stream(stream, args)
+  FMT_DICT = {category : EMPTY_STR for category in [NETWORK_STR, STATION_STR,
+                                                    CHANNEL_STR, BEG_DATE_STR]}
+  for category in args.groups:
+    FMT_DICT[category] = trace_files[category].unique()[0]
+  PRC_PATH = Path(DATA_PATH, PRC_STR)
+  PRC_PATH.mkdir(parents=False, exist_ok=True)
+  STRM_FILE = Path(PRC_PATH,
+                   PRC_MSEED_FMT.format(NETWORK=FMT_DICT[NETWORK_STR],
+                                        STATION=FMT_DICT[STATION_STR],
+                                        CHANNEL=FMT_DICT[CHANNEL_STR],
+                                        BEGDT=FMT_DICT[BEG_DATE_STR]))
+  if STRM_FILE.exists():
+    if args.verbose:
+      print("Found and reading previously processed file:", STRM_FILE)
+    stream = obspy.read(STRM_FILE)
+  else:
+    for _, row in trace_files.iterrows():
+      print("Attempting to read from raw file:", row.name)
+      if not row.name.exists():
+        # TODO: Download the file
+        continue
+      else:
+        stream += obspy.read(row.name)
+    # Clean the stream
+    stream = clean_stream(stream, UTCDateTime.strptime(FMT_DICT[BEG_DATE_STR],
+                                                       DATE_FMT), args)
+    stream.write(STRM_FILE, format=MSEED_STR)
   return stream
 
 @nb.njit(nogil=True)
@@ -330,55 +390,44 @@ def filter_data(data : np.array) -> bool:
   # if np.isnan(trc.data).any() or np.isinf(trc.data).any(): return True
   return filter_data_(data)
 
-def clean_stream(stream : obspy.Stream, args) -> None:
+def clean_stream(stream : obspy.Stream, start : UTCDateTime,
+                 args : argparse.Namespace) -> obspy.Stream:
   """
   input:
     - stream      (obspy.Stream)
-    - args        ()
+    - start       (UTCDateTime)
+    - args        (argparse.Namespace)
 
+  TODO: Review the inplace operation of the Stream
   output:
-    - None
+    - stream      (obspy.Stream)
 
   errors:
     - None
 
   notes:
-
   """
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
   if args.verbose: print("Cleaning the Stream")
   for trc in stream:
-    start = UTCDateTime(trc.stats.starttime.date)
-    if trc.stats.starttime.hour == 23: start += ONE_DAY
-    end = start + ONE_DAY
-    fpath = os.path.join(DATA_PATH, PRC_STR,
-                         UTCDateTime.strftime(start, DATE_FMT),
-                         trc.stats.network, trc.stats.station)
-    TRC_FILE = \
-      os.path.join(fpath,
-                   PRC_MSEED_FMT.format(NETWORK=trc.stats.network,
-                                        STATION=trc.stats.station,
-                                        CHANNEL=trc.stats.channel,
-                                        BEGDT=UTCDateTime.strftime(start, DATE_FMT)))
     # Remove Stream.Trace if it contains NaN or Inf
     if filter_data(trc.data): stream.remove(trc)
-    # Sample has to be 100 Hz
-    if trc.stats.sampling_rate != SAMPLING_RATE: trc.resample(SAMPLING_RATE)
-    trc.trim(start, end, pad=True, fill_value=0,
-             nearest_sample=(trc.stats.starttime.hour != 23))
-    trc.write(TRC_FILE, format=MSEED_STR)
+  # Sample has to be 100 Hz
+  stream = stream.resample(SAMPLING_RATE)
+  return stream.trim(starttime=start, endtime=start + ONE_DAY)
 
 def classify_stream(categories : tuple, trace_files : pd.core.frame.DataFrame,
-                    model : sbm, x : str, y : str, args) -> PickList:
+                    model, x : str, y : str, args : argparse.Namespace) -> \
+      sbu.PickList:
   """
   input:
     - categories    (tuple)
-    - trace_files   (pd.core.frame.DataFrame)
-    - model         (seisbench.models)
+    - trace_files   (pandas.core.frame.DataFrame)
+    - model         ()
     - x             (str)
     - y             (str)
-    - args          ()
+    - args          (argparse.Namespace)
 
   output:
     - output        (seisbench.util.PickList)
@@ -391,12 +440,13 @@ def classify_stream(categories : tuple, trace_files : pd.core.frame.DataFrame,
   """
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
-  fpath = os.path.join(DATA_PATH, CLF_STR, *categories)
+  fpath = Path(DATA_PATH, CLF_STR, *categories)
   os.makedirs(fpath, exist_ok=True)
-  CLF_FILE = os.path.join(fpath, "_".join([*categories, x, y]) + PICKLE_EXT)
-  if os.path.isfile(CLF_FILE):
-    if args.verbose: print("Found and loading previously classified results")
-    output = PickList()
+  CLF_FILE = Path(fpath, "_".join([*categories, x, y]) + PICKLE_EXT)
+  if CLF_FILE.is_file():
+    if args.verbose: print("Found and loading previously classified results:",
+                           CLF_FILE)
+    output = sbu.PickList()
     with open(CLF_FILE, 'rb') as fr:
       while True:
         try:
@@ -434,15 +484,15 @@ def get_model(x : str, y : str) -> sbm:
 
   """
   try:
-    model = MODEL_WEIGHTS_DICT[x][CLASS_STR].from_pretrained(y)
+    model = MODEL_WEIGHTS_DICT[x].from_pretrained(y)
   except:
-    if args.verbose:
-      print(f"WARNING: Pretrained weights {y} not found for model {x}")
+    print(f"WARNING: Pretrained weights {y} not found for model {x}")
     return None
+  if torch.cuda.is_available(): model.cuda()
   print(x, model.weights_docstring)
   return model
 
-def main(args):
+def main(args : argparse.Namespace):
   WAVEFORMS_DATA = waveform_table(args)
   if not args.train: # Test
     for x, y in list(itertools.product(args.models, args.weights)):
@@ -451,11 +501,14 @@ def main(args):
       for categories, trace_files in WAVEFORMS_DATA:
         # Classification
         output = classify_stream(categories, trace_files, model, x, y, args)
-        # # Annotation
+        # Annotation
   else: # Train
-    pass
+    for x, y in list(itertools.product(args.models, args.weights)):
+      model = get_model(x, y)
+      if model is None: continue
+    # Generate a Dataset
+    # Train the model
+    # Save
   return
 
-if __name__ == "__main__":
-  args = parse_arguments()
-  main(args)
+if __name__ == "__main__": main(parse_arguments())
