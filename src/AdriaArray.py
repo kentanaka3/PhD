@@ -57,7 +57,7 @@ PNG_EXT       = ".png"
 PUN_EXT       = ".pun"
 TORCH_EXT     = ".pt"
 
-PRC_MSEED_FMT = "{NETWORK}.{STATION}.{CHANNEL}.{BEGDT}" + MSEED_EXT
+PRC_FMT = "{NETWORK}.{STATION}.{CHANNEL}.{BEGDT}{EXT}"
 
 # Models
 DEEPDENOISER_STR  = "DeepDenoiser"
@@ -157,6 +157,7 @@ STEAD_STR       = "stead"
 # Clients
 INGV_STR = "INGV"
 IRIS_STR = "IRIS"
+OGS_STR  = "http://158.110.30.217:8080"
 
 # TODO: Study GaMMA associator with folder
 # TODO: Colab PyOcto associator to be tested with GaMMA
@@ -173,20 +174,25 @@ def is_dir_path(string : str) -> Path:
   if os.path.isdir(string): return Path(string)
   else: raise NotADirectoryError(string)
 
+class SortDatesAction(argparse.Action):
+  def __call__(self, parser, namespace, values, option_string=None):
+    setattr(namespace, self.dest, sorted(values))
+
 def parse_arguments():
   parser = argparse.ArgumentParser(description="Process AdriaArray Dataset")
   parser.add_argument('-C', "--channel", default=None, nargs=ALL_WILDCHAR_STR,
                       metavar=EMPTY_STR, required=False, type=str,
-                      help="Specify the Channel to analyze. To allow "
+                      help="Specify a set of Channels to analyze. To allow "
                            "downloading data for any channel, set this option "
                            f"to \'{ALL_WILDCHAR_STR}\'.")
   parser.add_argument('-D', "--dates", nargs=2, required=False, type=is_date,
-                      metavar="DATE",
+                      metavar="DATE", action=SortDatesAction,
                       default=[UTCDateTime.strptime("230601", DATE_FMT),
                                UTCDateTime.strptime("230731", DATE_FMT)],
                       help="Specify the date range to work with. If files are "
                            "not present")
-  parser.add_argument('-G', "--groups", nargs='+', required=False, metavar=EMPTY_STR,
+  parser.add_argument('-G', "--groups", nargs='+', required=False,
+                      metavar=EMPTY_STR,
                       default=[BEG_DATE_STR, NETWORK_STR, STATION_STR],
                       help="Analize the data based on a specified list")
   parser.add_argument('-J', "--julian", default=False, action="store_true",
@@ -198,25 +204,29 @@ def parse_arguments():
   parser.add_argument('-M', "--models", choices=MODEL_WEIGHTS_DICT.keys(),
                       required=False, metavar=EMPTY_STR, type=str, nargs='+',
                       default=[PHASENET_STR, EQTRANSFORMER_STR],
-                      help="Select a specific Machine Learning based model",)
+                      help="Specify a set of Machine Learning based models")
   parser.add_argument('-N', "--network", default=None, nargs=ALL_WILDCHAR_STR,
                       metavar=EMPTY_STR, required=False, type=str,
-                      help="Specify the Network to analyze. To allow "
+                      help="Specify a set of Networks to analyze. To allow "
                            "downloading data for any channel, set this option "
                            f"to \'{ALL_WILDCHAR_STR}\'.")
   parser.add_argument('-S', "--station", default=None, nargs=ALL_WILDCHAR_STR,
                       metavar=EMPTY_STR, required=False, type=str,
-                      help="Specify the Station to analyze. To allow "
+                      help="Specify a set of Stations to analyze. To allow "
                            "downloading data for any channel, set this option "
                            f"to \'{ALL_WILDCHAR_STR}\'.")
-  parser.add_argument('-T', "--train", default=False, action='store_true')
+  parser.add_argument('-T', "--train", default=False, action='store_true',
+                      required=False, help="Train the model")
   parser.add_argument('-W', "--weights", required=False, metavar=EMPTY_STR,
                       default=[INSTANCE_STR, ORIGINAL_STR, STEAD_STR,
                                SCEDC_STR], nargs='+', type=str,
-                      help="Select a specific pretrained weights for the "
+                      help="Specify a set of pretrained weights for the "
                            "selected Machine Learning based model. "
                            "WARNING: Weights which are not available for the "
                            "selected models will not be considered")
+  parser.add_argument('-b', "--batch", default=256, type=int, required=False,
+                      metavar=EMPTY_STR,
+                      help="Batch size for the classification")
   parser.add_argument('-d', "--directory", required=False, type=is_dir_path,
                       default=Path(DATA_PATH, "waveforms"),
                       help="Directory path to the raw files")
@@ -228,8 +238,13 @@ def parse_arguments():
   parser.add_argument('-v', "--verbose", default=False, action='store_true')
   parser.add_argument("--client", default=[INGV_STR], type=str, required=False,
                       nargs='+', help="Client to download the data")
+  parser.add_argument("--deep-denoiser", default=False, action='store_true',
+                      required=False,
+                      help="Enable DeepDenoiser model to filter the noise "
+                           "previous to run the Machine Learning base model")
   parser.add_argument("--domain", default=[44.5, 47, 10, 14], required=False,
-                      nargs=4, type=float, help="Domain to download the data")
+                      metavar=EMPTY_STR, nargs=4, type=float,
+                      help="Domain to download the data")
   parser.add_argument("--download", default=False, action='store_true',
                       help="Download the data from the server.")
   parser.add_argument("--pyrocko", default=False, action='store_true',
@@ -266,9 +281,6 @@ def data_downloader(args : argparse.Namespace) -> list:
     restrictions = Restrictions(starttime=args.dates[0], endtime=args.dates[1],
                                 channel_priorities=args.channel,
                                 network=args.network, station=args.station)
-    # NOTE: It is assumed that a single token file is applicable for all
-    #       clients
-    obspy.clients.fdsn.client._validate_eida_token(args.key)
     for client in args.client:
       cl = Client(client)
       # NOTE: It is assumed that a single token file is applicable for all
@@ -331,12 +343,60 @@ def waveform_table(args : argparse.Namespace):
   return pd.DataFrame(WAVEFORMS_DATA, columns=HEADER).set_index(FILENAME_STR)\
                                                      .groupby(args.groups)
 
+@nb.njit(nogil=True)
+def filter_data_(data : np.array) -> bool:
+  for d in data:
+    if np.isnan(d) or np.isinf(d): return True
+  return False
+
+@nb.jit()
+def filter_data(data : np.array) -> bool:
+  # if np.isnan(trc.data).any() or np.isinf(trc.data).any(): return True
+  return filter_data_(data)
+
+def clean_stream(stream : obspy.Stream, start : UTCDateTime,
+                 args : argparse.Namespace, dataset_name : str) -> \
+      obspy.Stream:
+  """
+  input:
+    - stream        (obspy.Stream)
+    - start         (UTCDateTime)
+    - args          (argparse.Namespace)
+    - dataset_name  (str)
+
+  output:
+    - stream        (obspy.Stream)
+
+  errors:
+    - None
+
+  notes:
+    TODO: Review the inplace operation of the Stream
+  """
+  global DATA_PATH
+  DATA_PATH = Path(args.directory).parent
+  if args.verbose: print("Cleaning the Stream")
+  for trc in stream:
+    # Remove Stream.Trace if it contains NaN or Inf
+    if filter_data(trc.data): stream.remove(trc)
+  # Sample has to be 100 Hz
+  stream = stream.resample(SAMPLING_RATE)
+  stream = stream.trim(starttime=start, endtime=start + ONE_DAY)
+  if args.deepDenoiser:
+    if args.verbose: print("Denoising the Stream")
+    denoiser = get_model(DEEPDENOISER_STR, dataset_name)
+    if denoiser is not None: stream = denoiser.annotate(stream)
+  if args.verbose: stream.plot(outfile=Path(IMG_PATH, ), format=PNG_EXT,
+                               dpi=300)
+  return stream
+
 def read_traces(trace_files : pd.api.typing.DataFrameGroupBy,
-                args : argparse.Namespace) -> obspy.Stream:
+                args : argparse.Namespace, dataset_name : str) -> obspy.Stream:
   """
   input:
     - trace_files   (pandas.api.typing.DataFrameGroupBy)
     - args          (argparse.Namespace)
+    - dataset_name  (str)
 
   output:
     - obspy.Stream
@@ -356,11 +416,11 @@ def read_traces(trace_files : pd.api.typing.DataFrameGroupBy,
     FMT_DICT[category] = trace_files[category].unique()[0]
   PRC_PATH = Path(DATA_PATH, PRC_STR)
   PRC_PATH.mkdir(parents=False, exist_ok=True)
-  STRM_FILE = Path(PRC_PATH,
-                   PRC_MSEED_FMT.format(NETWORK=FMT_DICT[NETWORK_STR],
-                                        STATION=FMT_DICT[STATION_STR],
-                                        CHANNEL=FMT_DICT[CHANNEL_STR],
-                                        BEGDT=FMT_DICT[BEG_DATE_STR]))
+  STRM_FILE = Path(PRC_PATH, PRC_FMT.format(NETWORK=FMT_DICT[NETWORK_STR],
+                                            STATION=FMT_DICT[STATION_STR],
+                                            CHANNEL=FMT_DICT[CHANNEL_STR],
+                                            BEGDT=FMT_DICT[BEG_DATE_STR],
+                                            EXT=MSEED_EXT))
   if STRM_FILE.exists():
     if args.verbose:
       print("Found and reading previously processed file:", STRM_FILE)
@@ -370,63 +430,27 @@ def read_traces(trace_files : pd.api.typing.DataFrameGroupBy,
       print("Attempting to read from raw file:", row.name)
       if not row.name.exists():
         # TODO: Download the file
+        print("CRITICAL: File not found:", row.name)
         continue
       else:
         stream += obspy.read(row.name)
     # Clean the stream
     stream = clean_stream(stream, UTCDateTime.strptime(FMT_DICT[BEG_DATE_STR],
-                                                       DATE_FMT), args)
+                                                       DATE_FMT), args,
+                                                       dataset_name)
     stream.write(STRM_FILE, format=MSEED_STR)
   return stream
 
-@nb.njit(nogil=True)
-def filter_data_(data : np.array) -> bool:
-  for d in data:
-    if np.isnan(d) or np.isinf(d): return True
-  return False
-
-@nb.jit()
-def filter_data(data : np.array) -> bool:
-  # if np.isnan(trc.data).any() or np.isinf(trc.data).any(): return True
-  return filter_data_(data)
-
-def clean_stream(stream : obspy.Stream, start : UTCDateTime,
-                 args : argparse.Namespace) -> obspy.Stream:
-  """
-  input:
-    - stream      (obspy.Stream)
-    - start       (UTCDateTime)
-    - args        (argparse.Namespace)
-
-  TODO: Review the inplace operation of the Stream
-  output:
-    - stream      (obspy.Stream)
-
-  errors:
-    - None
-
-  notes:
-  """
-  global DATA_PATH
-  DATA_PATH = Path(args.directory).parent
-  if args.verbose: print("Cleaning the Stream")
-  for trc in stream:
-    # Remove Stream.Trace if it contains NaN or Inf
-    if filter_data(trc.data): stream.remove(trc)
-  # Sample has to be 100 Hz
-  stream = stream.resample(SAMPLING_RATE)
-  return stream.trim(starttime=start, endtime=start + ONE_DAY)
-
 def classify_stream(categories : tuple, trace_files : pd.core.frame.DataFrame,
-                    model, x : str, y : str, args : argparse.Namespace) -> \
-      sbu.PickList:
+                    model, model_name : str, dataset_name : str,
+                    args : argparse.Namespace) -> sbu.PickList:
   """
   input:
     - categories    (tuple)
     - trace_files   (pandas.core.frame.DataFrame)
     - model         ()
-    - x             (str)
-    - y             (str)
+    - model_name    (str)
+    - dataset_name  (str)
     - args          (argparse.Namespace)
 
   output:
@@ -440,12 +464,12 @@ def classify_stream(categories : tuple, trace_files : pd.core.frame.DataFrame,
   """
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
-  fpath = Path(DATA_PATH, CLF_STR, *categories)
-  os.makedirs(fpath, exist_ok=True)
-  CLF_FILE = Path(fpath, "_".join([*categories, x, y]) + PICKLE_EXT)
+  CLF_PATH = Path(DATA_PATH, CLF_STR, *categories)
+  CLF_PATH.mkdir(parents=True, exist_ok=True)
+  CLF_FILE = Path(CLF_PATH, "_".join([*categories, model_name, dataset_name]) + PICKLE_EXT)
   if CLF_FILE.is_file():
-    if args.verbose: print("Found and loading previously classified results:",
-                           CLF_FILE)
+    if args.verbose:
+      print("Found and loading previously classified results:", CLF_FILE)
     output = sbu.PickList()
     with open(CLF_FILE, 'rb') as fr:
       while True:
@@ -454,57 +478,64 @@ def classify_stream(categories : tuple, trace_files : pd.core.frame.DataFrame,
         except EOFError:
           break
   else:
-    stream = read_traces(trace_files, args)
+    # Read or download all the involved data (waveforms / traces) and the
+    # collection of traces is called a "stream"
+    stream = read_traces(trace_files, args, dataset_name)
     if args.verbose: print("Classifying the Stream")
-    output = model.classify(stream, batch_size=256, P_threshold=args.pwave,
+    output = model.classify(stream, batch_size=args.batch,
+                            P_threshold=args.pwave,
                             S_threshold=args.swave).picks
     with open(CLF_FILE, 'wb') as fp: pickle.dump(output, fp)
   if args.verbose:
-    print(f"Classification results for model: {x}, with preloaded weight: "
-          f"{y}, categorized by {categories}")
+    print(f"Classification results for model: {model_name}, with preloaded "
+          f"weight: {dataset_name}, categorized by {categories}")
     print(output)
   return output
 
-def get_model(x : str, y : str) -> sbm:
+def get_model(model_name : str, dataset_name : str) -> sbm.base.SeisBenchModel:
   """
-  From a given model (x) trained on the dataset (y), return the associated
-  testing model.
+  Given a model_name trained on the dataset_name, return the associated testing
+  model.
 
   input:
-    - x (str)
-    - y (str)
+    - model_name    (str)
+    - dataset_name  (str)
 
   output:
-    - seisbench.models
+    - seisbench.models.base.SeisBenchModel
 
   errors:
     - None
 
   notes:
-
   """
   try:
-    model = MODEL_WEIGHTS_DICT[x].from_pretrained(y)
+    model = MODEL_WEIGHTS_DICT[model_name].from_pretrained(dataset_name)
   except:
-    print(f"WARNING: Pretrained weights {y} not found for model {x}")
+    print(f"WARNING: Pretrained weights {dataset_name} not found for model "
+          f"{model_name}")
     return None
+  # Enable GPU calls if available
   if torch.cuda.is_available(): model.cuda()
-  print(x, model.weights_docstring)
+  print(model_name, model.weights_docstring)
   return model
 
 def main(args : argparse.Namespace):
   WAVEFORMS_DATA = waveform_table(args)
   if not args.train: # Test
-    for x, y in list(itertools.product(args.models, args.weights)):
-      model = get_model(x, y)
+    for model_name, dataset_name in list(itertools.product(args.models,
+                                                           args.weights)):
+      model = get_model(model_name, dataset_name)
       if model is None: continue
       for categories, trace_files in WAVEFORMS_DATA:
         # Classification
-        output = classify_stream(categories, trace_files, model, x, y, args)
+        output = classify_stream(categories, trace_files, model, model_name,
+                                 dataset_name, args)
         # Annotation
   else: # Train
-    for x, y in list(itertools.product(args.models, args.weights)):
-      model = get_model(x, y)
+    for model_name, dataset_name in list(itertools.product(args.models,
+                                                           args.weights)):
+      model = get_model(model_name, dataset_name)
       if model is None: continue
     # Generate a Dataset
     # Train the model
