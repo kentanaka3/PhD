@@ -390,8 +390,8 @@ def clean_stream(stream : obspy.Stream, start : UTCDateTime,
                                dpi=300)
   return stream
 
-def read_traces(trace_files : pd.api.typing.DataFrameGroupBy,
-                args : argparse.Namespace, dataset_name : str) -> obspy.Stream:
+def read_traces(trace_files, args : argparse.Namespace, dataset_name : str) ->\
+    obspy.Stream:
   """
   input:
     - trace_files   (pandas.api.typing.DataFrameGroupBy)
@@ -441,13 +441,13 @@ def read_traces(trace_files : pd.api.typing.DataFrameGroupBy,
     stream.write(STRM_FILE, format=MSEED_STR)
   return stream
 
-def classify_stream(categories : tuple, trace_files : pd.core.frame.DataFrame,
-                    model, model_name : str, dataset_name : str,
-                    args : argparse.Namespace) -> sbu.PickList:
+def classify_stream(categories : tuple, trace_files, model, model_name : str,
+                    dataset_name : str, args : argparse.Namespace) -> \
+    sbu.PickList:
   """
   input:
     - categories    (tuple)
-    - trace_files   (pandas.core.frame.DataFrame)
+    - trace_files   ()
     - model         ()
     - model_name    (str)
     - dataset_name  (str)
