@@ -265,27 +265,25 @@ class TestWaveformTable(unittest.TestCase):
 
 class TestReadTraces(unittest.TestCase):
   @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-d", TEST_PATH.__str__(), "-v"])
-  def test_non_args(self):
-    args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args)
-    # TODO: Implement test
-
-  @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", "-G", BEG_DATE_STR, "-v", "-d",
                         TEST_PATH.__str__()])
   def test_group_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
-    # TODO: Implement test
+    for model_name, dataset_name in list(itertools.product(args.models,
+                                                           args.weights)):
+      for categories, trace_files in WAVEFORMS_DATA:
+        stream = read_traces(trace_files, args, dataset_name)
 
   @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-v", "-G", BEG_DATE_STR, NETWORK_STR,
-                        STATION_STR, "-d", TEST_PATH.__str__()])
+                       ["AdriaArray.py", "-v", "-d", TEST_PATH.__str__()])
   def test_groups_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
-    # TODO: Implement test
+    for model_name, dataset_name in list(itertools.product(args.models,
+                                                           args.weights)):
+      for categories, trace_files in WAVEFORMS_DATA:
+        stream = read_traces(trace_files, args, dataset_name)
 
 class TestModel(unittest.TestCase):
   """
@@ -341,7 +339,7 @@ class TestPickParser(unittest.TestCase):
     events = event_parser(filename)
     # with open(Path(MNL_DATA_PATH, EXPECTED_STR + JSON_EXT), 'w') as fp:
     #   json.dump(events, fp, default=str)
-    with open(Path(MNL_DATA_PATH, EXPECTED_STR + JSON_EXT), 'r') as fr:
+    with open(Path(MNL_DATA_PATH, EXPECTED_STR + "." + JSON_EXT), 'r') as fr:
       expected = json.load(fr)
     for key, event in events.items():
       for s, station in enumerate(event):

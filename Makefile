@@ -1,11 +1,11 @@
 all:
-	python src/AdriaArray.py -G BEGDT NETWORK STATION -v
+	python -m src.AdriaArray
 
 Leo:
-  bash Analyze.sh src/AdriaArray.py
+	bash Analyze.sh src/AdriaArray.py
 
 testing:
-	python -m test.test_AdriaArray
+	python -m test.testAdriaArray
 
 clean:
 	rm -f K*.err K*.out; clear

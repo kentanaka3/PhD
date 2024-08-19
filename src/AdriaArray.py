@@ -48,16 +48,19 @@ PRC_STR = "processed"
 CLF_STR = "classified"
 
 # Extensions
-CSV_EXT       = ".csv"
-HDF5_EXT      = ".h5"
-JSON_EXT      = ".json"
-MSEED_EXT     = ".mseed"
-PICKLE_EXT    = ".pkl"
-PNG_EXT       = ".png"
-PUN_EXT       = ".pun"
-TORCH_EXT     = ".pt"
+CSV_EXT       = "csv"
+DAT_EXT       = "dat"
+EPS_EXT       = "eps"
+HDF5_EXT      = "h5"
+JSON_EXT      = "json"
+MSEED_EXT     = "mseed"
+PDF_EXT       = "pdf"
+PICKLE_EXT    = "pkl"
+PNG_EXT       = "png"
+PUN_EXT       = "pun"
+TORCH_EXT     = "pt"
 
-PRC_FMT = "{NETWORK}.{STATION}.{CHANNEL}.{BEGDT}{EXT}"
+PRC_FMT = "{NETWORK}.{STATION}.{CHANNEL}.{BEGDT}.{EXT}"
 
 # Models
 DEEPDENOISER_STR  = "DeepDenoiser"
@@ -143,7 +146,7 @@ def event_parser(filename : str) -> dict:
         result[S_TIME_STR] = td(seconds=float(result[S_TIME_STR][:2] + "." + \
                                               result[S_TIME_STR][2:]))
       events[event].append(result)
-  # with open(os.path.splitext(filename)[0] + JSON_EXT, 'w') as fr:
+  # with open(os.path.splitext(filename)[0] + "." + JSON_EXT, 'w') as fr:
   #   json.dump(events, fr, indent=2)
   return events
 
@@ -238,9 +241,9 @@ def parse_arguments():
   parser.add_argument('-v', "--verbose", default=False, action='store_true')
   parser.add_argument("--client", default=[INGV_STR], type=str, required=False,
                       nargs='+', help="Client to download the data")
-  parser.add_argument("--deep-denoiser", default=False, action='store_true',
+  parser.add_argument("--denoiser", default=False, action='store_true',
                       required=False,
-                      help="Enable DeepDenoiser model to filter the noise "
+                      help="Enable Deep Denoiser model to filter the noise "
                            "previous to run the Machine Learning base model")
   parser.add_argument("--domain", default=[44.5, 47, 10, 14], required=False,
                       metavar=EMPTY_STR, nargs=4, type=float,
@@ -354,13 +357,13 @@ def filter_data(data : np.array) -> bool:
   # if np.isnan(trc.data).any() or np.isinf(trc.data).any(): return True
   return filter_data_(data)
 
-def clean_stream(stream : obspy.Stream, start : UTCDateTime,
+def clean_stream(stream : obspy.Stream, FMT_DICT : dict,
                  args : argparse.Namespace, dataset_name : str) -> \
       obspy.Stream:
   """
   input:
     - stream        (obspy.Stream)
-    - start         (UTCDateTime)
+    - start         (dict)
     - args          (argparse.Namespace)
     - dataset_name  (str)
 
@@ -381,13 +384,20 @@ def clean_stream(stream : obspy.Stream, start : UTCDateTime,
     if filter_data(trc.data): stream.remove(trc)
   # Sample has to be 100 Hz
   stream = stream.resample(SAMPLING_RATE)
+  start = UTCDateTime.strptime(FMT_DICT[BEG_DATE_STR], DATE_FMT)
   stream = stream.trim(starttime=start, endtime=start + ONE_DAY)
-  if args.deepDenoiser:
+  if args.denoiser:
     if args.verbose: print("Denoising the Stream")
     denoiser = get_model(DEEPDENOISER_STR, dataset_name)
     if denoiser is not None: stream = denoiser.annotate(stream)
-  if args.verbose: stream.plot(outfile=Path(IMG_PATH, ), format=PNG_EXT,
-                               dpi=300)
+  if args.verbose:
+    stream.plot(outfile=Path(IMG_PATH,
+                             PRC_FMT.format(NETWORK=FMT_DICT[NETWORK_STR],
+                                            STATION=FMT_DICT[STATION_STR],
+                                            CHANNEL=FMT_DICT[CHANNEL_STR],
+                                            BEGDT=FMT_DICT[BEG_DATE_STR],
+                                            EXT=EPS_EXT)),
+                size=(1000, 600), format=EPS_EXT, dpi=300)
   return stream
 
 def read_traces(trace_files, args : argparse.Namespace, dataset_name : str) ->\
@@ -435,13 +445,12 @@ def read_traces(trace_files, args : argparse.Namespace, dataset_name : str) ->\
       else:
         stream += obspy.read(row.name)
     # Clean the stream
-    stream = clean_stream(stream, UTCDateTime.strptime(FMT_DICT[BEG_DATE_STR],
-                                                       DATE_FMT), args,
-                                                       dataset_name)
+    stream = clean_stream(stream, FMT_DICT, args, dataset_name)
     stream.write(STRM_FILE, format=MSEED_STR)
   return stream
 
-def classify_stream(categories : tuple, trace_files, model, model_name : str,
+def classify_stream(categories : tuple, trace_files,
+                    model : sbm.base.SeisBenchModel, model_name : str,
                     dataset_name : str, args : argparse.Namespace) -> \
     sbu.PickList:
   """
@@ -466,7 +475,8 @@ def classify_stream(categories : tuple, trace_files, model, model_name : str,
   DATA_PATH = Path(args.directory).parent
   CLF_PATH = Path(DATA_PATH, CLF_STR, *categories)
   CLF_PATH.mkdir(parents=True, exist_ok=True)
-  CLF_FILE = Path(CLF_PATH, "_".join([*categories, model_name, dataset_name]) + PICKLE_EXT)
+  CLF_FILE = Path(CLF_PATH, "_".join([*categories, model_name, dataset_name]) \
+                  + "." + PICKLE_EXT)
   if CLF_FILE.is_file():
     if args.verbose:
       print("Found and loading previously classified results:", CLF_FILE)
@@ -522,7 +532,17 @@ def get_model(model_name : str, dataset_name : str) -> sbm.base.SeisBenchModel:
 
 def main(args : argparse.Namespace):
   WAVEFORMS_DATA = waveform_table(args)
-  if not args.train: # Test
+  if args.train: # Train
+    if args.verbose: print("Training the Model")
+    for model_name, dataset_name in list(itertools.product(args.models,
+                                                           args.weights)):
+      model = get_model(model_name, dataset_name)
+      if model is None: continue
+    # Generate a Dataset
+    # Train the model
+    # Save the model
+  else: # Test
+    if args.verbose: print("Testing the Model")
     for model_name, dataset_name in list(itertools.product(args.models,
                                                            args.weights)):
       model = get_model(model_name, dataset_name)
@@ -532,14 +552,6 @@ def main(args : argparse.Namespace):
         output = classify_stream(categories, trace_files, model, model_name,
                                  dataset_name, args)
         # Annotation
-  else: # Train
-    for model_name, dataset_name in list(itertools.product(args.models,
-                                                           args.weights)):
-      model = get_model(model_name, dataset_name)
-      if model is None: continue
-    # Generate a Dataset
-    # Train the model
-    # Save
   return
 
 if __name__ == "__main__": main(parse_arguments())
