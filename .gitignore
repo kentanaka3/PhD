@@ -16,6 +16,7 @@ andrea.sh
 *.err
 .vscode/*
 etna_data/*
-run.sh
+ktanakah.sh
+acarducci.sh
 doc/*
 img/*.eps

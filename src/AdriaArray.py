@@ -10,7 +10,6 @@ import sys
 # Add to path
 if INC_PATH not in sys.path: sys.path.append(INC_PATH)
 from constants import *
-import re
 import torch
 import pickle
 import argparse
@@ -19,7 +18,6 @@ import numpy as np
 import numba as nb
 import pandas as pd
 import matplotlib.pyplot as plt
-from datetime import timedelta as td
 
 # ObsPy
 import obspy
@@ -28,87 +26,16 @@ from obspy.core.utcdatetime import UTCDateTime
 # SeisBench
 import seisbench.util as sbu
 import seisbench.data as sbd
-import seisbench.models as sbm
 import seisbench.generate as sbg
 
-SAMPLING_RATE = 100
-
-NORM = "peak" # "peak" or "std"
-
-# DateTime, TimeDelta and Format constants
-DATE_FMT = "%y%m%d"
-DATETIME_FMT = "%y%m%d%H%M%S"
-ONE_DAY = td(days=1)
-PICK_OFFSET = td(seconds=0.5)
-ASSOCIATE_OFFSET = td(seconds=1)
-
-EMPTY_STR = ''
-ALL_WILDCHAR_STR = '*'
-PRC_STR = "processed"
-CLF_STR = "classified"
-
-# Extensions
-CSV_EXT       = "csv"
-DAT_EXT       = "dat"
-EPS_EXT       = "eps"
-HDF5_EXT      = "h5"
-JSON_EXT      = "json"
-MSEED_EXT     = "mseed"
-PDF_EXT       = "pdf"
-PICKLE_EXT    = "pkl"
-PNG_EXT       = "png"
-PUN_EXT       = "pun"
-TORCH_EXT     = "pt"
-
-PRC_FMT = "{NETWORK}.{STATION}.{CHANNEL}.{BEGDT}.{EXT}"
-
-# Models
-DEEPDENOISER_STR  = "DeepDenoiser"
-EQTRANSFORMER_STR = "EQTransformer"
-PHASENET_STR      = "PhaseNet"
-
-# Various pre-trained weights for each model (Add if new are available)
-MODEL_WEIGHTS_DICT = {
-  DEEPDENOISER_STR  : sbm.DeepDenoiser(sampling_rate=SAMPLING_RATE),
-  EQTRANSFORMER_STR : sbm.EQTransformer(phases="PS",
-                                        sampling_rate=SAMPLING_RATE,
-                                        norm=NORM),
-  PHASENET_STR      : sbm.PhaseNet(phases="PS", sampling_rate=SAMPLING_RATE,
-                                   norm=NORM)
-}
-
-COLORS = {
-  "P": "C0",
-  "S": "C1",
-  "Detection": "C2"
-}
-
-MSEED_STR = "MSEED"
-
-FILENAME_STR = "FILENAME"
-NETWORK_STR = "NETWORK"
-STATION_STR = "STATION"
-CHANNEL_STR = "CHANNEL"
-BEG_DATE_STR = "BEGDT"
-HEADER = [FILENAME_STR, NETWORK_STR, STATION_STR, CHANNEL_STR, BEG_DATE_STR]
-
-# Labelled Data components
-P_TIME_STR      = "P_TIME"
-P_TYPE_STR      = "P_TYPE"
-P_WEIGHT_STR    = "P_WEIGHT"
-S_TIME_STR      = "S_TIME"
-S_TYPE_STR      = "S_TYPE"
-S_WEIGHT_STR    = "S_WEIGHT"
-PHASE_EXTRACTOR = \
-  re.compile(fr"^(?P<{STATION_STR}>(\w{{4}}|\w{{3}}\s))"            # Station
-             fr"(?P<{P_TYPE_STR}>[ei?]P[cd\s])"                     # P Type
-             fr"(?P<{P_WEIGHT_STR}>[0-4])"                          # P Weight
-             fr"1(?P<{BEG_DATE_STR}>\d{{10}})"                      # Date
-             fr"\s(?P<{P_TIME_STR}>\d{{4}})"                        # P Time
-             fr"\s+((?P<{S_TIME_STR}>\d{{4}}|\d{{3}})"              # S Time
-             fr"(?P<{S_TYPE_STR}>[ei?]S\s)"                         # S Type
-             fr"(?P<{S_WEIGHT_STR}>[0-4]))*")                       # S Weight
-EVENT_EXTRACTOR = re.compile(r"^1(\s+D)*\s*$")                      # Event
+# TODO: Fix the following WARNINGS
+# Parts of the input stream consist of fragments shorter than the number of input samples. Output might be empty.
+# Detected multiple records for the same time and component that did not agree. All mismatching traces will be ignored.
+# Parts of the input stream consist of fragments shorter than the number of input samples or misaligned traces. Output might be empty.
+# TODO: Study GaMMA associator with folder
+# TODO: Colab PyOcto associator to be tested with GaMMA
+# TODO: Get Vel Model
+# TODO: Discuss constants.NORM = "peak"
 
 def event_parser(filename : str) -> dict:
   """
@@ -150,22 +77,6 @@ def event_parser(filename : str) -> dict:
   #   json.dump(events, fr, indent=2)
   return events
 
-# Pretrained model weights
-ADRIAARRAY_STR  = "adriaarray"
-INSTANCE_STR    = "instance"
-ORIGINAL_STR    = "original"
-SCEDC_STR       = "scedc"
-STEAD_STR       = "stead"
-
-# Clients
-INGV_STR = "INGV"
-IRIS_STR = "IRIS"
-OGS_STR  = "http://158.110.30.217:8080"
-
-# TODO: Study GaMMA associator with folder
-# TODO: Colab PyOcto associator to be tested with GaMMA
-# TODO: Get Vel Model
-
 def is_date(string : str) -> UTCDateTime:
   return UTCDateTime.strptime(string, DATE_FMT)
 
@@ -191,9 +102,9 @@ def parse_arguments():
   parser.add_argument('-D', "--dates", nargs=2, required=False, type=is_date,
                       metavar="DATE", action=SortDatesAction,
                       default=[UTCDateTime.strptime("230601", DATE_FMT),
-                               UTCDateTime.strptime("230731", DATE_FMT)],
-                      help="Specify the date range to work with. If files are "
-                           "not present")
+                               UTCDateTime.strptime("230801", DATE_FMT)],
+                      help="Specify the date (YYMMDD) range to work with. If "
+                           "files are not present")
   parser.add_argument('-G', "--groups", nargs='+', required=False,
                       metavar=EMPTY_STR,
                       default=[BEG_DATE_STR, NETWORK_STR, STATION_STR],
@@ -357,18 +268,17 @@ def filter_data(data : np.array) -> bool:
   # if np.isnan(trc.data).any() or np.isinf(trc.data).any(): return True
   return filter_data_(data)
 
-def clean_stream(stream : obspy.Stream, FMT_DICT : dict,
-                 args : argparse.Namespace, dataset_name : str) -> \
-      obspy.Stream:
+def clean_stream(stream : obspy.Stream, dataset_name : str, FMT_DICT : dict,
+                 args : argparse.Namespace) -> obspy.Stream:
   """
   input:
     - stream        (obspy.Stream)
-    - start         (dict)
+    - FMT_DICT      (dict)
     - args          (argparse.Namespace)
     - dataset_name  (str)
 
   output:
-    - stream        (obspy.Stream)
+    - obspy.Stream
 
   errors:
     - None
@@ -400,11 +310,11 @@ def clean_stream(stream : obspy.Stream, FMT_DICT : dict,
                 size=(1000, 600), format=EPS_EXT, dpi=300)
   return stream
 
-def read_traces(trace_files, args : argparse.Namespace, dataset_name : str) ->\
+def read_traces(trace_files, dataset_name : str, args : argparse.Namespace) ->\
     obspy.Stream:
   """
   input:
-    - trace_files   (pandas.api.typing.DataFrameGroupBy)
+    - trace_files   ()
     - args          (argparse.Namespace)
     - dataset_name  (str)
 
@@ -445,25 +355,23 @@ def read_traces(trace_files, args : argparse.Namespace, dataset_name : str) ->\
       else:
         stream += obspy.read(row.name)
     # Clean the stream
-    stream = clean_stream(stream, FMT_DICT, args, dataset_name)
+    stream = clean_stream(stream, dataset_name, FMT_DICT, args)
     stream.write(STRM_FILE, format=MSEED_STR)
   return stream
 
-def classify_stream(categories : tuple, trace_files,
-                    model : sbm.base.SeisBenchModel, model_name : str,
+def classify_stream(categories : tuple, trace_files, model_name : str,
                     dataset_name : str, args : argparse.Namespace) -> \
     sbu.PickList:
   """
   input:
     - categories    (tuple)
     - trace_files   ()
-    - model         ()
     - model_name    (str)
     - dataset_name  (str)
     - args          (argparse.Namespace)
 
   output:
-    - output        (seisbench.util.PickList)
+    - seisbench.util.PickList
 
   errors:
     - None
@@ -490,8 +398,9 @@ def classify_stream(categories : tuple, trace_files,
   else:
     # Read or download all the involved data (waveforms / traces) and the
     # collection of traces is called a "stream"
-    stream = read_traces(trace_files, args, dataset_name)
+    stream = read_traces(trace_files, dataset_name, args)
     if args.verbose: print("Classifying the Stream")
+    model = get_model(model_name, dataset_name)
     output = model.classify(stream, batch_size=args.batch,
                             P_threshold=args.pwave,
                             S_threshold=args.swave).picks
@@ -536,8 +445,7 @@ def main(args : argparse.Namespace):
     if args.verbose: print("Training the Model")
     for model_name, dataset_name in list(itertools.product(args.models,
                                                            args.weights)):
-      model = get_model(model_name, dataset_name)
-      if model is None: continue
+      if get_model(model_name, dataset_name) is None: continue
     # Generate a Dataset
     # Train the model
     # Save the model
@@ -545,11 +453,10 @@ def main(args : argparse.Namespace):
     if args.verbose: print("Testing the Model")
     for model_name, dataset_name in list(itertools.product(args.models,
                                                            args.weights)):
-      model = get_model(model_name, dataset_name)
-      if model is None: continue
+      if get_model(model_name, dataset_name) is None: continue
       for categories, trace_files in WAVEFORMS_DATA:
         # Classification
-        output = classify_stream(categories, trace_files, model, model_name,
+        output = classify_stream(categories, trace_files, model_name,
                                  dataset_name, args)
         # Annotation
   return
