@@ -347,7 +347,8 @@ def read_traces(trace_files, dataset_name : str, args : argparse.Namespace) ->\
     stream = obspy.read(STRM_FILE)
   else:
     for _, row in trace_files.iterrows():
-      print("Attempting to read from raw file:", row.name)
+      if args.verbose:
+        print("Attempting to read from raw file:", row.name)
       if not row.name.exists():
         # TODO: Download the file
         print("CRITICAL: File not found:", row.name)
@@ -360,14 +361,15 @@ def read_traces(trace_files, dataset_name : str, args : argparse.Namespace) ->\
   return stream
 
 def classify_stream(categories : tuple, trace_files, model_name : str,
-                    dataset_name : str, args : argparse.Namespace) -> \
-    sbu.PickList:
+                    dataset_name : str, MODEL : sbm.base.SeisBenchModel,
+                    args : argparse.Namespace) -> sbu.PickList:
   """
   input:
     - categories    (tuple)
     - trace_files   ()
     - model_name    (str)
     - dataset_name  (str)
+    - MODEL         (seisbench.models.base.SeisBenchModel)
     - args          (argparse.Namespace)
 
   output:
@@ -400,8 +402,7 @@ def classify_stream(categories : tuple, trace_files, model_name : str,
     # collection of traces is called a "stream"
     stream = read_traces(trace_files, dataset_name, args)
     if args.verbose: print("Classifying the Stream")
-    model = get_model(model_name, dataset_name)
-    output = model.classify(stream, batch_size=args.batch,
+    output = MODEL.classify(stream, batch_size=args.batch,
                             P_threshold=args.pwave,
                             S_threshold=args.swave).picks
     with open(CLF_FILE, 'wb') as fp: pickle.dump(output, fp)
@@ -443,9 +444,6 @@ def main(args : argparse.Namespace):
   WAVEFORMS_DATA = waveform_table(args)
   if args.train: # Train
     if args.verbose: print("Training the Model")
-    for model_name, dataset_name in list(itertools.product(args.models,
-                                                           args.weights)):
-      if get_model(model_name, dataset_name) is None: continue
     # Generate a Dataset
     # Train the model
     # Save the model
@@ -453,11 +451,12 @@ def main(args : argparse.Namespace):
     if args.verbose: print("Testing the Model")
     for model_name, dataset_name in list(itertools.product(args.models,
                                                            args.weights)):
-      if get_model(model_name, dataset_name) is None: continue
+      MODEL = get_model(model_name, dataset_name)
+      if MODEL is None: continue
       for categories, trace_files in WAVEFORMS_DATA:
         # Classification
         output = classify_stream(categories, trace_files, model_name,
-                                 dataset_name, args)
+                                 dataset_name, MODEL, args)
         # Annotation
   return
 
