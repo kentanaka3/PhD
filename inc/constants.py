@@ -16,7 +16,10 @@ ASSOCIATE_OFFSET = td(seconds=1)
 EMPTY_STR = ''
 ALL_WILDCHAR_STR = '*'
 PRC_STR = "processed"
-CLF_STR = "classified"
+ANT_STR = "annotated"
+
+PWAVE_THRESHOLD = 0.2
+SWAVE_THRESHOLD = 0.1
 
 # Extensions
 CSV_EXT       = "csv"
