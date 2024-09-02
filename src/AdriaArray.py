@@ -37,46 +37,6 @@ import seisbench.generate as sbg
 # TODO: Get Vel Model
 # TODO: Discuss constants.NORM = "peak"
 
-def event_parser(filename : str) -> dict:
-  """
-  input  :
-    - filename (str)
-
-  output :
-    - dictionary (str : value)
-
-  errors :
-    - None
-
-  notes  :
-
-  """
-  with open(filename, 'r') as fr: lines = fr.readlines()
-  events = {}
-  event = 0
-  events.setdefault(event, [])
-  for line in [l.strip() for l in lines]:
-    if EVENT_EXTRACTOR.match(line):
-      event += 1
-      events.setdefault(event, [])
-      continue
-    match = PHASE_EXTRACTOR.match(line)
-    if match:
-      result = match.groupdict()
-      result[BEG_DATE_STR] = UTCDateTime.strptime(result[BEG_DATE_STR],
-                                                  "%y%m%d%H%M")
-      result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
-      result[P_TIME_STR] = td(seconds=float(result[P_TIME_STR][:2] + "." + \
-                                            result[P_TIME_STR][2:]))
-      if result[S_TIME_STR]:
-        result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
-        result[S_TIME_STR] = td(seconds=float(result[S_TIME_STR][:2] + "." + \
-                                              result[S_TIME_STR][2:]))
-      events[event].append(result)
-  # with open(os.path.splitext(filename)[0] + "." + JSON_EXT, 'w') as fr:
-  #   json.dump(events, fr, indent=2)
-  return events
-
 def is_date(string : str) -> UTCDateTime:
   return UTCDateTime.strptime(string, DATE_FMT)
 
