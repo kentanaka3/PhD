@@ -18,6 +18,8 @@ TEST_PATH = Path(DATA_PATH, "waveforms")
 
 EXPECTED_STR = "expected"
 
+ANNOTATION_TD_OFFSET = td(seconds=2.5)
+
 def timedeltafmt(string):
   numbers = [float(n) for n in string.split(":")]
   return td(hours=numbers[0], minutes=numbers[1], seconds=numbers[2])
@@ -264,28 +266,52 @@ class TestWaveformTable(unittest.TestCase):
       self.assertEqual(trace_files.size, size)
 
 class TestReadTraces(unittest.TestCase):
+  @classmethod
+  def setUpClass(cls) -> None:
+    prc_dir = Path(DATA_PATH, PRC_STR)
+    if prc_dir.exists():
+      for f in prc_dir.iterdir():
+        if f.is_file():
+          f.unlink()
+
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", "-G", BEG_DATE_STR, "-v", "-d",
                         TEST_PATH.__str__()])
   def test_group_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
-    for model_name, dataset_name in list(itertools.product(args.models,
-                                                           args.weights)):
-      for categories, trace_files in WAVEFORMS_DATA:
-        stream = read_traces(trace_files, args, dataset_name)
+    for _, dataset_name in list(itertools.product(args.models, args.weights)):
+      for _, trace_files in WAVEFORMS_DATA:
+        stream = read_traces(trace_files, dataset_name, args)
+        for tr in stream:
+          self.assertGreaterEqual(tr.stats.starttime,
+                                  UTCDateTime(tr.stats.starttime.date))
+          self.assertLessEqual(tr.stats.endtime,
+                               UTCDateTime(tr.stats.starttime.date) + ONE_DAY)
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", "-v", "-d", TEST_PATH.__str__()])
   def test_groups_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
-    for model_name, dataset_name in list(itertools.product(args.models,
-                                                           args.weights)):
-      for categories, trace_files in WAVEFORMS_DATA:
-        stream = read_traces(trace_files, args, dataset_name)
+    for _, dataset_name in list(itertools.product(args.models, args.weights)):
+      for _, trace_files in WAVEFORMS_DATA:
+        stream = read_traces(trace_files, dataset_name, args)
+        for tr in stream:
+          self.assertGreaterEqual(tr.stats.starttime,
+                                  UTCDateTime(tr.stats.starttime.date))
+          self.assertLessEqual(tr.stats.endtime,
+                               UTCDateTime(tr.stats.starttime.date) + ONE_DAY)
 
 class TestModel(unittest.TestCase):
+  @classmethod
+  def setUpClass(cls) -> None:
+    ant_dir = Path(DATA_PATH, ANT_STR)
+    if ant_dir.exists():
+      for f in ant_dir.iterdir():
+        if f.is_file():
+          f.unlink()
+
   """
   def test_model_selector(self):
     self.assertEqual(get_model(DEEPDENOISER_STR, ORIGINAL_STR),
@@ -324,12 +350,22 @@ class TestModel(unittest.TestCase):
                        ["AdriaArray.py", "-v", "-d", TEST_PATH.__str__(),
                         "-G", BEG_DATE_STR, NETWORK_STR, STATION_STR, "-M",
                         PHASENET_STR, EQTRANSFORMER_STR])
-  def test_classification(self):
+  def test_annotation(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
-    for x, y in list(itertools.product(args.models, args.weights)):
-      model = get_model(x, y)
-      # TODO: Implement test for the classified results
+    for model_name, dataset_name in list(itertools.product(args.models,
+                                                           args.weights)):
+      MODEL = get_model(model_name, dataset_name)
+      if MODEL is None: continue
+      for categories, trace_files in WAVEFORMS_DATA:
+        output = annotate_stream(categories, trace_files, model_name,
+                                 dataset_name, MODEL, args)
+        for tr in output:
+          self.assertGreaterEqual(tr.stats.starttime,
+                                  UTCDateTime(tr.stats.starttime.date) + \
+                                    ANNOTATION_TD_OFFSET)
+          self.assertLessEqual(tr.stats.endtime,
+                               UTCDateTime(tr.stats.starttime.date) + ONE_DAY - ANNOTATION_TD_OFFSET)
 
 class TestPickParser(unittest.TestCase):
   def test_parse_pick(self):

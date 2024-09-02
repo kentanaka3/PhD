@@ -330,7 +330,7 @@ def read_traces(trace_files, dataset_name : str, args : argparse.Namespace) ->\
 
   """
   global DATA_PATH
-  DATA_PATH = args.directory.parent
+  DATA_PATH = Path(args.directory).parent
   stream = obspy.Stream()
   FMT_DICT = {category : EMPTY_STR for category in [NETWORK_STR, STATION_STR,
                                                     CHANNEL_STR, BEG_DATE_STR]}
