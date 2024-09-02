@@ -249,13 +249,15 @@ def clean_stream(stream : obspy.Stream, dataset_name : str, FMT_DICT : dict,
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
   if args.verbose: print("Cleaning the Stream")
+  stream.merge(method=1, fill_value='interpolate')
   for trc in stream:
     # Remove Stream.Trace if it contains NaN or Inf
     if filter_data(trc.data): stream.remove(trc)
   # Sample has to be 100 Hz
   stream = stream.resample(SAMPLING_RATE)
   start = UTCDateTime.strptime(FMT_DICT[BEG_DATE_STR], DATE_FMT)
-  stream = stream.trim(starttime=start, endtime=start + ONE_DAY)
+  stream = stream.trim(starttime=start, endtime=start + ONE_DAY, pad=True,
+                       fill_value=0, nearest_sample=False)
   if args.denoiser:
     if args.verbose: print("Denoising the Stream")
     denoiser = get_model(DEEPDENOISER_STR, dataset_name)
