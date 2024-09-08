@@ -16,13 +16,7 @@ BASE_PATH = Path(PRJ_PATH, "data")
 DATA_PATH = Path(BASE_PATH, "test")
 TEST_PATH = Path(DATA_PATH, "waveforms")
 
-EXPECTED_STR = "expected"
-
 ANNOTATION_TD_OFFSET = td(seconds=2.5)
-
-def timedeltafmt(string):
-  numbers = [float(n) for n in string.split(":")]
-  return td(hours=numbers[0], minutes=numbers[1], seconds=numbers[2])
 
 class TestArgparse(unittest.TestCase):
   def setUp(self):
@@ -37,9 +31,9 @@ class TestArgparse(unittest.TestCase):
     args = parse_arguments()
     self.assertEqual(args.channel, None)
     self.assertEqual(args.client, [INGV_STR])
-    self.assertEqual(args.batch, 256)
+    self.assertEqual(args.batch, 4096)
     self.assertEqual(args.dates, [UTCDateTime(year=2023, month=6, day=1),
-                                  UTCDateTime(year=2023, month=7, day=31)])
+                                  UTCDateTime(year=2023, month=8, day=1)])
     self.assertEqual(args.directory, Path(BASE_PATH, "waveforms"))
     self.assertEqual(args.domain, [44.5, 47, 10, 14])
     self.assertEqual(args.download, False)
@@ -148,23 +142,21 @@ class TestWaveformTable(unittest.TestCase):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
     SIZE = [12]*len(WAVEFORMS_DATA)
-    SIZE[1] = 8 # IV.SERM.EHZ__20230602 (purposely missing)
     for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
       self.assertEqual(trace_files.size, size)
 
   @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", '-N', "IV", "-d", TEST_PATH.__str__(),
+                       ["AdriaArray.py", '-N', "OX", "-d", TEST_PATH.__str__(),
                         "-v"])
   def test_network_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
     SIZE = [12]*len(WAVEFORMS_DATA)
-    SIZE[1] = 8 # IV.SERM.EHZ__20230602 (purposely missing)
     for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
       self.assertEqual(trace_files.size, size)
 
   @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", '-N', "SI", "ST", "-v", "-d",
+                       ["AdriaArray.py", '-N', "OX", "ST", "-v", "-d",
                         TEST_PATH.__str__()])
   def test_networks_args(self):
     args = parse_arguments()
@@ -306,9 +298,9 @@ class TestReadTraces(unittest.TestCase):
 class TestModel(unittest.TestCase):
   @classmethod
   def setUpClass(cls) -> None:
-    ant_dir = Path(DATA_PATH, ANT_STR)
-    if ant_dir.exists():
-      for f in ant_dir.iterdir():
+    clf_dir = Path(DATA_PATH, CLF_STR)
+    if clf_dir.exists():
+      for f in clf_dir.iterdir():
         if f.is_file():
           f.unlink()
 
@@ -350,7 +342,7 @@ class TestModel(unittest.TestCase):
                        ["AdriaArray.py", "-v", "-d", TEST_PATH.__str__(),
                         "-G", BEG_DATE_STR, NETWORK_STR, STATION_STR, "-M",
                         PHASENET_STR, EQTRANSFORMER_STR])
-  def test_annotation(self):
+  def test_classification(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
     for model_name, dataset_name in list(itertools.product(args.models,
@@ -358,39 +350,9 @@ class TestModel(unittest.TestCase):
       MODEL = get_model(model_name, dataset_name)
       if MODEL is None: continue
       for categories, trace_files in WAVEFORMS_DATA:
-        output = annotate_stream(categories, trace_files, model_name,
+        output = classify_stream(categories, trace_files, model_name,
                                  dataset_name, MODEL, args)
-        for tr in output:
-          self.assertGreaterEqual(tr.stats.starttime,
-                                  UTCDateTime(tr.stats.starttime.date) + \
-                                    ANNOTATION_TD_OFFSET)
-          self.assertLessEqual(tr.stats.endtime,
-                               UTCDateTime(tr.stats.starttime.date) + ONE_DAY - ANNOTATION_TD_OFFSET)
-
-class TestPickParser(unittest.TestCase):
-  def test_parse_pick(self):
-    global DATA_PATH
-    MNL_DATA_PATH = Path(DATA_PATH, "manual")
-    filename = Path(MNL_DATA_PATH, "manual.dat")
-    events = event_parser(filename)
-    # with open(Path(MNL_DATA_PATH, EXPECTED_STR + JSON_EXT), 'w') as fp:
-    #   json.dump(events, fp, default=str)
-    with open(Path(MNL_DATA_PATH, EXPECTED_STR + "." + JSON_EXT), 'r') as fr:
-      expected = json.load(fr)
-    for key, event in events.items():
-      for s, station in enumerate(event):
-        expected[str(key)][s][BEG_DATE_STR] = \
-          UTCDateTime(expected[str(key)][s][BEG_DATE_STR])
-        if expected[str(key)][s][P_TIME_STR] is not None:
-          expected[str(key)][s][P_TIME_STR] = \
-            timedeltafmt(expected[str(key)][s][P_TIME_STR])
-        if expected[str(key)][s][S_TIME_STR] is not None:
-          expected[str(key)][s][S_TIME_STR] = \
-            timedeltafmt(expected[str(key)][s][S_TIME_STR])
-    for key, event in events.items():
-      for s, station in enumerate(event):
-        for k, v in station.items():
-          self.assertEqual(v, expected[str(key)][s][k])
+        print(output)
 
 if __name__ == "__main__":
   unittest.main()

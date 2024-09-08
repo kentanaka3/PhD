@@ -1,19 +1,50 @@
 import os
 from pathlib import Path
 # Set the project folder
-PRJ_PATH = Path(os.path.abspath('')).parent
+PRJ_PATH = Path(os.path.dirname(__file__)).parent
 INC_PATH = os.path.join(PRJ_PATH, "inc")
 IMG_PATH = os.path.join(PRJ_PATH, "img")
 DATA_PATH = os.path.join(PRJ_PATH, "data")
 import sys
 # Add to path
 if INC_PATH not in sys.path: sys.path.append(INC_PATH)
-from constants import *
-import AdriaArray as AA
 import pickle
+import argparse
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+from datetime import timedelta as td
 from obspy.core.utcdatetime import UTCDateTime
+
+from constants import *
+import AdriaArray as AA
+
+def event_merger(ANCHOR : list, ADDITIONAL : list,
+                 width : td, PROBABILITIES = None, axis = 0) -> list:
+  if PROBABILITIES is None:
+    PROBABILITIES = [1.0] * len(ADDITIONAL)
+  # Initialize with ANCHOR and no match (False Negative)
+  BOXES = [(a, 0.0) for a in ANCHOR]
+  i = 0 # Index for ANCHOR
+  j = 0 # Index for ADDITIONAL
+  while i < len(ANCHOR) and j < len(ADDITIONAL):
+    if td(seconds=abs(ANCHOR[i] - ADDITIONAL[j])) < width:
+      # ANCHOR[i] and ADDITIONAL[j] are a match (True Positive)
+      BOXES[i] = (ANCHOR[i], PROBABILITIES[j])
+      i += 1
+      j += 1
+    elif ADDITIONAL[j] < ANCHOR[i]:
+      # ADDITIONAL[j] is not in ANCHOR (False Positive)
+      BOXES.append((ADDITIONAL[j], -1 * PROBABILITIES[j]))
+      j += 1
+    else:
+      # ANCHOR[i] is not in ADDITIONAL (False Negative)
+      i += 1
+  while j < len(ADDITIONAL):
+    # ADDITIONAL[j] is not in ANCHOR (False Positive)
+    BOXES.append((ADDITIONAL[j], -1 * PROBABILITIES[j]))
+    j += 1
+  return sorted(BOXES, key=lambda x: x[axis])
 
 def read_data(path : str):
   # Load the data
@@ -21,53 +52,87 @@ def read_data(path : str):
     data = pickle.load(f)
   return data
 
-def load_data():
-  ANT_PATH = os.path.join(DATA_PATH, ANT_STR)
+def load_data(args : argparse.Namespace) -> pd.DataFrame:
+  global DATA_PATH
+  DATA_PATH  = Path(args.directory).parent
+  CLF_PATH = os.path.join(DATA_PATH, CLF_STR)
   DATA = []
-  for m in [PHASENET_STR, EQTRANSFORMER_STR]:
-    for w in [INSTANCE_STR, ORIGINAL_STR, SCEDC_STR, STEAD_STR]:
-      MODEL = AA.get_model(m, w)
-      for d in os.listdir(ANT_PATH):
-        for n in os.listdir(os.path.join(ANT_PATH, d)):
-          for s in os.listdir(os.path.join(ANT_PATH, d, n)):
-            f = os.path.join(ANT_PATH, d, n, s, "_".join([d, n, s, m, w]) + "." + PICKLE_EXT)
-            data = read_data(f)
-            for t in ["P", "S"]:
-              for i in np.linspace(0.2, .9, 8):
-                DATA.append((m, w, d, n, s, t, i, MODEL.picks_from_annotations(data, threshold=i, phase=t)))
-  DATA = pd.DataFrame(DATA, columns=["MODEL", "WEIGHT", "DATE", "NETWORK", "STATION", "WAVE", "THRESHOLD", "DATA"])
+  HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR,
+            PHASE_STR, PROBABILITY_STR]
+  for model in args.models:
+    for weight in args.weights:
+      for date in os.listdir(CLF_PATH):
+        for network in os.listdir(os.path.join(CLF_PATH, date)):
+          for station in os.listdir(os.path.join(CLF_PATH, date, network)):
+            f = os.path.join(CLF_PATH, date, network, station,
+                             UNDERSCORE_STR.join([date, network, station,
+                                                  model, weight]) + \
+                             PERIOD_STR + PICKLE_EXT)
+            for p in read_data(f):
+              DATA.append([model, weight, p.peak_time, network, station,
+                           p.phase, p.peak_value])
+  return pd.DataFrame(DATA, columns=HEADER).sort_values(TIMESTAMP_STR)\
+                                           .reset_index(drop=True)
+
+def plot_data(DATA : pd.DataFrame, args : argparse.Namespace):
+  start, end = args.dates
+  DATA = DATA[DATA[PHASE_STR] == PWAVE]
+  x = [start]
+  while x[-1] <= end: x.append(x[-1] + ONE_DAY)
+  for DAT in DATA.groupby([MODEL_STR, NETWORK_STR, STATION_STR]):
+    _, _axs = plt.subplots(2, 2, figsize=(10, 10))
+    axs = _axs.flatten()
+    plt.suptitle(SPACE_STR.join(DAT[0]))
+    y_max = 0
+    for i, DA in enumerate(DAT[1].groupby(WEIGHT_STR)):
+      axs[i].set_title(DA[0])
+      for threshold in np.linspace(0.2, 0.9, 8):
+        D = DA[1]
+        y = [D[(D[PROBABILITY_STR] >= threshold) & (D[TIMESTAMP_STR] <= x[i]) &
+               (D[TIMESTAMP_STR] >= start)].size for i in range(len(x))]
+        axs[i].plot(x, y, label=threshold)
+        y_max = max(y_max, max(y))
+    for ax in axs:
+      ax.set_ylim(0, y_max)
+      ax.set_ylabel("Cumulative number of picks")
+      ax.set_xlabel("Date")
+      ax.grid()
+      ax.legend()
+    plt.savefig(Path(IMG_PATH, "EC_" + UNDERSCORE_STR.join(DAT[0]) + \
+                     PERIOD_STR + PNG_EXT))
+    if args.verbose: plt.show()
+
+def conf_mat(TRUE : pd.DataFrame, PRED : pd.DataFrame,
+             args : argparse.Namespace):
+  stations = args.station if (args.station is not None and
+                              args.station != ALL_WILDCHAR_STR) else \
+             PRED[STATION_STR].unique()
+  start, end = args.dates
+  TRUE = TRUE[(TRUE[P_TIME_STR] >= start) & (TRUE[P_TIME_STR] <= end) & \
+              TRUE[STATION_STR].isin(stations)]
+  PRED = PRED[(PRED[TIMESTAMP_STR] >= start) & (PRED[TIMESTAMP_STR] <= end) & \
+              PRED[STATION_STR].isin(stations) & (PRED[PHASE_STR] == PWAVE) & \
+              (PRED[PROBABILITY_STR] >= args.pwave)].reset_index(drop=True)
+  T = {}
+  for station, DF in TRUE.groupby(STATION_STR):
+    T[station] = list(DF[P_TIME_STR])
+  DATA = {}
+  # Analyze P waves
+  for model, DF in PRED.groupby(WEIGHT_STR):
+    DATA[model] = {}
+    for station, dataframe in DF.groupby(STATION_STR):
+      DATA[model][station] = \
+        event_merger(T[station], dataframe[TIMESTAMP_STR], PICK_OFFSET,
+                     dataframe[PROBABILITY_STR], axis=1)
   return DATA
 
-def plot_data(DATA):
-  x = DATA["DATE"].unique()
-  for DAT in DATA.groupby(["MODEL", "WEIGHT", "NETWORK", "STATION", "WAVE"]):
-    m, w, n, s, t = DAT[0]
-    plt.title(" ".join(DAT[0]))
-    for D in DAT[1].groupby(["THRESHOLD"]):
-      i = D[0]
-      y = np.cumsum([len(res) for res in D[1]["DATA"][:len(x)]])
-      plt.plot(x, y, label="_".join([str(i)]))
-    plt.yscale("log")
-    plt.legend()
-    plt.show()
-    plt.clf()
-
-def confusion_matrix(DATA):
-  for DAT in DATA.groupby(["MODEL", "WEIGHT", "NETWORK", "STATION", "WAVE"]):
-    m, w, n, s, t = DAT[0]
-    for D in DAT[1].groupby(["THRESHOLD"]):
-      i = D[0]
-      y = np.cumsum([len(res) for res in D[1]["DATA"]])
-      print(m, w, n, s, t, i, y)
-  return
-
-def event_parser(filename : str) -> dict:
+def event_parser(filename : str) -> pd.DataFrame:
   """
   input  :
     - filename (str)
 
   output :
-    - dictionary (str : value)
+    - pd.DataFrame
 
   errors :
     - None
@@ -76,13 +141,13 @@ def event_parser(filename : str) -> dict:
 
   """
   with open(filename, 'r') as fr: lines = fr.readlines()
-  events = {}
+  HEADER = ["EVENT", STATION_STR, P_TYPE_STR, P_WEIGHT_STR, P_TIME_STR,
+            S_TYPE_STR, S_WEIGHT_STR, S_TIME_STR]
+  DATA = []
   event = 0
-  events.setdefault(event, [])
   for line in [l.strip() for l in lines]:
     if EVENT_EXTRACTOR.match(line):
       event += 1
-      events.setdefault(event, [])
       continue
     match = PHASE_EXTRACTOR.match(line)
     if match:
@@ -90,21 +155,28 @@ def event_parser(filename : str) -> dict:
       result[BEG_DATE_STR] = UTCDateTime.strptime(result[BEG_DATE_STR],
                                                   "%y%m%d%H%M")
       result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
-      result[P_TIME_STR] = td(seconds=float(result[P_TIME_STR][:2] + "." + \
-                                            result[P_TIME_STR][2:]))
+      result[P_TIME_STR] = \
+        result[BEG_DATE_STR] + td(seconds=float(result[P_TIME_STR][:2] + \
+                                                PERIOD_STR + \
+                                                result[P_TIME_STR][2:]))
       if result[S_TIME_STR]:
         result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
-        result[S_TIME_STR] = td(seconds=float(result[S_TIME_STR][:2] + "." + \
-                                              result[S_TIME_STR][2:]))
-      events[event].append(result)
-  # with open(os.path.splitext(filename)[0] + "." + JSON_EXT, 'w') as fr:
-  #   json.dump(events, fr, indent=2)
-  return events
+        result[S_TIME_STR] = \
+          result[BEG_DATE_STR] + td(seconds=float(result[S_TIME_STR][:2] + \
+                                                  PERIOD_STR + \
+                                                  result[S_TIME_STR][2:]))
+    DATA.append([event, result[STATION_STR].strip(SPACE_STR),
+                 result[P_TYPE_STR], result[P_WEIGHT_STR],
+                 result[P_TIME_STR],
+                 result[S_TYPE_STR], result[S_WEIGHT_STR],
+                 result[S_TIME_STR]])
+  # We sort the values by the Primary wave arrival time
+  return pd.DataFrame(DATA, columns=HEADER).sort_values(P_TIME_STR)
 
-def main():
-  DATA = load_data()
-  confusion_matrix(DATA)
-
+def main(args : argparse.Namespace):
+  TRUE = event_parser("/Users/admin/Desktop/Monica/PhD/data/test/manual/manual.dat")
+  PRED = load_data(args)
+  conf_mat(TRUE, PRED, args)
   return
 
-if __name__ == "__main__": main()
+if __name__ == "__main__": main(AA.parse_arguments())

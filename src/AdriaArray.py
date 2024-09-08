@@ -100,7 +100,7 @@ def parse_arguments():
                            "selected models will not be considered")
   parser.add_argument('-b', "--batch", default=4096, type=int, required=False,
                       metavar=EMPTY_STR,
-                      help="Batch size for the annotation process")
+                      help="Batch size for the Machine Learning model")
   parser.add_argument('-d', "--directory", required=False, type=is_dir_path,
                       default=Path(DATA_PATH, "waveforms"),
                       help="Directory path to the raw files")
@@ -322,9 +322,9 @@ def read_traces(trace_files, dataset_name : str, args : argparse.Namespace) ->\
     stream.write(STRM_FILE, format=MSEED_STR)
   return stream
 
-def annotate_stream(categories : tuple, trace_files, model_name : str,
+def classify_stream(categories : tuple, trace_files, model_name : str,
                     dataset_name : str, MODEL : sbm.base.SeisBenchModel,
-                    args : argparse.Namespace) -> sbu.PickList:
+                    args : argparse.Namespace, force = False) -> sbu.PickList:
   """
   input:
     - categories    (tuple)
@@ -333,6 +333,7 @@ def annotate_stream(categories : tuple, trace_files, model_name : str,
     - dataset_name  (str)
     - MODEL         (seisbench.models.base.SeisBenchModel)
     - args          (argparse.Namespace)
+    - force         (bool)
 
   output:
     - seisbench.util.PickList
@@ -345,31 +346,27 @@ def annotate_stream(categories : tuple, trace_files, model_name : str,
   """
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
-  ANT_PATH = Path(DATA_PATH, ANT_STR, *categories)
-  ANT_PATH.mkdir(parents=True, exist_ok=True)
-  ANT_FILE = Path(ANT_PATH, "_".join([*categories, model_name, dataset_name]) \
-                  + "." + PICKLE_EXT)
-  if ANT_FILE.is_file():
+  CLF_PATH = Path(DATA_PATH, CLF_STR, *categories)
+  CLF_PATH.mkdir(parents=True, exist_ok=True)
+  CLF_FILE = Path(CLF_PATH,
+                  UNDERSCORE_STR.join([*categories, model_name, dataset_name])\
+                  + PERIOD_STR + PICKLE_EXT)
+  if not force and CLF_FILE.is_file():
     if args.verbose:
-      print("Found and loading previously annotated results:", ANT_FILE)
-    output = sbu.PickList()
-    with open(ANT_FILE, 'rb') as fr:
-      while True:
-        try:
-          output += pickle.load(fr)
-        except EOFError:
-          break
+      print("Found and loading previously classified results:", CLF_FILE)
+    with open(CLF_FILE, 'rb') as fr:
+      output = pickle.load(fr)
   else:
     # Read or download all the involved data (waveforms / traces) and the
     # collection of traces is called a "stream"
     stream = read_traces(trace_files, dataset_name, args)
-    if args.verbose: print("Annotating the Stream")
-    output = MODEL.annotate(stream, batch_size=args.batch,
+    if args.verbose: print("Classifying the Stream")
+    output = MODEL.classify(stream, batch_size=args.batch,
                             P_threshold=args.pwave,
-                            S_threshold=args.swave)
-    with open(ANT_FILE, 'wb') as fp: pickle.dump(output, fp)
+                            S_threshold=args.swave).picks
+    with open(CLF_FILE, 'wb') as fp: pickle.dump(output, fp)
   if args.verbose:
-    print(f"Annotation results for model: {model_name}, with preloaded "
+    print(f"Classification results for model: {model_name}, with preloaded "
           f"weight: {dataset_name}, categorized by {categories}")
     print(output)
   return output
@@ -416,10 +413,9 @@ def main(args : argparse.Namespace):
       MODEL = get_model(model_name, dataset_name)
       if MODEL is None: continue
       for categories, trace_files in WAVEFORMS_DATA:
-        # Annotation
-        output = annotate_stream(categories, trace_files, model_name,
+        # Classify the Stream
+        output = classify_stream(categories, trace_files, model_name,
                                  dataset_name, MODEL, args)
-        # Annotation
   return
 
 if __name__ == "__main__": main(parse_arguments())

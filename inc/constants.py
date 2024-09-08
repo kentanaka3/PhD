@@ -4,6 +4,8 @@ from datetime import timedelta as td
 
 SAMPLING_RATE = 100
 
+EPSILON = 1e-6
+
 NORM = "peak" # "peak" or "std"
 
 # DateTime, TimeDelta and Format constants
@@ -15,8 +17,15 @@ ASSOCIATE_OFFSET = td(seconds=1)
 
 EMPTY_STR = ''
 ALL_WILDCHAR_STR = '*'
+PERIOD_STR = '.'
+UNDERSCORE_STR = '_'
+SPACE_STR = ' '
 PRC_STR = "processed"
 ANT_STR = "annotated"
+CLF_STR = "classified"
+
+PWAVE = "P"
+SWAVE = "S"
 
 PWAVE_THRESHOLD = 0.2
 SWAVE_THRESHOLD = 0.1
@@ -44,26 +53,34 @@ PHASENET_STR      = "PhaseNet"
 # Various pre-trained weights for each model (Add if new are available)
 MODEL_WEIGHTS_DICT = {
   DEEPDENOISER_STR  : sbm.DeepDenoiser(sampling_rate=SAMPLING_RATE),
-  EQTRANSFORMER_STR : sbm.EQTransformer(phases="PS",
+  EQTRANSFORMER_STR : sbm.EQTransformer(phases=PWAVE + SWAVE,
                                         sampling_rate=SAMPLING_RATE,
                                         norm=NORM),
-  PHASENET_STR      : sbm.PhaseNet(phases="PS", sampling_rate=SAMPLING_RATE,
+  PHASENET_STR      : sbm.PhaseNet(phases=PWAVE + SWAVE,
+                                   sampling_rate=SAMPLING_RATE,
                                    norm=NORM)
 }
 
 COLORS = {
-  "P": "C0",
-  "S": "C1",
+  PWAVE: "C0",
+  SWAVE: "C1",
   "Detection": "C2"
 }
 
 MSEED_STR = "MSEED"
 
+MODEL_STR = "MODEL"
+WEIGHT_STR = "WEIGHT"
+PHASE_STR = "PHASE"
+THRESHOLD_STR = "THRESHOLD"
+RESULTS_STR = "RESULTS"
 FILENAME_STR = "FILENAME"
 NETWORK_STR = "NETWORK"
 STATION_STR = "STATION"
 CHANNEL_STR = "CHANNEL"
 BEG_DATE_STR = "BEGDT"
+TIMESTAMP_STR = "TIMESTAMP"
+PROBABILITY_STR = "PROBABILITY"
 HEADER = [FILENAME_STR, NETWORK_STR, STATION_STR, CHANNEL_STR, BEG_DATE_STR]
 
 # Labelled Data components
@@ -73,14 +90,15 @@ P_WEIGHT_STR    = "P_WEIGHT"
 S_TIME_STR      = "S_TIME"
 S_TYPE_STR      = "S_TYPE"
 S_WEIGHT_STR    = "S_WEIGHT"
+# TODO: Implement polarity
 PHASE_EXTRACTOR = \
   re.compile(fr"^(?P<{STATION_STR}>(\w{{4}}|\w{{3}}\s))"            # Station
-             fr"(?P<{P_TYPE_STR}>[ei?]P[cd\s])"                     # P Type
+             fr"(?P<{P_TYPE_STR}>[ei?]{PWAVE}[cd\s])"               # P Type
              fr"(?P<{P_WEIGHT_STR}>[0-4])"                          # P Weight
              fr"1(?P<{BEG_DATE_STR}>\d{{10}})"                      # Date
              fr"\s(?P<{P_TIME_STR}>\d{{4}})"                        # P Time
              fr"\s+((?P<{S_TIME_STR}>\d{{4}}|\d{{3}})"              # S Time
-             fr"(?P<{S_TYPE_STR}>[ei?]S\s)"                         # S Type
+             fr"(?P<{S_TYPE_STR}>[ei?]{SWAVE}\s)"                   # S Type
              fr"(?P<{S_WEIGHT_STR}>[0-4]))*")                       # S Weight
 EVENT_EXTRACTOR = re.compile(r"^1(\s+D)*\s*$")                      # Event
 
