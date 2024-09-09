@@ -68,11 +68,40 @@ class TestEventMerger(unittest.TestCase):
                 (UTCDateTime(2023, 6, 1, 0, 1), -1.0),  # FP
                 (UTCDateTime(2023, 6, 1, 0, 2),  1.0),  # TP
                 (UTCDateTime(2023, 6, 1, 0, 3), -1.0),  # FP
-                (UTCDateTime(2023, 6, 1, 0, 4),  0.0),  # TN
+                (UTCDateTime(2023, 6, 1, 0, 4),  0.0),  # FN
                 (UTCDateTime(2023, 6, 1, 0, 5), -1.0),  # FP
-                (UTCDateTime(2023, 6, 1, 0, 6),  0.0),  # TN
+                (UTCDateTime(2023, 6, 1, 0, 6),  0.0),  # FN
                 (UTCDateTime(2023, 6, 1, 0, 7), -1.0)]  # FP
     self.assertEqual(event_merger(TRUE, PRED, PICK_OFFSET), EXPECTED)
+
+class TestConfMtx(unittest.TestCase):
+  @unittest.mock.patch("sys.argv",
+                       ["AdriaArray.py", "-D", "230601", "230605", "-v",
+                        "-d", TEST_PATH.__str__()])
+  def test_conf_mtx(self):
+    args = AA.parse_arguments()
+    TRUE = event_parser(Path(DATA_PATH, "manual", "manual.dat"))
+    PRED = load_data(args)
+    EXPECTED = pd.DataFrame(
+      [[EQTRANSFORMER_STR, INSTANCE_STR, 13, 134, 0, 345453,
+        0.999612, 0.088435, 1.0, 0.1625],
+       [EQTRANSFORMER_STR, ORIGINAL_STR, 12, 32, 1, 345555,
+        0.999905, 0.272727, 0.923077, 0.421053],
+       [EQTRANSFORMER_STR, SCEDC_STR, 13, 2424, 0, 343163,
+        0.992986, 0.005334, 1.0, 0.010612],
+       [EQTRANSFORMER_STR, STEAD_STR, 10, 59, 3, 345528,
+        0.999821, 0.144928, 0.769231, 0.243902],
+       [PHASENET_STR, INSTANCE_STR, 13, 114, 0, 345473,
+        0.999670, 0.102362, 1.0, 0.185714],
+       [PHASENET_STR, ORIGINAL_STR, 13, 512, 0, 345075,
+        0.998519, 0.024762, 1.0, 0.048327],
+       [PHASENET_STR, SCEDC_STR, 11, 1065, 2, 344522,
+        0.996913, 0.010223, 0.846154, 0.020202],
+       [PHASENET_STR, STEAD_STR, 9, 48, 4, 345539,
+        0.999850, 0.157895, 0.692308, 0.257143]],
+      columns=[MODEL_STR, WEIGHT_STR, TP_STR, FP_STR, FN_STR, TN_STR,
+               ACCURACY_STR, PRECISION_STR, RECALL_STR, F1_STR])
+    # self.assertAlmostEqual(conf_mtx(TRUE, PRED, args), EXPECTED)
 
 if __name__ == "__main__":
   unittest.main()

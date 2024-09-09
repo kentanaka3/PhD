@@ -24,6 +24,15 @@ PRC_STR = "processed"
 ANT_STR = "annotated"
 CLF_STR = "classified"
 
+TP_STR = "True_Positive"
+FP_STR = "False_Positive"
+FN_STR = "False_Negative"
+TN_STR = "True_Negative"
+ACCURACY_STR = "Accuracy"
+PRECISION_STR = "Precision"
+RECALL_STR = "Recall"
+F1_STR = "F1_Score"
+
 PWAVE = "P"
 SWAVE = "S"
 

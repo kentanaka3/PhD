@@ -74,7 +74,7 @@ def load_data(args : argparse.Namespace) -> pd.DataFrame:
   return pd.DataFrame(DATA, columns=HEADER).sort_values(TIMESTAMP_STR)\
                                            .reset_index(drop=True)
 
-def plot_data(DATA : pd.DataFrame, args : argparse.Namespace):
+def plot_data(DATA : pd.DataFrame, args : argparse.Namespace) -> None:
   start, end = args.dates
   DATA = DATA[DATA[PHASE_STR] == PWAVE]
   x = [start]
@@ -102,34 +102,51 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace):
                      PERIOD_STR + PNG_EXT))
     if args.verbose: plt.show()
 
-def conf_mat(TRUE : pd.DataFrame, PRED : pd.DataFrame,
-             args : argparse.Namespace):
+def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
+             args : argparse.Namespace) -> pd.DataFrame:
   stations = args.station if (args.station is not None and
                               args.station != ALL_WILDCHAR_STR) else \
              PRED[STATION_STR].unique()
   start, end = args.dates
+  N_seconds = int((end - start) / (2 * PICK_OFFSET.total_seconds()))
   TRUE = TRUE[(TRUE[P_TIME_STR] >= start) & (TRUE[P_TIME_STR] <= end) & \
               TRUE[STATION_STR].isin(stations)]
   PRED = PRED[(PRED[TIMESTAMP_STR] >= start) & (PRED[TIMESTAMP_STR] <= end) & \
               PRED[STATION_STR].isin(stations) & (PRED[PHASE_STR] == PWAVE) & \
-              (PRED[PROBABILITY_STR] >= args.pwave)].reset_index(drop=True)
+              (PRED[PROBABILITY_STR] >= args.pwave)]
   T = {}
-  for station, DF in TRUE.groupby(STATION_STR):
-    T[station] = list(DF[P_TIME_STR])
+  for station, dataframe in TRUE.groupby(STATION_STR):
+    T[station] = list(dataframe[P_TIME_STR])
   DATA = {}
   # Analyze P waves
-  for model, DF in PRED.groupby(WEIGHT_STR):
-    DATA[model] = {}
-    for station, dataframe in DF.groupby(STATION_STR):
-      DATA[model][station] = \
-        event_merger(T[station], dataframe[TIMESTAMP_STR], PICK_OFFSET,
-                     dataframe[PROBABILITY_STR], axis=1)
-  return DATA
+  for (station, model, weight), dataframe in PRED.groupby([STATION_STR,
+                                                           MODEL_STR,
+                                                           WEIGHT_STR]):
+      DATA.setdefault((model, weight), [])
+      DATA[(model, weight)] += \
+        event_merger(T[station], dataframe[TIMESTAMP_STR].to_list(),
+                     PICK_OFFSET, dataframe[PROBABILITY_STR].to_list())
+  DATAFRAME = []
+  for (model, weight), values in DATA.items():
+      TP = len([v for v in values if v[1] > 0])           # True Positives
+      FP = len([v for v in values if v[1] < 0])           # False Positives
+      FN = len([v for v in values if v[1] == 0])          # False Negatives
+      TN = N_seconds - (TP + FP + FN)                     # True Negatives
+      ACCURACY = (TP + TN) / (TP + FP + FN + TN)          # Accuracy
+      PRECISION = TP / (TP + FP)                          # Precision
+      RECALL = TP / (TP + FN)                             # Recall
+      F1 = 2 * PRECISION * RECALL / (PRECISION + RECALL)  # F1 Score
+      DATAFRAME.append([model, weight, TP, FP, FN, TN,
+                        ACCURACY, PRECISION, RECALL, F1])
+  return pd.DataFrame(DATAFRAME, columns=[MODEL_STR, WEIGHT_STR,
+                                          TP_STR, FP_STR, FN_STR, TN_STR,
+                                          ACCURACY_STR, PRECISION_STR,
+                                          RECALL_STR, F1_STR])
 
-def event_parser(filename : str) -> pd.DataFrame:
+def event_parser(filename : Path) -> pd.DataFrame:
   """
   input  :
-    - filename (str)
+    - filename (Path)
 
   output :
     - pd.DataFrame
@@ -174,9 +191,8 @@ def event_parser(filename : str) -> pd.DataFrame:
   return pd.DataFrame(DATA, columns=HEADER).sort_values(P_TIME_STR)
 
 def main(args : argparse.Namespace):
-  TRUE = event_parser("/Users/admin/Desktop/Monica/PhD/data/test/manual/manual.dat")
+  TRUE = event_parser(Path(DATA_PATH, "test", "manual", "manual.dat"))
   PRED = load_data(args)
-  conf_mat(TRUE, PRED, args)
-  return
+  print(conf_mtx(TRUE, PRED, args))
 
 if __name__ == "__main__": main(AA.parse_arguments())
