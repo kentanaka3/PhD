@@ -28,10 +28,6 @@ import seisbench.util as sbu
 import seisbench.data as sbd
 import seisbench.generate as sbg
 
-# TODO: Fix the following WARNINGS
-# Parts of the input stream consist of fragments shorter than the number of input samples. Output might be empty.
-# Detected multiple records for the same time and component that did not agree. All mismatching traces will be ignored.
-# Parts of the input stream consist of fragments shorter than the number of input samples or misaligned traces. Output might be empty.
 # TODO: Study GaMMA associator with folder
 # TODO: Colab PyOcto associator to be tested with GaMMA
 # TODO: Get Vel Model
@@ -249,12 +245,12 @@ def clean_stream(stream : obspy.Stream, dataset_name : str, FMT_DICT : dict,
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
   if args.verbose: print("Cleaning the Stream")
+  # Sample has to be 100 Hz
+  stream = stream.resample(SAMPLING_RATE)
   stream.merge(method=1, fill_value='interpolate')
   for trc in stream:
     # Remove Stream.Trace if it contains NaN or Inf
     if filter_data(trc.data): stream.remove(trc)
-  # Sample has to be 100 Hz
-  stream = stream.resample(SAMPLING_RATE)
   start = UTCDateTime.strptime(FMT_DICT[BEG_DATE_STR], DATE_FMT)
   stream = stream.trim(starttime=start, endtime=start + ONE_DAY, pad=True,
                        fill_value=0, nearest_sample=False)
