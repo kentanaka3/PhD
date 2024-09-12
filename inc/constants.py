@@ -26,6 +26,9 @@ PRC_STR = "processed"
 ANT_STR = "annotated"
 CLF_STR = "classified"
 
+TRUE_STR = "TRUE"
+PRED_STR = "PRED"
+
 # Metrics
 TP_STR = "True_Positive"
 FP_STR = "False_Positive"

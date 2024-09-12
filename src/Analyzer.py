@@ -75,6 +75,7 @@ def load_data(args : argparse.Namespace) -> pd.DataFrame:
                                            .reset_index(drop=True)
 
 def plot_data(DATA : pd.DataFrame, args : argparse.Namespace) -> None:
+  if args.verbose: print("Plotting the cumulative number of picks per day")
   start, end = args.dates
   DATA = DATA[DATA[PHASE_STR] == PWAVE]
   x = [start]
@@ -98,11 +99,14 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace) -> None:
       ax.set_xlabel("Date")
       ax.grid()
       ax.legend()
-    plt.savefig(Path(IMG_PATH, "EC_" + UNDERSCORE_STR.join(DAT[0]) + PNG_EXT))
-    if args.verbose: plt.show()
+    IMG_FILE = Path(IMG_PATH, "CP_" + UNDERSCORE_STR.join(DAT[0]) + PNG_EXT)
+    plt.savefig(IMG_FILE)
+    plt.close()
+    if args.verbose: print(f"Saving {IMG_FILE}")
 
 def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
              args : argparse.Namespace) -> pd.DataFrame:
+  if args.verbose: print("Computing the Confusion Matrix")
   stations = args.station if (args.station is not None and
                               args.station != ALL_WILDCHAR_STR) else \
              PRED[STATION_STR].unique()
@@ -110,9 +114,13 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   N_seconds = int((end - start) / (2 * PICK_OFFSET.total_seconds()))
   TRUE = TRUE[(TRUE[P_TIME_STR] >= start) & (TRUE[P_TIME_STR] <= end) & \
               TRUE[STATION_STR].isin(stations)]
+  if args.verbose:
+    TRUE.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
   PRED = PRED[(PRED[TIMESTAMP_STR] >= start) & (PRED[TIMESTAMP_STR] <= end) & \
               PRED[STATION_STR].isin(stations) & (PRED[PHASE_STR] == PWAVE) & \
               (PRED[PROBABILITY_STR] >= args.pwave)]
+  if args.verbose:
+    PRED.to_csv(Path(DATA_PATH, PRED_STR + CSV_EXT), index=False)
   T = {}
   for station, dataframe in TRUE.groupby(STATION_STR):
     T[station] = list(dataframe[P_TIME_STR])
@@ -120,6 +128,8 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   # Analyze P waves
   for (station, model, weight), dataframe in \
     PRED.groupby([STATION_STR, MODEL_STR, WEIGHT_STR]):
+    # TODO: What if station not in T?
+    if station not in T: continue
     DATA.setdefault((model, weight), [])
     DATA[(model, weight)] += \
       event_merger(T[station], dataframe[TIMESTAMP_STR].to_list(),
@@ -167,18 +177,22 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   TPx = np.arange(len(DATAFRAME[THRESHOLD_STR].unique()))
   FNx = TPx + width
   for (model, weight), dataframe in DATAFRAME.groupby([MODEL_STR, WEIGHT_STR]):
-    plt.bar(TPx, dataframe[TP_STR], width, label=TP_STR)
-    plt.bar(FNx, dataframe[FN_STR], width, label=FN_STR)
-    plt.plot(TPx, dataframe[ACCURACY_STR], label=ACCURACY_STR, color='k')
-    plt.plot(TPx, dataframe[PRECISION_STR], label=PRECISION_STR, color='g')
-    plt.plot(TPx, dataframe[RECALL_STR], label=RECALL_STR, color='r')
-    plt.plot(TPx, dataframe[F1_STR], label=F1_STR, color='b')
-    plt.xticks(TPx + width / 2, dataframe[THRESHOLD_STR].unique())
-    plt.xlabel(THRESHOLD_STR)
-    plt.yscale("log")
-    plt.ylabel("Number of picks")
+    fig, ax1 = plt.subplots(figsize=(10, 5))
+    ax2 = ax1.twinx()
+    ax1.bar(TPx, dataframe[TP_STR], width, label=TP_STR)
+    ax1.bar(FNx, dataframe[FN_STR], width, label=FN_STR)
+    ax1.set_xlabel(THRESHOLD_STR)
+    ax1.set_ylabel("Number of picks")
+    ax1.set_xticks(TPx + width / 2, dataframe[THRESHOLD_STR].unique())
+    ax1.legend(loc='lower left')
+    # ax2.plot(TPx, dataframe[ACCURACY_STR], label=ACCURACY_STR, color='k')
+    # ax2.plot(TPx, dataframe[PRECISION_STR], label=PRECISION_STR, color='g')
+    ax2.plot(TPx, dataframe[RECALL_STR], label=RECALL_STR, color='r')
+    # ax2.plot(TPx, dataframe[F1_STR], label=F1_STR, color='b')
+    ax2.set_ylabel("Score")
+    ax2.set_yscale("log")
+    ax2.legend(loc='upper right')
     plt.title(SPACE_STR.join([model, weight]))
-    plt.legend()
     plt.savefig(Path(IMG_PATH, "TPFN_" + UNDERSCORE_STR.join([model, weight]) + PNG_EXT))
     plt.close()
   return DATAFRAME
