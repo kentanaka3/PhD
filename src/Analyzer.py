@@ -15,6 +15,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import timedelta as td
 from obspy.core.utcdatetime import UTCDateTime
+from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 
 from constants import *
 import AdriaArray as AA
@@ -66,8 +67,7 @@ def load_data(args : argparse.Namespace) -> pd.DataFrame:
           for station in os.listdir(os.path.join(CLF_PATH, date, network)):
             f = os.path.join(CLF_PATH, date, network, station,
                              UNDERSCORE_STR.join([date, network, station,
-                                                  model, weight]) + \
-                             PERIOD_STR + PICKLE_EXT)
+                                                  model, weight]) + PICKLE_EXT)
             for p in read_data(f):
               DATA.append([model, weight, p.peak_time, network, station,
                            p.phase, p.peak_value])
@@ -98,8 +98,7 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace) -> None:
       ax.set_xlabel("Date")
       ax.grid()
       ax.legend()
-    plt.savefig(Path(IMG_PATH, "EC_" + UNDERSCORE_STR.join(DAT[0]) + \
-                     PERIOD_STR + PNG_EXT))
+    plt.savefig(Path(IMG_PATH, "EC_" + UNDERSCORE_STR.join(DAT[0]) + PNG_EXT))
     if args.verbose: plt.show()
 
 def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
@@ -119,29 +118,70 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     T[station] = list(dataframe[P_TIME_STR])
   DATA = {}
   # Analyze P waves
-  for (station, model, weight), dataframe in PRED.groupby([STATION_STR,
-                                                           MODEL_STR,
-                                                           WEIGHT_STR]):
-      DATA.setdefault((model, weight), [])
-      DATA[(model, weight)] += \
-        event_merger(T[station], dataframe[TIMESTAMP_STR].to_list(),
-                     PICK_OFFSET, dataframe[PROBABILITY_STR].to_list())
+  for (station, model, weight), dataframe in \
+    PRED.groupby([STATION_STR, MODEL_STR, WEIGHT_STR]):
+    DATA.setdefault((model, weight), [])
+    DATA[(model, weight)] += \
+      event_merger(T[station], dataframe[TIMESTAMP_STR].to_list(),
+                   PICK_OFFSET, dataframe[PROBABILITY_STR].to_list())
   DATAFRAME = []
+  HEADER = [MODEL_STR, WEIGHT_STR, THRESHOLD_STR, TP_STR, FP_STR, FN_STR,
+            TN_STR, ACCURACY_STR, PRECISION_STR, RECALL_STR, F1_STR]
   for (model, weight), values in DATA.items():
-      TP = len([v for v in values if v[1] > 0])           # True Positives
-      FP = len([v for v in values if v[1] < 0])           # False Positives
+    _, axs = plt.subplots(3, 3, figsize=(17, 17))
+    plt.suptitle(SPACE_STR.join([model, weight]))
+    for threshold, ax in zip(np.linspace(0.2, 1.0, 9), axs.flatten()):
+      threshold = round(threshold, 2)
+      TP = len([v for v in values if v[1] >= threshold])  # True Positives
+      FP = len([v for v in values if v[1] <= -threshold]) # False Positives
       FN = len([v for v in values if v[1] == 0])          # False Negatives
       TN = N_seconds - (TP + FP + FN)                     # True Negatives
-      ACCURACY = (TP + TN) / (TP + FP + FN + TN)          # Accuracy
+      ConfMtxDisp(np.array([[TP, FP], [FN, TN]]),
+                  display_labels=[PWAVE, NONE_STR]).plot(ax=ax)
+      ax.set_title(str(threshold))
+      ACCURACY = (TP + TN) / N_seconds                    # Accuracy
+      if TP + FP == 0:
+        DATAFRAME.append([model, weight, threshold, TP, FP, FN, TN,
+                          ACCURACY, np.nan, np.nan, np.nan])
+        continue
       PRECISION = TP / (TP + FP)                          # Precision
+      if TP + FN == 0:
+        DATAFRAME.append([model, weight, threshold, TP, FP, FN, TN,
+                          ACCURACY, PRECISION, np.nan, np.nan])
+        continue
       RECALL = TP / (TP + FN)                             # Recall
+      if PRECISION + RECALL == 0:
+        DATAFRAME.append([model, weight, threshold, TP, FP, FN, TN, ACCURACY,
+                          PRECISION, RECALL, np.nan])
+        continue
       F1 = 2 * PRECISION * RECALL / (PRECISION + RECALL)  # F1 Score
-      DATAFRAME.append([model, weight, TP, FP, FN, TN,
+      DATAFRAME.append([model, weight, threshold, TP, FP, FN, TN,
                         ACCURACY, PRECISION, RECALL, F1])
-  return pd.DataFrame(DATAFRAME, columns=[MODEL_STR, WEIGHT_STR,
-                                          TP_STR, FP_STR, FN_STR, TN_STR,
-                                          ACCURACY_STR, PRECISION_STR,
-                                          RECALL_STR, F1_STR])
+    IMG_FILE = \
+      Path(IMG_PATH, "CM_" + UNDERSCORE_STR.join([model, weight]) + PNG_EXT)
+    plt.savefig(IMG_FILE)
+    plt.close()
+  DATAFRAME = pd.DataFrame(DATAFRAME, columns=HEADER)
+
+  width = 0.35
+  TPx = np.arange(len(DATAFRAME[THRESHOLD_STR].unique()))
+  FNx = TPx + width
+  for (model, weight), dataframe in DATAFRAME.groupby([MODEL_STR, WEIGHT_STR]):
+    plt.bar(TPx, dataframe[TP_STR], width, label=TP_STR)
+    plt.bar(FNx, dataframe[FN_STR], width, label=FN_STR)
+    plt.plot(TPx, dataframe[ACCURACY_STR], label=ACCURACY_STR, color='k')
+    plt.plot(TPx, dataframe[PRECISION_STR], label=PRECISION_STR, color='g')
+    plt.plot(TPx, dataframe[RECALL_STR], label=RECALL_STR, color='r')
+    plt.plot(TPx, dataframe[F1_STR], label=F1_STR, color='b')
+    plt.xticks(TPx + width / 2, dataframe[THRESHOLD_STR].unique())
+    plt.xlabel(THRESHOLD_STR)
+    plt.yscale("log")
+    plt.ylabel("Number of picks")
+    plt.title(SPACE_STR.join([model, weight]))
+    plt.legend()
+    plt.savefig(Path(IMG_PATH, "TPFN_" + UNDERSCORE_STR.join([model, weight]) + PNG_EXT))
+    plt.close()
+  return DATAFRAME
 
 def event_parser(filename : Path) -> pd.DataFrame:
   """
@@ -158,7 +198,7 @@ def event_parser(filename : Path) -> pd.DataFrame:
 
   """
   with open(filename, 'r') as fr: lines = fr.readlines()
-  HEADER = ["EVENT", STATION_STR, P_TYPE_STR, P_WEIGHT_STR, P_TIME_STR,
+  HEADER = [EVENT_STR, STATION_STR, P_TYPE_STR, P_WEIGHT_STR, P_TIME_STR,
             S_TYPE_STR, S_WEIGHT_STR, S_TIME_STR]
   DATA = []
   event = 0
@@ -193,6 +233,7 @@ def event_parser(filename : Path) -> pd.DataFrame:
 def main(args : argparse.Namespace):
   TRUE = event_parser(Path(DATA_PATH, "test", "manual", "manual.dat"))
   PRED = load_data(args)
-  print(conf_mtx(TRUE, PRED, args))
+  conf_mtx(TRUE, PRED, args)
+
 
 if __name__ == "__main__": main(AA.parse_arguments())

@@ -10,20 +10,23 @@ NORM = "peak" # "peak" or "std"
 
 # DateTime, TimeDelta and Format constants
 DATE_FMT = "%y%m%d"
-DATETIME_FMT = "%y%m%d%H%M%S"
+DATETIME_FMT = DATE_FMT + "%H%M%S"
 ONE_DAY = td(days=1)
 PICK_OFFSET = td(seconds=0.5)
 ASSOCIATE_OFFSET = td(seconds=1)
 
+# Strings
 EMPTY_STR = ''
 ALL_WILDCHAR_STR = '*'
 PERIOD_STR = '.'
 UNDERSCORE_STR = '_'
 SPACE_STR = ' '
+NONE_STR = "None"
 PRC_STR = "processed"
 ANT_STR = "annotated"
 CLF_STR = "classified"
 
+# Metrics
 TP_STR = "True_Positive"
 FP_STR = "False_Positive"
 FN_STR = "False_Negative"
@@ -33,26 +36,42 @@ PRECISION_STR = "Precision"
 RECALL_STR = "Recall"
 F1_STR = "F1_Score"
 
+# Phases
 PWAVE = "P"
 SWAVE = "S"
 
+# Thresholds
 PWAVE_THRESHOLD = 0.2
 SWAVE_THRESHOLD = 0.1
 
-# Extensions
-CSV_EXT       = "csv"
-DAT_EXT       = "dat"
-EPS_EXT       = "eps"
-HDF5_EXT      = "h5"
-JSON_EXT      = "json"
-MSEED_EXT     = "mseed"
-PDF_EXT       = "pdf"
-PICKLE_EXT    = "pkl"
-PNG_EXT       = "png"
-PUN_EXT       = "pun"
-TORCH_EXT     = "pt"
+SEED_ID_FMT = "{NETWORK}.{STATION}..{CHANNEL}"
 
-PRC_FMT = "{NETWORK}.{STATION}.{CHANNEL}.{BEGDT}.{EXT}"
+# Extensions
+CSV_STR       = "csv"
+DAT_STR       = "dat"
+EPS_STR       = "eps"
+HDF5_STR      = "h5"
+JSON_STR      = "json"
+MSEED_STR     = "mseed"
+PDF_STR       = "pdf"
+PICKLE_STR    = "pkl"
+PNG_STR       = "png"
+PUN_STR       = "pun"
+TORCH_STR     = "pt"
+
+CSV_EXT       = PERIOD_STR + CSV_STR
+DAT_EXT       = PERIOD_STR + DAT_STR
+EPS_EXT       = PERIOD_STR + EPS_STR
+HDF5_EXT      = PERIOD_STR + HDF5_STR
+JSON_EXT      = PERIOD_STR + JSON_STR
+MSEED_EXT     = PERIOD_STR + MSEED_STR
+PDF_EXT       = PERIOD_STR + PDF_STR
+PICKLE_EXT    = PERIOD_STR + PICKLE_STR
+PNG_EXT       = PERIOD_STR + PNG_STR
+PUN_EXT       = PERIOD_STR + PUN_STR
+TORCH_EXT     = PERIOD_STR + TORCH_STR
+
+PRC_FMT = SEED_ID_FMT + ".{BEGDT}.{EXT}"
 
 # Models
 DEEPDENOISER_STR  = "DeepDenoiser"
@@ -76,20 +95,30 @@ COLORS = {
   "Detection": "C2"
 }
 
-MSEED_STR = "MSEED"
+# Data components
+ID_STR = "id"
+TIMESTAMP_STR = "timestamp"
+PROBABILITY_STR = "prob"
+TYPE_STR = "type"
+LONGITUDE_STR = "longitude"
+LATITUDE_STR = "latitude"
+LOCAL_DEPTH_STR = "local_depth"
+ELEVATION_STR = "elevation"     # Elevation in meters
+X_COORD_STR = "x(km)"           # X coordinate in kilometers
+Y_COORD_STR = "y(km)"           # Y coordinate in kilometers
+Z_COORD_STR = "z(km)"           # Z coordinate in kilometers
 
+PHASE_STR = "PHASE"
+EVENT_STR = "EVENT"
 MODEL_STR = "MODEL"
 WEIGHT_STR = "WEIGHT"
-PHASE_STR = "PHASE"
-THRESHOLD_STR = "THRESHOLD"
 RESULTS_STR = "RESULTS"
 FILENAME_STR = "FILENAME"
+THRESHOLD_STR = "THRESHOLD"
 NETWORK_STR = "NETWORK"
 STATION_STR = "STATION"
 CHANNEL_STR = "CHANNEL"
 BEG_DATE_STR = "BEGDT"
-TIMESTAMP_STR = "TIMESTAMP"
-PROBABILITY_STR = "PROBABILITY"
 HEADER = [FILENAME_STR, NETWORK_STR, STATION_STR, CHANNEL_STR, BEG_DATE_STR]
 
 # Labelled Data components

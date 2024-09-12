@@ -123,7 +123,10 @@ def parse_arguments():
 
 def data_downloader(args : argparse.Namespace) -> list:
   """
-  Download the data from the server
+  Download the data from the server based on the specified arguments. If the
+  data is already present in the directory, the data will be replaced by the
+  new data.
+
   input:
     - args          (argparse.Namespace)
 
@@ -134,6 +137,7 @@ def data_downloader(args : argparse.Namespace) -> list:
     - None
 
   notes:
+
   """
   if args.pyrocko:
     # We enable the option to use the PyRocko module to download the data as it
@@ -166,6 +170,7 @@ def waveform_table(args : argparse.Namespace):
   option is enabled, the data will be downloaded directly from the server and
   replace all existing files in the directory.
   TODO: Consider generating a catalog of the downloaded data for future use.
+
   input:
     - args        (argparse.Namespace)
 
@@ -227,6 +232,10 @@ def filter_data(data : np.array) -> bool:
 def clean_stream(stream : obspy.Stream, dataset_name : str, FMT_DICT : dict,
                  args : argparse.Namespace) -> obspy.Stream:
   """
+  Clean the stream by resampling, merging, removing NaN and Inf values, and
+  trim the stream to a single day. If the denoiser option is enabled, the
+  stream will be denoised by the Deep Denoiser model.
+
   input:
     - stream        (obspy.Stream)
     - FMT_DICT      (dict)
@@ -264,13 +273,16 @@ def clean_stream(stream : obspy.Stream, dataset_name : str, FMT_DICT : dict,
                                             STATION=FMT_DICT[STATION_STR],
                                             CHANNEL=FMT_DICT[CHANNEL_STR],
                                             BEGDT=FMT_DICT[BEG_DATE_STR],
-                                            EXT=EPS_EXT)),
-                size=(1000, 600), format=EPS_EXT, dpi=300)
+                                            EXT=EPS_STR)),
+                size=(1000, 600), format=EPS_STR, dpi=300)
   return stream
 
-def read_traces(trace_files, dataset_name : str, args : argparse.Namespace) ->\
-    obspy.Stream:
+def read_traces(trace_files, dataset_name : str, args : argparse.Namespace) \
+  -> obspy.Stream:
   """
+  Read the traces from the specified files and return a Stream. If the file has
+  been previously processed, the Stream will be read from the processed file.
+
   input:
     - trace_files   ()
     - args          (argparse.Namespace)
@@ -298,7 +310,7 @@ def read_traces(trace_files, dataset_name : str, args : argparse.Namespace) ->\
                                             STATION=FMT_DICT[STATION_STR],
                                             CHANNEL=FMT_DICT[CHANNEL_STR],
                                             BEGDT=FMT_DICT[BEG_DATE_STR],
-                                            EXT=MSEED_EXT))
+                                            EXT=MSEED_STR))
   if STRM_FILE.exists():
     if args.verbose:
       print("Found and reading previously processed file:", STRM_FILE)
@@ -322,6 +334,10 @@ def classify_stream(categories : tuple, trace_files, model_name : str,
                     dataset_name : str, MODEL : sbm.base.SeisBenchModel,
                     args : argparse.Namespace, force = False) -> sbu.PickList:
   """
+  Classify the stream based on the specified model and dataset. If 'force' is
+  set to True, the classification will be performed regardless of the existence
+  of the file.
+
   input:
     - categories    (tuple)
     - trace_files   ()
@@ -344,9 +360,8 @@ def classify_stream(categories : tuple, trace_files, model_name : str,
   DATA_PATH = Path(args.directory).parent
   CLF_PATH = Path(DATA_PATH, CLF_STR, *categories)
   CLF_PATH.mkdir(parents=True, exist_ok=True)
-  CLF_FILE = Path(CLF_PATH,
-                  UNDERSCORE_STR.join([*categories, model_name, dataset_name])\
-                  + PERIOD_STR + PICKLE_EXT)
+  CLF_FILE = Path(CLF_PATH, UNDERSCORE_STR.join([*categories, model_name,
+                                                 dataset_name]) + PICKLE_EXT)
   if not force and CLF_FILE.is_file():
     if args.verbose:
       print("Found and loading previously classified results:", CLF_FILE)
@@ -369,8 +384,8 @@ def classify_stream(categories : tuple, trace_files, model_name : str,
 
 def get_model(model_name : str, dataset_name : str) -> sbm.base.SeisBenchModel:
   """
-  Given a model_name trained on the dataset_name, return the associated testing
-  model.
+  Given a 'model_name' trained on the 'dataset_name', return the associated
+  testing model. If the model is not found, return None.
 
   input:
     - model_name    (str)
@@ -383,6 +398,7 @@ def get_model(model_name : str, dataset_name : str) -> sbm.base.SeisBenchModel:
     - None
 
   notes:
+
   """
   try:
     model = MODEL_WEIGHTS_DICT[model_name].from_pretrained(dataset_name)

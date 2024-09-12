@@ -31,7 +31,7 @@ class TestPickParser(unittest.TestCase):
     events = event_parser(Path(MNL_DATA_PATH, "manual.dat"))
     # with open(Path(MNL_DATA_PATH, EXPECTED_STR + JSON_EXT), 'w') as fp:
     #   json.dump(events, fp, default=str)
-    with open(Path(MNL_DATA_PATH, EXPECTED_STR + PERIOD_STR + JSON_EXT), 'r') as fr:
+    with open(Path(MNL_DATA_PATH, EXPECTED_STR + JSON_EXT), 'r') as fr:
       expected = json.load(fr)
     for key, event in events.items():
       for s, station in enumerate(event):
