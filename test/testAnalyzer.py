@@ -74,6 +74,29 @@ class TestEventMerger(unittest.TestCase):
                 (UTCDateTime(2023, 6, 1, 0, 7), -1.0)]  # FP
     self.assertEqual(event_merger(TRUE, PRED, PICK_OFFSET), EXPECTED)
 
+  def test_event_merger_empty_anchor(self):
+    TRUE = []
+    PRED = [UTCDateTime(2023, 6, 1, 0, 0), UTCDateTime(2023, 6, 1, 0, 1),
+            UTCDateTime(2023, 6, 1, 0, 2), UTCDateTime(2023, 6, 1, 0, 3),
+            UTCDateTime(2023, 6, 1, 0, 5), UTCDateTime(2023, 6, 1, 0, 7)]
+    EXPECTED = [(UTCDateTime(2023, 6, 1, 0, 0), -1.0),
+                (UTCDateTime(2023, 6, 1, 0, 1), -1.0),
+                (UTCDateTime(2023, 6, 1, 0, 2), -1.0),
+                (UTCDateTime(2023, 6, 1, 0, 3), -1.0),
+                (UTCDateTime(2023, 6, 1, 0, 5), -1.0),
+                (UTCDateTime(2023, 6, 1, 0, 7), -1.0)]
+    self.assertEqual(event_merger(TRUE, PRED, PICK_OFFSET), EXPECTED)
+
+  def test_event_merger_empty_pred(self):
+    TRUE = [UTCDateTime(2023, 6, 1, 0, 0), UTCDateTime(2023, 6, 1, 0, 2),
+            UTCDateTime(2023, 6, 1, 0, 4), UTCDateTime(2023, 6, 1, 0, 6)]
+    PRED = []
+    EXPECTED = [(UTCDateTime(2023, 6, 1, 0, 0), 0.0),
+                (UTCDateTime(2023, 6, 1, 0, 2), 0.0),
+                (UTCDateTime(2023, 6, 1, 0, 4), 0.0),
+                (UTCDateTime(2023, 6, 1, 0, 6), 0.0)]
+    self.assertEqual(event_merger(TRUE, PRED, PICK_OFFSET), EXPECTED)
+
 class TestConfMtx(unittest.TestCase):
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", "-D", "230601", "230605", "-v",

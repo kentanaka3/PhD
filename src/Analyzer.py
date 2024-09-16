@@ -24,6 +24,8 @@ def event_merger(ANCHOR : list, ADDITIONAL : list,
                  width : td, PROBABILITIES = None, axis = 0) -> list:
   if PROBABILITIES is None:
     PROBABILITIES = [1.0] * len(ADDITIONAL)
+  if len(ANCHOR) == 0:
+    return [(a, -b) for a, b in zip(ADDITIONAL, PROBABILITIES)]
   # Initialize with ANCHOR and no match (False Negative)
   BOXES = [(a, 0.0) for a in ANCHOR]
   i = 0 # Index for ANCHOR
@@ -60,9 +62,12 @@ def load_data(args : argparse.Namespace) -> pd.DataFrame:
   DATA = []
   HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR,
             PHASE_STR, PROBABILITY_STR]
+  start, end = args.dates
   for model in args.models:
     for weight in args.weights:
       for date in os.listdir(CLF_PATH):
+        date_obj = UTCDateTime.strptime(date, DATE_FMT)
+        if date_obj < start or date_obj > end: continue
         for network in os.listdir(os.path.join(CLF_PATH, date)):
           for station in os.listdir(os.path.join(CLF_PATH, date, network)):
             f = os.path.join(CLF_PATH, date, network, station,
@@ -105,7 +110,7 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace) -> None:
     if args.verbose: print(f"Saving {IMG_FILE}")
 
 def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
-             args : argparse.Namespace) -> pd.DataFrame:
+             args : argparse.Namespace, phase = PWAVE) -> pd.DataFrame:
   if args.verbose: print("Computing the Confusion Matrix")
   stations = args.station if (args.station is not None and
                               args.station != ALL_WILDCHAR_STR) else \
@@ -116,8 +121,7 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
               TRUE[STATION_STR].isin(stations)]
   if args.verbose:
     TRUE.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
-  PRED = PRED[(PRED[TIMESTAMP_STR] >= start) & (PRED[TIMESTAMP_STR] <= end) & \
-              PRED[STATION_STR].isin(stations) & (PRED[PHASE_STR] == PWAVE) & \
+  PRED = PRED[PRED[STATION_STR].isin(stations) & (PRED[PHASE_STR] == phase) & \
               (PRED[PROBABILITY_STR] >= args.pwave)]
   if args.verbose:
     PRED.to_csv(Path(DATA_PATH, PRED_STR + CSV_EXT), index=False)
@@ -132,7 +136,8 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     if station not in T: continue
     DATA.setdefault((model, weight), [])
     DATA[(model, weight)] += \
-      event_merger(T[station], dataframe[TIMESTAMP_STR].to_list(),
+      event_merger(T[station] if station in T else [],
+                   dataframe[TIMESTAMP_STR].to_list(),
                    PICK_OFFSET, dataframe[PROBABILITY_STR].to_list())
   DATAFRAME = []
   HEADER = [MODEL_STR, WEIGHT_STR, THRESHOLD_STR, TP_STR, FP_STR, FN_STR,
@@ -248,6 +253,5 @@ def main(args : argparse.Namespace):
   TRUE = event_parser(Path(DATA_PATH, "test", "manual", "manual.dat"))
   PRED = load_data(args)
   conf_mtx(TRUE, PRED, args)
-
 
 if __name__ == "__main__": main(AA.parse_arguments())
