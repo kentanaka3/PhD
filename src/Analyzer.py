@@ -270,9 +270,9 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace):
     plt.close()
 
 def main(args : argparse.Namespace):
-  TRUE = event_parser(Path(DATA_PATH, "test", "manual", "manual.dat"))
   PRED = load_data(args)
   plot_data(PRED, args)
+  TRUE = event_parser(Path(DATA_PATH, "test", "manual", "manual.dat"))
   _, DATA = conf_mtx(TRUE, PRED, args)
   time_displacement(DATA, args)
 
