@@ -59,47 +59,69 @@ class TestEventCounter(unittest.TestCase):
 
 class TestEventMerger(unittest.TestCase):
   def test_event_merger(self):
-    TRUE = [UTCDateTime(2023, 6, 1, 0, 0), UTCDateTime(2023, 6, 1, 0, 2),
-            UTCDateTime(2023, 6, 1, 0, 4), UTCDateTime(2023, 6, 1, 0, 6)]
-    PRED = [UTCDateTime(2023, 6, 1, 0, 0), UTCDateTime(2023, 6, 1, 0, 1),
-            UTCDateTime(2023, 6, 1, 0, 2), UTCDateTime(2023, 6, 1, 0, 3),
-            UTCDateTime(2023, 6, 1, 0, 5), UTCDateTime(2023, 6, 1, 0, 7)]
-    EXPECTED = [(UTCDateTime(2023, 6, 1, 0, 0),  1.0),  # TP
-                (UTCDateTime(2023, 6, 1, 0, 1), -1.0),  # FP
-                (UTCDateTime(2023, 6, 1, 0, 2),  1.0),  # TP
-                (UTCDateTime(2023, 6, 1, 0, 3), -1.0),  # FP
-                (UTCDateTime(2023, 6, 1, 0, 4),  0.0),  # FN
-                (UTCDateTime(2023, 6, 1, 0, 5), -1.0),  # FP
-                (UTCDateTime(2023, 6, 1, 0, 6),  0.0),  # FN
-                (UTCDateTime(2023, 6, 1, 0, 7), -1.0)]  # FP
+    #                   YEAR, M, D, H, M, S, MS
+    TRUE = [UTCDateTime(2023, 6, 1, 0, 0, 0, 0),
+            UTCDateTime(2023, 6, 1, 0, 2, 0, 0),
+            UTCDateTime(2023, 6, 1, 0, 4, 0, 0),
+            UTCDateTime(2023, 6, 1, 0, 6, 0, 0)]
+    PRED = [UTCDateTime(2023, 6, 1, 0, 0, 0, 400),
+            UTCDateTime(2023, 6, 1, 0, 1, 0, 0),
+            UTCDateTime(2023, 6, 1, 0, 2, 0, 0),
+            UTCDateTime(2023, 6, 1, 0, 3, 0, 0),
+            UTCDateTime(2023, 6, 1, 0, 5, 0, 0),
+            UTCDateTime(2023, 6, 1, 0, 7, 0, 0)]
+    EXPECTED = [
+      (UTCDateTime(2023, 6, 1, 0, 0, 0, 0),  1.0,
+       UTCDateTime(2023, 6, 1, 0, 0, 0, 400)),      # TP
+      (UTCDateTime(2023, 6, 1, 0, 1, 0, 0), -1.0,
+        None),                                      # FP
+      (UTCDateTime(2023, 6, 1, 0, 2, 0, 0),  1.0,
+       UTCDateTime(2023, 6, 1, 0, 2, 0, 0)),        # TP
+      (UTCDateTime(2023, 6, 1, 0, 3, 0, 0), -1.0,
+       None),                                       # FP
+      (UTCDateTime(2023, 6, 1, 0, 4, 0, 0),  0.0,
+       None),                                       # FN
+      (UTCDateTime(2023, 6, 1, 0, 5, 0, 0), -1.0,
+       None),                                       # FP
+      (UTCDateTime(2023, 6, 1, 0, 6, 0, 0),  0.0,
+       None),                                       # FN
+      (UTCDateTime(2023, 6, 1, 0, 7, 0, 0), -1.0,
+       None)]                                       # FP
     self.assertEqual(event_merger(TRUE, PRED, PICK_OFFSET), EXPECTED)
 
   def test_event_merger_empty_anchor(self):
     TRUE = []
-    PRED = [UTCDateTime(2023, 6, 1, 0, 0), UTCDateTime(2023, 6, 1, 0, 1),
-            UTCDateTime(2023, 6, 1, 0, 2), UTCDateTime(2023, 6, 1, 0, 3),
-            UTCDateTime(2023, 6, 1, 0, 5), UTCDateTime(2023, 6, 1, 0, 7)]
-    EXPECTED = [(UTCDateTime(2023, 6, 1, 0, 0), -1.0),
-                (UTCDateTime(2023, 6, 1, 0, 1), -1.0),
-                (UTCDateTime(2023, 6, 1, 0, 2), -1.0),
-                (UTCDateTime(2023, 6, 1, 0, 3), -1.0),
-                (UTCDateTime(2023, 6, 1, 0, 5), -1.0),
-                (UTCDateTime(2023, 6, 1, 0, 7), -1.0)]
+    #                   YEAR, M, D, H, M, S, MS
+    PRED = [UTCDateTime(2023, 6, 1, 0, 0, 0, 0),
+            UTCDateTime(2023, 6, 1, 0, 1, 0, 0),
+            UTCDateTime(2023, 6, 1, 0, 2, 0, 0),
+            UTCDateTime(2023, 6, 1, 0, 3, 0, 0),
+            UTCDateTime(2023, 6, 1, 0, 5, 0, 0),
+            UTCDateTime(2023, 6, 1, 0, 7, 0, 0)]
+    EXPECTED = [(UTCDateTime(2023, 6, 1, 0, 0, 0, 0), -1.0, None),
+                (UTCDateTime(2023, 6, 1, 0, 1, 0, 0), -1.0, None),
+                (UTCDateTime(2023, 6, 1, 0, 2, 0, 0), -1.0, None),
+                (UTCDateTime(2023, 6, 1, 0, 3, 0, 0), -1.0, None),
+                (UTCDateTime(2023, 6, 1, 0, 5, 0, 0), -1.0, None),
+                (UTCDateTime(2023, 6, 1, 0, 7, 0, 0), -1.0, None)]
     self.assertEqual(event_merger(TRUE, PRED, PICK_OFFSET), EXPECTED)
 
   def test_event_merger_empty_pred(self):
-    TRUE = [UTCDateTime(2023, 6, 1, 0, 0), UTCDateTime(2023, 6, 1, 0, 2),
-            UTCDateTime(2023, 6, 1, 0, 4), UTCDateTime(2023, 6, 1, 0, 6)]
+    #                   YEAR, M, D, H, M, S, MS
+    TRUE = [UTCDateTime(2023, 6, 1, 0, 0, 0, 0),
+            UTCDateTime(2023, 6, 1, 0, 2, 0, 0),
+            UTCDateTime(2023, 6, 1, 0, 4, 0, 0),
+            UTCDateTime(2023, 6, 1, 0, 6, 0, 0)]
     PRED = []
-    EXPECTED = [(UTCDateTime(2023, 6, 1, 0, 0), 0.0),
-                (UTCDateTime(2023, 6, 1, 0, 2), 0.0),
-                (UTCDateTime(2023, 6, 1, 0, 4), 0.0),
-                (UTCDateTime(2023, 6, 1, 0, 6), 0.0)]
+    EXPECTED = [(UTCDateTime(2023, 6, 1, 0, 0, 0, 0), 0.0, None),
+                (UTCDateTime(2023, 6, 1, 0, 2, 0, 0), 0.0, None),
+                (UTCDateTime(2023, 6, 1, 0, 4, 0, 0), 0.0, None),
+                (UTCDateTime(2023, 6, 1, 0, 6, 0, 0), 0.0, None)]
     self.assertEqual(event_merger(TRUE, PRED, PICK_OFFSET), EXPECTED)
 
 class TestConfMtx(unittest.TestCase):
   @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-D", "230601", "230605", "-v",
+                       ["AdriaArray.py", "-D", "230601", "230604", "-v",
                         "-d", TEST_PATH.__str__()])
   def test_conf_mtx(self):
     args = AA.parse_arguments()

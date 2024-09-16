@@ -25,27 +25,27 @@ def event_merger(ANCHOR : list, ADDITIONAL : list,
   if PROBABILITIES is None:
     PROBABILITIES = [1.0] * len(ADDITIONAL)
   if len(ANCHOR) == 0:
-    return [(a, -b) for a, b in zip(ADDITIONAL, PROBABILITIES)]
+    return [(a, -b, None) for a, b in zip(ADDITIONAL, PROBABILITIES)]
   # Initialize with ANCHOR and no match (False Negative)
-  BOXES = [(a, 0.0) for a in ANCHOR]
+  BOXES = [(a, 0.0, None) for a in ANCHOR]
   i = 0 # Index for ANCHOR
   j = 0 # Index for ADDITIONAL
   while i < len(ANCHOR) and j < len(ADDITIONAL):
     if td(seconds=abs(ANCHOR[i] - ADDITIONAL[j])) < width:
       # ANCHOR[i] and ADDITIONAL[j] are a match (True Positive)
-      BOXES[i] = (ANCHOR[i], PROBABILITIES[j])
+      BOXES[i] = (ANCHOR[i], PROBABILITIES[j], ADDITIONAL[j])
       i += 1
       j += 1
     elif ADDITIONAL[j] < ANCHOR[i]:
       # ADDITIONAL[j] is not in ANCHOR (False Positive)
-      BOXES.append((ADDITIONAL[j], -1 * PROBABILITIES[j]))
+      BOXES.append((ADDITIONAL[j], -1 * PROBABILITIES[j], None))
       j += 1
     else:
       # ANCHOR[i] is not in ADDITIONAL (False Negative)
       i += 1
   while j < len(ADDITIONAL):
     # ADDITIONAL[j] is not in ANCHOR (False Positive)
-    BOXES.append((ADDITIONAL[j], -1 * PROBABILITIES[j]))
+    BOXES.append((ADDITIONAL[j], -1 * PROBABILITIES[j], None))
     j += 1
   return sorted(BOXES, key=lambda x: x[axis])
 
@@ -252,6 +252,7 @@ def event_parser(filename : Path) -> pd.DataFrame:
 def main(args : argparse.Namespace):
   TRUE = event_parser(Path(DATA_PATH, "test", "manual", "manual.dat"))
   PRED = load_data(args)
+  plot_data(PRED, args)
   conf_mtx(TRUE, PRED, args)
 
 if __name__ == "__main__": main(AA.parse_arguments())
