@@ -200,7 +200,7 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     plt.title(SPACE_STR.join([model, weight]))
     plt.savefig(Path(IMG_PATH, "TPFN_" + UNDERSCORE_STR.join([model, weight]) + PNG_EXT))
     plt.close()
-  return DATAFRAME
+  return DATAFRAME, DATA
 
 def event_parser(filename : Path) -> pd.DataFrame:
   """
@@ -249,10 +249,31 @@ def event_parser(filename : Path) -> pd.DataFrame:
   # We sort the values by the Primary wave arrival time
   return pd.DataFrame(DATA, columns=HEADER).sort_values(P_TIME_STR)
 
+def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace):
+  bins = np.linspace(0, 0.5, 21, endpoint=True)
+  for (model, weight), dataframe in DATA.items():
+    fig, axs = plt.subplots(figsize=(10, 10))
+    plt.title(SPACE_STR.join([model, weight]))
+    for threshold in np.linspace(0.2, 1.0, 9):
+      threshold = round(threshold, 2)
+      x = [abs(v[0] - v[2]) for v in dataframe if v[1] > threshold]
+      count, _ = np.histogram(x, bins=bins)
+      plt.plot(bins[:-1], count, label=threshold)
+    plt.xlim(0, 0.5)
+    plt.xlabel("Time Displacement (s)")
+    plt.ylim(0)
+    plt.ylabel("Number of picks")
+    plt.grid()
+    plt.legend()
+    IMG_FILE = Path(IMG_PATH, "TD_" + UNDERSCORE_STR.join([model, weight]) + PNG_EXT)
+    plt.savefig(IMG_FILE)
+    plt.close()
+
 def main(args : argparse.Namespace):
   TRUE = event_parser(Path(DATA_PATH, "test", "manual", "manual.dat"))
   PRED = load_data(args)
   plot_data(PRED, args)
-  conf_mtx(TRUE, PRED, args)
+  _, DATA = conf_mtx(TRUE, PRED, args)
+  time_displacement(DATA, args)
 
 if __name__ == "__main__": main(AA.parse_arguments())
