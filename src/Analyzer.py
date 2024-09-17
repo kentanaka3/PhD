@@ -89,7 +89,7 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace, phase = PWAVE) \
   DATA = DATA[(DATA[PHASE_STR] == phase) & (DATA[TIMESTAMP_STR] >= start)]
   x = [start]
   while x[-1] <= end: x.append(x[-1] + ONE_DAY)
-  z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
+  z = [round(t, 2) for t in np.linspace(0.2, 0.5, 4)]
   for model, dataframe in DATA.groupby(MODEL_STR):
     _, _axs = plt.subplots(2, 2, figsize=(10, 10))
     axs = _axs.flatten()
@@ -190,9 +190,9 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   DATAFRAME = []
   HEADER = [MODEL_STR, WEIGHT_STR, THRESHOLD_STR, TP_STR, FP_STR, FN_STR,
             TN_STR, ACCURACY_STR, PRECISION_STR, RECALL_STR, F1_STR]
-  z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
+  z = [round(t, 2) for t in np.linspace(0.2, 0.5, 4)]
   for (model, weight), values in DATA.items():
-    _, _axs = plt.subplots(3, 3, figsize=(10, 10))
+    _, _axs = plt.subplots(2, 2, figsize=(10, 10))
     axs = _axs.flatten()
     plt.suptitle(SPACE_STR.join([model, weight]), fontsize=16)
     if args.verbose:
@@ -203,7 +203,7 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       FP = len([v for v in values if v[1] <= -threshold]) # False Positives
       FN = len([v for v in values if v[1] == 0])          # False Negatives
       TN = N_seconds - (TP + FP + FN)                     # True Negatives
-      ConfMtxDisp(np.array([[TP, FP], [FN, TN]]),
+      ConfMtxDisp(np.array([[TP, FN], [FP, TN]]),
                   display_labels=[PWAVE, NONE_STR]).plot(ax=ax)
       ax.set_title(str(threshold))
       ACCURACY = (TP + TN) / N_seconds                    # Accuracy
@@ -228,8 +228,9 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       Path(IMG_PATH, "CM_" + UNDERSCORE_STR.join([model, weight]) + PNG_EXT)
     axs[0].set(xticklabels=[], xlabel=None)
     axs[1].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None)
-    axs[2].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None)
-    axs[3].set(xticklabels=[], xlabel=None)
+    axs[2].set()
+    axs[3].set(yticklabels=[], ylabel=None)
+    plt.tight_layout()
     plt.savefig(IMG_FILE)
     plt.close()
   DATAFRAME = pd.DataFrame(DATAFRAME, columns=HEADER)
@@ -309,7 +310,7 @@ def event_parser(filename : Path) -> pd.DataFrame:
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace):
   bins = np.linspace(-0.5, 0.5, 21, endpoint=True)
-  z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
+  z = [round(t, 2) for t in np.linspace(0.2, 0.5, 4)]
   for (model, weight), dataframe in DATA.items():
     fig, axs = plt.subplots(figsize=(10, 5))
     plt.title(SPACE_STR.join([model, weight]), fontsize=16)
