@@ -13,6 +13,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from datetime import timedelta as td
 from obspy.core.utcdatetime import UTCDateTime
 from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
@@ -21,31 +22,32 @@ from constants import *
 import AdriaArray as AA
 
 def event_merger(ANCHOR : list, ADDITIONAL : list,
-                 width : td, PROBABILITIES = None, axis = 0) -> list:
+                 width : td, PROBABILITIES = None, axis = 0, station = None) \
+    -> list:
   if PROBABILITIES is None:
     PROBABILITIES = [1.0] * len(ADDITIONAL)
   if len(ANCHOR) == 0:
-    return [(a, -b, None) for a, b in zip(ADDITIONAL, PROBABILITIES)]
+    return [(a, -b, None, station) for a, b in zip(ADDITIONAL, PROBABILITIES)]
   # Initialize with ANCHOR and no match (False Negative)
-  BOXES = [(a, 0.0, None) for a in ANCHOR]
+  BOXES = [(a, 0.0, None, station) for a in ANCHOR]
   i = 0 # Index for ANCHOR
   j = 0 # Index for ADDITIONAL
   while i < len(ANCHOR) and j < len(ADDITIONAL):
     if td(seconds=abs(ANCHOR[i] - ADDITIONAL[j])) < width:
       # ANCHOR[i] and ADDITIONAL[j] are a match (True Positive)
-      BOXES[i] = (ANCHOR[i], PROBABILITIES[j], ADDITIONAL[j])
+      BOXES[i] = (ANCHOR[i], PROBABILITIES[j], ADDITIONAL[j], station)
       i += 1
       j += 1
     elif ADDITIONAL[j] < ANCHOR[i]:
       # ADDITIONAL[j] is not in ANCHOR (False Positive)
-      BOXES.append((ADDITIONAL[j], -1 * PROBABILITIES[j], None))
+      BOXES.append((ADDITIONAL[j], -PROBABILITIES[j], None, station))
       j += 1
     else:
       # ANCHOR[i] is not in ADDITIONAL (False Negative)
       i += 1
   while j < len(ADDITIONAL):
     # ADDITIONAL[j] is not in ANCHOR (False Positive)
-    BOXES.append((ADDITIONAL[j], -1 * PROBABILITIES[j], None))
+    BOXES.append((ADDITIONAL[j], -PROBABILITIES[j], None, station))
     j += 1
   return sorted(BOXES, key=lambda x: x[axis])
 
@@ -79,38 +81,85 @@ def load_data(args : argparse.Namespace) -> pd.DataFrame:
   return pd.DataFrame(DATA, columns=HEADER).sort_values(TIMESTAMP_STR)\
                                            .reset_index(drop=True)
 
-def plot_data(DATA : pd.DataFrame, args : argparse.Namespace) -> None:
-  if args.verbose: print("Plotting the cumulative number of picks per day")
+def plot_data(DATA : pd.DataFrame, args : argparse.Namespace, phase = PWAVE) \
+    -> None:
+  MSG = f"Cumulative number of {phase} picks"
+  if args.verbose: print(MSG)
   start, end = args.dates
-  DATA = DATA[DATA[PHASE_STR] == PWAVE]
+  DATA = DATA[(DATA[PHASE_STR] == phase) & (DATA[TIMESTAMP_STR] >= start)]
   x = [start]
   while x[-1] <= end: x.append(x[-1] + ONE_DAY)
-  for DAT in DATA.groupby([MODEL_STR, NETWORK_STR, STATION_STR]):
+  z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
+  for model, dataframe in DATA.groupby(MODEL_STR):
     _, _axs = plt.subplots(2, 2, figsize=(10, 10))
     axs = _axs.flatten()
-    plt.suptitle(SPACE_STR.join(DAT[0]))
+    plt.suptitle(model, fontsize=16)
+    axs[0].set(xticklabels=[], xlabel=None, ylabel=MSG)
+    axs[1].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None)
+    axs[2].set(xlabel="Date", ylabel=MSG)
+    axs[3].set(xlabel="Date", yticklabels=[], ylabel=None)
     y_max = 0
-    for i, DA in enumerate(DAT[1].groupby(WEIGHT_STR)):
-      axs[i].set_title(DA[0])
-      for threshold in np.linspace(0.2, 0.9, 8):
-        D = DA[1]
-        y = [D[(D[PROBABILITY_STR] >= threshold) & (D[TIMESTAMP_STR] <= x[i]) &
-               (D[TIMESTAMP_STR] >= start)].size for i in range(len(x))]
-        axs[i].plot(x, y, label=threshold)
+    for i, (weight, data) in enumerate(dataframe.groupby(WEIGHT_STR)):
+      axs[i].set_title(weight)
+      for threshold in z:
+        y = [data[(data[PROBABILITY_STR] >= threshold) &
+                  (data[TIMESTAMP_STR] <= d)].size for d in x]
+        axs[i].plot([np.datetime64(t.datetime) for t in x], y, label=threshold)
         y_max = max(y_max, max(y))
     for ax in axs:
       ax.set_ylim(0, y_max)
-      ax.set_ylabel("Cumulative number of picks")
-      ax.set_xlabel("Date")
       ax.grid()
       ax.legend()
-    IMG_FILE = Path(IMG_PATH, "CP_" + UNDERSCORE_STR.join(DAT[0]) + PNG_EXT)
+    axs[2].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    for label in axs[2].get_xticklabels():
+      label.set(rotation=30, horizontalalignment='right')
+    axs[3].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    for label in axs[3].get_xticklabels():
+      label.set(rotation=30, horizontalalignment='right')
+    IMG_FILE = Path(IMG_PATH, "CP_" + model + PNG_EXT)
+    plt.tight_layout()
+    plt.savefig(IMG_FILE)
+    plt.close()
+    if args.verbose: print(f"Saving {IMG_FILE}")
+
+
+  for (model, network, station), dataframe in \
+    DATA.groupby([MODEL_STR, NETWORK_STR, STATION_STR]):
+    _, _axs = plt.subplots(2, 2, figsize=(10, 10))
+    axs = _axs.flatten()
+    plt.suptitle(SPACE_STR.join([model, network, station]), fontsize=16)
+    axs[0].set(xticklabels=[], xlabel=None, ylabel=MSG)
+    axs[1].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None)
+    axs[2].set(xlabel="Date", ylabel=MSG)
+    axs[3].set(xlabel="Date", yticklabels=[], ylabel=None)
+    y_max = 0
+    for i, (weight, data) in enumerate(dataframe.groupby(WEIGHT_STR)):
+      axs[i].set_title(weight)
+      for threshold in z:
+        y = [data[(data[PROBABILITY_STR] >= threshold) &
+                  (data[TIMESTAMP_STR] <= d)].size for d in x]
+        axs[i].plot([np.datetime64(t.datetime) for t in x], y, label=threshold)
+        y_max = max(y_max, max(y))
+    for ax in axs:
+      ax.set_ylim(0, y_max)
+      ax.grid()
+      ax.legend()
+    axs[2].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    for label in axs[2].get_xticklabels():
+      label.set(rotation=30, horizontalalignment='right')
+    axs[3].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    for label in axs[3].get_xticklabels():
+      label.set(rotation=30, horizontalalignment='right')
+    IMG_FILE = \
+      Path(IMG_PATH,
+           "CP_" + UNDERSCORE_STR.join([model, network, station]) + PNG_EXT)
+    plt.tight_layout()
     plt.savefig(IMG_FILE)
     plt.close()
     if args.verbose: print(f"Saving {IMG_FILE}")
 
 def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
-             args : argparse.Namespace, phase = PWAVE) -> pd.DataFrame:
+             args : argparse.Namespace, phase = PWAVE):
   if args.verbose: print("Computing the Confusion Matrix")
   stations = args.station if (args.station is not None and
                               args.station != ALL_WILDCHAR_STR) else \
@@ -132,21 +181,24 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   # Analyze P waves
   for (station, model, weight), dataframe in \
     PRED.groupby([STATION_STR, MODEL_STR, WEIGHT_STR]):
-    # TODO: What if station not in T?
-    if station not in T: continue
+    # TODO: What if station not in PRED?
     DATA.setdefault((model, weight), [])
     DATA[(model, weight)] += \
       event_merger(T[station] if station in T else [],
-                   dataframe[TIMESTAMP_STR].to_list(),
-                   PICK_OFFSET, dataframe[PROBABILITY_STR].to_list())
+                   dataframe[TIMESTAMP_STR].to_list(), PICK_OFFSET,
+                   dataframe[PROBABILITY_STR].to_list(), station=station)
   DATAFRAME = []
   HEADER = [MODEL_STR, WEIGHT_STR, THRESHOLD_STR, TP_STR, FP_STR, FN_STR,
             TN_STR, ACCURACY_STR, PRECISION_STR, RECALL_STR, F1_STR]
+  z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
   for (model, weight), values in DATA.items():
-    _, axs = plt.subplots(3, 3, figsize=(17, 17))
-    plt.suptitle(SPACE_STR.join([model, weight]))
-    for threshold, ax in zip(np.linspace(0.2, 1.0, 9), axs.flatten()):
-      threshold = round(threshold, 2)
+    _, _axs = plt.subplots(3, 3, figsize=(10, 10))
+    axs = _axs.flatten()
+    plt.suptitle(SPACE_STR.join([model, weight]), fontsize=16)
+    if args.verbose:
+      for v in values:
+        if v[1] == 0: print("WARNING: ", v[0], v[3], model, weight)
+    for threshold, ax in zip(z, axs):
       TP = len([v for v in values if v[1] >= threshold])  # True Positives
       FP = len([v for v in values if v[1] <= -threshold]) # False Positives
       FN = len([v for v in values if v[1] == 0])          # False Negatives
@@ -174,6 +226,10 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
                         ACCURACY, PRECISION, RECALL, F1])
     IMG_FILE = \
       Path(IMG_PATH, "CM_" + UNDERSCORE_STR.join([model, weight]) + PNG_EXT)
+    axs[0].set(xticklabels=[], xlabel=None)
+    axs[1].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None)
+    axs[2].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None)
+    axs[3].set(xticklabels=[], xlabel=None)
     plt.savefig(IMG_FILE)
     plt.close()
   DATAFRAME = pd.DataFrame(DATAFRAME, columns=HEADER)
@@ -182,7 +238,7 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   TPx = np.arange(len(DATAFRAME[THRESHOLD_STR].unique()))
   FNx = TPx + width
   for (model, weight), dataframe in DATAFRAME.groupby([MODEL_STR, WEIGHT_STR]):
-    fig, ax1 = plt.subplots(figsize=(10, 5))
+    _, ax1 = plt.subplots(figsize=(10, 5))
     ax2 = ax1.twinx()
     ax1.bar(TPx, dataframe[TP_STR], width, label=TP_STR)
     ax1.bar(FNx, dataframe[FN_STR], width, label=FN_STR)
@@ -195,10 +251,12 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     ax2.plot(TPx, dataframe[RECALL_STR], label=RECALL_STR, color='r')
     # ax2.plot(TPx, dataframe[F1_STR], label=F1_STR, color='b')
     ax2.set_ylabel("Score")
-    ax2.set_yscale("log")
+    ax2.set_ylim(0, 1)
     ax2.legend(loc='upper right')
-    plt.title(SPACE_STR.join([model, weight]))
-    plt.savefig(Path(IMG_PATH, "TPFN_" + UNDERSCORE_STR.join([model, weight]) + PNG_EXT))
+    plt.title(SPACE_STR.join([model, weight]), fontsize=16)
+    IMG_FILE = \
+      Path(IMG_PATH, "TPFN_" + UNDERSCORE_STR.join([model, weight]) + PNG_EXT)
+    plt.savefig(IMG_FILE)
     plt.close()
   return DATAFRAME, DATA
 
@@ -250,29 +308,30 @@ def event_parser(filename : Path) -> pd.DataFrame:
   return pd.DataFrame(DATA, columns=HEADER).sort_values(P_TIME_STR)
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace):
-  bins = np.linspace(0, 0.5, 21, endpoint=True)
+  bins = np.linspace(-0.5, 0.5, 21, endpoint=True)
+  z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
   for (model, weight), dataframe in DATA.items():
-    fig, axs = plt.subplots(figsize=(10, 10))
-    plt.title(SPACE_STR.join([model, weight]))
-    for threshold in np.linspace(0.2, 1.0, 9):
-      threshold = round(threshold, 2)
-      x = [abs(v[0] - v[2]) for v in dataframe if v[1] > threshold]
+    fig, axs = plt.subplots(figsize=(10, 5))
+    plt.title(SPACE_STR.join([model, weight]), fontsize=16)
+    for threshold in z:
+      x = [v[0] - v[2] for v in dataframe if v[1] >= threshold]
       count, _ = np.histogram(x, bins=bins)
       plt.plot(bins[:-1], count, label=threshold)
-    plt.xlim(0, 0.5)
+    plt.xlim(-0.5, 0.5)
     plt.xlabel("Time Displacement (s)")
     plt.ylim(0)
     plt.ylabel("Number of picks")
     plt.grid()
     plt.legend()
-    IMG_FILE = Path(IMG_PATH, "TD_" + UNDERSCORE_STR.join([model, weight]) + PNG_EXT)
+    IMG_FILE = \
+      Path(IMG_PATH, "TD_" + UNDERSCORE_STR.join([model, weight]) + PNG_EXT)
     plt.savefig(IMG_FILE)
     plt.close()
 
 def main(args : argparse.Namespace):
   PRED = load_data(args)
   plot_data(PRED, args)
-  TRUE = event_parser(Path(DATA_PATH, "test", "manual", "manual.dat"))
+  TRUE = event_parser(Path(DATA_PATH, "manual", "manual.dat"))
   _, DATA = conf_mtx(TRUE, PRED, args)
   time_displacement(DATA, args)
 
