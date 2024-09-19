@@ -10,6 +10,7 @@ import sys
 if INC_PATH not in sys.path: sys.path.append(INC_PATH)
 import pickle
 import argparse
+import itertools
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -188,41 +189,39 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   HEADER = [MODEL_STR, WEIGHT_STR, THRESHOLD_STR, TP_STR, FP_STR, FN_STR,
             TN_STR, ACCURACY_STR, PRECISION_STR, RECALL_STR, F1_STR]
   z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
-  for (model, weight), values in DATA.items():
+  for model, threshold in list(itertools.product(args.models, z)):
     _, _axs = plt.subplots(2, 2, figsize=(10, 10))
     axs = _axs.flatten()
-    plt.suptitle(SPACE_STR.join([model, weight]), fontsize=16)
-    if args.verbose:
-      for v in values:
-        if v[1] == 0: print("WARNING: ", v[0], v[3], model, weight)
-    for threshold, ax in zip(z, axs):
-      TP = len([v for v in values if v[1] >= threshold])  # True Positives
-      FP = len([v for v in values if v[1] <= -threshold]) # False Positives
-      FN = len([v for v in values if v[1] == 0])          # False Negatives
-      TN = N_seconds - (TP + FP + FN)                     # True Negatives
+    plt.suptitle(f"{model} w/ Threshold: {threshold}", fontsize=16)
+    for weight, ax in zip(args.weights, axs):
+      TP = len([v for v in DATA[(model, weight)] if v[1] >= threshold])
+      FP = len([v for v in DATA[(model, weight)] if v[1] <= -threshold])
+      FN = len([v for v in DATA[(model, weight)] if v[1] == 0])
+      TN = N_seconds - (TP + FP + FN)
       ConfMtxDisp(np.array([[TP, FN], [FP, TN]]),
                   display_labels=[PWAVE, NONE_STR]).plot(ax=ax)
-      ax.set_title(str(threshold))
-      ACCURACY = (TP + TN) / N_seconds                    # Accuracy
+      ax.set_title(weight)
+      ACCURACY = (TP + TN) / N_seconds
       if TP + FP == 0:
         DATAFRAME.append([model, weight, threshold, TP, FP, FN, TN,
                           ACCURACY, np.nan, np.nan, np.nan])
         continue
-      PRECISION = TP / (TP + FP)                          # Precision
+      PRECISION = TP / (TP + FP)
       if TP + FN == 0:
         DATAFRAME.append([model, weight, threshold, TP, FP, FN, TN,
                           ACCURACY, PRECISION, np.nan, np.nan])
         continue
-      RECALL = TP / (TP + FN)                             # Recall
+      RECALL = TP / (TP + FN)
       if PRECISION + RECALL == 0:
         DATAFRAME.append([model, weight, threshold, TP, FP, FN, TN, ACCURACY,
                           PRECISION, RECALL, np.nan])
         continue
-      F1 = 2 * PRECISION * RECALL / (PRECISION + RECALL)  # F1 Score
-      DATAFRAME.append([model, weight, threshold, TP, FP, FN, TN,
-                        ACCURACY, PRECISION, RECALL, F1])
+      F1 = 2 * PRECISION * RECALL / (PRECISION + RECALL)
+      DATAFRAME.append([model, weight, threshold, TP, FP, FN, TN, ACCURACY,
+                        PRECISION, RECALL, F1])
     IMG_FILE = \
-      Path(IMG_PATH, "CM_" + UNDERSCORE_STR.join([model, weight]) + PNG_EXT)
+      Path(IMG_PATH,
+           "CM_" + UNDERSCORE_STR.join([model, str(threshold)]) + PNG_EXT)
     axs[0].set(xticklabels=[], xlabel=None)
     axs[1].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None)
     axs[2].set()
