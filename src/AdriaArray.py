@@ -10,6 +10,7 @@ import sys
 # Add to path
 if INC_PATH not in sys.path: sys.path.append(INC_PATH)
 from constants import *
+import json
 import torch
 import pickle
 import argparse
@@ -98,12 +99,12 @@ def parse_arguments():
                       metavar=EMPTY_STR,
                       help="Batch size for the Machine Learning model")
   parser.add_argument('-d', "--directory", required=False, type=is_dir_path,
-                      default=Path(DATA_PATH, "waveforms"),
+                      default=Path(DATA_PATH, WAVEFORMS_STR),
                       help="Directory path to the raw files")
   parser.add_argument('-p', "--pwave", default=PWAVE_THRESHOLD, type=float,
-                      required=False, help="P wave threshold.")
+                      required=False, help=f"{PWAVE} wave threshold.")
   parser.add_argument('-s', "--swave", default=SWAVE_THRESHOLD, type=float,
-                      required=False, help="S wave threshold.")
+                      required=False, help=f"{SWAVE} wave threshold.")
   # TODO: Add verbose LEVEL
   parser.add_argument('-v', "--verbose", default=False, action='store_true')
   parser.add_argument("--client", default=[INGV_STR], type=str, required=False,
@@ -115,13 +116,11 @@ def parse_arguments():
   parser.add_argument("--domain", default=[44.5, 47, 10, 14], required=False,
                       metavar=EMPTY_STR, nargs=4, type=float,
                       help="Domain to download the data")
-  parser.add_argument("--download", default=False, action='store_true',
-                      help="Download the data from the server.")
   parser.add_argument("--pyrocko", default=False, action='store_true',
                       help="Enable PyRocko calls")
   return parser.parse_args()
 
-def data_downloader(args : argparse.Namespace) -> list:
+def data_downloader(args : argparse.Namespace) -> None:
   """
   Download the data from the server based on the specified arguments. If the
   data is already present in the directory, the data will be replaced by the
@@ -131,7 +130,7 @@ def data_downloader(args : argparse.Namespace) -> list:
     - args          (argparse.Namespace)
 
   output:
-    - list
+    - None
 
   errors:
     - None
@@ -162,14 +161,41 @@ def data_downloader(args : argparse.Namespace) -> list:
       cl.set_eida_token(args.key, validate=True)
       mdl = MassDownloader(providers=[cl])
       mdl.download(domain, restrictions, mseed_storage=args.directory)
-  return []
 
-def waveform_table(args : argparse.Namespace):
+def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
   """
-  Construct a table of files based on the specified arguments. If the download
-  option is enabled, the data will be downloaded directly from the server and
-  replace all existing files in the directory.
-  TODO: Consider generating a catalog of the downloaded data for future use.
+  Construct a table of files based on the specified arguments. If a key file is
+  provided, the data will be downloaded from the server and the table of files
+  will be constructed based on the specified arguments. The table of files will
+  be saved in the data directory. A JSON file with the arguments will be saved
+  in the data directory to act as a checksum and keep track of the arguments
+  used to construct the table of files.
+
+  args.key == None -> No data download (local data)
+    args.network == None -> All locally available networks
+    args.station == None -> All locally available stations
+    args.channel == None -> All locally available channels
+
+    args.network == '*' -> All locally available networks
+    args.station == '*' -> All locally available stations
+    args.channel == '*' -> All locally available channels
+
+    args.network != [None, '*'] -> Specific locally available networks
+    args.station != [None, '*'] -> Specific locally available stations
+    args.channel != [None, '*'] -> Specific locally available channels
+
+  args.key != None -> Data download (remote data)
+    args.network == None -> Error
+    args.station == None -> Error
+    args.channel == None -> Error
+
+    args.network == '*' -> All remotely available networks
+    args.station == '*' -> All remotely available stations
+    args.channel == '*' -> All remotely available channels
+
+    args.network != [None, '*'] -> Specific remotely available networks
+    args.station != [None, '*'] -> Specific remotely available stations
+    args.channel != [None, '*'] -> Specific remotely available channels
 
   input:
     - args        (argparse.Namespace)
@@ -178,45 +204,84 @@ def waveform_table(args : argparse.Namespace):
     - pandas.DataFrame
 
   errors:
-    - None
+    - FileNotFoundError
 
   notes:
-    If the starttime of the trace is 23:00 hrs, then we assume the date to be
-    recorded is the next day
+    If the starttime hour of the trace file is 23, then we assume the trace
+    file records to be the next day
   """
-  if args.verbose: print("Constructing the Table of Files")
+  global DATA_PATH
+  DATA_PATH = Path(args.directory).parent
+  HEADER = [FILENAME_STR, NETWORK_STR, STATION_STR, CHANNEL_STR, BEG_DATE_STR]
   WAVEFORMS_DATA = list()
-  if args.download: WAVEFORMS_DATA = data_downloader(args)
+  WAVEFORMS_FILE = Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT)
+  ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
+  if not ARGUMENTS_FILE.exists() or \
+     read_arguments(args) != primary_arguments(args):
+    # If the arguments file does not exist or the arguments are different from
+    # the ones in the JSON file, we save the arguments to the JSON file and
+    # construct the table of files based on the specified arguments.
+    read_arguments(args, overwrite=True)
   else:
-    for trc_file in args.directory.iterdir():
-      fr = Path(args.directory, trc_file)
-      if fr.is_file():
-        try:
-          trc = obspy.read(fr, headonly=True)[0].stats
-        except:
-          continue
-        start = UTCDateTime(trc.starttime.date)
-        if trc.starttime.hour == 23: start += ONE_DAY
-        end = start + ONE_DAY
-        outcome = True
-        if args.network and args.network != ALL_WILDCHAR_STR:
-          outcome = outcome and any([n == trc.network for n in args.network])
-        if args.station and args.station != ALL_WILDCHAR_STR and outcome:
-          outcome = outcome and any([n == trc.station for n in args.station])
-        if args.channel and args.channel != ALL_WILDCHAR_STR and outcome:
-          outcome = outcome and any([n == trc.channel for n in args.channel])
-        outcome = outcome and (args.dates[0] <= start and end <= args.dates[1])
-        if outcome:
-          WAVEFORMS_DATA.append([fr, trc.network, trc.station, trc.channel,
-                                UTCDateTime.strftime(start, DATE_FMT)])
-    if WAVEFORMS_DATA == [] and args.network is not None and \
-       args.station is not None and args.channel is not None:
-      # If no files are found in the specified directory, download the data
-      # only if the user has specified the network, station, channel and date
-      # range, as these are the minimum requirements to download the data.
-      data_downloader(args)
-  return pd.DataFrame(WAVEFORMS_DATA, columns=HEADER).set_index(FILENAME_STR)\
-                                                     .groupby(args.groups)
+    # If the arguments are the same as the ones in the JSON file, we load the
+    # table of files from the CSV file.
+    if WAVEFORMS_FILE.exists():
+      if args.verbose:
+        print("Found and loading previously constructed table of files:",
+              WAVEFORMS_FILE)
+      return pd.read_csv(WAVEFORMS_FILE, index_col=FILENAME_STR)
+  if args.verbose:
+    print("Constructing the Table of Files")
+  if args.key is not None:
+    # If a key is provided, we download the data from the server and construct
+    # the table of files based on the specified arguments.
+    data_downloader(args)
+  # Construct the table of files based on the specified arguments
+  for trc_file in args.directory.iterdir():
+    fr = Path(args.directory, trc_file)
+    if fr.is_file():
+      try:
+        trc = obspy.read(fr, headonly=True)[0].stats
+      except:
+        continue
+      start = UTCDateTime(trc.starttime.date)
+      if trc.starttime.hour == 23: start += ONE_DAY
+      end = start + ONE_DAY
+      # We start by assuming the trace file meets all the criterias:
+      # (network, station, channel, date range). If the trace file does meet
+      # we save the metadata to the list of files.
+      outcome = True
+      # If the user has specified the network different from the wildcard, then
+      # we check if the network of the trace file is in the list of networks,
+      # otherwise we assume the user wants to analyze all downloaded networks.
+      if args.network and args.network != ALL_WILDCHAR_STR:
+        outcome = outcome and any([n == trc.network for n in args.network])
+      if args.station and args.station != ALL_WILDCHAR_STR and outcome:
+        outcome = outcome and any([n == trc.station for n in args.station])
+      if args.channel and args.channel != ALL_WILDCHAR_STR and outcome:
+        outcome = outcome and any([n == trc.channel for n in args.channel])
+      outcome = outcome and (args.dates[0] <= start and end <= args.dates[1])
+      if outcome:
+        WAVEFORMS_DATA.append([fr, trc.network, trc.station, trc.channel,
+                               UTCDateTime.strftime(start, DATE_FMT)])
+  if WAVEFORMS_DATA == []:
+    # If no files were found in the specified directory, return an error
+    # message and exit the program.
+    print(
+      f"""FATAL: No files which meet the following criteria:
+         --network {args.network}
+         --station {args.station}
+         --channel {args.channel}
+         --dates   {SPACE_STR.join([d.__str__() for d in args.dates])}
+       were found in the specified directory: {args.directory}""")
+    if args.key is None:
+      print("HINT: If you want to download the data from the server, please "
+            "specify a key file with the argument \"--key\" <key>.")
+    raise FileNotFoundError
+  WAVEFORMS_DATA = \
+    pd.DataFrame(WAVEFORMS_DATA, columns=HEADER).set_index(FILENAME_STR)
+  WAVEFORMS_DATA.to_csv(WAVEFORMS_FILE)
+  return WAVEFORMS_DATA
 
 @nb.njit(nogil=True)
 def filter_data_(data : np.array) -> bool:
@@ -268,14 +333,78 @@ def clean_stream(stream : obspy.Stream, dataset_name : str, FMT_DICT : dict,
     denoiser = get_model(DEEPDENOISER_STR, dataset_name)
     if denoiser is not None: stream = denoiser.annotate(stream)
   if args.verbose:
-    stream.plot(outfile=Path(IMG_PATH,
-                             PRC_FMT.format(NETWORK=FMT_DICT[NETWORK_STR],
-                                            STATION=FMT_DICT[STATION_STR],
-                                            CHANNEL=FMT_DICT[CHANNEL_STR],
-                                            BEGDT=FMT_DICT[BEG_DATE_STR],
-                                            EXT=EPS_STR)),
-                size=(1000, 600), format=EPS_STR, dpi=300)
+    IMG_FILE = Path(IMG_PATH, PRC_FMT.format(NETWORK=FMT_DICT[NETWORK_STR],
+                                             STATION=FMT_DICT[STATION_STR],
+                                             CHANNEL=FMT_DICT[CHANNEL_STR],
+                                             BEGDT=FMT_DICT[BEG_DATE_STR],
+                                             EXT=EPS_STR))
+    stream.plot(outfile=IMG_FILE, size=(1000, 600), format=EPS_STR, dpi=300)
   return stream
+
+def primary_arguments(args : argparse.Namespace) -> dict:
+  """
+  Return the primary arguments from the specified file.
+
+  input:
+    - args          (argparse.Namespace)
+
+  output:
+    - dict
+
+  errors:
+    - None
+
+  notes:
+
+  """
+  return {
+    MODEL_STR     : args.models,
+    WEIGHT_STR    : args.weights,
+    NETWORK_STR   : args.network,
+    STATION_STR   : args.station,
+    CHANNEL_STR   : args.channel,
+    BEG_DATE_STR  : [a.__str__() for a in args.dates],
+    GROUPS_STR    : args.groups,
+    DIRECTORY_STR : args.directory.__str__(),
+    PWAVE         : args.pwave,
+    SWAVE         : args.swave,
+    JULIAN_STR    : args.julian,
+    DENOISER_STR  : args.denoiser,
+    DOMAIN_STR    : args.domain,
+    CLIENT_STR    : args.client
+  }
+
+def read_arguments(args : argparse.Namespace, overwrite = False) -> dict:
+  """
+  Read the primary arguments from the arguments file and return the primary
+  arguments dictionary.
+
+  input:
+    - args          (argparse.Namespace)
+    - overwrite     (bool)
+
+  output:
+    - dict
+
+  errors:
+    - FileNotFoundError
+
+  notes:
+
+  """
+  global DATA_PATH
+  DATA_PATH = Path(args.directory).parent
+  ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
+  if overwrite:
+    # Save the arguments to a JSON file
+    with open(ARGUMENTS_FILE, 'w') as fw:
+      json.dump(primary_arguments(args), fw, indent=2)
+  if not ARGUMENTS_FILE.exists():
+    print("FATAL: Arguments file not found:", ARGUMENTS_FILE)
+    raise FileNotFoundError
+  # Read the arguments from the JSON file
+  with open(ARGUMENTS_FILE, 'r') as fr:
+    return json.load(fr)
 
 def read_traces(trace_files, dataset_name : str, args : argparse.Namespace) \
   -> obspy.Stream:
@@ -424,7 +553,7 @@ def main(args : argparse.Namespace):
                                                            args.weights)):
       MODEL = get_model(model_name, dataset_name)
       if MODEL is None: continue
-      for categories, trace_files in WAVEFORMS_DATA:
+      for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
         # Classify the Stream
         output = classify_stream(categories, trace_files, model_name,
                                  dataset_name, MODEL, args)

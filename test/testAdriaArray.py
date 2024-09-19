@@ -16,8 +16,6 @@ BASE_PATH = Path(PRJ_PATH, "data")
 DATA_PATH = Path(BASE_PATH, "test")
 TEST_PATH = Path(DATA_PATH, "waveforms")
 
-ANNOTATION_TD_OFFSET = td(seconds=2.5)
-
 class TestArgparse(unittest.TestCase):
   def setUp(self):
     with open(Path(DATA_PATH, "file.key"), 'w') as fp:
@@ -36,7 +34,6 @@ class TestArgparse(unittest.TestCase):
                                   UTCDateTime(year=2023, month=8, day=1)])
     self.assertEqual(args.directory, Path(BASE_PATH, "waveforms"))
     self.assertEqual(args.domain, [44.5, 47, 10, 14])
-    self.assertEqual(args.download, False)
     self.assertEqual(args.groups, [BEG_DATE_STR, NETWORK_STR, STATION_STR])
     self.assertEqual(args.julian, False)
     self.assertEqual(args.key, None)
@@ -141,9 +138,26 @@ class TestWaveformTable(unittest.TestCase):
   def test_non_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
-    SIZE = [12]*len(WAVEFORMS_DATA)
-    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(trace_files.size, size)
+    EXPECTED = {
+      MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+      WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
+      NETWORK_STR: None,
+      STATION_STR: None,
+      CHANNEL_STR: None,
+      BEG_DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                     UTCDateTime(year=2023, month=8, day=1).__str__()],
+      GROUPS_STR: [BEG_DATE_STR, NETWORK_STR, STATION_STR],
+      DIRECTORY_STR: TEST_PATH.__str__(),
+      PWAVE: PWAVE_THRESHOLD,
+      SWAVE: SWAVE_THRESHOLD,
+      JULIAN_STR: False,
+      DENOISER_STR: False,
+      DOMAIN_STR: [44.5, 47, 10, 14],
+      CLIENT_STR: [INGV_STR],
+    }
+    self.assertEqual(primary_arguments(args), EXPECTED)
+    self.assertEqual(read_arguments(args), EXPECTED)
+    # TODO: Implement waveform table test
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", '-N', "OX", "-d", TEST_PATH.__str__(),
@@ -151,9 +165,26 @@ class TestWaveformTable(unittest.TestCase):
   def test_network_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
-    SIZE = [12]*len(WAVEFORMS_DATA)
-    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(trace_files.size, size)
+    EXPECTED = {
+      MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+      WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
+      NETWORK_STR: ["OX"],
+      STATION_STR: None,
+      CHANNEL_STR: None,
+      BEG_DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                     UTCDateTime(year=2023, month=8, day=1).__str__()],
+      GROUPS_STR: [BEG_DATE_STR, NETWORK_STR, STATION_STR],
+      DIRECTORY_STR: TEST_PATH.__str__(),
+      PWAVE: PWAVE_THRESHOLD,
+      SWAVE: SWAVE_THRESHOLD,
+      JULIAN_STR: False,
+      DENOISER_STR: False,
+      DOMAIN_STR: [44.5, 47, 10, 14],
+      CLIENT_STR: [INGV_STR],
+    }
+    self.assertEqual(primary_arguments(args), EXPECTED)
+    self.assertEqual(read_arguments(args), EXPECTED)
+    # TODO: Implement waveform table test
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", '-N', "OX", "ST", "-v", "-d",
@@ -161,29 +192,78 @@ class TestWaveformTable(unittest.TestCase):
   def test_networks_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
-    SIZE = [12]*len(WAVEFORMS_DATA)
-    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(trace_files.size, size)
+    EXPECTED = {
+      MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+      WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
+      NETWORK_STR: ["OX", "ST"],
+      STATION_STR: None,
+      CHANNEL_STR: None,
+      BEG_DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                     UTCDateTime(year=2023, month=8, day=1).__str__()],
+      GROUPS_STR: [BEG_DATE_STR, NETWORK_STR, STATION_STR],
+      DIRECTORY_STR: TEST_PATH.__str__(),
+      PWAVE: PWAVE_THRESHOLD,
+      SWAVE: SWAVE_THRESHOLD,
+      JULIAN_STR: False,
+      DENOISER_STR: False,
+      DOMAIN_STR: [44.5, 47, 10, 14],
+      CLIENT_STR: [INGV_STR],
+    }
+    self.assertEqual(primary_arguments(args), EXPECTED)
+    self.assertEqual(read_arguments(args), EXPECTED)
+    # TODO: Implement waveform table test
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", '-S', "LUSI", "-v", "-d",
                         TEST_PATH.__str__()])
   def test_station_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args)
-    SIZE = [12]*len(WAVEFORMS_DATA)
-    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(trace_files.size, size)
+    self.assertRaises(FileNotFoundError, waveform_table, args)
+    EXPECTED = {
+      MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+      WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
+      NETWORK_STR: None,
+      STATION_STR: ["LUSI"],
+      CHANNEL_STR: None,
+      BEG_DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                     UTCDateTime(year=2023, month=8, day=1).__str__()],
+      GROUPS_STR: [BEG_DATE_STR, NETWORK_STR, STATION_STR],
+      DIRECTORY_STR: TEST_PATH.__str__(),
+      PWAVE: PWAVE_THRESHOLD,
+      SWAVE: SWAVE_THRESHOLD,
+      JULIAN_STR: False,
+      DENOISER_STR: False,
+      DOMAIN_STR: [44.5, 47, 10, 14],
+      CLIENT_STR: [INGV_STR],
+    }
+    self.assertEqual(primary_arguments(args), EXPECTED)
+    self.assertEqual(read_arguments(args), EXPECTED)
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", '-S', "LUSI", "PANI", "-v", "-d",
                         TEST_PATH.__str__()])
   def test_stations_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args)
-    SIZE = [12]*len(WAVEFORMS_DATA)
-    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(trace_files.size, size)
+    self.assertRaises(FileNotFoundError, waveform_table, args)
+    EXPECTED = {
+      MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+      WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
+      NETWORK_STR: None,
+      STATION_STR: ["LUSI", "PANI"],
+      CHANNEL_STR: None,
+      BEG_DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                     UTCDateTime(year=2023, month=8, day=1).__str__()],
+      GROUPS_STR: [BEG_DATE_STR, NETWORK_STR, STATION_STR],
+      DIRECTORY_STR: TEST_PATH.__str__(),
+      PWAVE: PWAVE_THRESHOLD,
+      SWAVE: SWAVE_THRESHOLD,
+      JULIAN_STR: False,
+      DENOISER_STR: False,
+      DOMAIN_STR: [44.5, 47, 10, 14],
+      CLIENT_STR: [INGV_STR],
+    }
+    self.assertEqual(primary_arguments(args), EXPECTED)
+    self.assertEqual(read_arguments(args), EXPECTED)
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", '-C', "EHZ", "-v", "-d",
@@ -191,9 +271,26 @@ class TestWaveformTable(unittest.TestCase):
   def test_channel_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
-    SIZE = [4]*len(WAVEFORMS_DATA)
-    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(trace_files.size, size)
+    EXPECTED = {
+      MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+      WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
+      NETWORK_STR: None,
+      STATION_STR: None,
+      CHANNEL_STR: ["EHZ"],
+      BEG_DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                     UTCDateTime(year=2023, month=8, day=1).__str__()],
+      GROUPS_STR: [BEG_DATE_STR, NETWORK_STR, STATION_STR],
+      DIRECTORY_STR: TEST_PATH.__str__(),
+      PWAVE: PWAVE_THRESHOLD,
+      SWAVE: SWAVE_THRESHOLD,
+      JULIAN_STR: False,
+      DENOISER_STR: False,
+      DOMAIN_STR: [44.5, 47, 10, 14],
+      CLIENT_STR: [INGV_STR],
+    }
+    self.assertEqual(primary_arguments(args), EXPECTED)
+    self.assertEqual(read_arguments(args), EXPECTED)
+    # TODO: Implement waveform table test
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", '-C', "HHZ", "HHN", "-v", "-d",
@@ -201,39 +298,104 @@ class TestWaveformTable(unittest.TestCase):
   def test_channels_args(self):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
-    SIZE = [8]*len(WAVEFORMS_DATA)
-    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(trace_files.size, size)
+    EXPECTED = {
+      MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+      WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
+      NETWORK_STR: None,
+      STATION_STR: None,
+      CHANNEL_STR: ["HHZ", "HHN"],
+      BEG_DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                     UTCDateTime(year=2023, month=8, day=1).__str__()],
+      GROUPS_STR: [BEG_DATE_STR, NETWORK_STR, STATION_STR],
+      DIRECTORY_STR: TEST_PATH.__str__(),
+      PWAVE: PWAVE_THRESHOLD,
+      SWAVE: SWAVE_THRESHOLD,
+      JULIAN_STR: False,
+      DENOISER_STR: False,
+      DOMAIN_STR: [44.5, 47, 10, 14],
+      CLIENT_STR: [INGV_STR],
+    }
+    self.assertEqual(primary_arguments(args), EXPECTED)
+    self.assertEqual(read_arguments(args), EXPECTED)
+    # TODO: Implement waveform table test
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", '-N', "SI", "ST", '-S', "MAGA",
                         "LUSI", "-d", TEST_PATH.__str__(), "-v"])
   def test_networks_stations_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args)
-    SIZE = [12]*len(WAVEFORMS_DATA)
-    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(trace_files.size, size)
+    self.assertRaises(FileNotFoundError, waveform_table, args)
+    EXPECTED = {
+      MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+      WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
+      NETWORK_STR: ["SI", "ST"],
+      STATION_STR: ["MAGA", "LUSI"],
+      CHANNEL_STR: None,
+      BEG_DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                     UTCDateTime(year=2023, month=8, day=1).__str__()],
+      GROUPS_STR: [BEG_DATE_STR, NETWORK_STR, STATION_STR],
+      DIRECTORY_STR: TEST_PATH.__str__(),
+      PWAVE: PWAVE_THRESHOLD,
+      SWAVE: SWAVE_THRESHOLD,
+      JULIAN_STR: False,
+      DENOISER_STR: False,
+      DOMAIN_STR: [44.5, 47, 10, 14],
+      CLIENT_STR: [INGV_STR],
+    }
+    self.assertEqual(primary_arguments(args), EXPECTED)
+    self.assertEqual(read_arguments(args), EXPECTED)
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", '-N', "SI", "ST", '-C', "HHN", "HHZ",
                         "-d", TEST_PATH.__str__(), "-v"])
   def test_networks_channels_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args)
-    SIZE = [8]*len(WAVEFORMS_DATA)
-    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(trace_files.size, size)
+    self.assertRaises(FileNotFoundError, waveform_table, args)
+    EXPECTED = {
+      MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+      WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
+      NETWORK_STR: ["SI", "ST"],
+      STATION_STR: None,
+      CHANNEL_STR: ["HHN", "HHZ"],
+      BEG_DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                     UTCDateTime(year=2023, month=8, day=1).__str__()],
+      GROUPS_STR: [BEG_DATE_STR, NETWORK_STR, STATION_STR],
+      DIRECTORY_STR: TEST_PATH.__str__(),
+      PWAVE: PWAVE_THRESHOLD,
+      SWAVE: SWAVE_THRESHOLD,
+      JULIAN_STR: False,
+      DENOISER_STR: False,
+      DOMAIN_STR: [44.5, 47, 10, 14],
+      CLIENT_STR: [INGV_STR],
+    }
+    self.assertEqual(primary_arguments(args), EXPECTED)
+    self.assertEqual(read_arguments(args), EXPECTED)
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", '-S', "MAGA", "LUSI", '-C', "HHN",
                         "HHZ", "-d", TEST_PATH.__str__(), "-v"])
   def test_stations_channels_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args)
-    SIZE = [8]*len(WAVEFORMS_DATA)
-    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(trace_files.size, size)
+    self.assertRaises(FileNotFoundError, waveform_table, args)
+    EXPECTED = {
+      MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+      WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
+      NETWORK_STR: None,
+      STATION_STR: ["MAGA", "LUSI"],
+      CHANNEL_STR: ["HHN", "HHZ"],
+      BEG_DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                     UTCDateTime(year=2023, month=8, day=1).__str__()],
+      GROUPS_STR: [BEG_DATE_STR, NETWORK_STR, STATION_STR],
+      DIRECTORY_STR: TEST_PATH.__str__(),
+      PWAVE: PWAVE_THRESHOLD,
+      SWAVE: SWAVE_THRESHOLD,
+      JULIAN_STR: False,
+      DENOISER_STR: False,
+      DOMAIN_STR: [44.5, 47, 10, 14],
+      CLIENT_STR: [INGV_STR],
+    }
+    self.assertEqual(primary_arguments(args), EXPECTED)
+    self.assertEqual(read_arguments(args), EXPECTED)
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", '-S', "MAGA", "LUSI", '-C', "HHN",
@@ -241,10 +403,26 @@ class TestWaveformTable(unittest.TestCase):
                         TEST_PATH.__str__()])
   def test_stations_channels_dates_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args)
-    SIZE = [8]*len(WAVEFORMS_DATA)
-    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(trace_files.size, size)
+    self.assertRaises(FileNotFoundError, waveform_table, args)
+    EXPECTED = {
+      MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+      WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
+      NETWORK_STR: None,
+      STATION_STR: ["MAGA", "LUSI"],
+      CHANNEL_STR: ["HHN", "HHZ"],
+      BEG_DATE_STR: [UTCDateTime(year=2023, month=6, day=5).__str__(),
+                     UTCDateTime(year=2023, month=6, day=6).__str__()],
+      GROUPS_STR: [BEG_DATE_STR, NETWORK_STR, STATION_STR],
+      DIRECTORY_STR: TEST_PATH.__str__(),
+      PWAVE: PWAVE_THRESHOLD,
+      SWAVE: SWAVE_THRESHOLD,
+      JULIAN_STR: False,
+      DENOISER_STR: False,
+      DOMAIN_STR: [44.5, 47, 10, 14],
+      CLIENT_STR: [INGV_STR],
+    }
+    self.assertEqual(primary_arguments(args), EXPECTED)
+    self.assertEqual(read_arguments(args), EXPECTED)
 
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", '-S', "MAGA", "LUSI", '-C', "HHN",
@@ -252,10 +430,27 @@ class TestWaveformTable(unittest.TestCase):
                         TEST_PATH.__str__()])
   def test_download_args(self):
     args = parse_arguments()
-    WAVEFORMS_DATA = waveform_table(args)
-    SIZE = [8]*len(WAVEFORMS_DATA)
-    for (_, trace_files), size in zip(WAVEFORMS_DATA, SIZE):
-      self.assertEqual(trace_files.size, size)
+    # TODO: Implement download test
+    self.assertRaises(FileNotFoundError, waveform_table, args)
+    EXPECTED = {
+      MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+      WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
+      NETWORK_STR: None,
+      STATION_STR: ["MAGA", "LUSI"],
+      CHANNEL_STR: ["HHN", "HHZ"],
+      BEG_DATE_STR: [UTCDateTime(year=2023, month=6, day=5).__str__(),
+                     UTCDateTime(year=2023, month=6, day=6).__str__()],
+      GROUPS_STR: [BEG_DATE_STR, NETWORK_STR, STATION_STR],
+      DIRECTORY_STR: TEST_PATH.__str__(),
+      PWAVE: PWAVE_THRESHOLD,
+      SWAVE: SWAVE_THRESHOLD,
+      JULIAN_STR: False,
+      DENOISER_STR: False,
+      DOMAIN_STR: [44.5, 47, 10, 14],
+      CLIENT_STR: [INGV_STR],
+    }
+    self.assertEqual(primary_arguments(args), EXPECTED)
+    self.assertEqual(read_arguments(args), EXPECTED)
 
 class TestReadTraces(unittest.TestCase):
   @classmethod
@@ -266,6 +461,10 @@ class TestReadTraces(unittest.TestCase):
         if f.is_file():
           f.unlink()
 
+  def tearDown(self) -> None:
+    Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT).unlink()
+    Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT).unlink()
+
   @unittest.mock.patch("sys.argv",
                        ["AdriaArray.py", "-G", BEG_DATE_STR, "-v", "-d",
                         TEST_PATH.__str__()])
@@ -273,7 +472,7 @@ class TestReadTraces(unittest.TestCase):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
     for _, dataset_name in list(itertools.product(args.models, args.weights)):
-      for _, trace_files in WAVEFORMS_DATA:
+      for _, trace_files in WAVEFORMS_DATA.groupby(args.groups):
         stream = read_traces(trace_files, dataset_name, args)
         for tr in stream:
           self.assertGreaterEqual(tr.stats.starttime,
@@ -287,7 +486,7 @@ class TestReadTraces(unittest.TestCase):
     args = parse_arguments()
     WAVEFORMS_DATA = waveform_table(args)
     for _, dataset_name in list(itertools.product(args.models, args.weights)):
-      for _, trace_files in WAVEFORMS_DATA:
+      for _, trace_files in WAVEFORMS_DATA.groupby(args.groups):
         stream = read_traces(trace_files, dataset_name, args)
         for tr in stream:
           self.assertGreaterEqual(tr.stats.starttime,
@@ -349,7 +548,7 @@ class TestModel(unittest.TestCase):
                                                            args.weights)):
       MODEL = get_model(model_name, dataset_name)
       if MODEL is None: continue
-      for categories, trace_files in WAVEFORMS_DATA:
+      for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
         output = classify_stream(categories, trace_files, model_name,
                                  dataset_name, MODEL, args)
         print(output)

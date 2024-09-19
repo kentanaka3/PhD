@@ -122,7 +122,6 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace, phase = PWAVE) \
     plt.close()
     if args.verbose: print(f"Saving {IMG_FILE}")
 
-
   for (model, network, station), dataframe in \
     DATA.groupby([MODEL_STR, NETWORK_STR, STATION_STR]):
     _, _axs = plt.subplots(2, 2, figsize=(10, 10))
@@ -159,7 +158,7 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace, phase = PWAVE) \
     if args.verbose: print(f"Saving {IMG_FILE}")
 
 def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
-             args : argparse.Namespace, phase = PWAVE):
+             args : argparse.Namespace):
   if args.verbose: print("Computing the Confusion Matrix")
   stations = args.station if (args.station is not None and
                               args.station != ALL_WILDCHAR_STR) else \
@@ -170,18 +169,16 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
               TRUE[STATION_STR].isin(stations)]
   if args.verbose:
     TRUE.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
-  PRED = PRED[PRED[STATION_STR].isin(stations) & (PRED[PHASE_STR] == phase) & \
-              (PRED[PROBABILITY_STR] >= args.pwave)]
+  PRED = PRED[PRED[STATION_STR].isin(stations)]
   if args.verbose:
     PRED.to_csv(Path(DATA_PATH, PRED_STR + CSV_EXT), index=False)
   T = {}
   for station, dataframe in TRUE.groupby(STATION_STR):
     T[station] = list(dataframe[P_TIME_STR])
   DATA = {}
-  # Analyze P waves
+  # 
   for (station, model, weight), dataframe in \
     PRED.groupby([STATION_STR, MODEL_STR, WEIGHT_STR]):
-    # TODO: What if station not in PRED?
     DATA.setdefault((model, weight), [])
     DATA[(model, weight)] += \
       event_merger(T[station] if station in T else [],
@@ -190,7 +187,7 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   DATAFRAME = []
   HEADER = [MODEL_STR, WEIGHT_STR, THRESHOLD_STR, TP_STR, FP_STR, FN_STR,
             TN_STR, ACCURACY_STR, PRECISION_STR, RECALL_STR, F1_STR]
-  z = [round(t, 2) for t in np.linspace(0.2, 0.5, 4)]
+  z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
   for (model, weight), values in DATA.items():
     _, _axs = plt.subplots(2, 2, figsize=(10, 10))
     axs = _axs.flatten()
@@ -235,6 +232,8 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     plt.close()
   DATAFRAME = pd.DataFrame(DATAFRAME, columns=HEADER)
 
+  # Plot the True Positives, False Negatives histogram and the Recall as a
+  # function of the threshold for each model and weight
   width = 0.35
   TPx = np.arange(len(DATAFRAME[THRESHOLD_STR].unique()))
   FNx = TPx + width
@@ -243,14 +242,11 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     ax2 = ax1.twinx()
     ax1.bar(TPx, dataframe[TP_STR], width, label=TP_STR)
     ax1.bar(FNx, dataframe[FN_STR], width, label=FN_STR)
-    ax1.set_xlabel(THRESHOLD_STR)
-    ax1.set_ylabel("Number of picks")
-    ax1.set_xticks(TPx + width / 2, dataframe[THRESHOLD_STR].unique())
+    ax1.set(xticks=TPx + width / 2,
+            xticklabels=dataframe[THRESHOLD_STR].unique(),
+            xlabel=THRESHOLD_STR, ylabel="Number of picks")
     ax1.legend(loc='lower left')
-    # ax2.plot(TPx, dataframe[ACCURACY_STR], label=ACCURACY_STR, color='k')
-    # ax2.plot(TPx, dataframe[PRECISION_STR], label=PRECISION_STR, color='g')
     ax2.plot(TPx, dataframe[RECALL_STR], label=RECALL_STR, color='r')
-    # ax2.plot(TPx, dataframe[F1_STR], label=F1_STR, color='b')
     ax2.set_ylabel("Score")
     ax2.set_ylim(0, 1)
     ax2.legend(loc='upper right')
@@ -261,25 +257,51 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     plt.close()
   return DATAFRAME, DATA
 
-def event_parser(filename : Path) -> pd.DataFrame:
+def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
   """
   input  :
-    - filename (Path)
+    - filename      (Path)
+    - args          (argparse.Namespace)
 
   output :
     - pd.DataFrame
 
   errors :
-    - None
+    - FileNotFoundError
 
   notes  :
 
   """
-  with open(filename, 'r') as fr: lines = fr.readlines()
+  global DATA_PATH
+  DATA_PATH = Path(args.directory).parent
+  if Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT).exists() and \
+     AA.primary_arguments(args) == AA.read_arguments(args):
+    # As the arguments are the same, we can use the waveform catalog to search
+    # for the waveforms given the events listed
+    WAVEFORMS = pd.read_csv(Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT))
+  else:
+    # As the arguments are different, we need to regenerate the waveform
+    # catalog manually taking into consideration the current arguments
+    CLF_PATH = Path(DATA_PATH, CLF_STR)
+    if args.verbose:
+      print("WARNING: Creating catalog based on all existing files in",
+            CLF_PATH)
+    if not CLF_PATH.exists():
+      print(f"ERROR: {CLF_PATH} does not exist")
+      raise FileNotFoundError
+    WAVEFORMS = []
+    for date in os.listdir(CLF_PATH):
+      for network in os.listdir(Path(CLF_PATH, date)):
+        for station in os.listdir(Path(CLF_PATH, date, network)):
+          WAVEFORMS.append([date, station])
+    WAVEFORMS = pd.DataFrame(WAVEFORMS, columns=[BEG_DATE_STR, STATION_STR])
+  WAVEFORMS[BEG_DATE_STR] = \
+    WAVEFORMS[BEG_DATE_STR].apply(lambda x: UTCDateTime.strptime(x, DATE_FMT))
   HEADER = [EVENT_STR, STATION_STR, P_TYPE_STR, P_WEIGHT_STR, P_TIME_STR,
             S_TYPE_STR, S_WEIGHT_STR, S_TIME_STR]
   DATA = []
   event = 0
+  with open(filename, 'r') as fr: lines = fr.readlines()
   for line in [l.strip() for l in lines]:
     if EVENT_EXTRACTOR.match(line):
       event += 1
@@ -289,6 +311,13 @@ def event_parser(filename : Path) -> pd.DataFrame:
       result = match.groupdict()
       result[BEG_DATE_STR] = UTCDateTime.strptime(result[BEG_DATE_STR],
                                                   "%y%m%d%H%M")
+      if WAVEFORMS[
+           (WAVEFORMS[STATION_STR] == result[STATION_STR].strip(SPACE_STR)) &
+           (WAVEFORMS[BEG_DATE_STR] == result[BEG_DATE_STR].date)].empty:
+        if args.verbose:
+          print(f"WARNING: {result[STATION_STR]} {result[BEG_DATE_STR]} not "
+                "found")
+        continue
       result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
       result[P_TIME_STR] = \
         result[BEG_DATE_STR] + td(seconds=float(result[P_TIME_STR][:2] + \
@@ -300,16 +329,16 @@ def event_parser(filename : Path) -> pd.DataFrame:
           result[BEG_DATE_STR] + td(seconds=float(result[S_TIME_STR][:2] + \
                                                   PERIOD_STR + \
                                                   result[S_TIME_STR][2:]))
-    DATA.append([event, result[STATION_STR].strip(SPACE_STR),
-                 result[P_TYPE_STR], result[P_WEIGHT_STR],
-                 result[P_TIME_STR],
-                 result[S_TYPE_STR], result[S_WEIGHT_STR],
-                 result[S_TIME_STR]])
+      DATA.append([event, result[STATION_STR].strip(SPACE_STR),
+                   result[P_TYPE_STR], result[P_WEIGHT_STR],
+                   result[P_TIME_STR],
+                   result[S_TYPE_STR], result[S_WEIGHT_STR],
+                   result[S_TIME_STR]])
   # We sort the values by the Primary wave arrival time
   return pd.DataFrame(DATA, columns=HEADER).sort_values(P_TIME_STR)
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace):
-  bins = np.linspace(-0.5, 0.5, 21, endpoint=True)
+  bins = np.linspace(-0.5, 0.5, 31, endpoint=True)
   z = [round(t, 2) for t in np.linspace(0.2, 0.5, 4)]
   for (model, weight), dataframe in DATA.items():
     fig, axs = plt.subplots(figsize=(10, 5))
@@ -332,7 +361,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace):
 def main(args : argparse.Namespace):
   PRED = load_data(args)
   plot_data(PRED, args)
-  TRUE = event_parser(Path(DATA_PATH, "manual", "manual.dat"))
+  TRUE = event_parser(Path(DATA_PATH, "manual", "manual.dat"), args)
   _, DATA = conf_mtx(TRUE, PRED, args)
   time_displacement(DATA, args)
 

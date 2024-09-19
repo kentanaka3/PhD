@@ -21,6 +21,7 @@ ALL_WILDCHAR_STR = '*'
 PERIOD_STR = '.'
 UNDERSCORE_STR = '_'
 SPACE_STR = ' '
+COMMA_STR = ','
 NONE_STR = "None"
 PRC_STR = "processed"
 ANT_STR = "annotated"
@@ -111,10 +112,19 @@ X_COORD_STR = "x(km)"           # X coordinate in kilometers
 Y_COORD_STR = "y(km)"           # Y coordinate in kilometers
 Z_COORD_STR = "z(km)"           # Z coordinate in kilometers
 
+ARGUMENTS_STR = "arguments"
+WAVEFORMS_STR = "waveforms"
+
 PHASE_STR = "PHASE"
 EVENT_STR = "EVENT"
 MODEL_STR = "MODEL"
 WEIGHT_STR = "WEIGHT"
+GROUPS_STR = "GROUPS"
+DIRECTORY_STR = "DIRECTORY"
+JULIAN_STR = "JULIAN"
+DENOISER_STR = "DENOISER"
+DOMAIN_STR = "DOMAIN"
+CLIENT_STR = "CLIENT"
 RESULTS_STR = "RESULTS"
 FILENAME_STR = "FILENAME"
 THRESHOLD_STR = "THRESHOLD"
@@ -122,7 +132,6 @@ NETWORK_STR = "NETWORK"
 STATION_STR = "STATION"
 CHANNEL_STR = "CHANNEL"
 BEG_DATE_STR = "BEGDT"
-HEADER = [FILENAME_STR, NETWORK_STR, STATION_STR, CHANNEL_STR, BEG_DATE_STR]
 
 # Labelled Data components
 P_TIME_STR      = "P_TIME"

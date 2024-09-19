@@ -27,8 +27,12 @@ def timedeltafmt(string):
   return td(hours=numbers[0], minutes=numbers[1], seconds=numbers[2])
 
 class TestPickParser(unittest.TestCase):
+  @unittest.mock.patch("sys.argv",
+                       ["AdriaArray.py", "-D", "230601", "230604", "-v",
+                        "-d", TEST_PATH.__str__()])
   def test_parse_pick(self):
-    events = event_parser(Path(MNL_DATA_PATH, "manual.dat"))
+    args = AA.parse_arguments()
+    events = event_parser(Path(MNL_DATA_PATH, "manual.dat"), args)
     # with open(Path(MNL_DATA_PATH, EXPECTED_STR + JSON_EXT), 'w') as fp:
     #   json.dump(events, fp, default=str)
     with open(Path(MNL_DATA_PATH, EXPECTED_STR + JSON_EXT), 'r') as fr:
@@ -72,21 +76,21 @@ class TestEventMerger(unittest.TestCase):
             UTCDateTime(2023, 6, 1, 0, 7, 0, 0)]
     EXPECTED = [
       (UTCDateTime(2023, 6, 1, 0, 0, 0, 0),  1.0,
-       UTCDateTime(2023, 6, 1, 0, 0, 0, 400)),      # TP
+       UTCDateTime(2023, 6, 1, 0, 0, 0, 400), None),  # TP
       (UTCDateTime(2023, 6, 1, 0, 1, 0, 0), -1.0,
-        None),                                      # FP
+        None, None),                                  # FP
       (UTCDateTime(2023, 6, 1, 0, 2, 0, 0),  1.0,
-       UTCDateTime(2023, 6, 1, 0, 2, 0, 0)),        # TP
+       UTCDateTime(2023, 6, 1, 0, 2, 0, 0), None),    # TP
       (UTCDateTime(2023, 6, 1, 0, 3, 0, 0), -1.0,
-       None),                                       # FP
+       None, None),                                   # FP
       (UTCDateTime(2023, 6, 1, 0, 4, 0, 0),  0.0,
-       None),                                       # FN
+       None, None),                                   # FN
       (UTCDateTime(2023, 6, 1, 0, 5, 0, 0), -1.0,
-       None),                                       # FP
+       None, None),                                   # FP
       (UTCDateTime(2023, 6, 1, 0, 6, 0, 0),  0.0,
-       None),                                       # FN
+       None, None),                                   # FN
       (UTCDateTime(2023, 6, 1, 0, 7, 0, 0), -1.0,
-       None)]                                       # FP
+       None, None)]                                   # FP
     self.assertEqual(event_merger(TRUE, PRED, PICK_OFFSET), EXPECTED)
 
   def test_event_merger_empty_anchor(self):
@@ -98,12 +102,12 @@ class TestEventMerger(unittest.TestCase):
             UTCDateTime(2023, 6, 1, 0, 3, 0, 0),
             UTCDateTime(2023, 6, 1, 0, 5, 0, 0),
             UTCDateTime(2023, 6, 1, 0, 7, 0, 0)]
-    EXPECTED = [(UTCDateTime(2023, 6, 1, 0, 0, 0, 0), -1.0, None),
-                (UTCDateTime(2023, 6, 1, 0, 1, 0, 0), -1.0, None),
-                (UTCDateTime(2023, 6, 1, 0, 2, 0, 0), -1.0, None),
-                (UTCDateTime(2023, 6, 1, 0, 3, 0, 0), -1.0, None),
-                (UTCDateTime(2023, 6, 1, 0, 5, 0, 0), -1.0, None),
-                (UTCDateTime(2023, 6, 1, 0, 7, 0, 0), -1.0, None)]
+    EXPECTED = [(UTCDateTime(2023, 6, 1, 0, 0, 0, 0), -1.0, None, None),
+                (UTCDateTime(2023, 6, 1, 0, 1, 0, 0), -1.0, None, None),
+                (UTCDateTime(2023, 6, 1, 0, 2, 0, 0), -1.0, None, None),
+                (UTCDateTime(2023, 6, 1, 0, 3, 0, 0), -1.0, None, None),
+                (UTCDateTime(2023, 6, 1, 0, 5, 0, 0), -1.0, None, None),
+                (UTCDateTime(2023, 6, 1, 0, 7, 0, 0), -1.0, None, None)]
     self.assertEqual(event_merger(TRUE, PRED, PICK_OFFSET), EXPECTED)
 
   def test_event_merger_empty_pred(self):
@@ -113,10 +117,10 @@ class TestEventMerger(unittest.TestCase):
             UTCDateTime(2023, 6, 1, 0, 4, 0, 0),
             UTCDateTime(2023, 6, 1, 0, 6, 0, 0)]
     PRED = []
-    EXPECTED = [(UTCDateTime(2023, 6, 1, 0, 0, 0, 0), 0.0, None),
-                (UTCDateTime(2023, 6, 1, 0, 2, 0, 0), 0.0, None),
-                (UTCDateTime(2023, 6, 1, 0, 4, 0, 0), 0.0, None),
-                (UTCDateTime(2023, 6, 1, 0, 6, 0, 0), 0.0, None)]
+    EXPECTED = [(UTCDateTime(2023, 6, 1, 0, 0, 0, 0), 0.0, None, None),
+                (UTCDateTime(2023, 6, 1, 0, 2, 0, 0), 0.0, None, None),
+                (UTCDateTime(2023, 6, 1, 0, 4, 0, 0), 0.0, None, None),
+                (UTCDateTime(2023, 6, 1, 0, 6, 0, 0), 0.0, None, None)]
     self.assertEqual(event_merger(TRUE, PRED, PICK_OFFSET), EXPECTED)
 
 class TestConfMtx(unittest.TestCase):
@@ -125,7 +129,7 @@ class TestConfMtx(unittest.TestCase):
                         "-d", TEST_PATH.__str__()])
   def test_conf_mtx(self):
     args = AA.parse_arguments()
-    TRUE = event_parser(Path(DATA_PATH, "manual", "manual.dat"))
+    TRUE = event_parser(Path(DATA_PATH, "manual", "manual.dat"), args)
     PRED = load_data(args)
     EXPECTED = pd.DataFrame(
       [[EQTRANSFORMER_STR, INSTANCE_STR, 13, 134, 0, 345453,
