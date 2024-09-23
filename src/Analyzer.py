@@ -22,36 +22,6 @@ from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 from constants import *
 import AdriaArray as AA
 
-def event_merger(ANCHOR : list, ADDITIONAL : list,
-                 width : td, PROBABILITIES = None, axis = 0, station = None) \
-    -> list:
-  if PROBABILITIES is None:
-    PROBABILITIES = [1.0] * len(ADDITIONAL)
-  if len(ANCHOR) == 0:
-    return [(a, -b, None, station) for a, b in zip(ADDITIONAL, PROBABILITIES)]
-  # Initialize with ANCHOR and no match (False Negative)
-  BOXES = [(a, 0.0, None, station) for a in ANCHOR]
-  i = 0 # Index for ANCHOR
-  j = 0 # Index for ADDITIONAL
-  while i < len(ANCHOR) and j < len(ADDITIONAL):
-    if td(seconds=abs(ANCHOR[i] - ADDITIONAL[j])) < width:
-      # ANCHOR[i] and ADDITIONAL[j] are a match (True Positive)
-      BOXES[i] = (ANCHOR[i], PROBABILITIES[j], ADDITIONAL[j], station)
-      i += 1
-      j += 1
-    elif ADDITIONAL[j] < ANCHOR[i]:
-      # ADDITIONAL[j] is not in ANCHOR (False Positive)
-      BOXES.append((ADDITIONAL[j], -PROBABILITIES[j], None, station))
-      j += 1
-    else:
-      # ANCHOR[i] is not in ADDITIONAL (False Negative)
-      i += 1
-  while j < len(ADDITIONAL):
-    # ADDITIONAL[j] is not in ANCHOR (False Positive)
-    BOXES.append((ADDITIONAL[j], -PROBABILITIES[j], None, station))
-    j += 1
-  return sorted(BOXES, key=lambda x: x[axis])
-
 def read_data(path : str):
   # Load the data
   with open(os.path.join(path), 'rb') as f:
@@ -90,7 +60,7 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace, phase = PWAVE) \
   DATA = DATA[(DATA[PHASE_STR] == phase) & (DATA[TIMESTAMP_STR] >= start)]
   x = [start]
   while x[-1] <= end: x.append(x[-1] + ONE_DAY)
-  z = [round(t, 2) for t in np.linspace(0.2, 0.5, 4)]
+  z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
   for model, dataframe in DATA.groupby(MODEL_STR):
     _, _axs = plt.subplots(2, 2, figsize=(10, 10))
     axs = _axs.flatten()
@@ -166,95 +136,116 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
              PRED[STATION_STR].unique()
   start, end = args.dates
   N_seconds = int((end - start) / (2 * PICK_OFFSET.total_seconds()))
-  TRUE = TRUE[(TRUE[P_TIME_STR] >= start) & (TRUE[P_TIME_STR] <= end) & \
+  TRUE = TRUE[(TRUE[TIMESTAMP_STR] >= start) & (TRUE[TIMESTAMP_STR] <= end) & \
               TRUE[STATION_STR].isin(stations)]
+  TRUE = TRUE[[STATION_STR, TIMESTAMP_STR, PHASE_STR, WEIGHT_STR]]
   if args.verbose:
     TRUE.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
+  z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
   PRED = PRED[PRED[STATION_STR].isin(stations)]
   if args.verbose:
     PRED.to_csv(Path(DATA_PATH, PRED_STR + CSV_EXT), index=False)
-  T = {}
-  for station, dataframe in TRUE.groupby(STATION_STR):
-    T[station] = list(dataframe[P_TIME_STR])
-  DATA = {}
-  # 
-  for (station, model, weight), dataframe in \
-    PRED.groupby([STATION_STR, MODEL_STR, WEIGHT_STR]):
-    DATA.setdefault((model, weight), [])
-    DATA[(model, weight)] += \
-      event_merger(T[station] if station in T else [],
-                   dataframe[TIMESTAMP_STR].to_list(), PICK_OFFSET,
-                   dataframe[PROBABILITY_STR].to_list(), station=station)
-  DATAFRAME = []
-  HEADER = [MODEL_STR, WEIGHT_STR, THRESHOLD_STR, TP_STR, FP_STR, FN_STR,
-            TN_STR, ACCURACY_STR, PRECISION_STR, RECALL_STR, F1_STR]
-  z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
-  for model, threshold in list(itertools.product(args.models, z)):
-    _, _axs = plt.subplots(2, 2, figsize=(10, 10))
+  TP = []
+  FN = []
+  for threshold, (model, dataframe_m) in \
+    itertools.product(z, PRED.groupby(MODEL_STR)):
+    fig, _axs = plt.subplots(2, 2, figsize=(10, 10))
     axs = _axs.flatten()
-    plt.suptitle(f"{model} w/ Threshold: {threshold}", fontsize=16)
-    for weight, ax in zip(args.weights, axs):
-      TP = len([v for v in DATA[(model, weight)] if v[1] >= threshold])
-      FP = len([v for v in DATA[(model, weight)] if v[1] <= -threshold])
-      FN = len([v for v in DATA[(model, weight)] if v[1] == 0])
-      TN = N_seconds - (TP + FP + FN)
-      ConfMtxDisp(np.array([[TP, FN], [FP, TN]]),
-                  display_labels=[PWAVE, NONE_STR]).plot(ax=ax)
+    plt.suptitle(f"{model} w/ threshold: {threshold}", fontsize=16)
+    for ax, (weight, dataframe_w) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
       ax.set_title(weight)
-      ACCURACY = (TP + TN) / N_seconds
-      if TP + FP == 0:
-        DATAFRAME.append([model, weight, threshold, TP, FP, FN, TN,
-                          ACCURACY, np.nan, np.nan, np.nan])
-        continue
-      PRECISION = TP / (TP + FP)
-      if TP + FN == 0:
-        DATAFRAME.append([model, weight, threshold, TP, FP, FN, TN,
-                          ACCURACY, PRECISION, np.nan, np.nan])
-        continue
-      RECALL = TP / (TP + FN)
-      if PRECISION + RECALL == 0:
-        DATAFRAME.append([model, weight, threshold, TP, FP, FN, TN, ACCURACY,
-                          PRECISION, RECALL, np.nan])
-        continue
-      F1 = 2 * PRECISION * RECALL / (PRECISION + RECALL)
-      DATAFRAME.append([model, weight, threshold, TP, FP, FN, TN, ACCURACY,
-                        PRECISION, RECALL, F1])
-    IMG_FILE = \
-      Path(IMG_PATH,
-           "CM_" + UNDERSCORE_STR.join([model, str(threshold)]) + PNG_EXT)
-    axs[0].set(xticklabels=[], xlabel=None)
-    axs[1].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None)
+      CFN_MTX = pd.DataFrame(0, index=[PWAVE, SWAVE, NONE_STR],
+                             columns=[PWAVE, SWAVE, NONE_STR], dtype=int)
+      for station, dataframe_s in dataframe_w.groupby(STATION_STR):
+        TRUE_S = TRUE[TRUE[STATION_STR] == station].reset_index(drop=True)
+        PRED_S = dataframe_s[dataframe_s[PROBABILITY_STR] >= threshold]
+        PRED_S = PRED_S[[STATION_STR, TIMESTAMP_STR, PHASE_STR,
+                         PROBABILITY_STR]].reset_index(drop=True)
+        i, j = 0, 0
+        while i < TRUE_S.shape[0] and j < PRED_S.shape[0]:
+          T = TRUE_S.loc[i]
+          P = PRED_S.loc[j]
+          if td(seconds=abs(T[TIMESTAMP_STR] -
+                            P[TIMESTAMP_STR])) <= PICK_OFFSET:
+            # Partial True Positive
+            tp = [model, weight, station, threshold,
+                  (T[TIMESTAMP_STR], P[TIMESTAMP_STR]),
+                  (T[PHASE_STR], P[PHASE_STR]), T[WEIGHT_STR]]
+            if T[PHASE_STR] == P[PHASE_STR]: TP.append(tp)
+            CFN_MTX.loc[T[PHASE_STR], P[PHASE_STR]] += 1
+            i += 1
+            j += 1
+          elif T[TIMESTAMP_STR] < P[TIMESTAMP_STR]:
+            # Partial False Negative
+            fn = [model, weight, station, threshold, T[TIMESTAMP_STR],
+                  T[PHASE_STR], T[WEIGHT_STR]]
+            FN.append(fn)
+            if args.verbose:
+              print(f"WARNING: Missing prediction by", fn)
+            CFN_MTX.loc[T[PHASE_STR], NONE_STR] += 1
+            i += 1
+          else:
+            # Partial False Positive
+            CFN_MTX.loc[NONE_STR, P[PHASE_STR]] += 1
+            j += 1
+        while i < TRUE_S.shape[0]:
+          # Partial False Negative
+          T = TRUE_S.loc[i]
+          fn = [model, weight, station, threshold, T[TIMESTAMP_STR],
+                T[PHASE_STR], T[WEIGHT_STR]]
+          FN.append(fn)
+          if args.verbose:
+            print(f"WARNING: Missing prediction by", fn)
+          CFN_MTX.loc[T[PHASE_STR], NONE_STR] += 1
+          i += 1
+        while j < PRED_S.shape[0]:
+          # Partial False Positive
+          CFN_MTX.loc[NONE_STR, PRED_S.loc[j, PHASE_STR]] += 1
+          j += 1
+      CFN_MTX.loc[NONE_STR, NONE_STR] = N_seconds - CFN_MTX.sum().sum()
+      disp = ConfMtxDisp(CFN_MTX.values, display_labels=CFN_MTX.columns)
+      disp.plot(ax=ax)
+    axs[0].set(xlabel=None, xticklabels=[])
+    axs[1].set(xlabel=None, xticklabels=[], ylabel=None, yticklabels=[])
     axs[2].set()
-    axs[3].set(yticklabels=[], ylabel=None)
+    axs[3].set(ylabel=None, yticklabels=[])
     plt.tight_layout()
+    IMG_FILE = \
+      Path(IMG_PATH, "CM_" + UNDERSCORE_STR.join([model, str(threshold)]) + \
+           PNG_EXT)
     plt.savefig(IMG_FILE)
     plt.close()
-  DATAFRAME = pd.DataFrame(DATAFRAME, columns=HEADER)
-
+  HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, THRESHOLD_STR, TIMESTAMP_STR,
+            PHASE_STR, PROBABILITY_STR]
+  FN = pd.DataFrame(FN, columns=HEADER)
+  FN_FILE = Path(DATA_PATH, FN_STR + CSV_EXT)
+  FN.to_csv(FN_FILE, index=False)
+  HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, THRESHOLD_STR, TIMESTAMP_STR,
+            PHASE_STR, TYPE_STR]
+  TP = pd.DataFrame(TP, columns=HEADER)
   # Plot the True Positives, False Negatives histogram and the Recall as a
   # function of the threshold for each model and weight
-  width = 0.35
-  TPx = np.arange(len(DATAFRAME[THRESHOLD_STR].unique()))
-  FNx = TPx + width
-  for (model, weight), dataframe in DATAFRAME.groupby([MODEL_STR, WEIGHT_STR]):
+  for model, weight in itertools.product(args.models, args.weights):
     _, ax1 = plt.subplots(figsize=(10, 5))
     ax2 = ax1.twinx()
-    ax1.bar(TPx, dataframe[TP_STR], width, label=TP_STR)
-    ax1.bar(FNx, dataframe[FN_STR], width, label=FN_STR)
-    ax1.set(xticks=TPx + width / 2,
-            xticklabels=dataframe[THRESHOLD_STR].unique(),
-            xlabel=THRESHOLD_STR, ylabel="Number of picks")
-    ax1.legend(loc='lower left')
-    ax2.plot(TPx, dataframe[RECALL_STR], label=RECALL_STR, color='r')
-    ax2.set_ylabel("Score")
-    ax2.set_ylim(0, 1)
-    ax2.legend(loc='upper right')
-    plt.title(SPACE_STR.join([model, weight]), fontsize=16)
+    plt.suptitle(SPACE_STR.join([model, weight]), fontsize=16)
+    tp = TP[(TP[MODEL_STR] == model) & (TP[WEIGHT_STR] == weight)]
+    tp = tp[THRESHOLD_STR].value_counts().sort_index()
+    fn = FN[(FN[MODEL_STR] == model) & (FN[WEIGHT_STR] == weight)]
+    fn = fn[THRESHOLD_STR].value_counts().sort_index()
+    RECALL = tp / (tp + fn)
+    RECALL.plot(ax=ax2, color='r', label=RECALL_STR, use_index=False)
+    TPFN = pd.DataFrame({TP_STR: tp, FN_STR: fn})
+    TPFN.plot(kind='bar', ax=ax1, label=[TP_STR, FN_STR])
+    ax1.set(xlabel=THRESHOLD_STR, ylabel="Number of Picks")
+    ax1.legend()
+    ax2.set(ylabel=RECALL_STR, ylim=(0, 1))
+    ax2.legend()
     IMG_FILE = \
       Path(IMG_PATH, "TPFN_" + UNDERSCORE_STR.join([model, weight]) + PNG_EXT)
     plt.savefig(IMG_FILE)
     plt.close()
-  return DATAFRAME, DATA
+  return TP
 
 def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
   """
@@ -269,7 +260,8 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
     - FileNotFoundError
 
   notes  :
-
+    | EVENT | STATION | PHASE | BEGDT | WEIGHT |
+    --------------------------------------------
   """
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
@@ -296,8 +288,7 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
     WAVEFORMS = pd.DataFrame(WAVEFORMS, columns=[BEG_DATE_STR, STATION_STR])
   WAVEFORMS[BEG_DATE_STR] = \
     WAVEFORMS[BEG_DATE_STR].apply(lambda x: UTCDateTime.strptime(x, DATE_FMT))
-  HEADER = [EVENT_STR, STATION_STR, P_TYPE_STR, P_WEIGHT_STR, P_TIME_STR,
-            S_TYPE_STR, S_WEIGHT_STR, S_TIME_STR]
+  HEADER = [EVENT_STR, STATION_STR, PHASE_STR, TIMESTAMP_STR, WEIGHT_STR]
   DATA = []
   event = 0
   with open(filename, 'r') as fr: lines = fr.readlines()
@@ -322,34 +313,37 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
         result[BEG_DATE_STR] + td(seconds=float(result[P_TIME_STR][:2] + \
                                                 PERIOD_STR + \
                                                 result[P_TIME_STR][2:]))
+      DATA.append([event, result[STATION_STR].strip(SPACE_STR), PWAVE,
+                   result[P_TIME_STR], result[P_WEIGHT_STR]])
       if result[S_TIME_STR]:
         result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
         result[S_TIME_STR] = \
           result[BEG_DATE_STR] + td(seconds=float(result[S_TIME_STR][:2] + \
                                                   PERIOD_STR + \
                                                   result[S_TIME_STR][2:]))
-      DATA.append([event, result[STATION_STR].strip(SPACE_STR),
-                   result[P_TYPE_STR], result[P_WEIGHT_STR],
-                   result[P_TIME_STR],
-                   result[S_TYPE_STR], result[S_WEIGHT_STR],
-                   result[S_TIME_STR]])
+        DATA.append([event, result[STATION_STR].strip(SPACE_STR), SWAVE,
+                     result[S_TIME_STR], result[S_WEIGHT_STR]])
   # We sort the values by the Primary wave arrival time
-  return pd.DataFrame(DATA, columns=HEADER).sort_values(P_TIME_STR)
+  return pd.DataFrame(DATA, columns=HEADER).sort_values(TIMESTAMP_STR)
 
-def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace):
-  bins = np.linspace(-0.5, 0.5, 31, endpoint=True)
-  z = [round(t, 2) for t in np.linspace(0.2, 0.5, 4)]
-  for (model, weight), dataframe in DATA.items():
+def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
+                      phase = PWAVE) -> None:
+  bins = np.linspace(-0.5, 0.5, 21, endpoint=True)
+  z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
+  for (model, weight), dataframe in DATA.groupby([MODEL_STR, WEIGHT_STR]):
     fig, axs = plt.subplots(figsize=(10, 5))
     plt.title(SPACE_STR.join([model, weight]), fontsize=16)
+    dataframe = dataframe[[THRESHOLD_STR, TIMESTAMP_STR]]
+    dataframe[TIMESTAMP_STR] = \
+      dataframe[TIMESTAMP_STR].map(lambda x: x[0] - x[1])
     for threshold in z:
-      x = [v[0] - v[2] for v in dataframe if v[1] >= threshold]
-      count, _ = np.histogram(x, bins=bins)
-      plt.plot(bins[:-1], count, label=threshold)
+      data = dataframe[dataframe[THRESHOLD_STR] == threshold][TIMESTAMP_STR]
+      counts, _ = np.histogram(data, bins=bins)
+      plt.plot(bins[:-1], counts, label=threshold)
     plt.xlim(-0.5, 0.5)
     plt.xlabel("Time Displacement (s)")
     plt.ylim(0)
-    plt.ylabel("Number of picks")
+    plt.ylabel(f"Number of {phase} picks")
     plt.grid()
     plt.legend()
     IMG_FILE = \
@@ -361,7 +355,8 @@ def main(args : argparse.Namespace):
   PRED = load_data(args)
   plot_data(PRED, args)
   TRUE = event_parser(Path(DATA_PATH, "manual", "manual.dat"), args)
-  _, DATA = conf_mtx(TRUE, PRED, args)
-  time_displacement(DATA, args)
+  TP = conf_mtx(TRUE, PRED, args)
+  print(TP)
+  time_displacement(TP, args)
 
 if __name__ == "__main__": main(AA.parse_arguments())
