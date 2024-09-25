@@ -6,6 +6,12 @@
 */__pycache__/
 doc/References/*
 doc/Reports/*
+doc/Pres/*
+doc/Doc/*
+!doc/Doc/doc.pdf
+!doc/Doc/doc.tex
+doc/img/*
+doc/Post/*
 !data/classified/*/*/*/*/*/*.pkl
 env/*
 env3/*
@@ -18,5 +24,4 @@ andrea.sh
 etna_data/*
 ktanakah.sh
 acarducci.sh
-doc/*
 img/*.eps
