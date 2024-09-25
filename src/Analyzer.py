@@ -66,7 +66,8 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace, phase = PWAVE) \
     axs = _axs.flatten()
     plt.suptitle(model, fontsize=16)
     axs[0].set(xticklabels=[], xlabel=None, ylabel=MSG, yscale="log")
-    axs[1].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None, yscale="log")
+    axs[1].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None,
+               yscale="log")
     axs[2].set(xlabel="Date", ylabel=MSG, yscale="log")
     axs[3].set(xlabel="Date", yticklabels=[], ylabel=None, yscale="log")
     y_max = 0
