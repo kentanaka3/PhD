@@ -65,10 +65,10 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace, phase = PWAVE) \
     _, _axs = plt.subplots(2, 2, figsize=(10, 10))
     axs = _axs.flatten()
     plt.suptitle(model, fontsize=16)
-    axs[0].set(xticklabels=[], xlabel=None, ylabel=MSG)
-    axs[1].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None)
-    axs[2].set(xlabel="Date", ylabel=MSG)
-    axs[3].set(xlabel="Date", yticklabels=[], ylabel=None)
+    axs[0].set(xticklabels=[], xlabel=None, ylabel=MSG, yscale="log")
+    axs[1].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None, yscale="log")
+    axs[2].set(xlabel="Date", ylabel=MSG, yscale="log")
+    axs[3].set(xlabel="Date", yticklabels=[], ylabel=None, yscale="log")
     y_max = 0
     for i, (weight, data) in enumerate(dataframe.groupby(WEIGHT_STR)):
       axs[i].set_title(weight)
@@ -330,6 +330,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
                       phase = PWAVE) -> None:
   bins = np.linspace(-0.5, 0.5, 21, endpoint=True)
   z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
+  z = [0.2, 0.3]
   for (model, weight), dataframe in DATA.groupby([MODEL_STR, WEIGHT_STR]):
     fig, axs = plt.subplots(figsize=(10, 5))
     plt.title(SPACE_STR.join([model, weight]), fontsize=16)
@@ -356,7 +357,6 @@ def main(args : argparse.Namespace):
   plot_data(PRED, args)
   TRUE = event_parser(Path(DATA_PATH, "manual", "manual.dat"), args)
   TP = conf_mtx(TRUE, PRED, args)
-  print(TP)
   time_displacement(TP, args)
 
 if __name__ == "__main__": main(AA.parse_arguments())
