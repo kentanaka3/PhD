@@ -204,12 +204,20 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
           j += 1
       CFN_MTX.loc[NONE_STR, NONE_STR] = N_seconds - CFN_MTX.sum().sum()
       disp = ConfMtxDisp(CFN_MTX.values, display_labels=CFN_MTX.columns)
-      disp.plot(ax=ax)
+      disp.plot(ax=ax, colorbar=False)
+      for labels in disp.text_.ravel():
+        labels.set(color="#E4007C", fontsize=12, fontweight="bold")
+      disp.im_.set(clim=(1, N_seconds), cmap="Blues", norm="log")
     axs[0].set(xlabel=None, xticklabels=[])
     axs[1].set(xlabel=None, xticklabels=[], ylabel=None, yticklabels=[])
     axs[2].set()
     axs[3].set(ylabel=None, yticklabels=[])
-    plt.tight_layout()
+    fig.subplots_adjust(left=0.08, right=1.03, bottom=0.03, top=0.95,
+                        wspace=0.08, hspace=0.05)
+    fig.colorbar(disp.im_, ax=axs, orientation='vertical',
+                 label="Number of Picks")
+    disp.im_.set_clim(1, N_seconds)
+    plt.rcParams.update({'font.size': 12})
     IMG_FILE = \
       Path(IMG_PATH, "CM_" + UNDERSCORE_STR.join([model, str(threshold)]) + \
            PNG_EXT)
@@ -225,6 +233,10 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   TP = pd.DataFrame(TP, columns=HEADER)
   # Plot the True Positives, False Negatives histogram and the Recall as a
   # function of the threshold for each model and weight
+  m = \
+    max(TP.groupby([MODEL_STR, WEIGHT_STR])[THRESHOLD_STR].value_counts().max(),
+        FN.groupby([MODEL_STR, WEIGHT_STR])[THRESHOLD_STR].value_counts().max())
+  m = (m + 4) // 5 * 5
   for model, weight in itertools.product(args.models, args.weights):
     _, ax1 = plt.subplots(figsize=(10, 5))
     ax2 = ax1.twinx()
@@ -238,9 +250,10 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     TPFN = pd.DataFrame({TP_STR: tp, FN_STR: fn})
     TPFN.plot(kind='bar', ax=ax1, label=[TP_STR, FN_STR])
     ax1.set(xlabel=THRESHOLD_STR, ylabel="Number of Picks")
-    ax1.legend()
-    ax2.set(ylabel=RECALL_STR, ylim=(0, 1))
-    ax2.legend()
+    ax1.legend(loc='center left')
+    ax1.set_ylim(0, m)
+    ax2.set(ylabel="Score", ylim=(0, 1))
+    ax2.legend(loc='center right')
     IMG_FILE = \
       Path(IMG_PATH, "TPFN_" + UNDERSCORE_STR.join([model, weight]) + PNG_EXT)
     plt.savefig(IMG_FILE)
