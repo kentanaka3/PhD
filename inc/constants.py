@@ -31,14 +31,14 @@ TRUE_STR = "TRUE"
 PRED_STR = "PRED"
 
 # Metrics
-TP_STR = "True_Positive"
-FP_STR = "False_Positive"
-FN_STR = "False_Negative"
-TN_STR = "True_Negative"
+TP_STR = "True Positive"
+FP_STR = "False Positive"
+FN_STR = "False Negative"
+TN_STR = "True Negative"
 ACCURACY_STR = "Accuracy"
 PRECISION_STR = "Precision"
 RECALL_STR = "Recall"
-F1_STR = "F1_Score"
+F1_STR = "F1 Score"
 
 # Phases
 PWAVE = "P"
@@ -49,6 +49,11 @@ PWAVE_THRESHOLD = 0.2
 SWAVE_THRESHOLD = 0.1
 
 SEED_ID_FMT = "{NETWORK}.{STATION}..{CHANNEL}"
+
+CONF_MTX_STR = "CM"
+CMTV_PICKS_STR = "CP"
+TIME_DSPLCMT_STR = "TD"
+
 
 # Extensions
 CSV_STR       = "csv"

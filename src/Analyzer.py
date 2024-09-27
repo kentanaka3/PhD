@@ -88,7 +88,8 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace, phase = PWAVE) \
     axs[3].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
     for label in axs[3].get_xticklabels():
       label.set(rotation=30, horizontalalignment='right')
-    IMG_FILE = Path(IMG_PATH, "CP_" + model + PNG_EXT)
+    IMG_FILE = \
+      Path(IMG_PATH, UNDERSCORE_STR.join([CMTV_PICKS_STR, model]) + PNG_EXT)
     plt.tight_layout()
     plt.savefig(IMG_FILE)
     plt.close()
@@ -123,7 +124,8 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace, phase = PWAVE) \
       label.set(rotation=30, horizontalalignment='right')
     IMG_FILE = \
       Path(IMG_PATH,
-           "CP_" + UNDERSCORE_STR.join([model, network, station]) + PNG_EXT)
+           UNDERSCORE_STR.join([CMTV_PICKS_STR, model, network, station]) + \
+           PNG_EXT)
     plt.tight_layout()
     plt.savefig(IMG_FILE)
     plt.close()
@@ -150,9 +152,9 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   FN = []
   for threshold, (model, dataframe_m) in \
     itertools.product(z, PRED.groupby(MODEL_STR)):
-    fig, _axs = plt.subplots(2, 2, figsize=(10, 10))
+    fig, _axs = plt.subplots(2, 2, figsize=(10, 9))
     axs = _axs.flatten()
-    plt.suptitle(f"{model} w/ threshold: {threshold}", fontsize=16)
+    plt.rcParams.update({'font.size': 12})
     for ax, (weight, dataframe_w) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
       ax.set_title(weight)
       CFN_MTX = pd.DataFrame(0, index=[PWAVE, SWAVE, NONE_STR],
@@ -162,44 +164,48 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
         PRED_S = dataframe_s[dataframe_s[PROBABILITY_STR] >= threshold]
         PRED_S = PRED_S[[STATION_STR, TIMESTAMP_STR, PHASE_STR,
                          PROBABILITY_STR]].reset_index(drop=True)
+        A, B = TRUE_S.shape[0], PRED_S.shape[0]
         i, j = 0, 0
-        while i < TRUE_S.shape[0] and j < PRED_S.shape[0]:
+        while i < A and j < B:
           T = TRUE_S.loc[i]
           P = PRED_S.loc[j]
-          if td(seconds=abs(T[TIMESTAMP_STR] -
-                            P[TIMESTAMP_STR])) <= PICK_OFFSET:
-            # Partial True Positive
-            tp = [model, weight, station, threshold,
-                  (T[TIMESTAMP_STR], P[TIMESTAMP_STR]),
-                  (T[PHASE_STR], P[PHASE_STR]), T[WEIGHT_STR]]
-            if T[PHASE_STR] == P[PHASE_STR]: TP.append(tp)
+          sec = T[TIMESTAMP_STR] - P[TIMESTAMP_STR]
+          if td(seconds=abs(sec)) <= PICK_OFFSET:
+            tp = [model, weight, station, threshold, P[PHASE_STR],
+                  (T[TIMESTAMP_STR], P[TIMESTAMP_STR]), T[WEIGHT_STR]]
+            if T[PHASE_STR] == P[PHASE_STR]:
+              # Complete True Positive
+              TP.append(tp)
+            else:
+              # Partial True Positive
+              print(f"WARNING: Encountered partial TP", tp)
             CFN_MTX.loc[T[PHASE_STR], P[PHASE_STR]] += 1
             i += 1
             j += 1
-          elif T[TIMESTAMP_STR] < P[TIMESTAMP_STR]:
+          elif sec > 0.0:
+            # Partial False Positive
+            CFN_MTX.loc[NONE_STR, P[PHASE_STR]] += 1
+            j += 1
+          else:
             # Partial False Negative
-            fn = [model, weight, station, threshold, T[TIMESTAMP_STR],
-                  T[PHASE_STR], T[WEIGHT_STR]]
+            fn = [model, weight, station, threshold, T[PHASE_STR],
+                  T[TIMESTAMP_STR], T[WEIGHT_STR]]
             FN.append(fn)
             if args.verbose:
               print(f"WARNING: Missing prediction by", fn)
             CFN_MTX.loc[T[PHASE_STR], NONE_STR] += 1
             i += 1
-          else:
-            # Partial False Positive
-            CFN_MTX.loc[NONE_STR, P[PHASE_STR]] += 1
-            j += 1
-        while i < TRUE_S.shape[0]:
+        while i < A:
           # Partial False Negative
           T = TRUE_S.loc[i]
-          fn = [model, weight, station, threshold, T[TIMESTAMP_STR],
-                T[PHASE_STR], T[WEIGHT_STR]]
+          fn = [model, weight, station, threshold, T[PHASE_STR],
+                T[TIMESTAMP_STR], T[WEIGHT_STR]]
           FN.append(fn)
           if args.verbose:
             print(f"WARNING: Missing prediction by", fn)
           CFN_MTX.loc[T[PHASE_STR], NONE_STR] += 1
           i += 1
-        while j < PRED_S.shape[0]:
+        while j < B:
           # Partial False Positive
           CFN_MTX.loc[NONE_STR, PRED_S.loc[j, PHASE_STR]] += 1
           j += 1
@@ -211,52 +217,77 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       disp.im_.set(clim=(1, N_seconds), cmap="Blues", norm="log")
     axs[0].set(xlabel=None, xticklabels=[])
     axs[1].set(xlabel=None, xticklabels=[], ylabel=None, yticklabels=[])
-    axs[2].set()
+    #axs[2].xaxis.tick_top()
+    #axs[2].xaxis.set_label_position('top')
     axs[3].set(ylabel=None, yticklabels=[])
-    fig.subplots_adjust(left=0.08, right=1.03, bottom=0.03, top=0.95,
-                        wspace=0.08, hspace=0.05)
+    #axs[3].xaxis.tick_top()
+    #axs[3].xaxis.set_label_position('top')
+    #plt.tight_layout()
+    fig.subplots_adjust(left=0.08, right=1.08, top=.95, bottom=0.05, 
+                        wspace=0.1, hspace=0.1)
     fig.colorbar(disp.im_, ax=axs, orientation='vertical',
-                 label="Number of Picks")
+                 label="Number of Picks", aspect=50, shrink=0.8)
     disp.im_.set_clim(1, N_seconds)
-    plt.rcParams.update({'font.size': 12})
+    #plt.tight_layout()
     IMG_FILE = \
-      Path(IMG_PATH, "CM_" + UNDERSCORE_STR.join([model, str(threshold)]) + \
-           PNG_EXT)
+      Path(IMG_PATH,
+           UNDERSCORE_STR.join([CONF_MTX_STR, model, str(threshold)]) + PNG_EXT)
     plt.savefig(IMG_FILE)
     plt.close()
-  HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, THRESHOLD_STR, TIMESTAMP_STR,
-            PHASE_STR, PROBABILITY_STR]
+  HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, THRESHOLD_STR, PHASE_STR,
+            TIMESTAMP_STR, PROBABILITY_STR]
   FN = pd.DataFrame(FN, columns=HEADER)
   FN_FILE = Path(DATA_PATH, FN_STR + CSV_EXT)
   FN.to_csv(FN_FILE, index=False)
-  HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, THRESHOLD_STR, TIMESTAMP_STR,
-            PHASE_STR, TYPE_STR]
+  HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, THRESHOLD_STR, PHASE_STR,
+            TIMESTAMP_STR, TYPE_STR]
   TP = pd.DataFrame(TP, columns=HEADER)
   # Plot the True Positives, False Negatives histogram and the Recall as a
   # function of the threshold for each model and weight
-  m = \
-    max(TP.groupby([MODEL_STR, WEIGHT_STR])[THRESHOLD_STR].value_counts().max(),
-        FN.groupby([MODEL_STR, WEIGHT_STR])[THRESHOLD_STR].value_counts().max())
+  groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
+  m = max(TP.groupby(groups)[THRESHOLD_STR].value_counts().max(),
+          FN.groupby(groups)[THRESHOLD_STR].value_counts().max())
   m = (m + 4) // 5 * 5
-  for model, weight in itertools.product(args.models, args.weights):
-    _, ax1 = plt.subplots(figsize=(10, 5))
-    ax2 = ax1.twinx()
-    plt.suptitle(SPACE_STR.join([model, weight]), fontsize=16)
-    tp = TP[(TP[MODEL_STR] == model) & (TP[WEIGHT_STR] == weight)]
-    tp = tp[THRESHOLD_STR].value_counts().sort_index()
-    fn = FN[(FN[MODEL_STR] == model) & (FN[WEIGHT_STR] == weight)]
-    fn = fn[THRESHOLD_STR].value_counts().sort_index()
-    RECALL = tp / (tp + fn)
-    RECALL.plot(ax=ax2, color='r', label=RECALL_STR, use_index=False)
-    TPFN = pd.DataFrame({TP_STR: tp, FN_STR: fn})
-    TPFN.plot(kind='bar', ax=ax1, label=[TP_STR, FN_STR])
-    ax1.set(xlabel=THRESHOLD_STR, ylabel="Number of Picks")
-    ax1.legend(loc='center left')
-    ax1.set_ylim(0, m)
-    ax2.set(ylabel="Score", ylim=(0, 1))
-    ax2.legend(loc='center right')
-    IMG_FILE = \
-      Path(IMG_PATH, "TPFN_" + UNDERSCORE_STR.join([model, weight]) + PNG_EXT)
+  for model in args.models:
+    _, _axs = plt.subplots(4, figsize=(10, 15))
+    axs = _axs.flatten()
+    for ax1, weight in zip(axs, args.weights):
+      ax2 = ax1.twinx()
+      ax1.set_title(weight, fontsize=16)
+      tp = TP[(TP[MODEL_STR] == model) & (TP[WEIGHT_STR] == weight)]
+      tp[PHASE_STR] = tp[PHASE_STR].map(lambda x: x[0])
+      ptp = tp[tp[PHASE_STR] == PWAVE]
+      ptp = ptp[THRESHOLD_STR].value_counts().sort_index()
+      stp = tp[tp[PHASE_STR] == SWAVE]
+      stp = stp[THRESHOLD_STR].value_counts().sort_index()
+      fn = FN[(FN[MODEL_STR] == model) & (FN[WEIGHT_STR] == weight)]
+      pfn = fn[fn[PHASE_STR] == PWAVE]
+      pfn = pfn[THRESHOLD_STR].value_counts().sort_index()
+      sfn = fn[fn[PHASE_STR] == SWAVE]
+      sfn = sfn[THRESHOLD_STR].value_counts().sort_index()
+      pRECALL = ptp / (ptp + pfn)
+      sRECALL = stp / (stp + sfn)
+      pRECALL.plot(ax=ax2, label=PWAVE, use_index=False)
+      sRECALL.plot(ax=ax2, label=SWAVE, use_index=False)
+      TPFN = pd.DataFrame({
+        SPACE_STR.join([PWAVE, TP_STR]): ptp,
+        SPACE_STR.join([SWAVE, TP_STR]): stp,
+        SPACE_STR.join([PWAVE, FN_STR]): pfn,
+        SPACE_STR.join([SWAVE, FN_STR]): sfn
+      })
+      TPFN.plot(kind='bar', ax=ax1, width=0.7)
+      ax1.set(ylabel="Number of Picks", ylim=(0, m))
+      ax2.set(ylim=(0, 1), ylabel=RECALL_STR)
+      ax1.grid()
+      ax1.get_legend().remove()
+    axs[0].set(xlabel=None, xticklabels=[])
+    axs[0].legend()
+    axs[1].set(xlabel=None, xticklabels=[])
+    axs[2].set(xlabel=None, xticklabels=[])
+    axs[3].set(xlabel=THRESHOLD_STR)
+    ax2.legend()
+    IMG_FILE = Path(IMG_PATH, UNDERSCORE_STR.join(["TPFN", model]) + PNG_EXT)
+    plt.tight_layout()
     plt.savefig(IMG_FILE)
     plt.close()
   return TP
@@ -342,27 +373,33 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
                       phase = PWAVE) -> None:
+  DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].map(lambda x: x[0] - x[1])
   bins = np.linspace(-0.5, 0.5, 21, endpoint=True)
   z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
-  z = [0.2, 0.3]
-  for (model, weight), dataframe in DATA.groupby([MODEL_STR, WEIGHT_STR]):
-    fig, axs = plt.subplots(figsize=(10, 5))
-    plt.title(SPACE_STR.join([model, weight]), fontsize=16)
-    dataframe = dataframe[[THRESHOLD_STR, TIMESTAMP_STR]]
-    dataframe[TIMESTAMP_STR] = \
-      dataframe[TIMESTAMP_STR].map(lambda x: x[0] - x[1])
-    for threshold in z:
-      data = dataframe[dataframe[THRESHOLD_STR] == threshold][TIMESTAMP_STR]
-      counts, _ = np.histogram(data, bins=bins)
-      plt.plot(bins[:-1], counts, label=threshold)
-    plt.xlim(-0.5, 0.5)
-    plt.xlabel("Time Displacement (s)")
-    plt.ylim(0)
-    plt.ylabel(f"Number of {phase} picks")
-    plt.grid()
-    plt.legend()
+  for model, phase in itertools.product(args.models, [PWAVE, SWAVE]):
+    fig, _axs = plt.subplots(2, 2, figsize=(10, 7))
+    axs = _axs.flatten()
+    dataframe_mp = DATA[(DATA[MODEL_STR] == model) &
+                        (DATA[PHASE_STR] == phase)]
+    for ax, (weight, dataframe) in zip(axs, dataframe_mp.groupby(WEIGHT_STR)):
+      ax.set_title(weight)
+      for threshold in z:
+        data = dataframe[dataframe[THRESHOLD_STR] == threshold][TIMESTAMP_STR]
+        counts, _ = np.histogram(data, bins=bins)
+        ax.plot(bins[:-1], counts, label=threshold)
+      ax.set(xlim=(-0.5, 0.5))
+      ax.grid()
+      ax.legend()
+    xlabel = "Time Displacement (s)"
+    ylabel = f"Number of {phase} picks"
+    axs[0].set(xlabel=None, xticklabels=[], ylabel=ylabel)
+    axs[1].set(xlabel=None, xticklabels=[], ylabel=None, yticklabels=[])
+    axs[2].set(xlabel=xlabel, ylabel=ylabel)
+    axs[3].set(xlabel=xlabel, ylabel=None, yticklabels=[])
     IMG_FILE = \
-      Path(IMG_PATH, "TD_" + UNDERSCORE_STR.join([model, weight]) + PNG_EXT)
+      Path(IMG_PATH,
+           UNDERSCORE_STR.join([TIME_DSPLCMT_STR, model, phase]) + PNG_EXT)
+    plt.tight_layout()
     plt.savefig(IMG_FILE)
     plt.close()
 

@@ -4,6 +4,13 @@ all:
 Leo:
 	bash Analyze.sh src/AdriaArray.py
 
+results:
+	cp img/CP_EQTransformer.png doc/img/CP_EQTransformer.png
+	cp img/CP_PhaseNet.png doc/img/CP_PhaseNet.png
+	cp img/CM_* doc/img/
+	cp img/TD_* doc/img/
+	cp img/TPFN_* doc/img/
+
 testing:
 	python -m test.testAdriaArray
 
