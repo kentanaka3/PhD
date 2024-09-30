@@ -24,28 +24,29 @@ import AdriaArray as AA
 
 def read_data(path : str):
   # Load the data
-  with open(os.path.join(path), 'rb') as f:
+  with open(Path(path), 'rb') as f:
     data = pickle.load(f)
   return data
 
 def load_data(args : argparse.Namespace) -> pd.DataFrame:
   global DATA_PATH
   DATA_PATH  = Path(args.directory).parent
-  CLF_PATH = os.path.join(DATA_PATH, CLF_STR)
+  CLF_PATH = Path(DATA_PATH, CLF_STR)
   DATA = []
   HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR,
             PHASE_STR, PROBABILITY_STR]
   start, end = args.dates
   for model in args.models:
     for weight in args.weights:
-      for date in os.listdir(CLF_PATH):
+      for date in CLF_PATH.iterdir():
         date_obj = UTCDateTime.strptime(date, DATE_FMT)
         if date_obj < start or date_obj > end: continue
-        for network in os.listdir(os.path.join(CLF_PATH, date)):
-          for station in os.listdir(os.path.join(CLF_PATH, date, network)):
-            f = os.path.join(CLF_PATH, date, network, station,
-                             UNDERSCORE_STR.join([date, network, station,
-                                                  model, weight]) + PICKLE_EXT)
+        for network in Path(CLF_PATH, date).iterdir():
+          for station in Path(CLF_PATH, date, network).iterdir():
+            f = Path(CLF_PATH, date, network, station,
+                     ("D_" if args.denoiser else EMPTY_STR) + \
+                     UNDERSCORE_STR.join([date, network, station, model,
+                                          weight]) + PICKLE_EXT)
             for p in read_data(f):
               DATA.append([model, weight, p.peak_time, network, station,
                            p.phase, p.peak_value])
@@ -89,7 +90,8 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace, phase = PWAVE) \
     for label in axs[3].get_xticklabels():
       label.set(rotation=30, horizontalalignment='right')
     IMG_FILE = \
-      Path(IMG_PATH, UNDERSCORE_STR.join([CMTV_PICKS_STR, model]) + PNG_EXT)
+      Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+           UNDERSCORE_STR.join([CMTV_PICKS_STR, model]) + PNG_EXT)
     plt.tight_layout()
     plt.savefig(IMG_FILE)
     plt.close()
@@ -123,7 +125,7 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace, phase = PWAVE) \
     for label in axs[3].get_xticklabels():
       label.set(rotation=30, horizontalalignment='right')
     IMG_FILE = \
-      Path(IMG_PATH,
+      Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
            UNDERSCORE_STR.join([CMTV_PICKS_STR, model, network, station]) + \
            PNG_EXT)
     plt.tight_layout()
@@ -158,8 +160,8 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     plt.rcParams.update({'font.size': 12})
     for ax, (weight, dataframe_w) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
       ax.set_title(weight)
-      CFN_MTX = pd.DataFrame(0, index=[PWAVE, SWAVE, NONE_STR],
-                             columns=[PWAVE, SWAVE, NONE_STR], dtype=int)
+      tags = [PWAVE, SWAVE, NONE_STR]
+      CFN_MTX = pd.DataFrame(0, index=tags, columns=tags, dtype=int)
       for station, dataframe_s in dataframe_w.groupby(STATION_STR):
         TRUE_S = TRUE[TRUE[STATION_STR] == station].reset_index(drop=True)
         PRED_S = dataframe_s[dataframe_s[PROBABILITY_STR] >= threshold]
@@ -234,7 +236,7 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
                  label="Number of Picks", aspect=50, shrink=0.8)
     disp.im_.set_clim(1, N_seconds)
     IMG_FILE = \
-      Path(IMG_PATH,
+      Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
            UNDERSCORE_STR.join([CONF_MTX_STR, model, str(threshold)]) + PNG_EXT)
     plt.savefig(IMG_FILE)
     plt.close()
@@ -313,7 +315,8 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     ax2.set_yticks(yticks)
     ax2.set_yticklabels(yticklabels)
     ax2.legend()
-    IMG_FILE = Path(IMG_PATH, UNDERSCORE_STR.join(["TPFN", model]) + PNG_EXT)
+    IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                    UNDERSCORE_STR.join(["TPFN", model]) + PNG_EXT)
     plt.tight_layout()
     plt.savefig(IMG_FILE)
     plt.close()
@@ -363,7 +366,8 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     ax2.set_yticklabels(yticklabels)
     ax2.legend()
     IMG_FILE = \
-      Path(IMG_PATH, UNDERSCORE_STR.join(["TPFNFP", model, phase]) + PNG_EXT)
+      Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+           UNDERSCORE_STR.join(["TPFNFP", model, phase]) + PNG_EXT)
     plt.tight_layout()
     plt.savefig(IMG_FILE)
   return TP
@@ -402,9 +406,9 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
       print(f"ERROR: {CLF_PATH} does not exist")
       raise FileNotFoundError
     WAVEFORMS = []
-    for date in os.listdir(CLF_PATH):
-      for network in os.listdir(Path(CLF_PATH, date)):
-        for station in os.listdir(Path(CLF_PATH, date, network)):
+    for date in CLF_PATH.iterdir():
+      for network in Path(CLF_PATH, date).iterdir():
+        for station in Path(CLF_PATH, date, network).iterdir():
           WAVEFORMS.append([date, station])
     WAVEFORMS = pd.DataFrame(WAVEFORMS, columns=[BEG_DATE_STR, STATION_STR])
   WAVEFORMS[BEG_DATE_STR] = \
@@ -479,7 +483,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
     axs[2].set(xlabel=xlabel, ylabel=ylabel)
     axs[3].set(xlabel=xlabel, ylabel=None, yticklabels=[])
     IMG_FILE = \
-      Path(IMG_PATH,
+      Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
            UNDERSCORE_STR.join([TIME_DSPLCMT_STR, model, phase]) + PNG_EXT)
     plt.tight_layout()
     plt.savefig(IMG_FILE)

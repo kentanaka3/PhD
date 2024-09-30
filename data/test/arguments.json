@@ -1,0 +1,38 @@
+{
+  "MODEL": [
+    "PhaseNet",
+    "EQTransformer"
+  ],
+  "WEIGHT": [
+    "instance",
+    "original",
+    "stead",
+    "scedc"
+  ],
+  "NETWORK": null,
+  "STATION": null,
+  "CHANNEL": null,
+  "BEGDT": [
+    "2023-06-01T00:00:00.000000Z",
+    "2023-06-05T00:00:00.000000Z"
+  ],
+  "GROUPS": [
+    "BEGDT",
+    "NETWORK",
+    "STATION"
+  ],
+  "DIRECTORY": "/Users/admin/Desktop/Monica/PhD/data/test/waveforms",
+  "P": 0.2,
+  "S": 0.1,
+  "JULIAN": false,
+  "DENOISER": true,
+  "DOMAIN": [
+    44.5,
+    47,
+    10,
+    14
+  ],
+  "CLIENT": [
+    "INGV"
+  ]
+}

@@ -116,6 +116,8 @@ def parse_arguments():
   parser.add_argument("--domain", default=[44.5, 47, 10, 14], required=False,
                       metavar=EMPTY_STR, nargs=4, type=float,
                       help="Domain to download the data")
+  parser.add_argument("--force", default=False, action='store_true',
+                      required=False, help="Force running all the pipeline")
   parser.add_argument("--pyrocko", default=False, action='store_true',
                       help="Enable PyRocko calls")
   return parser.parse_args()
@@ -229,7 +231,11 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
       if args.verbose:
         print("Found and loading previously constructed table of files:",
               WAVEFORMS_FILE)
-      return pd.read_csv(WAVEFORMS_FILE, index_col=FILENAME_STR)
+      DATAFRAME = pd.read_csv(WAVEFORMS_FILE)
+      DATAFRAME[FILENAME_STR] = DATAFRAME[FILENAME_STR].apply(Path)
+      DATAFRAME[BEG_DATE_STR] = DATAFRAME[BEG_DATE_STR].apply(str)
+      DATAFRAME.set_index(FILENAME_STR, inplace=True)
+      return DATAFRAME
   if args.verbose:
     print("Constructing the Table of Files")
   if args.key is not None:
@@ -331,13 +337,18 @@ def clean_stream(stream : obspy.Stream, dataset_name : str, FMT_DICT : dict,
   if args.denoiser:
     if args.verbose: print("Denoising the Stream")
     denoiser = get_model(DEEPDENOISER_STR, dataset_name)
-    if denoiser is not None: stream = denoiser.annotate(stream)
+    if denoiser is None:
+      print(f"WARNING: {DEEPDENOISER_STR} model using '{ORIGINAL_STR}' "
+             "weights")
+      denoiser = get_model(DEEPDENOISER_STR, ORIGINAL_STR)
+    stream = denoiser.annotate(stream)
   if args.verbose:
-    IMG_FILE = Path(IMG_PATH, PRC_FMT.format(NETWORK=FMT_DICT[NETWORK_STR],
-                                             STATION=FMT_DICT[STATION_STR],
-                                             CHANNEL=FMT_DICT[CHANNEL_STR],
-                                             BEGDT=FMT_DICT[BEG_DATE_STR],
-                                             EXT=EPS_STR))
+    IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                    PRC_FMT.format(NETWORK=FMT_DICT[NETWORK_STR],
+                                   STATION=FMT_DICT[STATION_STR],
+                                   CHANNEL=FMT_DICT[CHANNEL_STR],
+                                   BEGDT=FMT_DICT[BEG_DATE_STR],
+                                   EXT=EPS_STR))
     stream.plot(outfile=IMG_FILE, size=(1000, 600), format=EPS_STR, dpi=300)
   return stream
 
@@ -409,8 +420,7 @@ def read_arguments(args : argparse.Namespace, overwrite = False) -> dict:
 def read_traces(trace_files, dataset_name : str, args : argparse.Namespace) \
   -> obspy.Stream:
   """
-  Read the traces from the specified files and return a Stream. If the file has
-  been previously processed, the Stream will be read from the processed file.
+  Read the traces from the specified files and return a clean Stream.
 
   input:
     - trace_files   ()
@@ -433,35 +443,21 @@ def read_traces(trace_files, dataset_name : str, args : argparse.Namespace) \
                                                     CHANNEL_STR, BEG_DATE_STR]}
   for category in args.groups:
     FMT_DICT[category] = trace_files[category].unique()[0]
-  PRC_PATH = Path(DATA_PATH, PRC_STR)
-  PRC_PATH.mkdir(parents=False, exist_ok=True)
-  STRM_FILE = Path(PRC_PATH, PRC_FMT.format(NETWORK=FMT_DICT[NETWORK_STR],
-                                            STATION=FMT_DICT[STATION_STR],
-                                            CHANNEL=FMT_DICT[CHANNEL_STR],
-                                            BEGDT=FMT_DICT[BEG_DATE_STR],
-                                            EXT=MSEED_STR))
-  if STRM_FILE.exists():
+  for _, row in trace_files.iterrows():
     if args.verbose:
-      print("Found and reading previously processed file:", STRM_FILE)
-    stream = obspy.read(STRM_FILE)
-  else:
-    for _, row in trace_files.iterrows():
-      if args.verbose:
-        print("Attempting to read from raw file:", row.name)
-      if not row.name.exists():
-        # TODO: Download the file
-        print("CRITICAL: File not found:", row.name)
-        continue
-      else:
-        stream += obspy.read(row.name)
-    # Clean the stream
-    stream = clean_stream(stream, dataset_name, FMT_DICT, args)
-    stream.write(STRM_FILE, format=MSEED_STR)
-  return stream
+      print("Attempting to read from raw file:", row.name)
+    if not row.name.exists():
+      # TODO: Download the file
+      print("CRITICAL: File not found:", row.name)
+      continue
+    else:
+      stream += obspy.read(row.name)
+  # Clean the stream
+  return clean_stream(stream, dataset_name, FMT_DICT, args)
 
 def classify_stream(categories : tuple, trace_files, model_name : str,
                     dataset_name : str, MODEL : sbm.base.SeisBenchModel,
-                    args : argparse.Namespace, force = False) -> sbu.PickList:
+                    args : argparse.Namespace) -> sbu.PickList:
   """
   Classify the stream based on the specified model and dataset. If 'force' is
   set to True, the classification will be performed regardless of the existence
@@ -474,7 +470,6 @@ def classify_stream(categories : tuple, trace_files, model_name : str,
     - dataset_name  (str)
     - MODEL         (seisbench.models.base.SeisBenchModel)
     - args          (argparse.Namespace)
-    - force         (bool)
 
   output:
     - seisbench.util.PickList
@@ -487,11 +482,14 @@ def classify_stream(categories : tuple, trace_files, model_name : str,
   """
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
+  categories = [str(c) for c in categories]
   CLF_PATH = Path(DATA_PATH, CLF_STR, *categories)
   CLF_PATH.mkdir(parents=True, exist_ok=True)
-  CLF_FILE = Path(CLF_PATH, UNDERSCORE_STR.join([*categories, model_name,
-                                                 dataset_name]) + PICKLE_EXT)
-  if not force and CLF_FILE.is_file():
+  CLF_FILE = \
+    Path(CLF_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+         UNDERSCORE_STR.join([*categories, model_name, dataset_name]) + \
+         PICKLE_EXT)
+  if not args.force and CLF_FILE.is_file():
     if args.verbose:
       print("Found and loading previously classified results:", CLF_FILE)
     with open(CLF_FILE, 'rb') as fr:
@@ -532,8 +530,8 @@ def get_model(model_name : str, dataset_name : str) -> sbm.base.SeisBenchModel:
   try:
     model = MODEL_WEIGHTS_DICT[model_name].from_pretrained(dataset_name)
   except:
-    print(f"WARNING: Pretrained weights {dataset_name} not found for model "
-          f"{model_name}")
+    print(f"WARNING: Pretrained weights '{dataset_name}' not found for model "
+          f"'{model_name}'")
     return None
   # Enable GPU calls if available
   if torch.cuda.is_available(): model.cuda()
