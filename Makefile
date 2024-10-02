@@ -10,6 +10,7 @@ results:
 	cp img/CM_* doc/img/
 	cp img/TD_* doc/img/
 	cp img/TPFN_* doc/img/
+	cp img/TPFNFP_* doc/img/
 
 testing:
 	python -m test.testAdriaArray

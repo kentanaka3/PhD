@@ -34,6 +34,8 @@ import seisbench.generate as sbg
 # TODO: Get Vel Model
 # TODO: Discuss constants.NORM = "peak"
 
+DENOISER = None
+
 def is_date(string : str) -> UTCDateTime:
   return UTCDateTime.strptime(string, DATE_FMT)
 
@@ -300,7 +302,7 @@ def filter_data(data : np.array) -> bool:
   # if np.isnan(trc.data).any() or np.isinf(trc.data).any(): return True
   return filter_data_(data)
 
-def clean_stream(stream : obspy.Stream, dataset_name : str, FMT_DICT : dict,
+def clean_stream(stream : obspy.Stream, FMT_DICT : dict,
                  args : argparse.Namespace) -> obspy.Stream:
   """
   Clean the stream by resampling, merging, removing NaN and Inf values, and
@@ -311,7 +313,6 @@ def clean_stream(stream : obspy.Stream, dataset_name : str, FMT_DICT : dict,
     - stream        (obspy.Stream)
     - FMT_DICT      (dict)
     - args          (argparse.Namespace)
-    - dataset_name  (str)
 
   output:
     - obspy.Stream
@@ -336,12 +337,8 @@ def clean_stream(stream : obspy.Stream, dataset_name : str, FMT_DICT : dict,
                        fill_value=0, nearest_sample=False)
   if args.denoiser:
     if args.verbose: print("Denoising the Stream")
-    denoiser = get_model(DEEPDENOISER_STR, dataset_name)
-    if denoiser is None:
-      print(f"WARNING: {DEEPDENOISER_STR} model using '{ORIGINAL_STR}' "
-             "weights")
-      denoiser = get_model(DEEPDENOISER_STR, ORIGINAL_STR)
-    stream = denoiser.annotate(stream)
+    global DENOISER
+    stream = DENOISER.annotate(stream)
   if args.verbose:
     IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                     PRC_FMT.format(NETWORK=FMT_DICT[NETWORK_STR],
@@ -417,15 +414,13 @@ def read_arguments(args : argparse.Namespace, overwrite = False) -> dict:
   with open(ARGUMENTS_FILE, 'r') as fr:
     return json.load(fr)
 
-def read_traces(trace_files, dataset_name : str, args : argparse.Namespace) \
-  -> obspy.Stream:
+def read_traces(trace_files, args : argparse.Namespace) -> obspy.Stream:
   """
   Read the traces from the specified files and return a clean Stream.
 
   input:
     - trace_files   ()
     - args          (argparse.Namespace)
-    - dataset_name  (str)
 
   output:
     - obspy.Stream
@@ -453,26 +448,20 @@ def read_traces(trace_files, dataset_name : str, args : argparse.Namespace) \
     else:
       stream += obspy.read(row.name)
   # Clean the stream
-  return clean_stream(stream, dataset_name, FMT_DICT, args)
+  return clean_stream(stream, FMT_DICT, args)
 
-def classify_stream(categories : tuple, trace_files, model_name : str,
-                    dataset_name : str, MODEL : sbm.base.SeisBenchModel,
-                    args : argparse.Namespace) -> sbu.PickList:
+def classify_stream(categories : tuple, trace_files,
+                    args : argparse.Namespace) -> None:
   """
-  Classify the stream based on the specified model and dataset. If 'force' is
-  set to True, the classification will be performed regardless of the existence
-  of the file.
+  Classify the stream. If 'force' is set to True, the classification will be
+  performed regardless of the existence of the file.
 
   input:
     - categories    (tuple)
     - trace_files   ()
-    - model_name    (str)
-    - dataset_name  (str)
-    - MODEL         (seisbench.models.base.SeisBenchModel)
     - args          (argparse.Namespace)
 
   output:
-    - seisbench.util.PickList
 
   errors:
     - None
@@ -485,29 +474,37 @@ def classify_stream(categories : tuple, trace_files, model_name : str,
   categories = [str(c) for c in categories]
   CLF_PATH = Path(DATA_PATH, CLF_STR, *categories)
   CLF_PATH.mkdir(parents=True, exist_ok=True)
-  CLF_FILE = \
-    Path(CLF_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-         UNDERSCORE_STR.join([*categories, model_name, dataset_name]) + \
-         PICKLE_EXT)
-  if not args.force and CLF_FILE.is_file():
-    if args.verbose:
-      print("Found and loading previously classified results:", CLF_FILE)
-    with open(CLF_FILE, 'rb') as fr:
-      output = pickle.load(fr)
+  clf_files = \
+    [(Path(CLF_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+           UNDERSCORE_STR.join([*categories, model_name, dataset_name]) + \
+           PICKLE_EXT), model_name, dataset_name)
+     for model_name, dataset_name in itertools.product(args.models,
+                                                       args.weights)]
+  if args.force:
+    clf_found = []
   else:
-    # Read or download all the involved data (waveforms / traces) and the
-    # collection of traces is called a "stream"
-    stream = read_traces(trace_files, dataset_name, args)
+    clf_found = [clf for clf in clf_files if clf[0].is_file()]
+    clf_files = [clf for clf in clf_files if not clf[0].is_file()]
+  if clf_files != []:
+    stream = read_traces(trace_files, args)
     if args.verbose: print("Classifying the Stream")
-    output = MODEL.classify(stream, batch_size=args.batch,
-                            P_threshold=args.pwave,
-                            S_threshold=args.swave).picks
-    with open(CLF_FILE, 'wb') as fp: pickle.dump(output, fp)
-  if args.verbose:
-    print(f"Classification results for model: {model_name}, with preloaded "
-          f"weight: {dataset_name}, categorized by {categories}")
-    print(output)
-  return output
+    for CLF_FILE, model_name, dataset_name in clf_files:
+      MODEL = get_model(model_name, dataset_name)
+      if MODEL is None: continue
+      output = MODEL.classify(stream, batch_size=args.batch,
+                              P_threshold=args.pwave,
+                              S_threshold=args.swave).picks
+      with open(CLF_FILE, 'wb') as fp: pickle.dump(output, fp)
+      if args.verbose:
+        print(f"Classification results for model: {model_name}, with "
+              f"preloaded weight: {dataset_name}, categorized by {categories}")
+        print(output)
+  for CLF_FILE, model_name, dataset_name in clf_found:
+    with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)
+    if args.verbose:
+      print(f"Classification results for model: {model_name}, with "
+            f"preloaded weight: {dataset_name}, categorized by {categories}")
+      print(output)
 
 def get_model(model_name : str, dataset_name : str) -> sbm.base.SeisBenchModel:
   """
@@ -539,6 +536,9 @@ def get_model(model_name : str, dataset_name : str) -> sbm.base.SeisBenchModel:
   return model
 
 def main(args : argparse.Namespace):
+  if args.denoiser:
+    global DENOISER
+    DENOISER = get_model(DEEPDENOISER_STR, ORIGINAL_STR)
   WAVEFORMS_DATA = waveform_table(args)
   if args.train: # Train
     if args.verbose: print("Training the Model")
@@ -547,14 +547,9 @@ def main(args : argparse.Namespace):
     # Save the model
   else: # Test
     if args.verbose: print("Testing the Model")
-    for model_name, dataset_name in list(itertools.product(args.models,
-                                                           args.weights)):
-      MODEL = get_model(model_name, dataset_name)
-      if MODEL is None: continue
-      for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
-        # Classify the Stream
-        output = classify_stream(categories, trace_files, model_name,
-                                 dataset_name, MODEL, args)
+    for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
+      # Classify the Stream
+      classify_stream(categories, trace_files, args)
   return
 
 if __name__ == "__main__": main(parse_arguments())
