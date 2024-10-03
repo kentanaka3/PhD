@@ -6,6 +6,15 @@ SAMPLING_RATE = 100
 
 EPSILON = 1e-6
 
+DENOISER = None
+
+MPI_RANK = 0
+MPI_SIZE = 1
+MPI_COMM = None
+
+GPU_SIZE = 0
+GPU_RANK = -1
+
 NORM = "peak" # "peak" or "std"
 
 # DateTime, TimeDelta and Format constants

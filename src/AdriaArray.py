@@ -18,6 +18,7 @@ import itertools
 import numpy as np
 import numba as nb
 import pandas as pd
+from mpi4py import MPI
 import matplotlib.pyplot as plt
 
 # ObsPy
@@ -33,8 +34,6 @@ import seisbench.generate as sbg
 # TODO: Colab PyOcto associator to be tested with GaMMA
 # TODO: Get Vel Model
 # TODO: Discuss constants.NORM = "peak"
-
-DENOISER = None
 
 def is_date(string : str) -> UTCDateTime:
   return UTCDateTime.strptime(string, DATE_FMT)
@@ -257,7 +256,7 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
       end = start + ONE_DAY
       # We start by assuming the trace file meets all the criterias:
       # (network, station, channel, date range). If the trace file does meet
-      # we save the metadata to the list of files.
+      # we save the metadata to the list of files called the waveform table.
       outcome = True
       # If the user has specified the network different from the wildcard, then
       # we check if the network of the trace file is in the list of networks,
@@ -344,8 +343,7 @@ def clean_stream(stream : obspy.Stream, FMT_DICT : dict,
                     PRC_FMT.format(NETWORK=FMT_DICT[NETWORK_STR],
                                    STATION=FMT_DICT[STATION_STR],
                                    CHANNEL=FMT_DICT[CHANNEL_STR],
-                                   BEGDT=FMT_DICT[BEG_DATE_STR],
-                                   EXT=EPS_STR))
+                                   BEGDT=FMT_DICT[BEG_DATE_STR], EXT=EPS_STR))
     stream.plot(outfile=IMG_FILE, size=(1000, 600), format=EPS_STR, dpi=300)
   return stream
 
@@ -450,7 +448,7 @@ def read_traces(trace_files, args : argparse.Namespace) -> obspy.Stream:
   # Clean the stream
   return clean_stream(stream, FMT_DICT, args)
 
-def classify_stream(categories : tuple, trace_files,
+def classify_stream(categories : tuple, trace_files, MODELS : dict,
                     args : argparse.Namespace) -> None:
   """
   Classify the stream. If 'force' is set to True, the classification will be
@@ -459,6 +457,7 @@ def classify_stream(categories : tuple, trace_files,
   input:
     - categories    (tuple)
     - trace_files   ()
+    - MODELS        (dict)
     - args          (argparse.Namespace)
 
   output:
@@ -478,8 +477,7 @@ def classify_stream(categories : tuple, trace_files,
     [(Path(CLF_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
            UNDERSCORE_STR.join([*categories, model_name, dataset_name]) + \
            PICKLE_EXT), model_name, dataset_name)
-     for model_name, dataset_name in itertools.product(args.models,
-                                                       args.weights)]
+     for model_name, dataset_name in MODELS.keys()]
   if args.force:
     clf_found = []
   else:
@@ -489,7 +487,7 @@ def classify_stream(categories : tuple, trace_files,
     stream = read_traces(trace_files, args)
     if args.verbose: print("Classifying the Stream")
     for CLF_FILE, model_name, dataset_name in clf_files:
-      MODEL = get_model(model_name, dataset_name)
+      MODEL = MODELS[(model_name, dataset_name)]
       if MODEL is None: continue
       output = MODEL.classify(stream, batch_size=args.batch,
                               P_threshold=args.pwave,
@@ -524,6 +522,7 @@ def get_model(model_name : str, dataset_name : str) -> sbm.base.SeisBenchModel:
   notes:
 
   """
+  global GPU_RANK
   try:
     model = MODEL_WEIGHTS_DICT[model_name].from_pretrained(dataset_name)
   except:
@@ -531,11 +530,64 @@ def get_model(model_name : str, dataset_name : str) -> sbm.base.SeisBenchModel:
           f"'{model_name}'")
     return None
   # Enable GPU calls if available
-  if torch.cuda.is_available(): model.cuda()
+  if GPU_RANK >= 0: model.cuda()
   print(model_name, model.weights_docstring)
   return model
 
+def set_up(args : argparse.Namespace) -> dict:
+  """
+  Set up the environment for the pipeline based on the available computational
+  resources.
+
+  input:
+    - args          (argparse.Namespace)
+
+  output:
+    - dict
+
+  errors:
+    - None
+
+  notes:
+
+  """
+  global GPU_SIZE, GPU_RANK
+  GPU_SIZE = torch.cuda.device_count() if torch.cuda.is_available() else 0
+  global MPI_SIZE, MPI_RANK, MPI_COMM
+  MPI_COMM = MPI.COMM_WORLD
+  MPI_SIZE = MPI_COMM.Get_size()
+  MPI_RANK = MPI_COMM.Get_rank()
+  if MPI_RANK < GPU_SIZE: GPU_RANK = MPI_RANK % GPU_SIZE
+  if args.verbose: print(f"Setting MPI {MPI_RANK} to " + \
+                         (f"GPU {GPU_RANK}" if GPU_RANK >= 0 else "CPU"))
+  torch.cuda.set_device(GPU_RANK)
+  MODELS = None
+  if MPI_RANK == 0:
+    if args.verbose:
+      print("MPI size:", MPI_SIZE)
+      print("GPU size:", GPU_SIZE)
+    MODELS = [(model_name, dataset_name)
+              for model_name, dataset_name in itertools.product(args.models,
+                                                                args.weights)
+              if get_model(model_name, dataset_name) is not None]
+  MODELS = MPI_COMM.bcast(MODELS, root=0)
+  # Split the MODELS among the MPI processes
+  num_models = len(MODELS)
+  models_per_process = num_models // MPI_SIZE
+  offset = num_models % MPI_SIZE
+
+  # Determine the start and end indices for each process
+  start_idx = MPI_RANK * models_per_process + min(MPI_RANK, offset)
+  end_idx = start_idx + models_per_process + (1 if MPI_RANK < offset else 0)
+
+  # Assign the models to the current process
+  MODELS = MODELS[start_idx:end_idx]
+  if args.verbose: print(f"Process {MPI_RANK} handles models {MODELS}")
+  return {(model_name, dataset_name) : get_model(model_name, dataset_name)
+          for model_name, dataset_name in MODELS}
+
 def main(args : argparse.Namespace):
+  MODELS = set_up(args)
   if args.denoiser:
     global DENOISER
     DENOISER = get_model(DEEPDENOISER_STR, ORIGINAL_STR)
@@ -549,7 +601,7 @@ def main(args : argparse.Namespace):
     if args.verbose: print("Testing the Model")
     for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
       # Classify the Stream
-      classify_stream(categories, trace_files, args)
+      classify_stream(categories, trace_files, MODELS, args)
   return
 
 if __name__ == "__main__": main(parse_arguments())

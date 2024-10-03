@@ -23,6 +23,14 @@ def main():
           "threads")
   except:
     print("Numba is NOT available")
+  try:
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    size = comm.Get_size()
+    print("MPI is available with rank:", rank, "and size:", size)
+  except:
+    print("MPI is NOT available")
   return
 
 if __name__ == "__main__": main()
