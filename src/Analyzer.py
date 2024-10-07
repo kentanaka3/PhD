@@ -186,11 +186,14 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
             i += 1
             j += 1
           elif sec > 0.0:
-            # Partial False Positive
+            # False Positive
+            fp = [model, weight, station, threshold, P[PHASE_STR],
+                  P[TIMESTAMP_STR], P[PROBABILITY_STR]]
+            FP.append(fp)
             CFN_MTX.loc[NONE_STR, P[PHASE_STR]] += 1
             j += 1
           else:
-            # Partial False Negative
+            # False Negative
             fn = [model, weight, station, threshold, T[PHASE_STR],
                   T[TIMESTAMP_STR], T[WEIGHT_STR]]
             FN.append(fn)
@@ -199,7 +202,7 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
             CFN_MTX.loc[T[PHASE_STR], NONE_STR] += 1
             i += 1
         while i < A:
-          # Partial False Negative
+          # False Negative
           T = TRUE_S.loc[i]
           fn = [model, weight, station, threshold, T[PHASE_STR],
                 T[TIMESTAMP_STR], T[WEIGHT_STR]]
@@ -209,7 +212,7 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
           CFN_MTX.loc[T[PHASE_STR], NONE_STR] += 1
           i += 1
         while j < B:
-          # Partial False Positive
+          # False Positive
           P = PRED_S.loc[j]
           fp = [model, weight, station, threshold, P[PHASE_STR],
                 P[TIMESTAMP_STR], P[PROBABILITY_STR]]

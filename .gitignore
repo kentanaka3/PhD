@@ -10,7 +10,8 @@ doc/Pres/*
 doc/Doc/*
 !doc/Doc/doc.pdf
 !doc/Doc/doc.tex
-!doc/img/*
+!doc/img/*.pdf
+doc/img/*
 doc/Post/*
 !data/classified/*/*/*/*/*/*.pkl
 env/*

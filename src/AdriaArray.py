@@ -108,8 +108,8 @@ def parse_arguments():
                       required=False, help=f"{SWAVE} wave threshold.")
   # TODO: Add verbose LEVEL
   parser.add_argument('-v', "--verbose", default=False, action='store_true')
-  parser.add_argument("--client", default=[INGV_STR], type=str, required=False,
-                      nargs='+', help="Client to download the data")
+  parser.add_argument("--client", default=[OGS_CLIENT_STR], required=False,
+                      type=str, nargs='+', help="Client to download the data")
   parser.add_argument("--denoiser", default=False, action='store_true',
                       required=False,
                       help="Enable Deep Denoiser model to filter the noise "
@@ -117,12 +117,14 @@ def parse_arguments():
   parser.add_argument("--domain", default=[44.5, 47, 10, 14], required=False,
                       metavar=EMPTY_STR, nargs=4, type=float,
                       help="Domain to download the data")
+  parser.add_argument("--download", default=False, action='store_true',
+                      required=False, help="Download the data")
   parser.add_argument("--force", default=False, action='store_true',
                       required=False, help="Force running all the pipeline")
-  parser.add_argument("--timing", default=False, action='store_true',
-                      required=False, help="Enable timing")
   parser.add_argument("--pyrocko", default=False, action='store_true',
                       help="Enable PyRocko calls")
+  parser.add_argument("--timing", default=False, action='store_true',
+                      required=False, help="Enable timing")
   return parser.parse_args()
 
 def data_downloader(args : argparse.Namespace) -> None:
@@ -143,6 +145,10 @@ def data_downloader(args : argparse.Namespace) -> None:
   notes:
 
   """
+  global DATA_PATH
+  DATA_PATH = Path(args.directory).parent
+  if args.verbose:
+    print("Downloading the Data to the directory:", args.directory)
   if args.pyrocko:
     # We enable the option to use the PyRocko module to download the data as it
     # is more efficient than the ObsPy module by multithreading the download.
@@ -157,15 +163,16 @@ def data_downloader(args : argparse.Namespace) -> None:
                                minlongitude=args.domain[2],
                                maxlongitude=args.domain[3])
     restrictions = Restrictions(starttime=args.dates[0], endtime=args.dates[1],
-                                channel_priorities=args.channel,
-                                network=args.network, station=args.station)
-    for client in args.client:
-      cl = Client(client)
+                                network=args.network, station=args.station,
+                                channel_priorities=args.channel)
+    CLIENTS = [Client(client) for client in args.client]
+    if args.key:
       # NOTE: It is assumed that a single token file is applicable for all
       #       clients
-      cl.set_eida_token(args.key, validate=True)
-      mdl = MassDownloader(providers=[cl])
-      mdl.download(domain, restrictions, mseed_storage=args.directory)
+      for cl in CLIENTS: cl.set_eida_token(args.key, validate=True)
+    mdl = MassDownloader(providers=CLIENTS)
+    mdl.download(domain, restrictions, mseed_storage=args.directory,
+                 stationxml_storage=Path(DATA_PATH, STATION_STR))
 
 def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
   """
@@ -239,13 +246,12 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
       DATAFRAME[BEG_DATE_STR] = DATAFRAME[BEG_DATE_STR].apply(str)
       DATAFRAME.set_index(FILENAME_STR, inplace=True)
       return DATAFRAME
-  if args.verbose:
-    print("Constructing the Table of Files")
-  if args.key is not None:
-    # If a key is provided, we download the data from the server and construct
-    # the table of files based on the specified arguments.
+  if args.download or args.key is not None:
+    # We download the data from the server and construct the table of files 
+    # based on the specified arguments.
     data_downloader(args)
   # Construct the table of files based on the specified arguments
+  if args.verbose: print("Constructing the Table of Files")
   for trc_file in args.directory.iterdir():
     fr = Path(args.directory, trc_file)
     if fr.is_file():
@@ -285,10 +291,13 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
        were found in the specified directory: {args.directory}""")
     if args.key is None:
       print("HINT: If you want to download the data from the server, please "
-            "specify a key file with the argument \"--key\" <key>.")
+            "specify the download option \"--download\" or provide a key file "
+            "with the argument \"--key\" <key> for the specified client with "
+            "the argument \"--client\" <client>")
     raise FileNotFoundError
   WAVEFORMS_DATA = \
     pd.DataFrame(WAVEFORMS_DATA, columns=HEADER).set_index(FILENAME_STR)
+  WAVEFORMS_DATA.sort_values(by=[BEG_DATE_STR, FILENAME_STR], inplace=True)
   WAVEFORMS_DATA.to_csv(WAVEFORMS_FILE)
   return WAVEFORMS_DATA
 
