@@ -119,6 +119,8 @@ def parse_arguments():
                       help="Domain to download the data")
   parser.add_argument("--force", default=False, action='store_true',
                       required=False, help="Force running all the pipeline")
+  parser.add_argument("--timing", default=False, action='store_true',
+                      required=False, help="Enable timing")
   parser.add_argument("--pyrocko", default=False, action='store_true',
                       help="Enable PyRocko calls")
   return parser.parse_args()
@@ -219,7 +221,7 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
   WAVEFORMS_DATA = list()
   WAVEFORMS_FILE = Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT)
   ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
-  if not ARGUMENTS_FILE.exists() or \
+  if args.force or not ARGUMENTS_FILE.exists() or \
      read_arguments(args) != primary_arguments(args):
     # If the arguments file does not exist or the arguments are different from
     # the ones in the JSON file, we save the arguments to the JSON file and
@@ -271,7 +273,7 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
       if outcome:
         WAVEFORMS_DATA.append([fr, trc.network, trc.station, trc.channel,
                                UTCDateTime.strftime(start, DATE_FMT)])
-  if WAVEFORMS_DATA == []:
+  if not WAVEFORMS_DATA:
     # If no files were found in the specified directory, return an error
     # message and exit the program.
     print(
@@ -437,8 +439,7 @@ def read_traces(trace_files, args : argparse.Namespace) -> obspy.Stream:
   for category in args.groups:
     FMT_DICT[category] = trace_files[category].unique()[0]
   for _, row in trace_files.iterrows():
-    if args.verbose:
-      print("Attempting to read from raw file:", row.name)
+    if args.verbose: print("Attempting to read from raw file:", row.name)
     if not row.name.exists():
       # TODO: Download the file
       print("CRITICAL: File not found:", row.name)
@@ -483,7 +484,7 @@ def classify_stream(categories : tuple, trace_files, MODELS : dict,
   else:
     clf_found = [clf for clf in clf_files if clf[0].is_file()]
     clf_files = [clf for clf in clf_files if not clf[0].is_file()]
-  if clf_files != []:
+  if clf_files:
     stream = read_traces(trace_files, args)
     if args.verbose: print("Classifying the Stream")
     for CLF_FILE, model_name, dataset_name in clf_files:
@@ -562,36 +563,36 @@ def set_up(args : argparse.Namespace) -> dict:
                          (f"GPU {GPU_RANK}" if GPU_RANK >= 0 else "CPU"))
   torch.cuda.set_device(GPU_RANK)
   MODELS = None
+  WAVEFORMS_DATA = None
   if MPI_RANK == 0:
     if args.verbose:
       print("MPI size:", MPI_SIZE)
       print("GPU size:", GPU_SIZE)
-    MODELS = [(model_name, dataset_name)
-              for model_name, dataset_name in itertools.product(args.models,
-                                                                args.weights)
-              if get_model(model_name, dataset_name) is not None]
+    MODELS = [(m, w) for m, w in itertools.product(args.models, args.weights)
+              if get_model(m, w) is not None]
+    WAVEFORMS_DATA = waveform_table(args)
   MODELS = MPI_COMM.bcast(MODELS, root=0)
+  WAVEFORMS_DATA = MPI_COMM.bcast(WAVEFORMS_DATA, root=0)
   # Split the MODELS among the MPI processes
   num_models = len(MODELS)
-  models_per_process = num_models // MPI_SIZE
-  offset = num_models % MPI_SIZE
+  models_idx = num_models // MPI_SIZE
+  rest_idx = num_models % MPI_SIZE
 
   # Determine the start and end indices for each process
-  start_idx = MPI_RANK * models_per_process + min(MPI_RANK, offset)
-  end_idx = start_idx + models_per_process + (1 if MPI_RANK < offset else 0)
+  start_idx = MPI_RANK * models_idx + min(MPI_RANK, rest_idx)
+  end_idx = start_idx + models_idx + (1 if MPI_RANK < rest_idx else 0)
 
   # Assign the models to the current process
   MODELS = MODELS[start_idx:end_idx]
   if args.verbose: print(f"Process {MPI_RANK} handles models {MODELS}")
   return {(model_name, dataset_name) : get_model(model_name, dataset_name)
-          for model_name, dataset_name in MODELS}
+          for model_name, dataset_name in MODELS}, WAVEFORMS_DATA
 
 def main(args : argparse.Namespace):
-  MODELS = set_up(args)
+  MODELS, WAVEFORMS_DATA = set_up(args)
   if args.denoiser:
     global DENOISER
     DENOISER = get_model(DEEPDENOISER_STR, ORIGINAL_STR)
-  WAVEFORMS_DATA = waveform_table(args)
   if args.train: # Train
     if args.verbose: print("Training the Model")
     # Generate a Dataset
@@ -599,9 +600,30 @@ def main(args : argparse.Namespace):
     # Save the model
   else: # Test
     if args.verbose: print("Testing the Model")
+    if args.timing:
+      TIMING = np.zeros(len(WAVEFORMS_DATA.groupby(args.groups)))
+      i = 0
     for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
+      if args.timing: start_time = MPI.Wtime()
       # Classify the Stream
       classify_stream(categories, trace_files, MODELS, args)
+      if args.timing:
+        TIMING[i] = MPI.Wtime() - start_time
+        i += 1
+      torch.cuda.empty_cache()
+    if args.timing:
+      global MPI_COMM, MPI_RANK, MPI_SIZE
+      TOTALS = np.zeros_like(TIMING)
+      MPI_COMM.Reduce([TIMING, MPI.DOUBLE], [TOTALS, MPI.DOUBLE], op=MPI.SUM,
+                      root=0)
+      TOTALS = TOTALS / MPI_SIZE
+      if MPI_RANK == 0:
+        print(f"  Total time: {sum(TOTALS):.2f} s")
+        print(f"Average time: {np.mean(TOTALS):.2f} s")
+        print(f"    Variance: {np.var(TOTALS):.2f} s")
+        print(f"Maximum time: {np.max(TOTALS):.2f} s")
+        print(f"Minimum time: {np.min(TOTALS):.2f} s")
+        print(f" Median time: {np.median(TOTALS):.2f} s")
   return
 
 if __name__ == "__main__": main(parse_arguments())
