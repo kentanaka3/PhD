@@ -10,7 +10,7 @@
     "scedc"
   ],
   "NETWORK": null,
-  "STATION": null,
+  "station": null,
   "CHANNEL": null,
   "BEGDT": [
     "2023-06-01T00:00:00.000000Z",
@@ -19,7 +19,7 @@
   "GROUPS": [
     "BEGDT",
     "NETWORK",
-    "STATION"
+    "station"
   ],
   "DIRECTORY": "/Users/admin/Desktop/Monica/PhD/data/test/waveforms",
   "P": 0.2,
@@ -33,6 +33,6 @@
     14
   ],
   "CLIENT": [
-    "INGV"
+    "http://158.110.30.217:8080"
   ]
 }

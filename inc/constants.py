@@ -1,6 +1,9 @@
 import re
+from collections import deque
 import seisbench.models as sbm
 from datetime import timedelta as td
+
+STREAM_STACK = deque()
 
 SAMPLING_RATE = 100
 
@@ -33,6 +36,7 @@ SPACE_STR = ' '
 COMMA_STR = ','
 NONE_STR = "None"
 CLF_STR = "classified"
+FILE_STR = "file"
 
 TRUE_STR = "TRUE"
 PRED_STR = "PRED"

@@ -8,6 +8,7 @@ DATA_PATH = os.path.join(PRJ_PATH, "data")
 import sys
 # Add to path
 if INC_PATH not in sys.path: sys.path.append(INC_PATH)
+import copy
 import pickle
 import argparse
 import itertools
@@ -24,11 +25,28 @@ import AdriaArray as AA
 
 def read_data(path : str):
   # Load the data
-  with open(Path(path), 'rb') as f:
-    data = pickle.load(f)
+  with open(Path(path), 'rb') as f: data = pickle.load(f)
   return data
 
 def load_data(args : argparse.Namespace) -> pd.DataFrame:
+  """
+  input  :
+    - args          (argparse.Namespace)
+
+  output :
+    - pd.DataFrame
+
+  errors :
+    - FileNotFoundError
+    - AttributeError
+
+  notes  :
+    | MODEL | WEIGHT | TIMESTAMP | NETWORK | STATION | PHASE | PROBABILITY |
+    ------------------------------------------------------------------------
+
+    The data is loaded from the directory given in the arguments. The data is
+    then sorted by the timestamp and returned as a pandas DataFrame.
+  """
   global DATA_PATH
   DATA_PATH  = Path(args.directory).parent
   CLF_PATH = Path(DATA_PATH, CLF_STR)
@@ -36,51 +54,91 @@ def load_data(args : argparse.Namespace) -> pd.DataFrame:
   HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR,
             PHASE_STR, PROBABILITY_STR]
   start, end = args.dates
+  z = [round(t, 2) for t in np.linspace(0.2, 1.0, 9)]
   for model in args.models:
     for weight in args.weights:
-      for date in CLF_PATH.iterdir():
+      for date_path in CLF_PATH.iterdir():
+        HIST = []
+        date = date_path.name
         date_obj = UTCDateTime.strptime(date, DATE_FMT)
         if date_obj < start or date_obj > end: continue
-        for network in Path(CLF_PATH, date).iterdir():
-          for station in Path(CLF_PATH, date, network).iterdir():
-            f = Path(CLF_PATH, date, network, station,
-                     ("D_" if args.denoiser else EMPTY_STR) + \
+        for network_path in date_path.iterdir():
+          network = network_path.name
+          for station_path in network_path.iterdir():
+            station = station_path.name
+            f = Path(station_path, ("D_" if args.denoiser else EMPTY_STR) + \
                      UNDERSCORE_STR.join([date, network, station, model,
                                           weight]) + PICKLE_EXT)
-            for p in read_data(f):
-              DATA.append([model, weight, p.peak_time, network, station,
-                           p.phase, p.peak_value])
+            PICKS = [[model, weight, p.peak_time, network, station, p.phase,
+                      p.peak_value] for p in read_data(f)]
+            DATA += PICKS
+            PICKS = pd.DataFrame(PICKS, columns=HEADER)
+            w = [len(PICKS[(PICKS[PROBABILITY_STR] >= a) &
+                           (PICKS[PROBABILITY_STR] < b)].index)
+                 for a, b in zip(z[:-1], z[1:])]
+            HIST.append([station_path.__str__(), *w])
+        HIST = pd.DataFrame(HIST, columns=[FILE_STR, *z[:-1]])\
+                 .set_index(FILE_STR).sort_values(z[:-1], ascending=False)
+        IMG_FILE = \
+          Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+               UNDERSCORE_STR.join(["HIST", model, weight, date]) + PNG_EXT)
+        HIST.plot(kind='bar', stacked=True)
+        plt.savefig(IMG_FILE)
+        plt.close()
   return pd.DataFrame(DATA, columns=HEADER).sort_values(TIMESTAMP_STR)\
                                            .reset_index(drop=True)
 
-def plot_data(DATA : pd.DataFrame, args : argparse.Namespace, phase = PWAVE) \
-    -> None:
+def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
+              args : argparse.Namespace, phase = PWAVE) -> None:
+  """
+  input  :
+    - TRUE          (pd.DataFrame)
+    - PRED          (pd.DataFrame)
+    - args          (argparse.Namespace)
+    - phase         (str)
+
+  output :
+    - None
+
+  errors :
+    - AttributeError
+
+  notes  :
+    The data is plotted for each model and weight. The plots are saved in the
+    img directory.
+  """
   MSG = f"Cumulative number of {phase} picks"
   if args.verbose: print(MSG)
   start, end = args.dates
-  DATA = DATA[(DATA[PHASE_STR] == phase) & (DATA[TIMESTAMP_STR] >= start)]
+  PRED = PRED[(PRED[PHASE_STR] == phase) & (PRED[TIMESTAMP_STR] >= start)]
+  TRUE = TRUE[(TRUE[PHASE_STR] == phase)].reset_index(drop=True)
   x = [start]
   while x[-1] <= end: x.append(x[-1] + ONE_DAY)
   z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
-  for model, dataframe in DATA.groupby(MODEL_STR):
+
+  y_true = [len(TRUE[TRUE[TIMESTAMP_STR] <= d].index) for d in x]
+
+  for model, dataframe in PRED.groupby(MODEL_STR):
     _, _axs = plt.subplots(2, 2, figsize=(10, 10))
     axs = _axs.flatten()
     plt.suptitle(model, fontsize=16)
-    axs[0].set(xticklabels=[], xlabel=None, ylabel=MSG, yscale="log")
-    axs[1].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None,
-               yscale="log")
-    axs[2].set(xlabel="Date", ylabel=MSG, yscale="log")
-    axs[3].set(xlabel="Date", yticklabels=[], ylabel=None, yscale="log")
+    axs[0].set(xticklabels=[], xlabel=None, ylabel=MSG)
+    axs[1].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None)
+    axs[2].set(xlabel="Date", ylabel=MSG)
+    axs[3].set(xlabel="Date", yticklabels=[], ylabel=None)
     y_max = 0
     for i, (weight, data) in enumerate(dataframe.groupby(WEIGHT_STR)):
       axs[i].set_title(weight)
       for threshold in z:
-        y = [data[(data[PROBABILITY_STR] >= threshold) &
-                  (data[TIMESTAMP_STR] <= d)].size for d in x]
+        y = [len(data[(data[PROBABILITY_STR] >= threshold) &
+                      (data[TIMESTAMP_STR] <= d)].index) for d in x]
         axs[i].plot([np.datetime64(t.datetime) for t in x], y, label=threshold)
         y_max = max(y_max, max(y))
+      axs[i].plot([np.datetime64(t.datetime) for t in x], y_true, label="True",
+                  color="k")
+      y_max = max(y_max, max(y_true))
     for ax in axs:
-      ax.set_ylim(0, y_max)
+      ax.set(xlim=(x[0], x[-1]), ylim=(1, y_max), yscale="log")
       ax.grid()
       ax.legend()
     axs[2].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
@@ -98,7 +156,7 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace, phase = PWAVE) \
     if args.verbose: print(f"Saving {IMG_FILE}")
 
   for (model, network, station), dataframe in \
-    DATA.groupby([MODEL_STR, NETWORK_STR, STATION_STR]):
+    PRED.groupby([MODEL_STR, NETWORK_STR, STATION_STR]):
     _, _axs = plt.subplots(2, 2, figsize=(10, 10))
     axs = _axs.flatten()
     plt.suptitle(SPACE_STR.join([model, network, station]), fontsize=16)
@@ -110,8 +168,8 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace, phase = PWAVE) \
     for i, (weight, data) in enumerate(dataframe.groupby(WEIGHT_STR)):
       axs[i].set_title(weight)
       for threshold in z:
-        y = [data[(data[PROBABILITY_STR] >= threshold) &
-                  (data[TIMESTAMP_STR] <= d)].size for d in x]
+        y = [len(data[(data[PROBABILITY_STR] >= threshold) &
+                      (data[TIMESTAMP_STR] <= d)].index) for d in x]
         axs[i].plot([np.datetime64(t.datetime) for t in x], y, label=threshold)
         y_max = max(y_max, max(y))
     for ax in axs:
@@ -134,22 +192,27 @@ def plot_data(DATA : pd.DataFrame, args : argparse.Namespace, phase = PWAVE) \
     if args.verbose: print(f"Saving {IMG_FILE}")
 
 def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
-             args : argparse.Namespace):
+             args : argparse.Namespace) -> pd.DataFrame:
+  """
+  input  :
+    - TRUE          (pd.DataFrame)
+    - PRED          (pd.DataFrame)
+    - args          (argparse.Namespace)
+
+  output :
+    - pd.DataFrame
+
+  errors :
+    - AttributeError
+
+  notes  :
+    | MODEL | WEIGHT | STATION | THRESHOLD | PHASE | TIMESTAMP | TYPE |
+    -------------------------------------------------------------------
+  """
   if args.verbose: print("Computing the Confusion Matrix")
-  stations = args.station if (args.station is not None and
-                              args.station != ALL_WILDCHAR_STR) else \
-             PRED[STATION_STR].unique()
   start, end = args.dates
   N_seconds = int((end - start) / (2 * PICK_OFFSET.total_seconds()))
-  TRUE = TRUE[(TRUE[TIMESTAMP_STR] >= start) & (TRUE[TIMESTAMP_STR] <= end) & \
-              TRUE[STATION_STR].isin(stations)]
-  TRUE = TRUE[[STATION_STR, TIMESTAMP_STR, PHASE_STR, WEIGHT_STR]]
-  if args.verbose:
-    TRUE.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
   z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
-  PRED = PRED[PRED[STATION_STR].isin(stations)]
-  if args.verbose:
-    PRED.to_csv(Path(DATA_PATH, PRED_STR + CSV_EXT), index=False)
   TP = []
   FN = []
   FP = []
@@ -173,27 +236,26 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
           T = TRUE_S.loc[i]
           P = PRED_S.loc[j]
           sec = T[TIMESTAMP_STR] - P[TIMESTAMP_STR]
+          # True Positive
           if td(seconds=abs(sec)) <= PICK_OFFSET:
             tp = [model, weight, station, threshold, P[PHASE_STR],
                   (T[TIMESTAMP_STR], P[TIMESTAMP_STR]), T[WEIGHT_STR]]
-            if T[PHASE_STR] == P[PHASE_STR]:
-              # Complete True Positive
-              TP.append(tp)
-            else:
-              # Partial True Positive
-              print(f"WARNING: Encountered partial TP", tp)
+            # Complete True Positive
+            if T[PHASE_STR] == P[PHASE_STR]: TP.append(tp)
+            # Partial True Positive
+            else: print(f"WARNING: Encountered partial TP", tp)
             CFN_MTX.loc[T[PHASE_STR], P[PHASE_STR]] += 1
             i += 1
             j += 1
+          # False Positive
           elif sec > 0.0:
-            # False Positive
             fp = [model, weight, station, threshold, P[PHASE_STR],
                   P[TIMESTAMP_STR], P[PROBABILITY_STR]]
             FP.append(fp)
             CFN_MTX.loc[NONE_STR, P[PHASE_STR]] += 1
             j += 1
+          # False Negative
           else:
-            # False Negative
             fn = [model, weight, station, threshold, T[PHASE_STR],
                   T[TIMESTAMP_STR], T[WEIGHT_STR]]
             FN.append(fn)
@@ -201,8 +263,8 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
               print(f"WARNING: Missing prediction by", fn)
             CFN_MTX.loc[T[PHASE_STR], NONE_STR] += 1
             i += 1
+        # False Negative
         while i < A:
-          # False Negative
           T = TRUE_S.loc[i]
           fn = [model, weight, station, threshold, T[PHASE_STR],
                 T[TIMESTAMP_STR], T[WEIGHT_STR]]
@@ -211,8 +273,8 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
             print(f"WARNING: Missing prediction by", fn)
           CFN_MTX.loc[T[PHASE_STR], NONE_STR] += 1
           i += 1
+        # False Positive
         while j < B:
-          # False Positive
           P = PRED_S.loc[j]
           fp = [model, weight, station, threshold, P[PHASE_STR],
                 P[TIMESTAMP_STR], P[PROBABILITY_STR]]
@@ -375,10 +437,12 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     plt.savefig(IMG_FILE)
   return TP
 
-def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
+def event_parser(filename : Path, stations : list, args : argparse.Namespace) \
+      -> pd.DataFrame:
   """
   input  :
     - filename      (Path)
+    - stations      (list)
     - args          (argparse.Namespace)
 
   output :
@@ -409,10 +473,11 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
       print(f"ERROR: {CLF_PATH} does not exist")
       raise FileNotFoundError
     WAVEFORMS = []
-    for date in CLF_PATH.iterdir():
-      for network in Path(CLF_PATH, date).iterdir():
-        for station in Path(CLF_PATH, date, network).iterdir():
-          WAVEFORMS.append([date, station])
+    for date_path in CLF_PATH.iterdir():
+      date = date_path.name
+      for network_path in date_path.iterdir():
+        for station_path in network_path.iterdir():
+          WAVEFORMS.append([date, station_path.name])
     WAVEFORMS = pd.DataFrame(WAVEFORMS, columns=[BEG_DATE_STR, STATION_STR])
   WAVEFORMS[BEG_DATE_STR] = \
     WAVEFORMS[BEG_DATE_STR].apply(lambda x: UTCDateTime.strptime(x, DATE_FMT))
@@ -452,10 +517,31 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
         DATA.append([event, result[STATION_STR].strip(SPACE_STR), SWAVE,
                      result[S_TIME_STR], result[S_WEIGHT_STR]])
   # We sort the values by the Primary wave arrival time
-  return pd.DataFrame(DATA, columns=HEADER).sort_values(TIMESTAMP_STR)
+  DATA = pd.DataFrame(DATA, columns=HEADER).sort_values(TIMESTAMP_STR)
+  start, end = args.dates
+  DATA = DATA[(DATA[TIMESTAMP_STR] >= start) &
+              (DATA[TIMESTAMP_STR] < end + ONE_DAY) & \
+              DATA[STATION_STR].isin(stations)]
+  return DATA
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
                       phase = PWAVE) -> None:
+  """
+  input  :
+    - DATA          (pd.DataFrame)
+    - args          (argparse.Namespace)
+    - phase         (str)
+
+  output :
+    - None
+
+  errors :
+    - AttributeError
+
+  notes  :
+    | MODEL | WEIGHT | PHASE | THRESHOLD | TIMESTAMP |
+    --------------------------------------------------
+  """
   DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].map(lambda x: x[0] - x[1])
   bins = np.linspace(-0.5, 0.5, 21, endpoint=True)
   z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
@@ -494,9 +580,15 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
 
 def main(args : argparse.Namespace):
   PRED = load_data(args)
-  plot_data(PRED, args)
-  TRUE = event_parser(Path(DATA_PATH, "manual", "manual.dat"), args)
-  TP = conf_mtx(TRUE, PRED, args)
+  stations = args.station if (args.station is not None and
+                              args.station != ALL_WILDCHAR_STR) else \
+             PRED[STATION_STR].unique()
+  TRUE = event_parser(Path(DATA_PATH, "manual", "manual.dat"), stations, args)
+  if args.verbose:
+    TRUE.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
+    PRED.to_csv(Path(DATA_PATH, PRED_STR + CSV_EXT), index=False)
+  plot_data(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
+  TP = conf_mtx(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
   time_displacement(TP, args)
 
 if __name__ == "__main__": main(AA.parse_arguments())
