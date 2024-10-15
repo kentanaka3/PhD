@@ -76,13 +76,15 @@ def load_data(args : argparse.Namespace) -> pd.DataFrame:
             w = [len(PICKS[(PICKS[PROBABILITY_STR] >= a) &
                            (PICKS[PROBABILITY_STR] < b)].index)
                  for a, b in zip(z[:-1], z[1:])]
-            HIST.append([station_path.__str__(), *w])
+            HIST.append([station_path.relative_to(date_path).__str__(), *w])
         HIST = pd.DataFrame(HIST, columns=[FILE_STR, *z[:-1]])\
                  .set_index(FILE_STR).sort_values(z[:-1], ascending=False)
         IMG_FILE = \
           Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                UNDERSCORE_STR.join(["HIST", model, weight, date]) + PNG_EXT)
-        HIST.plot(kind='bar', stacked=True)
+        HIST.plot(kind='bar', stacked=True, figsize=(20, 7))
+        plt.title(SPACE_STR.join([model, weight, date]))
+        plt.tight_layout()
         plt.savefig(IMG_FILE)
         plt.close()
   return pd.DataFrame(DATA, columns=HEADER).sort_values(TIMESTAMP_STR)\

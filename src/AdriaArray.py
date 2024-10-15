@@ -106,25 +106,41 @@ def parse_arguments():
                       required=False, help=f"{PWAVE} wave threshold.")
   parser.add_argument('-s', "--swave", default=SWAVE_THRESHOLD, type=float,
                       required=False, help=f"{SWAVE} wave threshold.")
-  # TODO: Add verbose LEVEL
-  parser.add_argument('-v', "--verbose", default=False, action='store_true')
   parser.add_argument("--client", default=[OGS_CLIENT_STR], required=False,
                       type=str, nargs='+', help="Client to download the data")
   parser.add_argument("--denoiser", default=False, action='store_true',
                       required=False,
                       help="Enable Deep Denoiser model to filter the noise "
                            "previous to run the Machine Learning base model")
-  parser.add_argument("--domain", default=[44.5, 47, 10, 14], required=False,
-                      metavar=EMPTY_STR, nargs=4, type=float,
-                      help="Domain to download the data")
   parser.add_argument("--download", default=False, action='store_true',
                       required=False, help="Download the data")
+  parser.add_argument("--interactive", default=False, action='store_true',
+                      required=False, help="Interactive mode")
   parser.add_argument("--force", default=False, action='store_true',
                       required=False, help="Force running all the pipeline")
   parser.add_argument("--pyrocko", default=False, action='store_true',
                       help="Enable PyRocko calls")
   parser.add_argument("--timing", default=False, action='store_true',
                       required=False, help="Enable timing")
+  domain_group = parser.add_mutually_exclusive_group(required=False)
+  domain_group.add_argument("--rectdomain", default=None, type=float, nargs=4,
+                            metavar=('min_lat', 'max_lat', 'min_lon',
+                                     'max_lon'),
+                            help="Rectangular domain to download the data: "
+                                 "[minimum latitude] [maximum latitude] "
+                                 "[minimum longitude] [maximum longitude]")
+  domain_group.add_argument("--circdomain", nargs=4, type=float,
+                            default=[46.3583, 12.808, 0., 0.3],
+                            metavar=('lat', 'lon', 'min_rad', 'max_rad'),
+                            help="Circular domain to download the data: "
+                                 "[latitude] [longitude] [minimum radius] "
+                                 "[maximum radius]")
+  verbal_group = parser.add_mutually_exclusive_group(required=False)
+  verbal_group.add_argument("--silent", default=False, action='store_true',
+                            help="Silent mode")
+  # TODO: Add verbose LEVEL
+  verbal_group.add_argument("-v", "--verbose", default=False,
+                            action='store_true', help="Verbose mode")
   return parser.parse_args()
 
 def data_downloader(args : argparse.Namespace) -> None:
@@ -156,23 +172,36 @@ def data_downloader(args : argparse.Namespace) -> None:
 
   else:
     from obspy.clients.fdsn import Client
-    from obspy.clients.fdsn.mass_downloader import \
-      RectangularDomain, Restrictions, MassDownloader
-    domain = RectangularDomain(minlatitude=args.domain[0],
-                               maxlatitude=args.domain[1],
-                               minlongitude=args.domain[2],
-                               maxlongitude=args.domain[3])
-    restrictions = Restrictions(starttime=args.dates[0], endtime=args.dates[1],
-                                network=args.network, station=args.station,
-                                channel_priorities=args.channel)
     CLIENTS = [Client(client) for client in args.client]
+    if args.rectdomain:
+      from obspy.clients.fdsn.mass_downloader.domain import RectangularDomain
+      domain = RectangularDomain(minlatitude=args.rectdomain[0],
+                                 maxlatitude=args.rectdomain[1],
+                                 minlongitude=args.rectdomain[2],
+                                 maxlongitude=args.rectdomain[3])
+    else:
+      from obspy.clients.fdsn.mass_downloader.domain import CircularDomain
+      domain = CircularDomain(latitude=args.circdomain[0],
+                              longitude=args.circdomain[1],
+                              minradius=args.circdomain[2],
+                              maxradius=args.circdomain[3])
+    from obspy.clients.fdsn.mass_downloader import Restrictions, MassDownloader
+    restrictions = Restrictions(starttime=args.dates[0], endtime=args.dates[1],
+                                network=COMMA_STR.join(args.network),
+                                station=COMMA_STR.join(args.station),
+                                channel_priorities=["HH[ZNE]", "EH[ZNE]",
+                                                    "HN[ZNE]", "HG[ZNE]"],
+                                reject_channels_with_gaps=False,
+                                minimum_length=0.0,
+                                minimum_interstation_distance_in_m=100.0,
+                                location_priorities=["", "00", "10"],
+                                chunklength_in_sec=86400)
     if args.key:
-      # NOTE: It is assumed that a single token file is applicable for all
-      #       clients
+      # NOTE: It is assumed a single token file is applicable for all clients
       for cl in CLIENTS: cl.set_eida_token(args.key, validate=True)
     mdl = MassDownloader(providers=CLIENTS)
-    mdl.download(domain, restrictions, mseed_storage=args.directory,
-                 stationxml_storage=Path(DATA_PATH, STATION_STR))
+    mdl.download(domain, restrictions, mseed_storage=args.directory.__str__(),
+                 stationxml_storage=Path(DATA_PATH, STATION_STR).__str__())
 
 def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
   """
@@ -269,21 +298,20 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
       # If the user has specified the network different from the wildcard, then
       # we check if the network of the trace file is in the list of networks,
       # otherwise we assume the user wants to analyze all downloaded networks.
-      if args.network and args.network != ALL_WILDCHAR_STR:
+      if args.network and args.network != [ALL_WILDCHAR_STR]:
         outcome = outcome and any([n == trc.network for n in args.network])
-      if args.station and args.station != ALL_WILDCHAR_STR and outcome:
+      if args.station and args.station != [ALL_WILDCHAR_STR] and outcome:
         outcome = outcome and any([n == trc.station for n in args.station])
-      if args.channel and args.channel != ALL_WILDCHAR_STR and outcome:
+      if args.channel and args.channel != [ALL_WILDCHAR_STR] and outcome:
         outcome = outcome and any([n == trc.channel for n in args.channel])
       outcome = outcome and (args.dates[0] <= start and end <= args.dates[1])
       if outcome:
         WAVEFORMS_DATA.append([fr, trc.network, trc.station, trc.channel,
                                UTCDateTime.strftime(start, DATE_FMT)])
-  if not WAVEFORMS_DATA:
+  if not WAVEFORMS_DATA and not args.silent:
     # If no files were found in the specified directory, return an error
     # message and exit the program.
-    print(
-      f"""FATAL: No files which meet the following criteria:
+    print(f"""FATAL: No files which meet the following criteria:
          --network {args.network}
          --station {args.station}
          --channel {args.channel}
@@ -387,7 +415,7 @@ def primary_arguments(args : argparse.Namespace) -> dict:
     SWAVE         : args.swave,
     JULIAN_STR    : args.julian,
     DENOISER_STR  : args.denoiser,
-    DOMAIN_STR    : args.domain,
+    DOMAIN_STR    : args.rectdomain if args.rectdomain else args.circdomain,
     CLIENT_STR    : args.client
   }
 
@@ -416,7 +444,7 @@ def read_arguments(args : argparse.Namespace, overwrite = False) -> dict:
     # Save the arguments to a JSON file
     with open(ARGUMENTS_FILE, 'w') as fw:
       json.dump(primary_arguments(args), fw, indent=2)
-  if not ARGUMENTS_FILE.exists():
+  if not ARGUMENTS_FILE.exists() and not args.silent:
     print("FATAL: Arguments file not found:", ARGUMENTS_FILE)
     raise FileNotFoundError
   # Read the arguments from the JSON file
@@ -449,7 +477,7 @@ def read_traces(trace_files, args : argparse.Namespace) -> obspy.Stream:
     FMT_DICT[category] = trace_files[category].unique()[0]
   for _, row in trace_files.iterrows():
     if args.verbose: print("Attempting to read from raw file:", row.name)
-    if not row.name.exists():
+    if not row.name.exists() and not args.silent:
       # TODO: Download the file
       print("CRITICAL: File not found:", row.name)
       continue
@@ -457,6 +485,33 @@ def read_traces(trace_files, args : argparse.Namespace) -> obspy.Stream:
       stream += obspy.read(row.name)
   # Clean the stream
   return clean_stream(stream, FMT_DICT, args)
+
+def interactive_plot(stream : obspy.Stream, picks : sbu.PickList,
+                     model_name : str, dataset_name) -> None:
+  """
+  Plot the Stream with the picks on the Stream.
+
+  input:
+    - stream        (obspy.Stream)
+    - picks         (seisbench.util.PickList)
+    - model_name    (str)
+    - dataset_name  (str)
+
+  output:
+
+  errors:
+    - None
+
+  notes:
+
+  """
+  events = [(np.datetime64(pick.peak_time), pick.peak_value,
+             ('b' if pick.phase == PWAVE else 'r')) for pick in picks]
+  fig = stream.plot(handle=True, method='full')
+  fig.suptitle(SPACE_STR.join([fig.get_suptitle(), model_name, dataset_name]))
+  for ax in fig.get_axes():
+    for p, a, c in events: ax.axvline(p, linestyle='--', color=c, alpha=a)
+  plt.show(block=False)
 
 def classify_stream(categories : tuple, trace_files, MODELS : dict,
                     args : argparse.Namespace) -> None:
@@ -502,19 +557,28 @@ def classify_stream(categories : tuple, trace_files, MODELS : dict,
       output = MODEL.classify(stream, batch_size=args.batch,
                               P_threshold=args.pwave,
                               S_threshold=args.swave).picks
+      THRESHOLD_DICT = {PWAVE : args.pwave, SWAVE : args.swave}
+      output = sbu.PickList([pick for pick in output if pick.peak_value > \
+                             THRESHOLD_DICT[pick.phase]])
       with open(CLF_FILE, 'wb') as fp: pickle.dump(output, fp)
       if args.verbose:
         print(f"Classification results for model: {model_name}, with "
               f"preloaded weight: {dataset_name}, categorized by {categories}")
         print(output)
+      if args.interactive:
+        interactive_plot(stream, output, model_name, dataset_name)
   for CLF_FILE, model_name, dataset_name in clf_found:
     with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)
     if args.verbose:
       print(f"Classification results for model: {model_name}, with "
             f"preloaded weight: {dataset_name}, categorized by {categories}")
       print(output)
+    if args.interactive:
+      stream = read_traces(trace_files, args)
+      interactive_plot(stream, output, model_name, dataset_name)
 
-def get_model(model_name : str, dataset_name : str) -> sbm.base.SeisBenchModel:
+def get_model(model_name : str, dataset_name : str, silent = False) \
+      -> sbm.base.SeisBenchModel:
   """
   Given a 'model_name' trained on the 'dataset_name', return the associated
   testing model. If the model is not found, return None.
@@ -522,6 +586,7 @@ def get_model(model_name : str, dataset_name : str) -> sbm.base.SeisBenchModel:
   input:
     - model_name    (str)
     - dataset_name  (str)
+    - silent        (bool)
 
   output:
     - seisbench.models.base.SeisBenchModel
@@ -536,12 +601,13 @@ def get_model(model_name : str, dataset_name : str) -> sbm.base.SeisBenchModel:
   try:
     model = MODEL_WEIGHTS_DICT[model_name].from_pretrained(dataset_name)
   except:
-    print(f"WARNING: Pretrained weights '{dataset_name}' not found for model "
-          f"'{model_name}'")
+    if not silent:
+      print(f"WARNING: Pretrained weights '{dataset_name}' not found for model"
+            f" '{model_name}'")
     return None
   # Enable GPU calls if available
   if GPU_RANK >= 0: model.cuda()
-  print(model_name, model.weights_docstring)
+  if not silent: print(model_name, model.weights_docstring)
   return model
 
 def set_up(args : argparse.Namespace) -> dict:
@@ -578,7 +644,7 @@ def set_up(args : argparse.Namespace) -> dict:
       print("MPI size:", MPI_SIZE)
       print("GPU size:", GPU_SIZE)
     MODELS = [(m, w) for m, w in itertools.product(args.models, args.weights)
-              if get_model(m, w) is not None]
+              if get_model(m, w, True) is not None]
     WAVEFORMS_DATA = waveform_table(args)
   MODELS = MPI_COMM.bcast(MODELS, root=0)
   WAVEFORMS_DATA = MPI_COMM.bcast(WAVEFORMS_DATA, root=0)
@@ -594,14 +660,15 @@ def set_up(args : argparse.Namespace) -> dict:
   # Assign the models to the current process
   MODELS = MODELS[start_idx:end_idx]
   if args.verbose: print(f"Process {MPI_RANK} handles models {MODELS}")
-  return {(model_name, dataset_name) : get_model(model_name, dataset_name)
+  return {(model_name, dataset_name) :
+            get_model(model_name, dataset_name, args.silent)
           for model_name, dataset_name in MODELS}, WAVEFORMS_DATA
 
 def main(args : argparse.Namespace):
   MODELS, WAVEFORMS_DATA = set_up(args)
   if args.denoiser:
     global DENOISER
-    DENOISER = get_model(DEEPDENOISER_STR, ORIGINAL_STR)
+    DENOISER = get_model(DEEPDENOISER_STR, ORIGINAL_STR, args.silent)
   if args.train: # Train
     if args.verbose: print("Training the Model")
     # Generate a Dataset
