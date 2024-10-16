@@ -315,11 +315,13 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
             TIMESTAMP_STR, PROBABILITY_STR]
   # False Negatives
   FN = pd.DataFrame(FN, columns=HEADER)
-  FN_FILE = Path(DATA_PATH, FN_STR + CSV_EXT)
+  FN_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                 FN_STR + CSV_EXT)
   FN.to_csv(FN_FILE, index=False)
   # False Positives
   FP = pd.DataFrame(FP, columns=HEADER)
-  FP_FILE = Path(DATA_PATH, FP_STR + CSV_EXT)
+  FP_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                 FP_STR + CSV_EXT)
   FP.to_csv(FP_FILE, index=False)
   # Plot the True Positives, False Negatives histogram and the Recall as a
   # function of the threshold for each model and weight
