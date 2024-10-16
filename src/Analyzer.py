@@ -21,7 +21,7 @@ from obspy.core.utcdatetime import UTCDateTime
 from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 
 from constants import *
-import AdriaArray as AA
+import Picker as Pkr
 
 def read_data(path : str):
   # Load the data
@@ -462,7 +462,7 @@ def event_parser(filename : Path, stations : list, args : argparse.Namespace) \
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
   if Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT).exists() and \
-     AA.primary_arguments(args) == AA.read_arguments(args):
+     Pkr.primary_arguments(args) == Pkr.read_arguments(args):
     # As the arguments are the same, we can use the waveform catalog to search
     # for the waveforms given the events listed
     WAVEFORMS = pd.read_csv(Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT))
@@ -594,4 +594,4 @@ def main(args : argparse.Namespace):
   TP = conf_mtx(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
   time_displacement(TP, args)
 
-if __name__ == "__main__": main(AA.parse_arguments())
+if __name__ == "__main__": main(Pkr.parse_arguments())
