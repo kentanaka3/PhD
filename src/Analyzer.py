@@ -73,11 +73,11 @@ def load_data(args : argparse.Namespace) -> pd.DataFrame:
                       p.peak_value] for p in read_data(f)]
             DATA += PICKS
             PICKS = pd.DataFrame(PICKS, columns=HEADER)
-            w = [len(PICKS[(PICKS[PROBABILITY_STR] >= a) &
-                           (PICKS[PROBABILITY_STR] < b)].index)
-                 for a, b in zip(z[:-1], z[1:])]
+            w = reversed([len(PICKS[(PICKS[PROBABILITY_STR] >= a) &
+                                    (PICKS[PROBABILITY_STR] < b)].index)
+                          for a, b in zip(z[:-1], z[1:])])
             HIST.append([station_path.relative_to(date_path).__str__(), *w])
-        HIST = pd.DataFrame(HIST, columns=[FILE_STR, *z[:-1]])\
+        HIST = pd.DataFrame(HIST, columns=[FILE_STR, *reversed(z[:-1])])\
                  .set_index(FILE_STR).sort_values(z[:-1], ascending=False)
         IMG_FILE = \
           Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
@@ -476,13 +476,11 @@ def event_parser(filename : Path, stations : list, args : argparse.Namespace) \
       raise FileNotFoundError
     WAVEFORMS = []
     for date_path in CLF_PATH.iterdir():
-      date = date_path.name
+      date = UTCDateTime.strptime(date_path.name, DATE_FMT)
       for network_path in date_path.iterdir():
         for station_path in network_path.iterdir():
           WAVEFORMS.append([date, station_path.name])
     WAVEFORMS = pd.DataFrame(WAVEFORMS, columns=[BEG_DATE_STR, STATION_STR])
-  WAVEFORMS[BEG_DATE_STR] = \
-    WAVEFORMS[BEG_DATE_STR].apply(lambda x: UTCDateTime.strptime(x, DATE_FMT))
   HEADER = [EVENT_STR, STATION_STR, PHASE_STR, TIMESTAMP_STR, WEIGHT_STR]
   DATA = []
   event = 0
@@ -585,10 +583,11 @@ def main(args : argparse.Namespace):
   stations = args.station if (args.station is not None and
                               args.station != ALL_WILDCHAR_STR) else \
              PRED[STATION_STR].unique()
-  TRUE = event_parser(Path(DATA_PATH, "manual", "manual.dat"), stations, args)
+  TRUE = event_parser(Path(DATA_PATH, "manual.dat"), stations, args)
   if args.verbose:
     TRUE.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
-    PRED.to_csv(Path(DATA_PATH, PRED_STR + CSV_EXT), index=False)
+    PRED.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                     PRED_STR + CSV_EXT), index=False)
   plot_data(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
   TP = conf_mtx(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
   time_displacement(TP, args)
