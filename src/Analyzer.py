@@ -139,6 +139,26 @@ def dist_time(T : pd.Series, P : pd.Series) -> float:
 def dist_default(T : pd.Series, P : pd.Series) -> float:
   return dist_balanced(T, P)
 
+def plot_timeline(G : nx.Graph, pos : dict, N : int, model_name : str,
+                  dataset_name : str) -> None:
+  fig, ax = plt.subplots(figsize=(15, 2))
+  node_color = [COLOR_ENCODING[G.nodes[node][STATUS_STR]]\
+                  [G.nodes[node][PHASE_STR]] for node in G.nodes]
+  nx.draw(G, pos=pos, ax=ax, node_color=node_color, edge_color='black',
+          width=2, node_size=10)
+  ax.axis('on')
+  ax.tick_params(bottom=True, labelbottom=True)
+  for node in G.nodes:
+    if node < N:
+      x = pos[node][0]
+      ax.axvline(x=x + PICK_OFFSET.microseconds * 1e-6, c='k', ls='--')
+      ax.axvline(x=x - PICK_OFFSET.microseconds * 1e-6, c='k', ls='--')
+  ax.grid()
+  ax.set_title(SPACE_STR.join([model_name, dataset_name]))
+  fig.tight_layout()
+  plt.show()
+  plt.close(fig=fig)
+
 def recall(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
            dataset_name : str, threshold : float, args : argparse.Namespace) \
       -> pd.DataFrame:
@@ -197,10 +217,10 @@ def recall(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
     # True picks of the graph and remove the edges that are not part of
     # the maximum weight matching
     if node >= N: continue
-    for neighbor in copy.deepcopy(G.neighbors(node)):
-      #       TRUE, PRED
-      edge = (node, neighbor)
-      if edge not in LINKS: G.remove_edge(*edge)
+    for neighbor in copy.deepcopy((G.neighbors(node))):
+      #               TRUE, PRED            PRED, TRUE
+      edge, edge_r = (node, neighbor), (neighbor, node)
+      if edge not in LINKS and edge_r not in LINKS: G.remove_edge(*edge)
   TP, FN, FP = [], [], []
   tags = [PWAVE, SWAVE, NONE_STR]
   CFN_MTX = pd.DataFrame(0, index=tags, columns=tags, dtype=int)
@@ -233,23 +253,7 @@ def recall(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
         FP.append([model_name, dataset_name, p[STATION_STR], p[PHASE_STR],
                    threshold, p[TIMESTAMP_STR], p[PROBABILITY_STR]])
         CFN_MTX.loc[NONE_STR, PRED.iloc[node - N][PHASE_STR]] += 1
-  if False and args.verbose:
-    node_color = [COLOR_ENCODING[G.nodes[node][STATUS_STR]]\
-                    [G.nodes[node][PHASE_STR]] for node in G.nodes]
-    fig, ax = plt.subplots(figsize=(15, 2))
-    nx.draw(G, pos=pos, ax=ax, node_color=node_color, edge_color='black',
-            width=2, node_size=10)
-    ax.axis('on')
-    ax.tick_params(bottom=True, labelbottom=True)
-    for node in G.nodes:
-      if node < N:
-        ax.axvline(x=pos[node][0] + PICK_OFFSET.seconds, color='k', linestyle='--')
-        ax.axvline(x=pos[node][0] - PICK_OFFSET.seconds, color='k', linestyle='--')
-    ax.grid()
-    ax.set_title(SPACE_STR.join([model_name, dataset_name]))
-    fig.tight_layout()
-    plt.show()
-    plt.close(fig=fig)
+  if False and args.verbose: plot_timeline(G, pos, N, model_name, dataset_name)
   return CFN_MTX, TP, FN, FP
 
 def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
@@ -473,6 +477,7 @@ def event_parser(filename : Path, stations : list, args : argparse.Namespace) \
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
   if Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT).exists() and \
+     Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT).exists() and \
      Pkr.primary_arguments(args) == Pkr.read_arguments(args):
     # As the arguments are the same, we can use the waveform catalog to search
     # for the waveforms given the events listed
