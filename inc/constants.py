@@ -25,6 +25,13 @@ DATE_FMT = "%y%m%d"
 DATETIME_FMT = DATE_FMT + "%H%M%S"
 ONE_DAY = td(days=1)
 PICK_OFFSET = td(seconds=0.5)
+H71_OFFSET = {
+  0 : td(seconds=0.01),
+  1 : td(seconds=0.04),
+  2 : td(seconds=0.2),
+  3 : td(seconds=1),
+  4 : td(seconds=5)
+}
 ASSOCIATE_OFFSET = td(seconds=1)
 
 # Strings
@@ -37,6 +44,8 @@ COMMA_STR = ','
 NONE_STR = "None"
 CLF_STR = "classified"
 FILE_STR = "file"
+TEMPORAL_STR = "tmp"
+STATUS_STR = "status"
 
 TRUE_STR = "TRUE"
 PRED_STR = "PRED"
@@ -61,7 +70,7 @@ SWAVE_THRESHOLD = 0.1
 
 SEED_ID_FMT = "{NETWORK}.{STATION}..{CHANNEL}"
 
-CONF_MTX_STR = "CM"
+CFN_MTX_STR = "CM"
 CMTV_PICKS_STR = "CP"
 TIME_DSPLCMT_STR = "TD"
 
@@ -78,6 +87,7 @@ PICKLE_STR    = "pkl"
 PNG_STR       = "png"
 PUN_STR       = "pun"
 TORCH_STR     = "pt"
+XML_STR       = "xml"
 
 CSV_EXT       = PERIOD_STR + CSV_STR
 DAT_EXT       = PERIOD_STR + DAT_STR
@@ -90,6 +100,7 @@ PICKLE_EXT    = PERIOD_STR + PICKLE_STR
 PNG_EXT       = PERIOD_STR + PNG_STR
 PUN_EXT       = PERIOD_STR + PUN_STR
 TORCH_EXT     = PERIOD_STR + TORCH_STR
+XML_EXT       = PERIOD_STR + XML_STR
 
 PRC_FMT = SEED_ID_FMT + ".{BEGDT}.{EXT}"
 
@@ -109,10 +120,25 @@ MODEL_WEIGHTS_DICT = {
                                    norm=NORM)
 }
 
+# Colors
 COLORS = {
   PWAVE: "C0",
   SWAVE: "C1",
   "Detection": "C2"
+}
+COLOR_ENCODING = {
+  TP_STR : {
+    PWAVE: "red",
+    SWAVE: "blue"
+  },
+  FP_STR : {
+    PWAVE: "orange",
+    SWAVE: "green"
+  },
+  FN_STR : {
+    PWAVE: "pink",
+    SWAVE: "purple"
+  }
 }
 
 # Data components

@@ -143,6 +143,75 @@ def parse_arguments():
                             action='store_true', help="Verbose mode")
   return parser.parse_args()
 
+def read_data(path : str):
+  # Load the data
+  with open(Path(path), 'rb') as f: data = pickle.load(f)
+  return data
+
+def load_data(args : argparse.Namespace) -> pd.DataFrame:
+  """
+  input  :
+    - args          (argparse.Namespace)
+
+  output :
+    - pd.DataFrame
+
+  errors :
+    - FileNotFoundError
+    - AttributeError
+
+  notes  :
+    | MODEL | WEIGHT | TIMESTAMP | NETWORK | STATION | PHASE | PROBABILITY |
+    ------------------------------------------------------------------------
+
+    The data is loaded from the directory given in the arguments. The data is
+    then sorted by the timestamp and returned as a pandas DataFrame.
+  """
+  global DATA_PATH
+  DATA_PATH  = Path(args.directory).parent
+  CLF_PATH = Path(DATA_PATH, CLF_STR)
+  DATA = []
+  HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR,
+            PHASE_STR, PROBABILITY_STR]
+  start, end = args.dates
+  z = [round(t, 2) for t in np.linspace(0.2, 1.0, 9)]
+  for model in args.models:
+    for weight in args.weights:
+      for date_path in CLF_PATH.iterdir():
+        if args.verbose: HIST = []
+        date = date_path.name
+        date_obj = UTCDateTime.strptime(date, DATE_FMT)
+        if date_obj < start or date_obj > end: continue
+        for network_path in date_path.iterdir():
+          network = network_path.name
+          for station_path in network_path.iterdir():
+            station = station_path.name
+            f = Path(station_path, ("D_" if args.denoiser else EMPTY_STR) + \
+                     UNDERSCORE_STR.join([date, network, station, model,
+                                          weight]) + PICKLE_EXT)
+            PICKS = [[model, weight, p.peak_time, network, station, p.phase,
+                      p.peak_value] for p in read_data(f)]
+            DATA += PICKS
+            PICKS = pd.DataFrame(PICKS, columns=HEADER)
+            if args.verbose:
+              w = reversed([len(PICKS[(PICKS[PROBABILITY_STR] >= a) &
+                                      (PICKS[PROBABILITY_STR] < b)].index)
+                            for a, b in zip(z[:-1], z[1:])])
+              HIST.append([station_path.relative_to(date_path).__str__(), *w])
+        if args.verbose:
+          HIST = pd.DataFrame(HIST, columns=[FILE_STR, *reversed(z[:-1])])\
+                  .set_index(FILE_STR).sort_values(z[:-1], ascending=False)
+          IMG_FILE = \
+            Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                UNDERSCORE_STR.join(["HIST", model, weight, date]) + PNG_EXT)
+          HIST.plot(kind='bar', stacked=True, figsize=(20, 7))
+          plt.title(SPACE_STR.join([model, weight, date]))
+          plt.tight_layout()
+          plt.savefig(IMG_FILE)
+          plt.close()
+  return pd.DataFrame(DATA, columns=HEADER).sort_values(TIMESTAMP_STR)\
+                                           .reset_index(drop=True)
+
 def data_downloader(args : argparse.Namespace) -> None:
   """
   Download the data from the server based on the specified arguments. If the

@@ -11,7 +11,7 @@ import json
 import shutil
 import unittest
 from Analyzer import *
-import AdriaArray as AA
+import Picker as Pkr
 from constants import *
 from datetime import timedelta as td
 
@@ -22,135 +22,385 @@ MNL_DATA_PATH = Path(DATA_PATH, "manual")
 
 EXPECTED_STR = "expected"
 
-def timedeltafmt(string):
-  numbers = [float(n) for n in string.split(":")]
-  return td(hours=numbers[0], minutes=numbers[1], seconds=numbers[2])
+TRUE_HEADER = [STATION_STR, TIMESTAMP_STR, PHASE_STR, WEIGHT_STR]
+PRED_HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, STATION_STR, PHASE_STR,
+               PROBABILITY_STR]
 
 class TestPickParser(unittest.TestCase):
   @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-D", "230601", "230604", "-v",
-                        "-d", TEST_PATH.__str__()])
+                       ["Picker.py", "-D", "230601", "230604", "-v", "-d",
+                        TEST_PATH.__str__()])
   def test_parse_pick(self):
-    args = AA.parse_arguments()
-    events = event_parser(Path(MNL_DATA_PATH, "manual.dat"), args)
-    # with open(Path(MNL_DATA_PATH, EXPECTED_STR + JSON_EXT), 'w') as fp:
-    #   json.dump(events, fp, default=str)
-    with open(Path(MNL_DATA_PATH, EXPECTED_STR + JSON_EXT), 'r') as fr:
-      expected = json.load(fr)
-    for key, event in events.items():
-      for s, station in enumerate(event):
-        expected[str(key)][s][BEG_DATE_STR] = \
-          UTCDateTime(expected[str(key)][s][BEG_DATE_STR])
-        if expected[str(key)][s][P_TIME_STR] is not None:
-          expected[str(key)][s][P_TIME_STR] = \
-            timedeltafmt(expected[str(key)][s][P_TIME_STR])
-        if expected[str(key)][s][S_TIME_STR] is not None:
-          expected[str(key)][s][S_TIME_STR] = \
-            timedeltafmt(expected[str(key)][s][S_TIME_STR])
-    for key, event in events.items():
-      for s, station in enumerate(event):
-        for k, v in station.items():
-          self.assertEqual(v, expected[str(key)][s][k])
+    args = Pkr.parse_arguments()
+    PRED = Pkr.load_data(args)
+    stations = args.station if (args.station is not None and
+                                args.station != ALL_WILDCHAR_STR) else \
+               PRED[STATION_STR].unique()
+    TRUE = event_parser(Path(DATA_PATH, "manual.dat"), stations, args)
 
 class TestEventCounter(unittest.TestCase):
   @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-D", "230601", "230605", "-v",
-                        "-d", TEST_PATH.__str__(), "-M", PHASENET_STR])
+                       ["Picker.py", "-D", "230601", "230605", "-v", "-d",
+                        TEST_PATH.__str__(), "-M", PHASENET_STR])
   def test_event_counter(self):
-    args = AA.parse_arguments()
-    DATA = load_data(args)
-    plot_data(DATA, args)
-
-class TestEventMerger(unittest.TestCase):
-  def test_event_merger(self):
-    #                   YEAR, M, D, H, M, S, MS
-    TRUE = [UTCDateTime(2023, 6, 1, 0, 0, 0, 0),
-            UTCDateTime(2023, 6, 1, 0, 2, 0, 0),
-            UTCDateTime(2023, 6, 1, 0, 4, 0, 0),
-            UTCDateTime(2023, 6, 1, 0, 6, 0, 0)]
-    PRED = [UTCDateTime(2023, 6, 1, 0, 0, 0, 400),
-            UTCDateTime(2023, 6, 1, 0, 1, 0, 0),
-            UTCDateTime(2023, 6, 1, 0, 2, 0, 0),
-            UTCDateTime(2023, 6, 1, 0, 3, 0, 0),
-            UTCDateTime(2023, 6, 1, 0, 5, 0, 0),
-            UTCDateTime(2023, 6, 1, 0, 7, 0, 0)]
-    EXPECTED = [
-      (UTCDateTime(2023, 6, 1, 0, 0, 0, 0),  1.0,
-       UTCDateTime(2023, 6, 1, 0, 0, 0, 400), None),  # TP
-      (UTCDateTime(2023, 6, 1, 0, 1, 0, 0), -1.0,
-        None, None),                                  # FP
-      (UTCDateTime(2023, 6, 1, 0, 2, 0, 0),  1.0,
-       UTCDateTime(2023, 6, 1, 0, 2, 0, 0), None),    # TP
-      (UTCDateTime(2023, 6, 1, 0, 3, 0, 0), -1.0,
-       None, None),                                   # FP
-      (UTCDateTime(2023, 6, 1, 0, 4, 0, 0),  0.0,
-       None, None),                                   # FN
-      (UTCDateTime(2023, 6, 1, 0, 5, 0, 0), -1.0,
-       None, None),                                   # FP
-      (UTCDateTime(2023, 6, 1, 0, 6, 0, 0),  0.0,
-       None, None),                                   # FN
-      (UTCDateTime(2023, 6, 1, 0, 7, 0, 0), -1.0,
-       None, None)]                                   # FP
-    self.assertEqual(event_merger(TRUE, PRED, PICK_OFFSET), EXPECTED)
-
-  def test_event_merger_empty_anchor(self):
-    TRUE = []
-    #                   YEAR, M, D, H, M, S, MS
-    PRED = [UTCDateTime(2023, 6, 1, 0, 0, 0, 0),
-            UTCDateTime(2023, 6, 1, 0, 1, 0, 0),
-            UTCDateTime(2023, 6, 1, 0, 2, 0, 0),
-            UTCDateTime(2023, 6, 1, 0, 3, 0, 0),
-            UTCDateTime(2023, 6, 1, 0, 5, 0, 0),
-            UTCDateTime(2023, 6, 1, 0, 7, 0, 0)]
-    EXPECTED = [(UTCDateTime(2023, 6, 1, 0, 0, 0, 0), -1.0, None, None),
-                (UTCDateTime(2023, 6, 1, 0, 1, 0, 0), -1.0, None, None),
-                (UTCDateTime(2023, 6, 1, 0, 2, 0, 0), -1.0, None, None),
-                (UTCDateTime(2023, 6, 1, 0, 3, 0, 0), -1.0, None, None),
-                (UTCDateTime(2023, 6, 1, 0, 5, 0, 0), -1.0, None, None),
-                (UTCDateTime(2023, 6, 1, 0, 7, 0, 0), -1.0, None, None)]
-    self.assertEqual(event_merger(TRUE, PRED, PICK_OFFSET), EXPECTED)
-
-  def test_event_merger_empty_pred(self):
-    #                   YEAR, M, D, H, M, S, MS
-    TRUE = [UTCDateTime(2023, 6, 1, 0, 0, 0, 0),
-            UTCDateTime(2023, 6, 1, 0, 2, 0, 0),
-            UTCDateTime(2023, 6, 1, 0, 4, 0, 0),
-            UTCDateTime(2023, 6, 1, 0, 6, 0, 0)]
-    PRED = []
-    EXPECTED = [(UTCDateTime(2023, 6, 1, 0, 0, 0, 0), 0.0, None, None),
-                (UTCDateTime(2023, 6, 1, 0, 2, 0, 0), 0.0, None, None),
-                (UTCDateTime(2023, 6, 1, 0, 4, 0, 0), 0.0, None, None),
-                (UTCDateTime(2023, 6, 1, 0, 6, 0, 0), 0.0, None, None)]
-    self.assertEqual(event_merger(TRUE, PRED, PICK_OFFSET), EXPECTED)
+    args = Pkr.parse_arguments()
+    PRED = Pkr.load_data(args)
+    stations = args.station if (args.station is not None and
+                                args.station != ALL_WILDCHAR_STR) else \
+               PRED[STATION_STR].unique()
+    TRUE = event_parser(Path(DATA_PATH, "manual.dat"), stations, args)
+    plot_data(TRUE, PRED, args)
 
 class TestConfMtx(unittest.TestCase):
   @unittest.mock.patch("sys.argv",
-                       ["AdriaArray.py", "-D", "230601", "230604", "-v",
-                        "-d", TEST_PATH.__str__()])
-  def test_conf_mtx(self):
-    args = AA.parse_arguments()
-    TRUE = event_parser(Path(DATA_PATH, "manual", "manual.dat"), args)
-    PRED = load_data(args)
-    EXPECTED = pd.DataFrame(
-      [[EQTRANSFORMER_STR, INSTANCE_STR, 13, 134, 0, 345453,
-        0.999612, 0.088435, 1.0, 0.1625],
-       [EQTRANSFORMER_STR, ORIGINAL_STR, 12, 32, 1, 345555,
-        0.999905, 0.272727, 0.923077, 0.421053],
-       [EQTRANSFORMER_STR, SCEDC_STR, 13, 2424, 0, 343163,
-        0.992986, 0.005334, 1.0, 0.010612],
-       [EQTRANSFORMER_STR, STEAD_STR, 10, 59, 3, 345528,
-        0.999821, 0.144928, 0.769231, 0.243902],
-       [PHASENET_STR, INSTANCE_STR, 13, 114, 0, 345473,
-        0.999670, 0.102362, 1.0, 0.185714],
-       [PHASENET_STR, ORIGINAL_STR, 13, 512, 0, 345075,
-        0.998519, 0.024762, 1.0, 0.048327],
-       [PHASENET_STR, SCEDC_STR, 11, 1065, 2, 344522,
-        0.996913, 0.010223, 0.846154, 0.020202],
-       [PHASENET_STR, STEAD_STR, 9, 48, 4, 345539,
-        0.999850, 0.157895, 0.692308, 0.257143]],
-      columns=[MODEL_STR, WEIGHT_STR, TP_STR, FP_STR, FN_STR, TN_STR,
-               ACCURACY_STR, PRECISION_STR, RECALL_STR, F1_STR])
-    # self.assertAlmostEqual(conf_mtx(TRUE, PRED, args), EXPECTED)
+                       ["Picker.py", "-D", "230601", "230601", "-v", "-d",
+                        TEST_PATH.__str__()])
+  def test_perfect(self):
+    """
+    OFFSET = 0.5 : |--"--|
+           |------------------------------- 66 -------------------------------|
+    TRUE : |----------------P---------------------------------S---------------|
+                         |--"--|                           |--"--|
+    PRED : |----------------P---------------------------------S---------------|
+    OUTPUT: P [1, 0,  0]
+            S [0, 1,  0]
+            N [0, 0, 64]
+               P  S   N
+    """
+    args = Pkr.parse_arguments()
+    STATION = "EG"
+    #        STATION              YEAR, M, D, H, M, S, MS  PHASE WEIGHT
+    TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
+            [STATION, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), SWAVE, 0]]
+    TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
+    PRED = [[PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
+             STATION, PWAVE, 0.43185002],
+            [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
+             STATION, SWAVE, 0.3372562]]
+    PRED = pd.DataFrame(PRED, columns=PRED_HEADER)
+    THRESHOLD = 0.3
+    CFN_MTX, TP, FN, FP = recall(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
+                                 THRESHOLD, args)
+    EXPECTED = [[1, 0, 0],
+                [0, 1, 0],
+                [0, 0, 0]]
+    self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
+    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
+                 (UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
+                  UTCDateTime(2023, 6, 1, 0, 1, 2, 3)), 3],
+                [PHASENET_STR, ORIGINAL_STR, STATION, SWAVE, THRESHOLD,
+                 (UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
+                  UTCDateTime(2023, 6, 1, 0, 4, 5, 6)), 0]]
+    self.assertListEqual(EXPECTED, TP)
+    EXPECTED = []
+    self.assertListEqual(EXPECTED, FN)
+    EXPECTED = []
+    self.assertListEqual(EXPECTED, FP)
+
+  @unittest.mock.patch("sys.argv",
+                       ["Picker.py", "-D", "230601", "230601", "-v", "-d",
+                        TEST_PATH.__str__()])
+  def test_flipped(self):
+    """
+    OFFSET = 0.5 : |--"--|
+           |------------------------------- 66 -------------------------------|
+    TRUE : |----------------P---------------------------------S---------------|
+                         |--"--|                           |--"--|
+    PRED : |----------------S---------------------------------P---------------|
+    OUTPUT: P [0, 1,  0]
+            S [1, 0,  0]
+            N [0, 0, 64]
+               P  S   N
+    """
+    args = Pkr.parse_arguments()
+    STATION = "EG"
+    #        STATION              YEAR, M, D, H, M, S, MS  PHASE WEIGHT
+    TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
+            [STATION, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), SWAVE, 0]]
+    TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
+    PRED = [[PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
+             STATION, SWAVE, 0.43185002],
+            [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
+             STATION, PWAVE, 0.3372562]]
+    PRED = pd.DataFrame(PRED, columns=PRED_HEADER)
+    THRESHOLD = 0.3
+    CFN_MTX, TP, FN, FP = recall(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
+                                 THRESHOLD, args)
+    EXPECTED = [[0, 1, 0],
+                [1, 0, 0],
+                [0, 0, 0]]
+    self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
+    EXPECTED = []
+    self.assertListEqual(EXPECTED, TP)
+    EXPECTED = []
+    self.assertListEqual(EXPECTED, FN)
+    EXPECTED = []
+    self.assertListEqual(EXPECTED, FP)
+
+  @unittest.mock.patch("sys.argv",
+                       ["Picker.py", "-D", "230601", "230601", "-v", "-d",
+                        TEST_PATH.__str__()])
+  def test_pred_over_true(self):
+    """
+    OFFSET = 0.5 : |--"--|
+           |------------------------------- 66 -------------------------------|
+    TRUE : |--------------:-P---:-----------------------------S---------------|
+                         |:-"--|:                          |--"--|
+    PRED : |--------------:-PP--:-----------------------------S---------------|
+                          |--"--|
+    OUTPUT: P [1, 0,  0]
+            S [0, 1,  0]
+            N [1, 0, 63]
+               P  S   N : PRED
+    """
+    args = Pkr.parse_arguments()
+    STATION = "EG"
+    #        STATION              YEAR, M, D, H, M, S, MS  PHASE WEIGHT
+    TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
+            [STATION, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), SWAVE, 0]]
+    TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
+    PRED = [
+      [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
+       STATION, PWAVE, 0.43185002],
+      [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 1, 2, 4),
+       STATION, PWAVE, 0.43185002],
+      [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
+       STATION, SWAVE, 0.3372562]]
+    PRED = pd.DataFrame(PRED, columns=PRED_HEADER)
+    THRESHOLD = 0.3
+    CFN_MTX, TP, FN, FP = recall(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
+                                 THRESHOLD, args)
+    EXPECTED = [[1, 0, 0],
+                [0, 1, 0],
+                [1, 0, 0]]
+    self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
+    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
+                 (UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
+                  UTCDateTime(2023, 6, 1, 0, 1, 2, 3)), 3],
+                 [PHASENET_STR, ORIGINAL_STR, STATION, SWAVE, THRESHOLD,
+                  (UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
+                   UTCDateTime(2023, 6, 1, 0, 4, 5, 6)), 0]]
+    self.assertListEqual(EXPECTED, TP)
+    EXPECTED = []
+    self.assertListEqual(EXPECTED, FN)
+    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
+                 UTCDateTime(2023, 6, 1, 0, 1, 2, 4), 0.43185002]]
+    self.assertListEqual(EXPECTED, FP)
+
+  @unittest.mock.patch("sys.argv",
+                       ["Picker.py", "-D", "230601", "230601", "-v", "-d",
+                        TEST_PATH.__str__()])
+  def test_true_over_pred(self):
+    """
+    OFFSET = 0.5 : |--"--|
+           |------------------------------- 66 -------------------------------|
+                         |--"--|
+    TRUE : |--------------:-P---P---------------------------------------------|
+                          :  |--"--|
+    PRED : |--------------:--P--:-----------------------------S---------------|
+                          |--"--|
+    OUTPUT: P [1, 0,  1]
+            S [0, 0,  0]
+            N [0, 1, 63]
+               P  S   N : PRED
+    """
+    args = Pkr.parse_arguments()
+    STATION = "EG"
+    #        STATION              YEAR, M, D, H, M, S, MS  PHASE WEIGHT
+    TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
+            [STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 4), PWAVE, 3]]
+    TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
+    PRED = [
+      [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
+       STATION, PWAVE, 0.43185002],
+      [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
+       STATION, SWAVE, 0.3372562]]
+    PRED = pd.DataFrame(PRED, columns=PRED_HEADER)
+    THRESHOLD = 0.3
+    CFN_MTX, TP, FN, FP = recall(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
+                                 THRESHOLD, args)
+    EXPECTED = [[1, 0, 1],
+                [0, 0, 0],
+                [0, 1, 0]]
+    self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
+    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
+                 (UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
+                  UTCDateTime(2023, 6, 1, 0, 1, 2, 3)), 3]]
+    self.assertListEqual(EXPECTED, TP)
+    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
+                 UTCDateTime(2023, 6, 1, 0, 1, 2, 4), 3]]
+    self.assertListEqual(EXPECTED, FN)
+    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, SWAVE, THRESHOLD,
+                 UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0.3372562]]
+    self.assertListEqual(EXPECTED, FP)
+
+  @unittest.mock.patch("sys.argv",
+                       ["Picker.py", "-D", "230601", "230601", "-v", "-d",
+                        TEST_PATH.__str__()])
+  def test_no_pred(self):
+    """
+    OFFSET = 0.5 : |--"--|
+           |------------------------------- 66 -------------------------------|
+    TRUE : |----------------P---------------------------------S---------------|
+                         |--"--|
+    PRED : |------------------------------------------------------------------|
+    OUTPUT: P [0, 0,  1]
+            S [0, 0,  1]
+            N [0, 0, 64]
+               P  S   N : PRED
+    """
+    args = Pkr.parse_arguments()
+    STATION = "EG"
+    #        STATION              YEAR, M, D, H, M, S, MS  PHASE WEIGHT
+    TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
+            [STATION, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), SWAVE, 0]]
+    TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
+    PRED = []
+    PRED = pd.DataFrame(PRED, columns=PRED_HEADER)
+    THRESHOLD = 0.3
+    CFN_MTX, TP, FN, FP = recall(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
+                                 THRESHOLD, args)
+    EXPECTED = [[0, 0, 1],
+                [0, 0, 1],
+                [0, 0, 0]]
+    self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
+    EXPECTED = []
+    self.assertListEqual(EXPECTED, TP)
+    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
+                 UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 3],
+                [PHASENET_STR, ORIGINAL_STR, STATION, SWAVE, THRESHOLD,
+                 UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0]]
+    self.assertListEqual(EXPECTED, FN)
+    EXPECTED = []
+    self.assertListEqual(EXPECTED, FP)
+
+  @unittest.mock.patch("sys.argv",
+                        ["Picker.py", "-D", "230601", "230601", "-v", "-d",
+                          TEST_PATH.__str__()])
+  def test_no_true(self):
+    """
+    OFFSET = 0.5 : |--"--|
+           |------------------------------- 66 -------------------------------|
+    TRUE : |------------------------------------------------------------------|
+    PRED : |----------------P---------------------------------S---------------|
+                         |--"--|
+    OUTPUT: P [0, 0,  0]
+            S [0, 0,  0]
+            N [1, 1, 64]
+               P  S   N : PRED
+    """
+    args = Pkr.parse_arguments()
+    STATION = "EG"
+    #        STATION              YEAR, M, D, H, M, S, MS  PHASE WEIGHT
+    TRUE = []
+    TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
+    PRED = [
+      [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
+       STATION, PWAVE, 0.43185002],
+      [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
+       STATION, SWAVE, 0.3372562]]
+    PRED = pd.DataFrame(PRED, columns=PRED_HEADER)
+    THRESHOLD = 0.3
+    CFN_MTX, TP, FN, FP = recall(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
+                                 THRESHOLD, args)
+    EXPECTED = [[0, 0, 0],
+                [0, 0, 0],
+                [1, 1, 0]]
+    self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
+    EXPECTED = []
+    self.assertListEqual(EXPECTED, TP)
+    EXPECTED = []
+    self.assertListEqual(EXPECTED, FN)
+    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
+                 UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 0.43185002],
+                [PHASENET_STR, ORIGINAL_STR, STATION, SWAVE, THRESHOLD,
+                 UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0.3372562]]
+    self.assertListEqual(EXPECTED, FP)
+
+  @unittest.mock.patch("sys.argv",
+                        ["Picker.py", "-D", "230601", "230601", "-v", "-d",
+                          TEST_PATH.__str__()])
+  def test_no_true_no_pred(self):
+    """
+    OFFSET = 0.5 : |--"--|
+           |------------------------------- 66 -------------------------------|
+    TRUE : |------------------------------------------------------------------|
+    PRED : |------------------------------------------------------------------|
+    OUTPUT: P [0, 0,  0]
+            S [0, 0,  0]
+            N [0, 0, 66]
+               P  S   N : PRED
+    """
+    args = Pkr.parse_arguments()
+    STATION = "EG"
+    #        STATION              YEAR, M, D, H, M, S, MS  PHASE WEIGHT
+    TRUE = []
+    TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
+    PRED = []
+    PRED = pd.DataFrame(PRED, columns=PRED_HEADER)
+    THRESHOLD = 0.3
+    CFN_MTX, TP, FN, FP = recall(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
+                                 THRESHOLD, args)
+    EXPECTED = [[0, 0, 0],
+                [0, 0, 0],
+                [0, 0, 0]]
+    self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
+    EXPECTED = []
+    self.assertListEqual(EXPECTED, TP)
+    EXPECTED = []
+    self.assertListEqual(EXPECTED, FN)
+    EXPECTED = []
+
+  @unittest.mock.patch("sys.argv",
+                        ["Picker.py", "-D", "230601", "230601", "-v", "-d",
+                          TEST_PATH.__str__()])
+  def test_true_pred(self):
+    """
+    OFFSET = 0.5 : |--"--|
+           |------------------------------- 66 -------------------------------|
+                         |--"--|
+    TRUE : |---------------:P--:S:---:----------------------------------------|
+                           : |-:":-| :
+    PRED : |---------------:--P:-:S--:------------------------S---------------|
+                           |--"--|
+    OUTPUT: P [1, 0,  0]
+            S [0, 1,  0]
+            N [0, 1, 63]
+               P  S   N : PRED
+    """
+    args = Pkr.parse_arguments()
+    STATION = "EG"
+    #        STATION              YEAR, M, D, H, M, S, MS  PHASE WEIGHT
+    TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
+            [STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 4), SWAVE, 0]]
+    TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
+    PRED = [
+      [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
+       STATION, PWAVE, 0.43185002],
+      [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 1, 2, 4),
+       STATION, SWAVE, 0.3372562],
+      [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
+       STATION, SWAVE, 0.3372562]]
+    PRED = pd.DataFrame(PRED, columns=PRED_HEADER)
+    THRESHOLD = 0.3
+    CFN_MTX, TP, FN, FP = recall(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
+                                 THRESHOLD, args)
+    EXPECTED = [[1, 0, 0],
+                [0, 1, 0],
+                [0, 1, 0]]
+    self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
+    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
+                 (UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
+                  UTCDateTime(2023, 6, 1, 0, 1, 2, 3)), 3],
+                [PHASENET_STR, ORIGINAL_STR, STATION, SWAVE, THRESHOLD,
+                 (UTCDateTime(2023, 6, 1, 0, 1, 2, 4),
+                  UTCDateTime(2023, 6, 1, 0, 1, 2, 4)), 0]]
+    self.assertListEqual(EXPECTED, TP)
+    EXPECTED = []
+    self.assertListEqual(EXPECTED, FN)
+    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, SWAVE, THRESHOLD,
+                 UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0.3372562]]
+    self.assertListEqual(EXPECTED, FP)
 
 if __name__ == "__main__":
   unittest.main()

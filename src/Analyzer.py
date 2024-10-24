@@ -14,6 +14,7 @@ import argparse
 import itertools
 import numpy as np
 import pandas as pd
+import networkx as nx
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import timedelta as td
@@ -22,73 +23,6 @@ from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 
 from constants import *
 import Picker as Pkr
-
-def read_data(path : str):
-  # Load the data
-  with open(Path(path), 'rb') as f: data = pickle.load(f)
-  return data
-
-def load_data(args : argparse.Namespace) -> pd.DataFrame:
-  """
-  input  :
-    - args          (argparse.Namespace)
-
-  output :
-    - pd.DataFrame
-
-  errors :
-    - FileNotFoundError
-    - AttributeError
-
-  notes  :
-    | MODEL | WEIGHT | TIMESTAMP | NETWORK | STATION | PHASE | PROBABILITY |
-    ------------------------------------------------------------------------
-
-    The data is loaded from the directory given in the arguments. The data is
-    then sorted by the timestamp and returned as a pandas DataFrame.
-  """
-  global DATA_PATH
-  DATA_PATH  = Path(args.directory).parent
-  CLF_PATH = Path(DATA_PATH, CLF_STR)
-  DATA = []
-  HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR,
-            PHASE_STR, PROBABILITY_STR]
-  start, end = args.dates
-  z = [round(t, 2) for t in np.linspace(0.2, 1.0, 9)]
-  for model in args.models:
-    for weight in args.weights:
-      for date_path in CLF_PATH.iterdir():
-        HIST = []
-        date = date_path.name
-        date_obj = UTCDateTime.strptime(date, DATE_FMT)
-        if date_obj < start or date_obj > end: continue
-        for network_path in date_path.iterdir():
-          network = network_path.name
-          for station_path in network_path.iterdir():
-            station = station_path.name
-            f = Path(station_path, ("D_" if args.denoiser else EMPTY_STR) + \
-                     UNDERSCORE_STR.join([date, network, station, model,
-                                          weight]) + PICKLE_EXT)
-            PICKS = [[model, weight, p.peak_time, network, station, p.phase,
-                      p.peak_value] for p in read_data(f)]
-            DATA += PICKS
-            PICKS = pd.DataFrame(PICKS, columns=HEADER)
-            w = reversed([len(PICKS[(PICKS[PROBABILITY_STR] >= a) &
-                                    (PICKS[PROBABILITY_STR] < b)].index)
-                          for a, b in zip(z[:-1], z[1:])])
-            HIST.append([station_path.relative_to(date_path).__str__(), *w])
-        HIST = pd.DataFrame(HIST, columns=[FILE_STR, *reversed(z[:-1])])\
-                 .set_index(FILE_STR).sort_values(z[:-1], ascending=False)
-        IMG_FILE = \
-          Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-               UNDERSCORE_STR.join(["HIST", model, weight, date]) + PNG_EXT)
-        HIST.plot(kind='bar', stacked=True, figsize=(20, 7))
-        plt.title(SPACE_STR.join([model, weight, date]))
-        plt.tight_layout()
-        plt.savefig(IMG_FILE)
-        plt.close()
-  return pd.DataFrame(DATA, columns=HEADER).sort_values(TIMESTAMP_STR)\
-                                           .reset_index(drop=True)
 
 def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
               args : argparse.Namespace, phase = PWAVE) -> None:
@@ -193,6 +127,131 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     plt.close()
     if args.verbose: print(f"Saving {IMG_FILE}")
 
+def dist_balanced(T : pd.Series, P : pd.Series) -> float:
+  return (dist_time(T, P) + dist_phase(T, P)) / 2.
+
+def dist_phase(T : pd.Series, P : pd.Series) -> float:
+  return int(P[PHASE_STR] == T[PHASE_STR])
+
+def dist_time(T : pd.Series, P : pd.Series) -> float:
+  return 1. - (P[TEMPORAL_STR] / PICK_OFFSET)
+
+def dist_default(T : pd.Series, P : pd.Series) -> float:
+  return dist_balanced(T, P)
+
+def recall(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
+           dataset_name : str, threshold : float, args : argparse.Namespace) \
+      -> pd.DataFrame:
+  """
+  input  :
+    - TRUE          (pd.DataFrame)
+    - PRED          (pd.DataFrame)
+    - model_name    (str)
+    - dataset_name  (str)
+    - threshold     (float)
+    - args          (argparse.Namespace)
+
+  output :
+    - pd.DataFrame
+    - list
+    - list
+    - list
+
+  errors :
+    - AttributeError
+
+  notes  :
+
+  """
+  N = len(TRUE.index)
+  G = nx.Graph()
+  # All Predictions are initialized as False Positives
+  G.add_nodes_from([(i + N, {PHASE_STR : P[PHASE_STR],
+                             STATION_STR : P[STATION_STR],
+                             STATUS_STR : FP_STR})
+                    for i, P in PRED.iterrows()], bipartite=1)
+  start, _ = args.dates
+  pos = {i + N : (P[TIMESTAMP_STR] - start, 1) for i, P in PRED.iterrows()}
+  for i, T in TRUE.iterrows():
+    # All True are initialized as False Negatives
+    G.add_nodes_from([(i, {PHASE_STR : T[PHASE_STR],
+                           STATION_STR : T[STATION_STR],
+                           STATUS_STR : FN_STR})], bipartite=0)
+    pos[i] = (T[TIMESTAMP_STR] - start, 0)
+    PRED[TEMPORAL_STR] = (PRED[TIMESTAMP_STR] - T[TIMESTAMP_STR])\
+                           .apply(lambda x : td(seconds=abs(x)))
+    # TODO: Consider H71 error interval
+    # PICKS = PRED[PRED[TEMPORAL_STR] < H71_OFFSET[T[WEIGHT_STR]]]
+    PICKS = PRED[PRED[TEMPORAL_STR] <= PICK_OFFSET]
+    if PICKS.empty: continue
+    # If there are picks within the PICK_OFFSET, we change the status of the
+    # True and Predicted picks to True Positives and we add the corresponding
+    # edges to the graph
+    G.nodes[i][STATUS_STR] = TP_STR
+    for j, P in PICKS.iterrows():
+      G.add_edge(i, j + N, weight=dist_default(T, P))
+      G.nodes[j + N][STATUS_STR] = TP_STR
+  LINKS = nx.max_weight_matching(G)
+  for node in G.nodes:
+    # As there are more Predicted picks than True picks, we only traverse the
+    # True picks of the graph and remove the edges that are not part of
+    # the maximum weight matching
+    if node >= N: continue
+    for neighbor in copy.deepcopy(G.neighbors(node)):
+      #       TRUE, PRED
+      edge = (node, neighbor)
+      if edge not in LINKS: G.remove_edge(*edge)
+  TP, FN, FP = [], [], []
+  tags = [PWAVE, SWAVE, NONE_STR]
+  CFN_MTX = pd.DataFrame(0, index=tags, columns=tags, dtype=int)
+  for node in G.nodes:
+    deg = nx.degree(G, node)
+    if not deg: G.nodes[node][STATUS_STR] = FN_STR if node < N else FP_STR
+    elif deg > 1: raise AttributeError("The graph is not a matching")
+    # TRUE picks
+    if node < N:
+      t = TRUE.iloc[node]
+      if G.nodes[node][STATUS_STR] == TP_STR:
+        p = PRED.iloc[list(G.neighbors(node))[0] - N]
+        CFN_MTX.loc[t[PHASE_STR], p[PHASE_STR]] += 1
+        if t[PHASE_STR] == p[PHASE_STR]:
+          TP.append([model_name, dataset_name, t[STATION_STR], t[PHASE_STR],
+                     threshold, (t[TIMESTAMP_STR], p[TIMESTAMP_STR]),
+                     t[WEIGHT_STR]])
+      elif G.nodes[node][STATUS_STR] == FN_STR:
+        FN.append([model_name, dataset_name, t[STATION_STR], t[PHASE_STR],
+                   threshold, t[TIMESTAMP_STR], t[WEIGHT_STR]])
+        CFN_MTX.loc[TRUE.iloc[node][PHASE_STR], NONE_STR] += 1
+      else:
+        raise AttributeError(f"The TRUE node is not a {TP_STR} or {FN_STR}")
+    # PRED picks
+    else:
+      p = PRED.iloc[node - N]
+      # As the graph is a matching, the Predicted picks that are not part of
+      # the matching are False Positives
+      if G.nodes[node][STATUS_STR] == FP_STR:
+        FP.append([model_name, dataset_name, p[STATION_STR], p[PHASE_STR],
+                   threshold, p[TIMESTAMP_STR], p[PROBABILITY_STR]])
+        CFN_MTX.loc[NONE_STR, PRED.iloc[node - N][PHASE_STR]] += 1
+  if False and args.verbose:
+    node_color = [COLOR_ENCODING[G.nodes[node][STATUS_STR]]\
+                    [G.nodes[node][PHASE_STR]] for node in G.nodes]
+    fig, ax = plt.subplots(figsize=(15, 2))
+    nx.draw(G, pos=pos, ax=ax, node_color=node_color, edge_color='black',
+            width=2, node_size=10)
+    ax.axis('on')
+    ax.tick_params(bottom=True, labelbottom=True)
+    for node in G.nodes:
+      if node < N:
+        ax.axvline(x=pos[node][0] + PICK_OFFSET.seconds, color='k', linestyle='--')
+        ax.axvline(x=pos[node][0] - PICK_OFFSET.seconds, color='k', linestyle='--')
+    ax.grid()
+    ax.set_title(SPACE_STR.join([model_name, dataset_name]))
+    fig.tight_layout()
+    plt.show()
+    plt.close(fig=fig)
+  return CFN_MTX, TP, FN, FP
+
 def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
              args : argparse.Namespace) -> pd.DataFrame:
   """
@@ -215,9 +274,7 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   start, end = args.dates
   N_seconds = int((end - start) / (2 * PICK_OFFSET.total_seconds()))
   z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
-  TP = []
-  FN = []
-  FP = []
+  TP, FN, FP = [], [], []
   for threshold, (model, dataframe_m) in \
     itertools.product(z, PRED.groupby(MODEL_STR)):
     fig, _axs = plt.subplots(2, 2, figsize=(10, 9))
@@ -229,60 +286,14 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       CFN_MTX = pd.DataFrame(0, index=tags, columns=tags, dtype=int)
       for station, dataframe_s in dataframe_w.groupby(STATION_STR):
         TRUE_S = TRUE[TRUE[STATION_STR] == station].reset_index(drop=True)
-        PRED_S = dataframe_s[dataframe_s[PROBABILITY_STR] >= threshold]
-        PRED_S = PRED_S[[STATION_STR, TIMESTAMP_STR, PHASE_STR,
-                         PROBABILITY_STR]].reset_index(drop=True)
-        A, B = TRUE_S.shape[0], PRED_S.shape[0]
-        i, j = 0, 0
-        while i < A and j < B:
-          T = TRUE_S.loc[i]
-          P = PRED_S.loc[j]
-          sec = T[TIMESTAMP_STR] - P[TIMESTAMP_STR]
-          # True Positive
-          if td(seconds=abs(sec)) <= PICK_OFFSET:
-            tp = [model, weight, station, threshold, P[PHASE_STR],
-                  (T[TIMESTAMP_STR], P[TIMESTAMP_STR]), T[WEIGHT_STR]]
-            # Complete True Positive
-            if T[PHASE_STR] == P[PHASE_STR]: TP.append(tp)
-            # Partial True Positive
-            else: print(f"WARNING: Encountered partial TP", tp)
-            CFN_MTX.loc[T[PHASE_STR], P[PHASE_STR]] += 1
-            i += 1
-            j += 1
-          # False Positive
-          elif sec > 0.0:
-            fp = [model, weight, station, threshold, P[PHASE_STR],
-                  P[TIMESTAMP_STR], P[PROBABILITY_STR]]
-            FP.append(fp)
-            CFN_MTX.loc[NONE_STR, P[PHASE_STR]] += 1
-            j += 1
-          # False Negative
-          else:
-            fn = [model, weight, station, threshold, T[PHASE_STR],
-                  T[TIMESTAMP_STR], T[WEIGHT_STR]]
-            FN.append(fn)
-            if args.verbose:
-              print(f"WARNING: Missing prediction by", fn)
-            CFN_MTX.loc[T[PHASE_STR], NONE_STR] += 1
-            i += 1
-        # False Negative
-        while i < A:
-          T = TRUE_S.loc[i]
-          fn = [model, weight, station, threshold, T[PHASE_STR],
-                T[TIMESTAMP_STR], T[WEIGHT_STR]]
-          FN.append(fn)
-          if args.verbose:
-            print(f"WARNING: Missing prediction by", fn)
-          CFN_MTX.loc[T[PHASE_STR], NONE_STR] += 1
-          i += 1
-        # False Positive
-        while j < B:
-          P = PRED_S.loc[j]
-          fp = [model, weight, station, threshold, P[PHASE_STR],
-                P[TIMESTAMP_STR], P[PROBABILITY_STR]]
-          FP.append(fp)
-          CFN_MTX.loc[NONE_STR, PRED_S.loc[j, PHASE_STR]] += 1
-          j += 1
+        PRED_S = dataframe_s[dataframe_s[PROBABILITY_STR] >= threshold]\
+                  .reset_index(drop=True)
+        cfn_mtx, tp, fn, fp = recall(TRUE_S, PRED_S, model, weight, threshold,
+                                     args)
+        CFN_MTX += cfn_mtx
+        TP.extend(tp)
+        FN.extend(fn)
+        FP.extend(fp)
       CFN_MTX.loc[NONE_STR, NONE_STR] = N_seconds - CFN_MTX.sum().sum()
       disp = ConfMtxDisp(CFN_MTX.values, display_labels=CFN_MTX.columns)
       disp.plot(ax=ax, colorbar=False)
@@ -297,21 +308,21 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     axs[3].set(ylabel=None, yticklabels=[], title=None)
     axs[3].set_xlabel(args.weights[3], fontsize=14)
     axs[3].xaxis.tick_top()
-    fig.subplots_adjust(left=0.08, right=1.08, top=.95, bottom=0.05, 
+    fig.subplots_adjust(left=0.08, right=1.08, top=.95, bottom=0.05,
                         wspace=0.1, hspace=0.2)
     fig.colorbar(disp.im_, ax=axs, orientation='vertical',
                  label="Number of Picks", aspect=50, shrink=0.8)
     disp.im_.set_clim(1, N_seconds)
-    IMG_FILE = \
-      Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-           UNDERSCORE_STR.join([CONF_MTX_STR, model, str(threshold)]) + PNG_EXT)
+    IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                    UNDERSCORE_STR.join([CFN_MTX_STR, model, str(threshold)]) +
+                    PNG_EXT)
     plt.savefig(IMG_FILE)
     plt.close()
-  HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, THRESHOLD_STR, PHASE_STR,
+  HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, PHASE_STR, THRESHOLD_STR,
             TIMESTAMP_STR, TYPE_STR]
   # True Positives
   TP = pd.DataFrame(TP, columns=HEADER)
-  HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, THRESHOLD_STR, PHASE_STR,
+  HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, PHASE_STR, THRESHOLD_STR,
             TIMESTAMP_STR, PROBABILITY_STR]
   # False Negatives
   FN = pd.DataFrame(FN, columns=HEADER)
@@ -581,7 +592,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
     plt.close()
 
 def main(args : argparse.Namespace):
-  PRED = load_data(args)
+  PRED = Pkr.load_data(args)
   stations = args.station if (args.station is not None and
                               args.station != ALL_WILDCHAR_STR) else \
              PRED[STATION_STR].unique()
