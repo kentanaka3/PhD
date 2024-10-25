@@ -186,17 +186,14 @@ def recall(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
   N = len(TRUE.index)
   G = nx.Graph()
   # All Predictions are initialized as False Positives
-  G.add_nodes_from([(i + N, {PHASE_STR : P[PHASE_STR],
-                             STATION_STR : P[STATION_STR],
-                             STATUS_STR : FP_STR})
+  G.add_nodes_from([(i + N, {PHASE_STR : P[PHASE_STR], STATUS_STR : FP_STR})
                     for i, P in PRED.iterrows()], bipartite=1)
   start, _ = args.dates
   pos = {i + N : (P[TIMESTAMP_STR] - start, 1) for i, P in PRED.iterrows()}
   for i, T in TRUE.iterrows():
     # All True are initialized as False Negatives
-    G.add_nodes_from([(i, {PHASE_STR : T[PHASE_STR],
-                           STATION_STR : T[STATION_STR],
-                           STATUS_STR : FN_STR})], bipartite=0)
+    G.add_nodes_from([(i, {PHASE_STR : T[PHASE_STR], STATUS_STR : FN_STR})],
+                     bipartite=0)
     pos[i] = (T[TIMESTAMP_STR] - start, 0)
     PRED[TEMPORAL_STR] = (PRED[TIMESTAMP_STR] - T[TIMESTAMP_STR])\
                            .apply(lambda x : td(seconds=abs(x)))
@@ -204,9 +201,9 @@ def recall(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
     # PICKS = PRED[PRED[TEMPORAL_STR] < H71_OFFSET[T[WEIGHT_STR]]]
     PICKS = PRED[PRED[TEMPORAL_STR] <= PICK_OFFSET]
     if PICKS.empty: continue
-    # If there are picks within the PICK_OFFSET, we change the status of the
-    # True and Predicted picks to True Positives and we add the corresponding
-    # edges to the graph
+    # If there are picks within the OFFSET, we change the status of the True
+    # and Predicted picks to True Positive and we add the corresponding edges
+    # to the graph
     G.nodes[i][STATUS_STR] = TP_STR
     for j, P in PICKS.iterrows():
       G.add_edge(i, j + N, weight=dist_default(T, P))
@@ -214,20 +211,20 @@ def recall(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
   LINKS = nx.max_weight_matching(G)
   for node in G.nodes:
     # As there are more Predicted picks than True picks, we only traverse the
-    # True picks of the graph and remove the edges that are not part of
-    # the maximum weight matching
+    # True picks of the graph and remove the edges that are not part of the
+    # maximum weight matching
     if node >= N: continue
-    for neighbor in copy.deepcopy((G.neighbors(node))):
+    for neighbor in copy.deepcopy(G.neighbors(node)):
       #               TRUE, PRED            PRED, TRUE
       edge, edge_r = (node, neighbor), (neighbor, node)
-      if edge not in LINKS and edge_r not in LINKS: G.remove_edge(*edge)
+      if not (edge in LINKS or edge_r in LINKS): G.remove_edge(*edge)
   TP, FN, FP = [], [], []
   tags = [PWAVE, SWAVE, NONE_STR]
   CFN_MTX = pd.DataFrame(0, index=tags, columns=tags, dtype=int)
   for node in G.nodes:
     deg = nx.degree(G, node)
     if not deg: G.nodes[node][STATUS_STR] = FN_STR if node < N else FP_STR
-    elif deg > 1: raise AttributeError("The graph is not a matching")
+    elif deg > 1: raise AttributeError("The graph is not a matching graph")
     # TRUE picks
     if node < N:
       t = TRUE.iloc[node]
@@ -242,13 +239,12 @@ def recall(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
         FN.append([model_name, dataset_name, t[STATION_STR], t[PHASE_STR],
                    threshold, t[TIMESTAMP_STR], t[WEIGHT_STR]])
         CFN_MTX.loc[TRUE.iloc[node][PHASE_STR], NONE_STR] += 1
-      else:
-        raise AttributeError(f"The TRUE node is not a {TP_STR} or {FN_STR}")
+      else: raise AttributeError(f"The node is not a {TP_STR} or {FN_STR}")
     # PRED picks
     else:
       p = PRED.iloc[node - N]
-      # As the graph is a matching, the Predicted picks that are not part of
-      # the matching are False Positives
+      # As the graph is a matching graph, the Predicted picks that are not part
+      # of the matching graph must remain as False Positives
       if G.nodes[node][STATUS_STR] == FP_STR:
         FP.append([model_name, dataset_name, p[STATION_STR], p[PHASE_STR],
                    threshold, p[TIMESTAMP_STR], p[PROBABILITY_STR]])
@@ -476,12 +472,13 @@ def event_parser(filename : Path, stations : list, args : argparse.Namespace) \
   """
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
-  if Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT).exists() and \
-     Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT).exists() and \
+  WAVEFORMS_FILE = Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT)
+  ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
+  if ARGUMENTS_FILE.exists() and WAVEFORMS_FILE.exists() and \
      Pkr.primary_arguments(args) == Pkr.read_arguments(args):
     # As the arguments are the same, we can use the waveform catalog to search
     # for the waveforms given the events listed
-    WAVEFORMS = pd.read_csv(Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT))
+    WAVEFORMS = pd.read_csv(WAVEFORMS_FILE)
   else:
     # As the arguments are different, we need to regenerate the waveform
     # catalog manually taking into consideration the current arguments

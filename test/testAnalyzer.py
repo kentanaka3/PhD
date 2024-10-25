@@ -28,7 +28,7 @@ PRED_HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, STATION_STR, PHASE_STR,
 
 class TestPickParser(unittest.TestCase):
   @unittest.mock.patch("sys.argv",
-                       ["Picker.py", "-D", "230601", "230604", "-v", "-d",
+                       ["Analyzer.py", "-D", "230601", "230604", "-v", "-d",
                         TEST_PATH.__str__()])
   def test_parse_pick(self):
     args = Pkr.parse_arguments()
@@ -40,7 +40,7 @@ class TestPickParser(unittest.TestCase):
 
 class TestEventCounter(unittest.TestCase):
   @unittest.mock.patch("sys.argv",
-                       ["Picker.py", "-D", "230601", "230605", "-v", "-d",
+                       ["Analyzer.py", "-D", "230601", "230605", "-v", "-d",
                         TEST_PATH.__str__(), "-M", PHASENET_STR])
   def test_event_counter(self):
     args = Pkr.parse_arguments()
@@ -53,7 +53,7 @@ class TestEventCounter(unittest.TestCase):
 
 class TestConfMtx(unittest.TestCase):
   @unittest.mock.patch("sys.argv",
-                       ["Picker.py", "-D", "230601", "230601", "-v", "-d",
+                       ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
                         TEST_PATH.__str__()])
   def test_perfect(self):
     """
@@ -69,7 +69,7 @@ class TestConfMtx(unittest.TestCase):
     """
     args = Pkr.parse_arguments()
     STATION = "EG"
-    #        STATION              YEAR, M, D, H, M, S, MS  PHASE WEIGHT
+    #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), SWAVE, 0]]
     TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
@@ -98,7 +98,7 @@ class TestConfMtx(unittest.TestCase):
     self.assertListEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
-                       ["Picker.py", "-D", "230601", "230601", "-v", "-d",
+                       ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
                         TEST_PATH.__str__()])
   def test_flipped(self):
     """
@@ -114,7 +114,7 @@ class TestConfMtx(unittest.TestCase):
     """
     args = Pkr.parse_arguments()
     STATION = "EG"
-    #        STATION              YEAR, M, D, H, M, S, MS  PHASE WEIGHT
+    #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), SWAVE, 0]]
     TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
@@ -138,7 +138,7 @@ class TestConfMtx(unittest.TestCase):
     self.assertListEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
-                       ["Picker.py", "-D", "230601", "230601", "-v", "-d",
+                       ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
                         TEST_PATH.__str__()])
   def test_pred_over_true(self):
     """
@@ -155,7 +155,7 @@ class TestConfMtx(unittest.TestCase):
     """
     args = Pkr.parse_arguments()
     STATION = "EG"
-    #        STATION              YEAR, M, D, H, M, S, MS  PHASE WEIGHT
+    #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), SWAVE, 0]]
     TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
@@ -188,7 +188,7 @@ class TestConfMtx(unittest.TestCase):
     self.assertListEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
-                       ["Picker.py", "-D", "230601", "230601", "-v", "-d",
+                       ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
                         TEST_PATH.__str__()])
   def test_true_over_pred(self):
     """
@@ -206,7 +206,7 @@ class TestConfMtx(unittest.TestCase):
     """
     args = Pkr.parse_arguments()
     STATION = "EG"
-    #        STATION              YEAR, M, D, H, M, S, MS  PHASE WEIGHT
+    #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 4), PWAVE, 3]]
     TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
@@ -235,7 +235,7 @@ class TestConfMtx(unittest.TestCase):
     self.assertListEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
-                       ["Picker.py", "-D", "230601", "230601", "-v", "-d",
+                       ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
                         TEST_PATH.__str__()])
   def test_no_pred(self):
     """
@@ -251,7 +251,7 @@ class TestConfMtx(unittest.TestCase):
     """
     args = Pkr.parse_arguments()
     STATION = "EG"
-    #        STATION              YEAR, M, D, H, M, S, MS  PHASE WEIGHT
+    #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), SWAVE, 0]]
     TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
@@ -275,8 +275,8 @@ class TestConfMtx(unittest.TestCase):
     self.assertListEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
-                        ["Picker.py", "-D", "230601", "230601", "-v", "-d",
-                          TEST_PATH.__str__()])
+                       ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
+                        TEST_PATH.__str__()])
   def test_no_true(self):
     """
     OFFSET = 0.5 : |--"--|
@@ -291,7 +291,7 @@ class TestConfMtx(unittest.TestCase):
     """
     args = Pkr.parse_arguments()
     STATION = "EG"
-    #        STATION              YEAR, M, D, H, M, S, MS  PHASE WEIGHT
+    #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = []
     TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
     PRED = [
@@ -318,8 +318,8 @@ class TestConfMtx(unittest.TestCase):
     self.assertListEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
-                        ["Picker.py", "-D", "230601", "230601", "-v", "-d",
-                          TEST_PATH.__str__()])
+                       ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
+                        TEST_PATH.__str__()])
   def test_no_true_no_pred(self):
     """
     OFFSET = 0.5 : |--"--|
@@ -333,7 +333,7 @@ class TestConfMtx(unittest.TestCase):
     """
     args = Pkr.parse_arguments()
     STATION = "EG"
-    #        STATION              YEAR, M, D, H, M, S, MS  PHASE WEIGHT
+    #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = []
     TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
     PRED = []
@@ -352,8 +352,8 @@ class TestConfMtx(unittest.TestCase):
     EXPECTED = []
 
   @unittest.mock.patch("sys.argv",
-                        ["Picker.py", "-D", "230601", "230601", "-v", "-d",
-                          TEST_PATH.__str__()])
+                       ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
+                        TEST_PATH.__str__()])
   def test_true_pred(self):
     """
     OFFSET = 0.5 : |--"--|
@@ -370,7 +370,7 @@ class TestConfMtx(unittest.TestCase):
     """
     args = Pkr.parse_arguments()
     STATION = "EG"
-    #        STATION              YEAR, M, D, H, M, S, MS  PHASE WEIGHT
+    #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 4), SWAVE, 0]]
     TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)

@@ -61,8 +61,8 @@ def parse_arguments():
                       metavar="DATE", action=SortDatesAction,
                       default=[UTCDateTime.strptime("230601", DATE_FMT),
                                UTCDateTime.strptime("230801", DATE_FMT)],
-                      help="Specify the date (YYMMDD) range to work with. If "
-                           "files are not present")
+                      help="Specify the beggining and ending (inclusive) date "
+                           "(YYMMDD) range to work with.")
   parser.add_argument('-G', "--groups", nargs='+', required=False,
                       metavar=EMPTY_STR,
                       default=[BEG_DATE_STR, NETWORK_STR, STATION_STR],
@@ -181,7 +181,7 @@ def load_data(args : argparse.Namespace) -> pd.DataFrame:
         if args.verbose: HIST = []
         date = date_path.name
         date_obj = UTCDateTime.strptime(date, DATE_FMT)
-        if date_obj < start or date_obj > end: continue
+        if date_obj < start or date_obj >= end + ONE_DAY: continue
         for network_path in date_path.iterdir():
           network = network_path.name
           for station_path in network_path.iterdir():
@@ -255,7 +255,8 @@ def data_downloader(args : argparse.Namespace) -> None:
                               minradius=args.circdomain[2],
                               maxradius=args.circdomain[3])
     from obspy.clients.fdsn.mass_downloader import Restrictions, MassDownloader
-    restrictions = Restrictions(starttime=args.dates[0], endtime=args.dates[1],
+    start, end = args.dates
+    restrictions = Restrictions(starttime=start, endtime=end + ONE_DAY,
                                 network=COMMA_STR.join(args.network),
                                 station=COMMA_STR.join(args.station),
                                 channel_priorities=["HH[ZNE]", "EH[ZNE]",
@@ -359,7 +360,6 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
         continue
       start = UTCDateTime(trc.starttime.date)
       if trc.starttime.hour == 23: start += ONE_DAY
-      end = start + ONE_DAY
       # We start by assuming the trace file meets all the criterias:
       # (network, station, channel, date range). If the trace file does meet
       # we save the metadata to the list of files called the waveform table.
@@ -367,13 +367,14 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
       # If the user has specified the network different from the wildcard, then
       # we check if the network of the trace file is in the list of networks,
       # otherwise we assume the user wants to analyze all downloaded networks.
+      # The same logic applies to the station and channel.
       if args.network and args.network != [ALL_WILDCHAR_STR]:
         outcome = outcome and any([n == trc.network for n in args.network])
       if args.station and args.station != [ALL_WILDCHAR_STR] and outcome:
         outcome = outcome and any([n == trc.station for n in args.station])
       if args.channel and args.channel != [ALL_WILDCHAR_STR] and outcome:
         outcome = outcome and any([n == trc.channel for n in args.channel])
-      outcome = outcome and (args.dates[0] <= start and end <= args.dates[1])
+      outcome = outcome and (args.dates[0] <= start and start < args.dates[1])
       if outcome:
         WAVEFORMS_DATA.append([fr, trc.network, trc.station, trc.channel,
                                UTCDateTime.strftime(start, DATE_FMT)])
@@ -670,9 +671,8 @@ def get_model(model_name : str, dataset_name : str, silent = False) \
   try:
     model = MODEL_WEIGHTS_DICT[model_name].from_pretrained(dataset_name)
   except:
-    if not silent:
-      print(f"WARNING: Pretrained weights '{dataset_name}' not found for model"
-            f" '{model_name}'")
+    if not silent: print(f"WARNING: Pretrained weights '{dataset_name}' not "
+                         f"found for model '{model_name}'")
     return None
   # Enable GPU calls if available
   if GPU_RANK >= 0: model.cuda()
