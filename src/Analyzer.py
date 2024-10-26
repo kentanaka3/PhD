@@ -159,8 +159,8 @@ def plot_timeline(G : nx.Graph, pos : dict, N : int, model_name : str,
   plt.show()
   plt.close(fig=fig)
 
-def recall(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
-           dataset_name : str, threshold : float, args : argparse.Namespace) \
+def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
+             dataset_name : str, threshold : float, args : argparse.Namespace)\
       -> pd.DataFrame:
   """
   input  :
@@ -249,10 +249,10 @@ def recall(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
         FP.append([model_name, dataset_name, p[STATION_STR], p[PHASE_STR],
                    threshold, p[TIMESTAMP_STR], p[PROBABILITY_STR]])
         CFN_MTX.loc[NONE_STR, PRED.iloc[node - N][PHASE_STR]] += 1
-  if False and args.verbose: plot_timeline(G, pos, N, model_name, dataset_name)
+  if args.interactive: plot_timeline(G, pos, N, model_name, dataset_name)
   return CFN_MTX, TP, FN, FP
 
-def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
+def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
              args : argparse.Namespace) -> pd.DataFrame:
   """
   input  :
@@ -288,8 +288,8 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame,
         TRUE_S = TRUE[TRUE[STATION_STR] == station].reset_index(drop=True)
         PRED_S = dataframe_s[dataframe_s[PROBABILITY_STR] >= threshold]\
                   .reset_index(drop=True)
-        cfn_mtx, tp, fn, fp = recall(TRUE_S, PRED_S, model, weight, threshold,
-                                     args)
+        cfn_mtx, tp, fn, fp = conf_mtx(TRUE_S, PRED_S, model, weight,
+                                       threshold, args)
         CFN_MTX += cfn_mtx
         TP.extend(tp)
         FN.extend(fn)
@@ -604,7 +604,7 @@ def main(args : argparse.Namespace):
     PRED.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                      PRED_STR + CSV_EXT), index=False)
   plot_data(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
-  TP = conf_mtx(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
+  TP = stat_test(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
   time_displacement(TP, args)
 
 if __name__ == "__main__": main(Pkr.parse_arguments())

@@ -170,6 +170,7 @@ def load_data(args : argparse.Namespace) -> pd.DataFrame:
   global DATA_PATH
   DATA_PATH  = Path(args.directory).parent
   CLF_PATH = Path(DATA_PATH, CLF_STR)
+  if not CLF_PATH.exists(): raise FileNotFoundError
   DATA = []
   HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR,
             PHASE_STR, PROBABILITY_STR]
@@ -577,11 +578,16 @@ def interactive_plot(stream : obspy.Stream, picks : sbu.PickList,
   """
   events = [(np.datetime64(pick.peak_time), pick.peak_value,
              ('b' if pick.phase == PWAVE else 'r')) for pick in picks]
-  fig = stream.plot(handle=True, method='full')
-  fig.suptitle(SPACE_STR.join([fig.get_suptitle(), model_name, dataset_name]))
+  fig = stream.plot(handle=True, method='full', size=(3000, 1000))
+  fig.suptitle(SPACE_STR.join([fig.get_suptitle(), model_name, dataset_name]),
+               fontsize=24)
   for ax in fig.get_axes():
+    for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
+                 ax.get_xticklabels() + ax.get_yticklabels()):
+      item.set_fontsize(18)
     for p, a, c in events: ax.axvline(p, linestyle='--', color=c, alpha=a)
-  plt.show(block=False)
+  fig.tight_layout()
+  plt.show()
 
 def classify_stream(categories : tuple, trace_files, MODELS : dict,
                     args : argparse.Namespace) -> None:
@@ -636,6 +642,7 @@ def classify_stream(categories : tuple, trace_files, MODELS : dict,
               f"preloaded weight: {dataset_name}, categorized by {categories}")
         print(output)
       if args.interactive:
+        # TODO: Plot without blocking the execution of the pipeline
         interactive_plot(stream, output, model_name, dataset_name)
   for CLF_FILE, model_name, dataset_name in clf_found:
     with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)

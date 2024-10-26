@@ -26,6 +26,9 @@ TRUE_HEADER = [STATION_STR, TIMESTAMP_STR, PHASE_STR, WEIGHT_STR]
 PRED_HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, STATION_STR, PHASE_STR,
                PROBABILITY_STR]
 
+STATION = "EG"
+THRESHOLD = 0.3
+
 class TestPickParser(unittest.TestCase):
   @unittest.mock.patch("sys.argv",
                        ["Analyzer.py", "-D", "230601", "230604", "-v", "-d",
@@ -62,13 +65,12 @@ class TestConfMtx(unittest.TestCase):
     TRUE : |----------------P---------------------------------S---------------|
                          |--"--|                           |--"--|
     PRED : |----------------P---------------------------------S---------------|
-    OUTPUT: P [1, 0,  0]
-            S [0, 1,  0]
-            N [0, 0, 64]
-               P  S   N
+    OUTPUT: P [1, 0, 0]
+            S [0, 1, 0]
+            N [0, 0, 0]
+               P  S  N : PRED
     """
     args = Pkr.parse_arguments()
-    STATION = "EG"
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), SWAVE, 0]]
@@ -78,9 +80,8 @@ class TestConfMtx(unittest.TestCase):
             [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
              STATION, SWAVE, 0.3372562]]
     PRED = pd.DataFrame(PRED, columns=PRED_HEADER)
-    THRESHOLD = 0.3
-    CFN_MTX, TP, FN, FP = recall(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
-                                 THRESHOLD, args)
+    CFN_MTX, TP, FN, FP = conf_mtx(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
+                                   THRESHOLD, args)
     EXPECTED = [[1, 0, 0],
                 [0, 1, 0],
                 [0, 0, 0]]
@@ -107,13 +108,12 @@ class TestConfMtx(unittest.TestCase):
     TRUE : |----------------P---------------------------------S---------------|
                          |--"--|                           |--"--|
     PRED : |----------------S---------------------------------P---------------|
-    OUTPUT: P [0, 1,  0]
-            S [1, 0,  0]
-            N [0, 0, 64]
-               P  S   N
+    OUTPUT: P [0, 1, 0]
+            S [1, 0, 0]
+            N [0, 0, 0]
+               P  S  N : PRED
     """
     args = Pkr.parse_arguments()
-    STATION = "EG"
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), SWAVE, 0]]
@@ -123,9 +123,8 @@ class TestConfMtx(unittest.TestCase):
             [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
              STATION, PWAVE, 0.3372562]]
     PRED = pd.DataFrame(PRED, columns=PRED_HEADER)
-    THRESHOLD = 0.3
-    CFN_MTX, TP, FN, FP = recall(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
-                                 THRESHOLD, args)
+    CFN_MTX, TP, FN, FP = conf_mtx(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
+                                   THRESHOLD, args)
     EXPECTED = [[0, 1, 0],
                 [1, 0, 0],
                 [0, 0, 0]]
@@ -148,13 +147,12 @@ class TestConfMtx(unittest.TestCase):
                          |:-"--|:                          |--"--|
     PRED : |--------------:-PP--:-----------------------------S---------------|
                           |--"--|
-    OUTPUT: P [1, 0,  0]
-            S [0, 1,  0]
-            N [1, 0, 63]
-               P  S   N : PRED
+    OUTPUT: P [1, 0, 0]
+            S [0, 1, 0]
+            N [1, 0, 0]
+               P  S  N : PRED
     """
     args = Pkr.parse_arguments()
-    STATION = "EG"
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), SWAVE, 0]]
@@ -167,9 +165,8 @@ class TestConfMtx(unittest.TestCase):
       [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
        STATION, SWAVE, 0.3372562]]
     PRED = pd.DataFrame(PRED, columns=PRED_HEADER)
-    THRESHOLD = 0.3
-    CFN_MTX, TP, FN, FP = recall(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
-                                 THRESHOLD, args)
+    CFN_MTX, TP, FN, FP = conf_mtx(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
+                                   THRESHOLD, args)
     EXPECTED = [[1, 0, 0],
                 [0, 1, 0],
                 [1, 0, 0]]
@@ -198,14 +195,13 @@ class TestConfMtx(unittest.TestCase):
     TRUE : |--------------:-P---P---------------------------------------------|
                           :  |--"--|
     PRED : |--------------:--P--:-----------------------------S---------------|
-                          |--"--|
-    OUTPUT: P [1, 0,  1]
-            S [0, 0,  0]
-            N [0, 1, 63]
-               P  S   N : PRED
+                          |--"--|                          |--"--|
+    OUTPUT: P [1, 0, 1]
+            S [0, 0, 0]
+            N [0, 1, 0]
+               P  S  N : PRED
     """
     args = Pkr.parse_arguments()
-    STATION = "EG"
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 4), PWAVE, 3]]
@@ -216,9 +212,8 @@ class TestConfMtx(unittest.TestCase):
       [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
        STATION, SWAVE, 0.3372562]]
     PRED = pd.DataFrame(PRED, columns=PRED_HEADER)
-    THRESHOLD = 0.3
-    CFN_MTX, TP, FN, FP = recall(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
-                                 THRESHOLD, args)
+    CFN_MTX, TP, FN, FP = conf_mtx(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
+                                   THRESHOLD, args)
     EXPECTED = [[1, 0, 1],
                 [0, 0, 0],
                 [0, 1, 0]]
@@ -242,24 +237,22 @@ class TestConfMtx(unittest.TestCase):
     OFFSET = 0.5 : |--"--|
            |------------------------------- 66 -------------------------------|
     TRUE : |----------------P---------------------------------S---------------|
-                         |--"--|
+                         |--"--|                           |--"--|
     PRED : |------------------------------------------------------------------|
-    OUTPUT: P [0, 0,  1]
-            S [0, 0,  1]
-            N [0, 0, 64]
-               P  S   N : PRED
+    OUTPUT: P [0, 0, 1]
+            S [0, 0, 1]
+            N [0, 0, 0]
+               P  S  N : PRED
     """
     args = Pkr.parse_arguments()
-    STATION = "EG"
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), SWAVE, 0]]
     TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
     PRED = []
     PRED = pd.DataFrame(PRED, columns=PRED_HEADER)
-    THRESHOLD = 0.3
-    CFN_MTX, TP, FN, FP = recall(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
-                                 THRESHOLD, args)
+    CFN_MTX, TP, FN, FP = conf_mtx(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
+                                   THRESHOLD, args)
     EXPECTED = [[0, 0, 1],
                 [0, 0, 1],
                 [0, 0, 0]]
@@ -283,14 +276,13 @@ class TestConfMtx(unittest.TestCase):
            |------------------------------- 66 -------------------------------|
     TRUE : |------------------------------------------------------------------|
     PRED : |----------------P---------------------------------S---------------|
-                         |--"--|
-    OUTPUT: P [0, 0,  0]
-            S [0, 0,  0]
-            N [1, 1, 64]
-               P  S   N : PRED
+                         |--"--|                           |--"--|
+    OUTPUT: P [0, 0, 0]
+            S [0, 0, 0]
+            N [1, 1, 0]
+               P  S  N : PRED
     """
     args = Pkr.parse_arguments()
-    STATION = "EG"
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = []
     TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
@@ -300,9 +292,8 @@ class TestConfMtx(unittest.TestCase):
       [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
        STATION, SWAVE, 0.3372562]]
     PRED = pd.DataFrame(PRED, columns=PRED_HEADER)
-    THRESHOLD = 0.3
-    CFN_MTX, TP, FN, FP = recall(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
-                                 THRESHOLD, args)
+    CFN_MTX, TP, FN, FP = conf_mtx(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
+                                   THRESHOLD, args)
     EXPECTED = [[0, 0, 0],
                 [0, 0, 0],
                 [1, 1, 0]]
@@ -326,21 +317,19 @@ class TestConfMtx(unittest.TestCase):
            |------------------------------- 66 -------------------------------|
     TRUE : |------------------------------------------------------------------|
     PRED : |------------------------------------------------------------------|
-    OUTPUT: P [0, 0,  0]
-            S [0, 0,  0]
-            N [0, 0, 66]
-               P  S   N : PRED
+    OUTPUT: P [0, 0, 0]
+            S [0, 0, 0]
+            N [0, 0, 0]
+               P  S  N : PRED
     """
     args = Pkr.parse_arguments()
-    STATION = "EG"
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = []
     TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
     PRED = []
     PRED = pd.DataFrame(PRED, columns=PRED_HEADER)
-    THRESHOLD = 0.3
-    CFN_MTX, TP, FN, FP = recall(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
-                                 THRESHOLD, args)
+    CFN_MTX, TP, FN, FP = conf_mtx(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
+                                   THRESHOLD, args)
     EXPECTED = [[0, 0, 0],
                 [0, 0, 0],
                 [0, 0, 0]]
@@ -350,6 +339,7 @@ class TestConfMtx(unittest.TestCase):
     EXPECTED = []
     self.assertListEqual(EXPECTED, FN)
     EXPECTED = []
+    self.assertListEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
                        ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
@@ -359,17 +349,16 @@ class TestConfMtx(unittest.TestCase):
     OFFSET = 0.5 : |--"--|
            |------------------------------- 66 -------------------------------|
                          |--"--|
-    TRUE : |---------------:P--:S:---:----------------------------------------|
-                           : |-:":-| :
-    PRED : |---------------:--P:-:S--:------------------------S---------------|
-                           |--"--|
-    OUTPUT: P [1, 0,  0]
-            S [0, 1,  0]
-            N [0, 1, 63]
-               P  S   N : PRED
+    TRUE : |----------------P--:S-:--:----------------------------------------|
+                            :|-:"-:| :
+    PRED : |----------------:--P--:S-:------------------------S---------------|
+                            |--"--|                        |--"--|
+    OUTPUT: P [1, 0, 0]
+            S [0, 1, 0]
+            N [0, 1, 0]
+               P  S  N : PRED
     """
     args = Pkr.parse_arguments()
-    STATION = "EG"
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 4), SWAVE, 0]]
@@ -382,9 +371,8 @@ class TestConfMtx(unittest.TestCase):
       [PHASENET_STR, ORIGINAL_STR, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
        STATION, SWAVE, 0.3372562]]
     PRED = pd.DataFrame(PRED, columns=PRED_HEADER)
-    THRESHOLD = 0.3
-    CFN_MTX, TP, FN, FP = recall(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
-                                 THRESHOLD, args)
+    CFN_MTX, TP, FN, FP = conf_mtx(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
+                                   THRESHOLD, args)
     EXPECTED = [[1, 0, 0],
                 [0, 1, 0],
                 [0, 1, 0]]
@@ -402,5 +390,4 @@ class TestConfMtx(unittest.TestCase):
                  UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0.3372562]]
     self.assertListEqual(EXPECTED, FP)
 
-if __name__ == "__main__":
-  unittest.main()
+if __name__ == "__main__": unittest.main()
