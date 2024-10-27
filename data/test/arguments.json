@@ -14,7 +14,7 @@
   "CHANNEL": null,
   "BEGDT": [
     "2023-06-01T00:00:00.000000Z",
-    "2023-06-05T00:00:00.000000Z"
+    "2023-06-04T00:00:00.000000Z"
   ],
   "GROUPS": [
     "BEGDT",
@@ -24,7 +24,7 @@
   "DIRECTORY": "/Users/admin/Desktop/Monica/PhD/data/test/waveforms",
   "P": 0.2,
   "S": 0.1,
-  "JULIAN": false,
+  "JULIAN": null,
   "DENOISER": false,
   "DOMAIN": [
     46.3583,

@@ -38,6 +38,11 @@ import seisbench.generate as sbg
 def is_date(string : str) -> UTCDateTime:
   return UTCDateTime.strptime(string, DATE_FMT)
 
+def is_julian(string : str) -> UTCDateTime:
+  # TODO: Define and convert Julian date to Gregorian date
+  raise NotImplementedError
+  return UTCDateTime.strptime(string, DATE_FMT)._set_julday(string)
+
 def is_file_path(string : str) -> Path:
   if os.path.isfile(string): return Path(string)
   else: raise NotADirectoryError(string)
@@ -57,18 +62,10 @@ def parse_arguments():
                       help="Specify a set of Channels to analyze. To allow "
                            "downloading data for any channel, set this option "
                            f"to \'{ALL_WILDCHAR_STR}\'.")
-  parser.add_argument('-D', "--dates", nargs=2, required=False, type=is_date,
-                      metavar="DATE", action=SortDatesAction,
-                      default=[UTCDateTime.strptime("230601", DATE_FMT),
-                               UTCDateTime.strptime("230801", DATE_FMT)],
-                      help="Specify the beggining and ending (inclusive) date "
-                           "(YYMMDD) range to work with.")
   parser.add_argument('-G', "--groups", nargs='+', required=False,
                       metavar=EMPTY_STR,
                       default=[BEG_DATE_STR, NETWORK_STR, STATION_STR],
                       help="Analize the data based on a specified list")
-  parser.add_argument('-J', "--julian", default=False, action="store_true",
-                      help="Transform the selected dates into Julian date.")
   # TODO: Implement data retrieval
   parser.add_argument('-K', "--key", default=None, required=False,
                       type=is_file_path, metavar=EMPTY_STR,
@@ -97,7 +94,6 @@ def parse_arguments():
                            "WARNING: Weights which are not available for the "
                            "selected models will not be considered")
   parser.add_argument('-b', "--batch", default=4096, type=int, required=False,
-                      metavar=EMPTY_STR,
                       help="Batch size for the Machine Learning model")
   parser.add_argument('-d', "--directory", required=False, type=is_dir_path,
                       default=Path(DATA_PATH, WAVEFORMS_STR),
@@ -122,16 +118,28 @@ def parse_arguments():
                       help="Enable PyRocko calls")
   parser.add_argument("--timing", default=False, action='store_true',
                       required=False, help="Enable timing")
+  date_group = parser.add_mutually_exclusive_group(required=False)
+  date_group.add_argument('-D', "--dates", required=False, metavar="YYMMDD",
+                          type=is_date, nargs=2, action=SortDatesAction,
+                          default=[UTCDateTime.strptime("230601", DATE_FMT),
+                                   UTCDateTime.strptime("230801", DATE_FMT)],
+                          help="Specify the beginning and ending (inclusive) "
+                               "Gregorian date (YYMMDD) range to work with.")
+  date_group.add_argument('-J', "--julian", required=False, metavar="YYMMDD",
+                          action=SortDatesAction, type=is_julian, default=None,
+                          nargs=2,
+                          help="Specify the beginning and ending (inclusive) "
+                               "Julian date (YYMMDD) range to work with.")
   domain_group = parser.add_mutually_exclusive_group(required=False)
   domain_group.add_argument("--rectdomain", default=None, type=float, nargs=4,
-                            metavar=('min_lat', 'max_lat', 'min_lon',
-                                     'max_lon'),
+                            metavar=("min_lat", "max_lat", "min_lon",
+                                     "max_lon"),
                             help="Rectangular domain to download the data: "
                                  "[minimum latitude] [maximum latitude] "
                                  "[minimum longitude] [maximum longitude]")
   domain_group.add_argument("--circdomain", nargs=4, type=float,
                             default=[46.3583, 12.808, 0., 0.3],
-                            metavar=('lat', 'lon', 'min_rad', 'max_rad'),
+                            metavar=("lat", "lon", "min_rad", "max_rad"),
                             help="Circular domain to download the data: "
                                  "[latitude] [longitude] [minimum radius] "
                                  "[maximum radius]")
@@ -190,8 +198,8 @@ def load_data(args : argparse.Namespace) -> pd.DataFrame:
             f = Path(station_path, ("D_" if args.denoiser else EMPTY_STR) + \
                      UNDERSCORE_STR.join([date, network, station, model,
                                           weight]) + PICKLE_EXT)
-            PICKS = [[model, weight, p.peak_time, network, station, p.phase,
-                      p.peak_value] for p in read_data(f)]
+            PICKS = [[model, weight, p.peak_time.datetime, network, station,
+                      p.phase, p.peak_value] for p in read_data(f)]
             DATA += PICKS
             PICKS = pd.DataFrame(PICKS, columns=HEADER)
             if args.verbose:
@@ -201,11 +209,13 @@ def load_data(args : argparse.Namespace) -> pd.DataFrame:
               HIST.append([station_path.relative_to(date_path).__str__(), *w])
         if args.verbose:
           HIST = pd.DataFrame(HIST, columns=[FILE_STR, *reversed(z[:-1])])\
-                  .set_index(FILE_STR).sort_values(z[:-1], ascending=False)
+                   .set_index(FILE_STR).sort_values(z[:-1], ascending=False)
           IMG_FILE = \
             Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                UNDERSCORE_STR.join(["HIST", model, weight, date]) + PNG_EXT)
+                 UNDERSCORE_STR.join(["HIST", model, weight, date]) + PNG_EXT)
           HIST.plot(kind='bar', stacked=True, figsize=(20, 7))
+          for leg in plt.legend().get_texts():
+            leg.set_text(rf"P $\geq$ {leg.get_text()}")
           plt.title(SPACE_STR.join([model, weight, date]))
           plt.tight_layout()
           plt.savefig(IMG_FILE)
@@ -633,9 +643,6 @@ def classify_stream(categories : tuple, trace_files, MODELS : dict,
       output = MODEL.classify(stream, batch_size=args.batch,
                               P_threshold=args.pwave,
                               S_threshold=args.swave).picks
-      THRESHOLD_DICT = {PWAVE : args.pwave, SWAVE : args.swave}
-      output = sbu.PickList([pick for pick in output if pick.peak_value > \
-                             THRESHOLD_DICT[pick.phase]])
       with open(CLF_FILE, 'wb') as fp: pickle.dump(output, fp)
       if args.verbose:
         print(f"Classification results for model: {model_name}, with "

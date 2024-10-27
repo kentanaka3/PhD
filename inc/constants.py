@@ -43,6 +43,7 @@ SPACE_STR = ' '
 COMMA_STR = ','
 NONE_STR = "None"
 CLF_STR = "classified"
+AST_STR = "associated"
 FILE_STR = "file"
 TEMPORAL_STR = "tmp"
 STATUS_STR = "status"
@@ -74,6 +75,7 @@ CFN_MTX_STR = "CM"
 CMTV_PICKS_STR = "CP"
 TIME_DSPLCMT_STR = "TD"
 
+# TODO: Add Tabular data for relational databases for future development
 
 # Extensions
 CSV_STR       = "csv"
@@ -153,6 +155,12 @@ ELEVATION_STR = "elevation"     # Elevation in meters
 X_COORD_STR = "x(km)"           # X coordinate in kilometers
 Y_COORD_STR = "y(km)"           # Y coordinate in kilometers
 Z_COORD_STR = "z(km)"           # Z coordinate in kilometers
+MAGNITUDE_STR = "magnitude"
+VELOCITY_STR = "vel"
+METHOD_STR = "method"
+DIMENSIONS_STR = "dims"
+GAUSS_MIX_MODEL_STR = "GMM"
+BAYES_GAUSS_MIX_MODEL_STR = "B" + GAUSS_MIX_MODEL_STR
 
 ARGUMENTS_STR = "arguments"
 WAVEFORMS_STR = "waveforms"
@@ -218,3 +226,48 @@ GEONET_CLIENT_STR = "GEONET"
 GEONET_CLIENT_STR = "GEONET"
 OGS_CLIENT_STR    = "http://158.110.30.217:8080"
 RASPISHAKE_CLIENT_STR = "RASPISHAKE"
+
+ASSOCIATION_CONFIG = {
+  DIMENSIONS_STR : [X_COORD_STR, Y_COORD_STR, Z_COORD_STR],
+  "use_dbscan" : True,
+  "use_amplitude" : False,
+  X_COORD_STR : (250, 600),
+  Y_COORD_STR : (7200, 8000),
+  Z_COORD_STR : (0, 150),
+  VELOCITY_STR : {
+    PWAVE.lower(): 6.0,
+    SWAVE.lower(): 6.0 / 1.75
+  },
+  METHOD_STR : BAYES_GAUSS_MIX_MODEL_STR,
+  "oversample_factor" : 4,
+  "dbscan_eps" : 0.5,
+  "dbscan_min_samples" : 3,
+  "min_picks_per_eq" : 5,
+  "min_p_picks_per_eq" : 0,
+  "min_s_picks_per_eq" : 0,
+  "max_sigma11" : 3.0,
+  "max_sigma22" : 1.0,
+  "max_sigma12" : 1.0,
+}
+
+# DBSCAN
+ASSOCIATION_CONFIG["bfgs_bounds"] = (
+  (ASSOCIATION_CONFIG[X_COORD_STR][0] - 1, ASSOCIATION_CONFIG[X_COORD_STR][1] + 1),  # x
+  (ASSOCIATION_CONFIG[Y_COORD_STR][0] - 1, ASSOCIATION_CONFIG[X_COORD_STR][1] + 1),  # y
+  (0, ASSOCIATION_CONFIG[Z_COORD_STR][1] + 1),  # x
+  (None, None),  # t
+)
+
+EIKONAL_P = [3.0, 3.59,  4.0,  4.8, 5.59, 6.5, 8.0]
+
+ASSOCIATION_CONFIG["eikonal"] = {
+  VELOCITY_STR : {
+    PWAVE.lower(): EIKONAL_P,
+    SWAVE.lower(): [v / 1.75 for v in EIKONAL_P],
+    "z" : [0.0, 0.5, 2.0, 4.0, 6.0, 12.0, 30.0]
+  },
+  "h": 1.0,
+  "xlim": ASSOCIATION_CONFIG[X_COORD_STR],
+  "ylim": ASSOCIATION_CONFIG[Y_COORD_STR],
+  "zlim": ASSOCIATION_CONFIG[Z_COORD_STR]
+}

@@ -46,9 +46,10 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   MSG = f"Cumulative number of {phase} picks"
   if args.verbose: print(MSG)
   start, end = args.dates
-  PRED = PRED[(PRED[PHASE_STR] == phase) & (PRED[TIMESTAMP_STR] >= start)]
+  PRED = PRED[(PRED[PHASE_STR] == phase) &
+              (PRED[TIMESTAMP_STR] >= start.datetime)]
   TRUE = TRUE[(TRUE[PHASE_STR] == phase)].reset_index(drop=True)
-  x = [start]
+  x = [start.datetime]
   while x[-1] <= end: x.append(x[-1] + ONE_DAY)
   z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
 
@@ -68,9 +69,10 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       for threshold in z:
         y = [len(data[(data[PROBABILITY_STR] >= threshold) &
                       (data[TIMESTAMP_STR] <= d)].index) for d in x]
-        axs[i].plot([np.datetime64(t.datetime) for t in x], y, label=threshold)
+        axs[i].plot([np.datetime64(t) for t in x], y,
+                    label=rf"P $\geq$ {threshold}")
         y_max = max(y_max, max(y))
-      axs[i].plot([np.datetime64(t.datetime) for t in x], y_true, label="True",
+      axs[i].plot([np.datetime64(t) for t in x], y_true, label="True",
                   color="k")
       y_max = max(y_max, max(y_true))
     for ax in axs:
@@ -106,7 +108,8 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       for threshold in z:
         y = [len(data[(data[PROBABILITY_STR] >= threshold) &
                       (data[TIMESTAMP_STR] <= d)].index) for d in x]
-        axs[i].plot([np.datetime64(t.datetime) for t in x], y, label=threshold)
+        axs[i].plot([np.datetime64(t) for t in x], y,
+                    label=rf"P $\geq$ {threshold}")
         y_max = max(y_max, max(y))
     for ax in axs:
       ax.set_ylim(0, y_max)
@@ -576,7 +579,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
       for threshold in z:
         data = dataframe[dataframe[THRESHOLD_STR] == threshold][TIMESTAMP_STR]
         counts, _ = np.histogram(data, bins=bins)
-        ax.plot(bins[:-1], counts, label=threshold)
+        ax.plot(bins[:-1], counts, label=rf"P $\geq$ {threshold}")
       ax.set(xlim=(-0.5, 0.5), ylim=(0, m))
       ax.grid()
       ax.legend()
