@@ -1,8 +1,8 @@
-all:
-	python -m src.AdriaArray
-
 Leo:
-	bash Analyze.sh src/AdriaArray.py
+	bash Analyze.sh 1 4 MAKE src/Picker.py
+	bash Analyze.sh 1 2 MAKE src/Picker.py
+	bash Analyze.sh 1 1 MAKE src/Picker.py
+
 
 results:
 	cp img/CP_EQTransformer.png doc/img/CP_EQTransformer.png
@@ -12,17 +12,29 @@ results:
 	cp img/TPFN_* doc/img/
 	cp img/TPFNFP_* doc/img/
 
-testing:
-	python -m test.testAdriaArray
+testEnv:
+	bash Analyze.sh 1 "1 2 4" TestEnv test/testEnv.py
+
+testPicker:
+	bash Analyze.sh 1 "1 2 4" TestPicker test/testPicker.py
+
+testAnalyzer:
+	bash Analyze.sh 1 1 TestAnalyzer test/testAnalyzer.py
+
+testAssociator:
+	bash Analyze.sh 1 "1 2 4" TestAssociator test/testAssociator.py
+
+picker:
+	bash Analyze.sh 1 "1 2 4" "" src/Picker.py -v --force
+
+analyzer:
+	bash Analyze.sh 1 1 "" src/Analyze.py -v --force
+
+associator:
+	bash Analyze.sh 1 "1 2 4" "" src/Associator.py -v --force
 
 clean:
-	rm -f K*.err K*.out; clear
+	rm -f k*.err k*.out report*.nsys-rep report*.qdstrm; module purge; clear
 
-clean_annotate:
-	rm -rf data/annotated && clear
-
-clean_classify: clean_annotate
+clean_classify:
 	rm -rf data/classified && clear
-
-clean_process: clean_classify
-	rm -rf data/processed && clear

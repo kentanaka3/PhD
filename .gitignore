@@ -21,8 +21,11 @@ Analyze.sh
 andrea.sh
 *.out
 *.err
+*.csv
 .vscode/*
 etna_data/*
 ktanakah.sh
 acarducci.sh
 img/*.eps
+*.nsys-rep
+data/arguments.json

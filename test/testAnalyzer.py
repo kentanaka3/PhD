@@ -7,13 +7,10 @@ SRC_PATH = os.path.join(PRJ_PATH, "src")
 import sys
 # Add to path
 if SRC_PATH not in sys.path: sys.path.append(SRC_PATH)
-import json
-import shutil
 import unittest
 from Analyzer import *
 import Picker as Pkr
 from constants import *
-from datetime import timedelta as td
 
 BASE_PATH = Path(PRJ_PATH, "data")
 DATA_PATH = Path(BASE_PATH, "test")
