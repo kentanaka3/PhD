@@ -1,8 +1,7 @@
 Leo:
-	bash Analyze.sh 1 4 MAKE src/Picker.py
-	bash Analyze.sh 1 2 MAKE src/Picker.py
-	bash Analyze.sh 1 1 MAKE src/Picker.py
-
+	bash Analyze.sh 1 4 MAKE src/Picker.py -D 230601 230605 -v --force
+	bash Analyze.sh 1 2 MAKE src/Picker.py -D 230601 230605 -v --force
+	bash Analyze.sh 1 1 MAKE src/Picker.py -D 230601 230605 -v --force
 
 results:
 	cp img/CP_EQTransformer.png doc/img/CP_EQTransformer.png
