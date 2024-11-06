@@ -44,7 +44,7 @@ def associate_events(PRED : pd.DataFrame, STATION : pd.DataFrame,
   if PRED.empty: return
   PRED[ID_STR] = PRED[NETWORK_STR] + PERIOD_STR + PRED[STATION_STR]
   PRED.rename(columns={PHASE_STR : TYPE_STR}, inplace=True)
-  print(PRED)
+  PRED[TIMESTAMP_STR] = PRED[TIMESTAMP_STR].apply(lambda x: x.datetime)
   catalog, assignment = association(PRED, STATION, config=ASSOCIATION_CONFIG,
                                     method=ASSOCIATION_CONFIG[METHOD_STR])
   print(catalog)
@@ -66,7 +66,6 @@ def main(args : argparse.Namespace) -> None:
               station.longitude, station.latitude, station.elevation)
              for network in INVENTORY for station in network}
   STATION = pd.DataFrame(STATION, columns=HEADER)
-  print(STATION)
   # if args.verbose: station_graph(INVENTORY)
   THRESHOLDS = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
   PRED = Pkr.load_data(args)

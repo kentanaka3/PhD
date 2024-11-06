@@ -482,6 +482,8 @@ def event_parser(filename : Path, stations : list, args : argparse.Namespace) \
     # As the arguments are the same, we can use the waveform catalog to search
     # for the waveforms given the events listed
     WAVEFORMS = pd.read_csv(WAVEFORMS_FILE)
+    WAVEFORMS[BEG_DATE_STR] = WAVEFORMS[BEG_DATE_STR].apply(lambda x:
+                                UTCDateTime.strptime(str(x), DATE_FMT))
   else:
     # As the arguments are different, we need to regenerate the waveform
     # catalog manually taking into consideration the current arguments
@@ -597,6 +599,8 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
     plt.close()
 
 def main(args : argparse.Namespace):
+  global DATA_PATH
+  DATA_PATH = Path(args.directory).parent
   PRED = Pkr.load_data(args)
   stations = args.station if (args.station is not None and
                               args.station != ALL_WILDCHAR_STR) else \

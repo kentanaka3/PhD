@@ -198,7 +198,7 @@ def load_data(args : argparse.Namespace) -> pd.DataFrame:
             f = Path(station_path, ("D_" if args.denoiser else EMPTY_STR) + \
                      UNDERSCORE_STR.join([date, network, station, model,
                                           weight]) + PICKLE_EXT)
-            PICKS = [[model, weight, p.peak_time.datetime, network, station,
+            PICKS = [[model, weight, p.peak_time, network, station,
                       p.phase, p.peak_value] for p in read_data(f)]
             DATA += PICKS
             PICKS = pd.DataFrame(PICKS, columns=HEADER)
@@ -385,7 +385,7 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
         outcome = outcome and any([n == trc.station for n in args.station])
       if args.channel and args.channel != [ALL_WILDCHAR_STR] and outcome:
         outcome = outcome and any([n == trc.channel for n in args.channel])
-      outcome = outcome and (args.dates[0] <= start and start < args.dates[1])
+      outcome = outcome and (args.dates[0] <= start and start <= args.dates[1])
       if outcome:
         WAVEFORMS_DATA.append([fr, trc.network, trc.station, trc.channel,
                                UTCDateTime.strftime(start, DATE_FMT)])

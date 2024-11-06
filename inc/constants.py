@@ -233,10 +233,10 @@ ASSOCIATION_CONFIG = {
   "use_amplitude" : False,
   X_COORD_STR : (250, 600),
   Y_COORD_STR : (7200, 8000),
-  Z_COORD_STR : (0, 150),
+  Z_COORD_STR : (0, 20),
   VELOCITY_STR : {
-    PWAVE.lower(): 6.0,
-    SWAVE.lower(): 6.0 / 1.75
+    PWAVE.lower(): 5.85,
+    SWAVE.lower(): 5.85 / 1.78
   },
   METHOD_STR : BAYES_GAUSS_MIX_MODEL_STR,
   "oversample_factor" : 4,
