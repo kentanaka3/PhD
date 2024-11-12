@@ -28,7 +28,7 @@ picker:
 	bash Analyze.sh 1 "1 2 4" AUTOMATER src/Picker.py -v --force
 
 analyzer:
-	bash Analyze.sh 1 1 AUTOMATER src/Analyze.py -v --force --file ./data/manual/RSFVG-2023.dat
+	bash Analyze.sh 1 1 AUTOMATER src/Analyzer.py -v --force --file ./data/manual/RSFVG-2023.dat
 
 associator:
 	bash Analyze.sh 1 "1 2 4" AUTOMATER src/Associator.py -v --force
