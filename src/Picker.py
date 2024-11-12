@@ -473,13 +473,8 @@ def clean_stream(stream : obspy.Stream, FMT_DICT : dict,
     if args.verbose: print("Denoising the Stream")
     global DENOISER
     stream = DENOISER.annotate(stream, copy=False)
-  if args.verbose:
-    IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                    PRC_FMT.format(NETWORK=FMT_DICT[NETWORK_STR],
-                                   STATION=FMT_DICT[STATION_STR],
-                                   CHANNEL=FMT_DICT[CHANNEL_STR],
-                                   BEGDT=FMT_DICT[BEG_DATE_STR], EXT=EPS_STR))
-    stream.plot(outfile=IMG_FILE, size=(1000, 600), format=EPS_STR, dpi=300)
+  # TODO: Implement interactive plot
+  if args.interactive: pass
   return stream
 
 def primary_arguments(args : argparse.Namespace) -> dict:
