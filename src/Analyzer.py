@@ -605,7 +605,7 @@ def main(args : argparse.Namespace):
   stations = args.station if (args.station is not None and
                               args.station != ALL_WILDCHAR_STR) else \
              PRED[STATION_STR].unique()
-  TRUE = event_parser(Path(DATA_PATH, "manual.dat"), stations, args)
+  TRUE = event_parser(args.file, stations, args)
   if args.verbose:
     TRUE.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
     PRED.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \

@@ -15,7 +15,8 @@ testEnv:
 	bash Analyze.sh 1 "1 2 4" TestEnv test/testEnv.py
 
 testPicker:
-	bash Analyze.sh 1 "1 2 4" TestPicker test/testPicker.py
+	bash Analyze.sh 1 1 TestPicker test/testPicker.py
+	bash Analyze.sh 1 "1 2 4" PickerTest src/Picker.py -d ./data/test/waveforms -v -D 230601 230604
 
 testAnalyzer:
 	bash Analyze.sh 1 1 TestAnalyzer test/testAnalyzer.py
@@ -24,13 +25,13 @@ testAssociator:
 	bash Analyze.sh 1 "1 2 4" TestAssociator test/testAssociator.py
 
 picker:
-	bash Analyze.sh 1 "1 2 4" "" src/Picker.py -v --force
+	bash Analyze.sh 1 "1 2 4" AUTOMATER src/Picker.py -v --force
 
 analyzer:
-	bash Analyze.sh 1 1 "" src/Analyze.py -v --force
+	bash Analyze.sh 1 1 AUTOMATER src/Analyze.py -v --force --file ./data/manual/RSFVG-2023.dat
 
 associator:
-	bash Analyze.sh 1 "1 2 4" "" src/Associator.py -v --force
+	bash Analyze.sh 1 "1 2 4" AUTOMATER src/Associator.py -v --force
 
 clean:
 	rm -f k*.err k*.out report*.nsys-rep report*.qdstrm; module purge; clear
