@@ -29,3 +29,5 @@ acarducci.sh
 img/*.eps
 *.nsys-rep
 data/arguments.json
+*HIST_*_*_*.png
+*CP_*_*_*.png

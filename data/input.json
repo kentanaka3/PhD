@@ -1,0 +1,10 @@
+{
+  "channel" : "*",
+  "groups" : ["BEGDT", "NETWORK", "station"],
+  "models" : ["PhaseNet", "EQTransformer"],
+  "network" : "*",
+  "station" : [],
+  "train" : false,
+  "weights" : ["instance", "original", "stead", "scedc"],
+  
+}
