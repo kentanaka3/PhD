@@ -140,7 +140,7 @@ def dist_time(T : pd.Series, P : pd.Series) -> float:
   return 1. - (P[TEMPORAL_STR] / PICK_OFFSET)
 
 def dist_default(T : pd.Series, P : pd.Series) -> float:
-  return dist_balanced(T, P)
+  return (99 * dist_balanced(T, P) + P[PROBABILITY_STR]) / 100.
 
 def plot_timeline(G : nx.Graph, pos : dict, N : int, model_name : str,
                   dataset_name : str) -> None:
@@ -506,10 +506,10 @@ def event_parser(filename : Path, stations : list, args : argparse.Namespace) \
   event = 0
   with open(filename, 'r') as fr: lines = fr.readlines()
   for line in [l.strip() for l in lines]:
-    if EVENT_EXTRACTOR.match(line):
+    if EVENT_EXTRACTOR_DAT.match(line):
       event += 1
       continue
-    match = PHASE_EXTRACTOR.match(line)
+    match = RECORD_EXTRACTOR_DAT.match(line)
     if match:
       result = match.groupdict()
       result[BEG_DATE_STR] = UTCDateTime.strptime(result[BEG_DATE_STR],
@@ -605,7 +605,7 @@ def main(args : argparse.Namespace):
   stations = args.station if (args.station is not None and
                               args.station != ALL_WILDCHAR_STR) else \
              PRED[STATION_STR].unique()
-  TRUE = event_parser(Path(DATA_PATH, "manual.dat"), stations, args)
+  TRUE = event_parser(args.file, stations, args)
   if args.verbose:
     TRUE.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
     PRED.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \

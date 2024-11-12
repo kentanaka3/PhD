@@ -45,15 +45,23 @@ def is_julian(string : str) -> UTCDateTime:
 
 def is_file_path(string : str) -> Path:
   if os.path.isfile(string): return Path(string)
-  else: raise NotADirectoryError(string)
+  else: raise FileNotFoundError(string)
 
 def is_dir_path(string : str) -> Path:
   if os.path.isdir(string): return Path(string)
   else: raise NotADirectoryError(string)
 
+def is_path(string : str) -> Path:
+  if os.path.isfile(string) or os.path.isdir(string): return Path(string)
+  else: raise FileNotFoundError(string)
+
 class SortDatesAction(argparse.Action):
   def __call__(self, parser, namespace, values, option_string=None):
     setattr(namespace, self.dest, sorted(values))
+
+class LoadFileAction(argparse.Action):
+  def __call__(self, parser, namespace, values, option_string=None):
+    with values as f: setattr(namespace, self.dest, json.load(f))
 
 def parse_arguments():
   parser = argparse.ArgumentParser(description="Process AdriaArray Dataset")
@@ -62,11 +70,14 @@ def parse_arguments():
                       help="Specify a set of Channels to analyze. To allow "
                            "downloading data for any channel, set this option "
                            f"to \'{ALL_WILDCHAR_STR}\'.")
+  # TODO: Handle security issues
+  parser.add_argument('-F', "--file", default=None, required=False,
+                      type=is_path, metavar=EMPTY_STR,
+                      help="Supporting file path")
   parser.add_argument('-G', "--groups", nargs='+', required=False,
                       metavar=EMPTY_STR,
                       default=[BEG_DATE_STR, NETWORK_STR, STATION_STR],
                       help="Analize the data based on a specified list")
-  # TODO: Implement data retrieval
   parser.add_argument('-K', "--key", default=None, required=False,
                       type=is_file_path, metavar=EMPTY_STR,
                       help="Key to download the data from server.")
@@ -95,6 +106,10 @@ def parse_arguments():
                            "selected models will not be considered")
   parser.add_argument('-b', "--batch", default=4096, type=int, required=False,
                       help="Batch size for the Machine Learning model")
+  parser.add_argument('-c', "--config", default=None, type=open,
+                      action=LoadFileAction,
+                      required=False, metavar=EMPTY_STR,
+                      help="Configuration file path")
   parser.add_argument('-d', "--directory", required=False, type=is_dir_path,
                       default=Path(DATA_PATH, WAVEFORMS_STR),
                       help="Directory path to the raw files")
@@ -446,18 +461,18 @@ def clean_stream(stream : obspy.Stream, FMT_DICT : dict,
   DATA_PATH = Path(args.directory).parent
   if args.verbose: print("Cleaning the Stream")
   # Sample has to be 100 Hz
-  stream = stream.resample(SAMPLING_RATE)
+  stream.resample(SAMPLING_RATE)
   stream.merge(method=1, fill_value='interpolate')
   for trc in stream:
     # Remove Stream.Trace if it contains NaN or Inf
     if filter_data(trc.data): stream.remove(trc)
   start = UTCDateTime.strptime(FMT_DICT[BEG_DATE_STR], DATE_FMT)
-  stream = stream.trim(starttime=start, endtime=start + ONE_DAY, pad=True,
-                       fill_value=0, nearest_sample=False)
+  stream.trim(starttime=start, endtime=start + ONE_DAY, pad=True, fill_value=0,
+              nearest_sample=False)
   if args.denoiser:
     if args.verbose: print("Denoising the Stream")
     global DENOISER
-    stream = DENOISER.annotate(stream)
+    stream = DENOISER.annotate(stream, copy=False)
   if args.verbose:
     IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                     PRC_FMT.format(NETWORK=FMT_DICT[NETWORK_STR],

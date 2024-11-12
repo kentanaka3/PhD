@@ -82,12 +82,15 @@ CSV_STR       = "csv"
 DAT_STR       = "dat"
 EPS_STR       = "eps"
 HDF5_STR      = "h5"
+HPC_STR       = "hpc"
+HPL_STR       = "hpl"
 JSON_STR      = "json"
 MSEED_STR     = "mseed"
 PDF_STR       = "pdf"
 PICKLE_STR    = "pkl"
 PNG_STR       = "png"
 PUN_STR       = "pun"
+QML_STR       = "qml"
 TORCH_STR     = "pt"
 XML_STR       = "xml"
 
@@ -95,12 +98,15 @@ CSV_EXT       = PERIOD_STR + CSV_STR
 DAT_EXT       = PERIOD_STR + DAT_STR
 EPS_EXT       = PERIOD_STR + EPS_STR
 HDF5_EXT      = PERIOD_STR + HDF5_STR
+HPC_EXT       = PERIOD_STR + HPC_STR
+HPL_EXT       = PERIOD_STR + HPL_STR
 JSON_EXT      = PERIOD_STR + JSON_STR
 MSEED_EXT     = PERIOD_STR + MSEED_STR
 PDF_EXT       = PERIOD_STR + PDF_STR
 PICKLE_EXT    = PERIOD_STR + PICKLE_STR
 PNG_EXT       = PERIOD_STR + PNG_STR
 PUN_EXT       = PERIOD_STR + PUN_STR
+QML_EXT       = PERIOD_STR + QML_STR
 TORCH_EXT     = PERIOD_STR + TORCH_STR
 XML_EXT       = PERIOD_STR + XML_STR
 
@@ -190,8 +196,16 @@ P_WEIGHT_STR    = "P_WEIGHT"
 S_TIME_STR      = "S_TIME"
 S_TYPE_STR      = "S_TYPE"
 S_WEIGHT_STR    = "S_WEIGHT"
+ORIGIN_STR      = "ORIGIN"
+NO_STR          = "NO"
+GAP_STR         = "GAP"
+DMIN_STR        = "DMIN"
+RMS_STR         = "RMS"
+ERH_STR         = "ERH"
+ERZ_STR         = "ERZ"
+QM_STR          = "QM"
 # TODO: Implement polarity
-PHASE_EXTRACTOR = \
+RECORD_EXTRACTOR_DAT = \
   re.compile(fr"^(?P<{STATION_STR}>(\w{{4}}|\w{{3}}\s))"            # Station
              fr"(?P<{P_TYPE_STR}>[ei?]{PWAVE}[cd\s])"               # P Type
              fr"(?P<{P_WEIGHT_STR}>[0-4])"                          # P Weight
@@ -200,8 +214,21 @@ PHASE_EXTRACTOR = \
              fr"\s+((?P<{S_TIME_STR}>\d{{4}}|\d{{3}})"              # S Time
              fr"(?P<{S_TYPE_STR}>[ei?]{SWAVE}\s)"                   # S Type
              fr"(?P<{S_WEIGHT_STR}>[0-4]))*")                       # S Weight
-EVENT_EXTRACTOR = re.compile(r"^1(\s+D)*\s*$")                      # Event
+EVENT_EXTRACTOR_DAT = re.compile(r"^1(\s+D)*\s*$")                  # Event
+# TODO: Parse HPC, HPL, PUN and QML files
+EVENT_EXTRACTOR_PUN = re.compile(
+  fr"^1(?P<{BEG_DATE_STR}>\d{{6}}[\s\d]\d{{3}})\s"                      # Date
+  fr"(?P<{ORIGIN_STR}>(\s\d|\d{{2}})\.\d{{2}})\s"                       # Origin
+  fr"(?P<{LATITUDE_STR}>(\s\d|\d{{2}})-(\s\d|\d{{2}})\.\d{{2}})\s{{2}}" # Latitude
+  fr"(?P<{LONGITUDE_STR}>(\s\d|\d{{2}})-(\s\d|\d{{2}})\.\d{{2}})"       # Longitude
+  fr"\s{{2}}(?P<{LOCAL_DEPTH_STR}>(\s\d|\d{{2}})\.\d{{2}})\s"           # Depth
+  fr"(?P<{MAGNITUDE_STR}>\d\.\d{{2}})\s"                                # Magnitude
+  fr"(?P<{NO_STR}>(\s\d|\d{{2}}))\s"                                    # NO
+  fr"(?P<{GAP_STR}>(\d{{3}}|\s\d{{2}}))\s"                              # GAP
+  fr"(?P<{DMIN_STR}>(\s\d|\d{{2}})\.\d)\s"                              # DMIN
+  fr"(?P<{RMS_STR}>\d\.\d{{2}})\s"                                            # RMS
 
+)
 # Pretrained model weights
 ADRIAARRAY_STR  = "adriaarray"
 INSTANCE_STR    = "instance"
@@ -220,54 +247,7 @@ RESIF_CLIENT_STR  = "RESIF"
 LMU_CLIENT_STR    = "LMU"
 USGS_CLIENT_STR   = "USGS"
 EMSC_CLIENT_STR   = "EMSC"
-GEONET_CLIENT_STR = "GEONET"
 ODC_CLIENT_STR    = "ODC"
-GEONET_CLIENT_STR = "GEONET"
 GEONET_CLIENT_STR = "GEONET"
 OGS_CLIENT_STR    = "http://158.110.30.217:8080"
 RASPISHAKE_CLIENT_STR = "RASPISHAKE"
-
-ASSOCIATION_CONFIG = {
-  DIMENSIONS_STR : [X_COORD_STR, Y_COORD_STR, Z_COORD_STR],
-  "use_dbscan" : True,
-  "use_amplitude" : False,
-  X_COORD_STR : (250, 600),
-  Y_COORD_STR : (7200, 8000),
-  Z_COORD_STR : (0, 20),
-  VELOCITY_STR : {
-    PWAVE.lower(): 5.85,
-    SWAVE.lower(): 5.85 / 1.78
-  },
-  METHOD_STR : BAYES_GAUSS_MIX_MODEL_STR,
-  "oversample_factor" : 4,
-  "dbscan_eps" : 0.5,
-  "dbscan_min_samples" : 3,
-  "min_picks_per_eq" : 5,
-  "min_p_picks_per_eq" : 0,
-  "min_s_picks_per_eq" : 0,
-  "max_sigma11" : 3.0,
-  "max_sigma22" : 1.0,
-  "max_sigma12" : 1.0,
-}
-
-# DBSCAN
-ASSOCIATION_CONFIG["bfgs_bounds"] = (
-  (ASSOCIATION_CONFIG[X_COORD_STR][0] - 1, ASSOCIATION_CONFIG[X_COORD_STR][1] + 1),  # x
-  (ASSOCIATION_CONFIG[Y_COORD_STR][0] - 1, ASSOCIATION_CONFIG[X_COORD_STR][1] + 1),  # y
-  (0, ASSOCIATION_CONFIG[Z_COORD_STR][1] + 1),  # x
-  (None, None),  # t
-)
-
-EIKONAL_P = [3.0, 3.59,  4.0,  4.8, 5.59, 6.5, 8.0]
-
-ASSOCIATION_CONFIG["eikonal"] = {
-  VELOCITY_STR : {
-    PWAVE.lower(): EIKONAL_P,
-    SWAVE.lower(): [v / 1.75 for v in EIKONAL_P],
-    "z" : [0.0, 0.5, 2.0, 4.0, 6.0, 12.0, 30.0]
-  },
-  "h": 1.0,
-  "xlim": ASSOCIATION_CONFIG[X_COORD_STR],
-  "ylim": ASSOCIATION_CONFIG[Y_COORD_STR],
-  "zlim": ASSOCIATION_CONFIG[Z_COORD_STR]
-}
