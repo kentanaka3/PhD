@@ -28,27 +28,54 @@ THRESHOLD = 0.3
 
 class TestPickParser(unittest.TestCase):
   @unittest.mock.patch("sys.argv",
-                       ["Analyzer.py", "-D", "230601", "230604", "-v", "-d",
-                        TEST_PATH.__str__()])
+                       ["Analyzer.py", "-d", TEST_PATH.__str__(),
+                        "-D", "230601", "230604", "-v", "--file",
+                        Path(MNL_DATA_PATH, "RSFVG-2023.dat").__str__()])
   def test_parse_pick(self):
     args = Pkr.parse_arguments()
     PRED = Pkr.load_data(args)
     stations = args.station if (args.station is not None and
                                 args.station != ALL_WILDCHAR_STR) else \
                PRED[STATION_STR].unique()
-    TRUE = event_parser(Path(DATA_PATH, "manual.dat"), stations, args)
+    TRUE = event_parser(args.file, stations, args)
+    EXPECTED = [[897, "CAE", PWAVE, "2023-06-01T09:27:58.710000Z", 0],
+                [897, "CAE", SWAVE, "2023-06-01T09:27:59.360000Z", 2],
+                [898, "CAE", PWAVE, "2023-06-01T09:53:32.530000Z", 2],
+                [898, "CAE", SWAVE, "2023-06-01T09:53:36.360000Z", 3],
+                [899, "VARA", PWAVE, "2023-06-01T10:02:12.860000Z", 3],
+                [902, "CAE", PWAVE, "2023-06-01T21:41:16.740000Z", 0],
+                [902, "CAE", SWAVE, "2023-06-01T21:41:19.090000Z", 0],
+                [904, "VARA", PWAVE, "2023-06-02T02:18:27.430000Z", 0],
+                [904, "VARA", SWAVE, "2023-06-02T02:18:29.510000Z", 1],
+                [905, "BAD", PWAVE, "2023-06-02T08:50:46.420000Z", 2],
+                [907, "BAD", PWAVE, "2023-06-03T00:31:40.050000Z", 2],
+                [907, "BAD", SWAVE, "2023-06-03T00:31:43.560000Z", 1],
+                [908, "VARA", PWAVE, "2023-06-03T05:18:36.010000Z", 2],
+                [908, "VARA", SWAVE, "2023-06-03T05:18:39.980000Z", 2],
+                [910, "VARA", PWAVE, "2023-06-03T12:33:23.350000Z", 0],
+                [910, "VARA", SWAVE, "2023-06-03T12:33:25.980000Z", 0],
+                [911, "BAD", PWAVE, "2023-06-03T16:54:16.760000Z", 2],
+                [911, "BAD", SWAVE, "2023-06-03T16:54:19.950000Z", 2],
+                [914, "BAD", PWAVE, "2023-06-04T00:03:05.450000Z", 0],
+                [914, "BAD", SWAVE, "2023-06-04T00:04:23.400000Z", 2],
+                [915, "BAD", PWAVE, "2023-06-04T00:25:10.760000Z", 1],
+                [915, "BAD", SWAVE, "2023-06-04T00:25:16.420000Z", 2],
+                [918, "CAE", PWAVE, "2023-06-04T17:57:11.390000Z", 3],
+                [918, "CAE", SWAVE, "2023-06-04T17:57:17.250000Z", 2]]
+    self.assertListEqual(EXPECTED, TRUE.values.tolist())
 
 class TestEventCounter(unittest.TestCase):
   @unittest.mock.patch("sys.argv",
-                       ["Analyzer.py", "-D", "230601", "230605", "-v", "-d",
-                        TEST_PATH.__str__(), "-M", PHASENET_STR])
+                       ["Analyzer.py", "-D", "230601", "230604", "-v", "-d",
+                        TEST_PATH.__str__(), "-M", PHASENET_STR, "--file",
+                        Path(MNL_DATA_PATH, "RSFVG-2023.dat").__str__()])
   def test_event_counter(self):
     args = Pkr.parse_arguments()
     PRED = Pkr.load_data(args)
     stations = args.station if (args.station is not None and
                                 args.station != ALL_WILDCHAR_STR) else \
                PRED[STATION_STR].unique()
-    TRUE = event_parser(Path(DATA_PATH, "manual.dat"), stations, args)
+    TRUE = event_parser(args.file, stations, args)
     plot_data(TRUE, PRED, args)
 
 class TestConfMtx(unittest.TestCase):
@@ -386,5 +413,25 @@ class TestConfMtx(unittest.TestCase):
     EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, SWAVE, THRESHOLD,
                  UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0.3372562]]
     self.assertListEqual(EXPECTED, FP)
+
+  @unittest.mock.patch("sys.argv",
+                       ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
+                        TEST_PATH.__str__()])
+  def test_true_pred_complex(self):
+    """
+    OFFSET = 0.5 : |--"--|
+           |------------------------------- 66 -------------------------------|
+                         |--"--|
+    TRUE : |----------------P--:S-:--:----------------------------------------|
+                            :|-:"-:| :
+    PRED : |----------------:--P--:S-:------------------------S---------------|
+                            |--"--|                        |--"--|
+    OUTPUT: P [1, 0, 0]
+            S [0, 1, 0]
+            N [0, 1, 0]
+               P  S  N : PRED
+    """
+    args = Pkr.parse_arguments()
+    #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
 
 if __name__ == "__main__": unittest.main()

@@ -13,6 +13,7 @@ import pickle
 import argparse
 import itertools
 import numpy as np
+import scipy as sp
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -187,17 +188,22 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
 
   """
   N = len(TRUE.index)
+  M = len(PRED.index)
   G = nx.Graph()
   # All Predictions are initialized as False Positives
   G.add_nodes_from([(i + N, {PHASE_STR : P[PHASE_STR], STATUS_STR : FP_STR})
                     for i, P in PRED.iterrows()], bipartite=1)
   start, _ = args.dates
+  # Position of the nodes in the graph for plotting
   pos = {i + N : (P[TIMESTAMP_STR] - start, 1) for i, P in PRED.iterrows()}
   for i, T in TRUE.iterrows():
     # All True are initialized as False Negatives
     G.add_nodes_from([(i, {PHASE_STR : T[PHASE_STR], STATUS_STR : FN_STR})],
                      bipartite=0)
+    # Position of the nodes in the graph for plotting
     pos[i] = (T[TIMESTAMP_STR] - start, 0)
+    # Create a new column in the Predicted dataframe to store the temporal
+    # difference between the True and Predicted picks
     PRED[TEMPORAL_STR] = (PRED[TIMESTAMP_STR] - T[TIMESTAMP_STR])\
                            .apply(lambda x : td(seconds=abs(x)))
     # TODO: Consider H71 error interval
@@ -206,17 +212,17 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
     if PICKS.empty: continue
     # If there are picks within the OFFSET, we change the status of the True
     # and Predicted picks to True Positive and we add the corresponding edges
-    # to the graph
+    # to the graph with the weight of the edge being the distance between the
+    # True and Predicted picks
     G.nodes[i][STATUS_STR] = TP_STR
     for j, P in PICKS.iterrows():
       G.add_edge(i, j + N, weight=dist_default(T, P))
       G.nodes[j + N][STATUS_STR] = TP_STR
   LINKS = nx.max_weight_matching(G)
-  for node in G.nodes:
-    # As there are more Predicted picks than True picks, we only traverse the
-    # True picks of the graph and remove the edges that are not part of the
-    # maximum weight matching
-    if node >= N: continue
+  # As there are more Predicted picks than True picks, we only traverse the
+  # True picks of the graph and remove the edges that are not part of the
+  # maximum weight matching
+  for node in range(N):
     for neighbor in copy.deepcopy(G.neighbors(node)):
       #               TRUE, PRED            PRED, TRUE
       edge, edge_r = (node, neighbor), (neighbor, node)
@@ -224,34 +230,35 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
   TP, FN, FP = [], [], []
   tags = [PWAVE, SWAVE, NONE_STR]
   CFN_MTX = pd.DataFrame(0, index=tags, columns=tags, dtype=int)
-  for node in G.nodes:
-    deg = nx.degree(G, node)
-    if not deg: G.nodes[node][STATUS_STR] = FN_STR if node < N else FP_STR
-    elif deg > 1: raise AttributeError("The graph is not a matching graph")
-    # TRUE picks
-    if node < N:
-      t = TRUE.iloc[node]
-      if G.nodes[node][STATUS_STR] == TP_STR:
-        p = PRED.iloc[list(G.neighbors(node))[0] - N]
-        CFN_MTX.loc[t[PHASE_STR], p[PHASE_STR]] += 1
-        if t[PHASE_STR] == p[PHASE_STR]:
-          TP.append([model_name, dataset_name, t[STATION_STR], t[PHASE_STR],
-                     threshold, (t[TIMESTAMP_STR], p[TIMESTAMP_STR]),
-                     t[WEIGHT_STR]])
-      elif G.nodes[node][STATUS_STR] == FN_STR:
-        FN.append([model_name, dataset_name, t[STATION_STR], t[PHASE_STR],
-                   threshold, t[TIMESTAMP_STR], t[WEIGHT_STR]])
-        CFN_MTX.loc[TRUE.iloc[node][PHASE_STR], NONE_STR] += 1
-      else: raise AttributeError(f"The node is not a {TP_STR} or {FN_STR}")
-    # PRED picks
+  # We traverse the TRUE nodes of the graph to update the status and append
+  # the relevant information to the True Positives and False Negatives lists
+  for node in range(N):
+    # As we have removed the edges that are not part of the maximum weight
+    # matching, we can now assign the status of the nodes that are not part of
+    # the matching graph
+    t = TRUE.iloc[node]
+    if nx.degree(G, node):
+      p = PRED.iloc[list(G.neighbors(node))[0] - N]
+      CFN_MTX.loc[t[PHASE_STR], p[PHASE_STR]] += 1
+      if t[PHASE_STR] == p[PHASE_STR]:
+        TP.append([model_name, dataset_name, t[STATION_STR], t[PHASE_STR],
+                   threshold, (t[TIMESTAMP_STR], p[TIMESTAMP_STR]),
+                   t[WEIGHT_STR]])
     else:
+      G.nodes[node][STATUS_STR] = FN_STR
+      FN.append([model_name, dataset_name, t[STATION_STR], t[PHASE_STR],
+                 threshold, t[TIMESTAMP_STR], t[WEIGHT_STR]])
+      CFN_MTX.loc[t[PHASE_STR], NONE_STR] += 1
+
+  # We traverse the PRED nodes of the graph to update the status and append
+  # the relevant information to the False Positives list
+  for node in range(N, N + M):
+    if not nx.degree(G, node):
+      G.nodes[node][STATUS_STR] = FP_STR
       p = PRED.iloc[node - N]
-      # As the graph is a matching graph, the Predicted picks that are not part
-      # of the matching graph must remain as False Positives
-      if G.nodes[node][STATUS_STR] == FP_STR:
-        FP.append([model_name, dataset_name, p[STATION_STR], p[PHASE_STR],
-                   threshold, p[TIMESTAMP_STR], p[PROBABILITY_STR]])
-        CFN_MTX.loc[NONE_STR, PRED.iloc[node - N][PHASE_STR]] += 1
+      FP.append([model_name, dataset_name, p[STATION_STR], p[PHASE_STR],
+                 threshold, p[TIMESTAMP_STR], p[PROBABILITY_STR]])
+      CFN_MTX.loc[NONE_STR, p[PHASE_STR]] += 1
   if args.interactive: plot_timeline(G, pos, N, model_name, dataset_name)
   return CFN_MTX, TP, FN, FP
 
@@ -475,6 +482,7 @@ def event_parser(filename : Path, stations : list, args : argparse.Namespace) \
   """
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
+  if args.file is None: raise FileNotFoundError
   WAVEFORMS_FILE = Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT)
   ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
   if ARGUMENTS_FILE.exists() and WAVEFORMS_FILE.exists() and \
@@ -504,6 +512,7 @@ def event_parser(filename : Path, stations : list, args : argparse.Namespace) \
   HEADER = [EVENT_STR, STATION_STR, PHASE_STR, TIMESTAMP_STR, WEIGHT_STR]
   DATA = []
   event = 0
+  start, end = args.dates
   with open(filename, 'r') as fr: lines = fr.readlines()
   for line in [l.strip() for l in lines]:
     if EVENT_EXTRACTOR_DAT.match(line):
@@ -514,9 +523,13 @@ def event_parser(filename : Path, stations : list, args : argparse.Namespace) \
       result = match.groupdict()
       result[BEG_DATE_STR] = UTCDateTime.strptime(result[BEG_DATE_STR],
                                                   "%y%m%d%H%M")
-      if WAVEFORMS[
-           (WAVEFORMS[STATION_STR] == result[STATION_STR].strip(SPACE_STR)) &
-           (WAVEFORMS[BEG_DATE_STR] == result[BEG_DATE_STR].date)].empty:
+      # We only consider the picks from the date range
+      if result[BEG_DATE_STR] < start or result[BEG_DATE_STR] >= end + ONE_DAY:
+        continue
+      # We only consider the stations that are in the list of predicted
+      # stations
+      result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
+      if WAVEFORMS[(WAVEFORMS[STATION_STR] == result[STATION_STR])].empty:
         if args.verbose:
           print(f"WARNING: {result[STATION_STR]} {result[BEG_DATE_STR]} not "
                 "found")
@@ -526,22 +539,18 @@ def event_parser(filename : Path, stations : list, args : argparse.Namespace) \
         result[BEG_DATE_STR] + td(seconds=float(result[P_TIME_STR][:2] + \
                                                 PERIOD_STR + \
                                                 result[P_TIME_STR][2:]))
-      DATA.append([event, result[STATION_STR].strip(SPACE_STR), PWAVE,
-                   result[P_TIME_STR], result[P_WEIGHT_STR]])
+      DATA.append([event, result[STATION_STR], PWAVE, result[P_TIME_STR],
+                   result[P_WEIGHT_STR]])
       if result[S_TIME_STR]:
         result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
         result[S_TIME_STR] = \
           result[BEG_DATE_STR] + td(seconds=float(result[S_TIME_STR][:2] + \
                                                   PERIOD_STR + \
                                                   result[S_TIME_STR][2:]))
-        DATA.append([event, result[STATION_STR].strip(SPACE_STR), SWAVE,
-                     result[S_TIME_STR], result[S_WEIGHT_STR]])
+        DATA.append([event, result[STATION_STR], SWAVE, result[S_TIME_STR],
+                     result[S_WEIGHT_STR]])
   # We sort the values by the Primary wave arrival time
   DATA = pd.DataFrame(DATA, columns=HEADER).sort_values(TIMESTAMP_STR)
-  start, end = args.dates
-  DATA = DATA[(DATA[TIMESTAMP_STR] >= start) &
-              (DATA[TIMESTAMP_STR] < end + ONE_DAY) & \
-              DATA[STATION_STR].isin(stations)]
   return DATA
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
@@ -580,8 +589,15 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
       ax.set_title(weight)
       for threshold in z:
         data = dataframe[dataframe[THRESHOLD_STR] == threshold][TIMESTAMP_STR]
+        # TODO: Consider a KDE plot
         counts, _ = np.histogram(data, bins=bins)
-        ax.plot(bins[:-1], counts, label=rf"P $\geq$ {threshold}")
+        mu = np.mean(data)
+        std = np.std(data)
+        skew = sp.stats.skew(data)
+        ax.plot(bins[:-1], counts, label=rf"P $\geq$ {threshold}, " + \
+                                         rf"$\mu$ = {mu:.2f}, " + \
+                                         rf"$\sigma$ = {std:.2f}, " + \
+                                         rf"$\gamma$ = {skew:.2f}")
       ax.set(xlim=(-0.5, 0.5), ylim=(0, m))
       ax.grid()
       ax.legend()
