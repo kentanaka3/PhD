@@ -71,7 +71,7 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
         y = [len(data[(data[PROBABILITY_STR] >= threshold) &
                       (data[TIMESTAMP_STR] <= d)].index) for d in x]
         axs[i].plot([np.datetime64(t) for t in x], y,
-                    label=rf"P $\geq$ {threshold}")
+                    label=rf"$\geq$ {threshold}")
         y_max = max(y_max, max(y))
       axs[i].plot([np.datetime64(t) for t in x], y_true, label="True",
                   color="k")
@@ -88,7 +88,7 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       label.set(rotation=30, horizontalalignment='right')
     IMG_FILE = \
       Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-           UNDERSCORE_STR.join([CMTV_PICKS_STR, model]) + PNG_EXT)
+           UNDERSCORE_STR.join([CMTV_PICKS_STR, model, phase]) + PNG_EXT)
     plt.tight_layout()
     plt.savefig(IMG_FILE)
     plt.close()
@@ -110,7 +110,7 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
         y = [len(data[(data[PROBABILITY_STR] >= threshold) &
                       (data[TIMESTAMP_STR] <= d)].index) for d in x]
         axs[i].plot([np.datetime64(t) for t in x], y,
-                    label=rf"P $\geq$ {threshold}")
+                    label=rf"$\geq$ {threshold}")
         y_max = max(y_max, max(y))
     for ax in axs:
       ax.set_ylim(0, y_max)
@@ -124,8 +124,8 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       label.set(rotation=30, horizontalalignment='right')
     IMG_FILE = \
       Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-           UNDERSCORE_STR.join([CMTV_PICKS_STR, model, network, station]) + \
-           PNG_EXT)
+           UNDERSCORE_STR.join([CMTV_PICKS_STR, model, network,
+                                station, phase]) + PNG_EXT)
     plt.tight_layout()
     plt.savefig(IMG_FILE)
     plt.close()
@@ -598,10 +598,10 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
         mu = np.mean(data)
         std = np.std(data)
         skew = sp.stats.skew(data)
-        ax.plot(bins[:-1], counts, label=rf"P $\geq$ {threshold}, " + \
-                                         rf"$\mu$ = {mu:.2f}, " + \
-                                         rf"$\sigma$ = {std:.2f}, " + \
-                                         rf"$\gamma$ = {skew:.2f}")
+        ax.plot(bins[:-1], counts, label=rf"$\geq${threshold}, " + \
+                                         rf"$\mu$={mu:.2f}, " + \
+                                         rf"$\sigma$={std:.2f}, " + \
+                                         rf"$\gamma$={skew:.2f}")
       ax.set(xlim=(-0.5, 0.5), ylim=(0, m))
       ax.grid()
       ax.legend()
@@ -622,17 +622,16 @@ def main(args : argparse.Namespace):
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
   PRED = Pkr.load_data(args)
-  PRED = PRED[PRED[PHASE_STR] == SWAVE]
   stations = args.station if (args.station is not None and
                               args.station != ALL_WILDCHAR_STR) else \
              PRED[STATION_STR].unique()
   TRUE = event_parser(args.file, stations, args)
-  TRUE = TRUE[TRUE[PHASE_STR] == SWAVE]
   if args.verbose:
     TRUE.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
     PRED.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                      PRED_STR + CSV_EXT), index=False)
   plot_data(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
+  plot_data(copy.deepcopy(TRUE), copy.deepcopy(PRED), args, phase=SWAVE)
   TP = stat_test(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
   time_displacement(TP, args)
 
