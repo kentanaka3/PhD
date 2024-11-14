@@ -463,6 +463,7 @@ def clean_stream(stream : obspy.Stream, FMT_DICT : dict,
   # Sample has to be 100 Hz
   stream.resample(SAMPLING_RATE)
   stream.merge(method=1, fill_value='interpolate')
+  # TODO: Consider using the Stream.detrend() method
   for trc in stream:
     # Remove Stream.Trace if it contains NaN or Inf
     if filter_data(trc.data): stream.remove(trc)
@@ -598,7 +599,8 @@ def interactive_plot(stream : obspy.Stream, picks : sbu.PickList,
   """
   events = [(np.datetime64(pick.peak_time), pick.peak_value,
              ('b' if pick.phase == PWAVE else 'r')) for pick in picks]
-  fig = stream.plot(handle=True, method='full', size=(3000, 1000))
+  fig = stream.plot(handle=True, method='full', size=(3000, 1000),
+                    equal_scale=False)
   fig.suptitle(SPACE_STR.join([fig.get_suptitle(), model_name, dataset_name]),
                fontsize=24)
   for ax in fig.get_axes():

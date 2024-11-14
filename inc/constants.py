@@ -226,8 +226,10 @@ EVENT_EXTRACTOR_PUN = re.compile(
   fr"(?P<{NO_STR}>(\s\d|\d{{2}}))\s"                                    # NO
   fr"(?P<{GAP_STR}>(\d{{3}}|\s\d{{2}}))\s"                              # GAP
   fr"(?P<{DMIN_STR}>(\s\d|\d{{2}})\.\d)\s"                              # DMIN
-  fr"(?P<{RMS_STR}>\d\.\d{{2}})\s"                                            # RMS
-
+  fr"(?P<{RMS_STR}>\d\.\d{{2}})\s{{2}}"                                 # RMS
+  fr"(?P<{ERH_STR}>\d\.\d)\s{{2}}"                                      # ERH
+  fr"(?P<{ERZ_STR}>\d\.\d)\s"                                           # ERZ
+  fr"(?P<{QM_STR}>[A-Z][0-9])"                                          # QM
 )
 # Pretrained model weights
 ADRIAARRAY_STR  = "adriaarray"

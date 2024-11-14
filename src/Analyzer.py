@@ -132,7 +132,7 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     if args.verbose: print(f"Saving {IMG_FILE}")
 
 def dist_balanced(T : pd.Series, P : pd.Series) -> float:
-  return (dist_time(T, P) + dist_phase(T, P)) / 2.
+  return (dist_time(T, P) + 9. * dist_phase(T, P)) / 10.
 
 def dist_phase(T : pd.Series, P : pd.Series) -> float:
   return int(P[PHASE_STR] == T[PHASE_STR])
@@ -141,7 +141,7 @@ def dist_time(T : pd.Series, P : pd.Series) -> float:
   return 1. - (P[TEMPORAL_STR] / PICK_OFFSET)
 
 def dist_default(T : pd.Series, P : pd.Series) -> float:
-  return (99 * dist_balanced(T, P) + P[PROBABILITY_STR]) / 100.
+  return (99. * dist_balanced(T, P) + P[PROBABILITY_STR]) / 100.
 
 def plot_timeline(G : nx.Graph, pos : dict, N : int, model_name : str,
                   dataset_name : str) -> None:
@@ -513,42 +513,46 @@ def event_parser(filename : Path, stations : list, args : argparse.Namespace) \
   DATA = []
   event = 0
   start, end = args.dates
-  with open(filename, 'r') as fr: lines = fr.readlines()
-  for line in [l.strip() for l in lines]:
-    if EVENT_EXTRACTOR_DAT.match(line):
-      event += 1
-      continue
-    match = RECORD_EXTRACTOR_DAT.match(line)
-    if match:
-      result = match.groupdict()
-      result[BEG_DATE_STR] = UTCDateTime.strptime(result[BEG_DATE_STR],
-                                                  "%y%m%d%H%M")
-      # We only consider the picks from the date range
-      if result[BEG_DATE_STR] < start or result[BEG_DATE_STR] >= end + ONE_DAY:
+  if os.path.isfile(filename):
+    with open(filename, 'r') as fr: lines = fr.readlines()
+    for line in [l.strip() for l in lines]:
+      if EVENT_EXTRACTOR_DAT.match(line):
+        event += 1
         continue
-      # We only consider the stations that are in the list of predicted
-      # stations
-      result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
-      if WAVEFORMS[(WAVEFORMS[STATION_STR] == result[STATION_STR])].empty:
-        if args.verbose:
-          print(f"WARNING: {result[STATION_STR]} {result[BEG_DATE_STR]} not "
-                "found")
-        continue
-      result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
-      result[P_TIME_STR] = \
-        result[BEG_DATE_STR] + td(seconds=float(result[P_TIME_STR][:2] + \
-                                                PERIOD_STR + \
-                                                result[P_TIME_STR][2:]))
-      DATA.append([event, result[STATION_STR], PWAVE, result[P_TIME_STR],
-                   result[P_WEIGHT_STR]])
-      if result[S_TIME_STR]:
-        result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
-        result[S_TIME_STR] = \
-          result[BEG_DATE_STR] + td(seconds=float(result[S_TIME_STR][:2] + \
+      match = RECORD_EXTRACTOR_DAT.match(line)
+      if match:
+        result = match.groupdict()
+        result[BEG_DATE_STR] = UTCDateTime.strptime(result[BEG_DATE_STR],
+                                                    "%y%m%d%H%M")
+        # We only consider the picks from the date range
+        if result[BEG_DATE_STR] < start or \
+          result[BEG_DATE_STR] >= end + ONE_DAY: continue
+        # We only consider the stations that are in the list of predicted
+        # stations
+        result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
+        if WAVEFORMS[(WAVEFORMS[STATION_STR] == result[STATION_STR])].empty:
+          if args.verbose:
+            print(f"WARNING: {result[STATION_STR]} {result[BEG_DATE_STR]} not "
+                  "found")
+          continue
+        result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
+        result[P_TIME_STR] = \
+          result[BEG_DATE_STR] + td(seconds=float(result[P_TIME_STR][:2] + \
                                                   PERIOD_STR + \
-                                                  result[S_TIME_STR][2:]))
-        DATA.append([event, result[STATION_STR], SWAVE, result[S_TIME_STR],
-                     result[S_WEIGHT_STR]])
+                                                  result[P_TIME_STR][2:]))
+        DATA.append([event, result[STATION_STR], PWAVE, result[P_TIME_STR],
+                    result[P_WEIGHT_STR]])
+        if result[S_TIME_STR]:
+          result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
+          result[S_TIME_STR] = \
+            result[BEG_DATE_STR] + td(seconds=float(result[S_TIME_STR][:2] + \
+                                                    PERIOD_STR + \
+                                                    result[S_TIME_STR][2:]))
+          DATA.append([event, result[STATION_STR], SWAVE, result[S_TIME_STR],
+                      result[S_WEIGHT_STR]])
+  else:
+    # TODO: Implement the case where the filename is a directory
+    pass
   # We sort the values by the Primary wave arrival time
   DATA = pd.DataFrame(DATA, columns=HEADER).sort_values(TIMESTAMP_STR)
   return DATA
@@ -618,10 +622,12 @@ def main(args : argparse.Namespace):
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
   PRED = Pkr.load_data(args)
+  PRED = PRED[PRED[PHASE_STR] == SWAVE]
   stations = args.station if (args.station is not None and
                               args.station != ALL_WILDCHAR_STR) else \
              PRED[STATION_STR].unique()
   TRUE = event_parser(args.file, stations, args)
+  TRUE = TRUE[TRUE[PHASE_STR] == SWAVE]
   if args.verbose:
     TRUE.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
     PRED.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
