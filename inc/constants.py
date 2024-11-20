@@ -47,6 +47,7 @@ AST_STR = "associated"
 FILE_STR = "file"
 TEMPORAL_STR = "tmp"
 STATUS_STR = "status"
+SECONDS_STR = "seconds"
 
 TRUE_STR = "TRUE"
 PRED_STR = "PRED"
@@ -204,33 +205,7 @@ RMS_STR         = "RMS"
 ERH_STR         = "ERH"
 ERZ_STR         = "ERZ"
 QM_STR          = "QM"
-# TODO: Implement polarity
-RECORD_EXTRACTOR_DAT = \
-  re.compile(fr"^(?P<{STATION_STR}>(\w{{4}}|\w{{3}}\s))"            # Station
-             fr"(?P<{P_TYPE_STR}>[ei?]{PWAVE}[cd\s])"               # P Type
-             fr"(?P<{P_WEIGHT_STR}>[0-4])"                          # P Weight
-             fr"1(?P<{BEG_DATE_STR}>\d{{10}})"                      # Date
-             fr"\s(?P<{P_TIME_STR}>\d{{4}})"                        # P Time
-             fr"\s+((?P<{S_TIME_STR}>\d{{4}}|\d{{3}})"              # S Time
-             fr"(?P<{S_TYPE_STR}>[ei?]{SWAVE}\s)"                   # S Type
-             fr"(?P<{S_WEIGHT_STR}>[0-4]))*")                       # S Weight
-EVENT_EXTRACTOR_DAT = re.compile(r"^1(\s+D)*\s*$")                  # Event
-# TODO: Parse HPC, HPL, PUN and QML files
-EVENT_EXTRACTOR_PUN = re.compile(
-  fr"^1(?P<{BEG_DATE_STR}>\d{{6}}[\s\d]\d{{3}})\s"                      # Date
-  fr"(?P<{ORIGIN_STR}>(\s\d|\d{{2}})\.\d{{2}})\s"                       # Origin
-  fr"(?P<{LATITUDE_STR}>(\s\d|\d{{2}})-(\s\d|\d{{2}})\.\d{{2}})\s{{2}}" # Latitude
-  fr"(?P<{LONGITUDE_STR}>(\s\d|\d{{2}})-(\s\d|\d{{2}})\.\d{{2}})"       # Longitude
-  fr"\s{{2}}(?P<{LOCAL_DEPTH_STR}>(\s\d|\d{{2}})\.\d{{2}})\s"           # Depth
-  fr"(?P<{MAGNITUDE_STR}>\d\.\d{{2}})\s"                                # Magnitude
-  fr"(?P<{NO_STR}>(\s\d|\d{{2}}))\s"                                    # NO
-  fr"(?P<{GAP_STR}>(\d{{3}}|\s\d{{2}}))\s"                              # GAP
-  fr"(?P<{DMIN_STR}>(\s\d|\d{{2}})\.\d)\s"                              # DMIN
-  fr"(?P<{RMS_STR}>\d\.\d{{2}})\s{{2}}"                                 # RMS
-  fr"(?P<{ERH_STR}>\d\.\d)\s{{2}}"                                      # ERH
-  fr"(?P<{ERZ_STR}>\d\.\d)\s"                                           # ERZ
-  fr"(?P<{QM_STR}>[A-Z][0-9])"                                          # QM
-)
+
 # Pretrained model weights
 ADRIAARRAY_STR  = "adriaarray"
 INSTANCE_STR    = "instance"
