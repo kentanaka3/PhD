@@ -13,7 +13,6 @@ import pickle
 import argparse
 import itertools
 import numpy as np
-import scipy as sp
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -23,7 +22,84 @@ from obspy.core.utcdatetime import UTCDateTime
 from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 
 from constants import *
+import parser as prs
 import Picker as Pkr
+
+SORT_HIERARCHY_PRED = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, PROBABILITY_STR]
+
+def read_data(filepath : Path) -> list:
+  # Load the data
+  with open(filepath, 'rb') as f: data = pickle.load(f)
+  return data
+
+def load_data(args : argparse.Namespace) -> pd.DataFrame:
+  """
+  input  :
+    - args          (argparse.Namespace)
+
+  output :
+    - pd.DataFrame
+
+  errors :
+    - FileNotFoundError
+    - AttributeError
+
+  notes  :
+    | MODEL | WEIGHT | TIMESTAMP | NETWORK | STATION | PHASE | PROBABILITY |
+    ------------------------------------------------------------------------
+
+    The data is loaded from the directory given in the arguments. The data is
+    then sorted by the timestamp and returned as a pandas DataFrame.
+  """
+  global DATA_PATH
+  DATA_PATH  = Path(args.directory).parent
+  CLF_PATH = Path(DATA_PATH, CLF_STR)
+  if not CLF_PATH.exists(): raise FileNotFoundError
+  DATA = []
+  HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR,
+            PHASE_STR, PROBABILITY_STR]
+  start, end = args.dates
+  z = [round(t, 2) for t in np.linspace(0.2, 1.0, 9)]
+  for model in args.models:
+    for weight in args.weights:
+      for date_path in CLF_PATH.iterdir():
+        if args.verbose: HIST = []
+        date = date_path.name
+        date_obj = UTCDateTime.strptime(date, DATE_FMT)
+        if date_obj < start or date_obj >= end + ONE_DAY: continue
+        for network_path in date_path.iterdir():
+          network = network_path.name
+          for station_path in network_path.iterdir():
+            station = station_path.name
+            f = Path(station_path, ("D_" if args.denoiser else EMPTY_STR) + \
+                     UNDERSCORE_STR.join([date, network, station, model,
+                                          weight]) + PICKLE_EXT)
+            PICKS = [[model, weight, p.peak_time.__str__(), network, station,
+                      p.phase, p.peak_value] for p in read_data(f)]
+            DATA += PICKS
+            PICKS = pd.DataFrame(PICKS, columns=HEADER)
+            if args.verbose:
+              w = reversed([len(PICKS[(PICKS[PROBABILITY_STR] >= a) &
+                                      (PICKS[PROBABILITY_STR] < b)].index)
+                            for a, b in zip(z[:-1], z[1:])])
+              HIST.append([station_path.relative_to(date_path).__str__(), *w])
+        if args.verbose:
+          HIST = pd.DataFrame(HIST, columns=[FILE_STR, *reversed(z[:-1])])\
+                   .set_index(FILE_STR).sort_values(z[:-1], ascending=False)
+          IMG_FILE = \
+            Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                 UNDERSCORE_STR.join(["HIST", model, weight, date]) + PNG_EXT)
+          HIST.plot(kind='bar', stacked=True, figsize=(20, 7))
+          for leg in plt.legend().get_texts():
+            leg.set_text(rf"P $\geq$ {leg.get_text()}")
+          plt.title(SPACE_STR.join([model, weight, date]))
+          plt.tight_layout()
+          plt.savefig(IMG_FILE)
+          plt.close()
+  DATA = pd.DataFrame(DATA, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)\
+           .reset_index(drop=True)
+  DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].apply(lambda x : UTCDateTime(x))
+  return DATA
 
 def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
               args : argparse.Namespace, phase = PWAVE) -> None:
@@ -55,7 +131,7 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
 
   y_true = [len(TRUE[TRUE[TIMESTAMP_STR] <= d].index) for d in x]
-
+  # Plot a 2x2 grid for each model and weight
   for model, dataframe in PRED.groupby(MODEL_STR):
     _, _axs = plt.subplots(2, 2, figsize=(10, 10))
     axs = _axs.flatten()
@@ -93,7 +169,7 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     plt.savefig(IMG_FILE)
     plt.close()
     if args.verbose: print(f"Saving {IMG_FILE}")
-
+  # Plot a 2x2 grid for each model, network and station
   for (model, network, station), dataframe in \
     PRED.groupby([MODEL_STR, NETWORK_STR, STATION_STR]):
     _, _axs = plt.subplots(2, 2, figsize=(10, 10))
@@ -227,7 +303,7 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
       #               TRUE, PRED            PRED, TRUE
       edge, edge_r = (node, neighbor), (neighbor, node)
       if not (edge in LINKS or edge_r in LINKS): G.remove_edge(*edge)
-  TP, FN, FP = [], [], []
+  TP, FN, FP = set(), [], set()
   tags = [PWAVE, SWAVE, NONE_STR]
   CFN_MTX = pd.DataFrame(0, index=tags, columns=tags, dtype=int)
   # We traverse the TRUE nodes of the graph to update the status and append
@@ -241,13 +317,13 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
       p = PRED.iloc[list(G.neighbors(node))[0] - N]
       CFN_MTX.loc[t[PHASE_STR], p[PHASE_STR]] += 1
       if t[PHASE_STR] == p[PHASE_STR]:
-        TP.append([model_name, dataset_name, t[STATION_STR], t[PHASE_STR],
-                   threshold, (t[TIMESTAMP_STR], p[TIMESTAMP_STR]),
-                   t[WEIGHT_STR]])
+        TP.add((model_name, dataset_name, t[STATION_STR], t[PHASE_STR],
+                (str(t[TIMESTAMP_STR]), str(p[TIMESTAMP_STR])),
+                (t[WEIGHT_STR], p[PROBABILITY_STR])))
     else:
       G.nodes[node][STATUS_STR] = FN_STR
       FN.append([model_name, dataset_name, t[STATION_STR], t[PHASE_STR],
-                 threshold, t[TIMESTAMP_STR], t[WEIGHT_STR]])
+                 threshold, t[TIMESTAMP_STR].__str__(), t[WEIGHT_STR]])
       CFN_MTX.loc[t[PHASE_STR], NONE_STR] += 1
 
   # We traverse the PRED nodes of the graph to update the status and append
@@ -256,14 +332,14 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
     if not nx.degree(G, node):
       G.nodes[node][STATUS_STR] = FP_STR
       p = PRED.iloc[node - N]
-      FP.append([model_name, dataset_name, p[STATION_STR], p[PHASE_STR],
-                 threshold, p[TIMESTAMP_STR], p[PROBABILITY_STR]])
+      FP.add((model_name, dataset_name, p[STATION_STR], p[PHASE_STR],
+              p[TIMESTAMP_STR].__str__(), p[PROBABILITY_STR]))
       CFN_MTX.loc[NONE_STR, p[PHASE_STR]] += 1
   if args.interactive: plot_timeline(G, pos, N, model_name, dataset_name)
   return CFN_MTX, TP, FN, FP
 
 def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
-             args : argparse.Namespace) -> pd.DataFrame:
+              args : argparse.Namespace) -> pd.DataFrame:
   """
   input  :
     - TRUE          (pd.DataFrame)
@@ -284,7 +360,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   start, end = args.dates
   N_seconds = int((end - start) / (2 * PICK_OFFSET.total_seconds()))
   z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
-  TP, FN, FP = [], [], []
+  TP, FN, FP = set(), [], set()
   for threshold, (model, dataframe_m) in \
     itertools.product(z, PRED.groupby(MODEL_STR)):
     fig, _axs = plt.subplots(2, 2, figsize=(10, 9))
@@ -301,9 +377,9 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
         cfn_mtx, tp, fn, fp = conf_mtx(TRUE_S, PRED_S, model, weight,
                                        threshold, args)
         CFN_MTX += cfn_mtx
-        TP.extend(tp)
+        TP = TP.union(tp)
         FN.extend(fn)
-        FP.extend(fp)
+        FP = FP.union(fp)
       CFN_MTX.loc[NONE_STR, NONE_STR] = N_seconds - CFN_MTX.sum().sum()
       disp = ConfMtxDisp(CFN_MTX.values, display_labels=CFN_MTX.columns)
       disp.plot(ax=ax, colorbar=False)
@@ -328,22 +404,27 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
                     PNG_EXT)
     plt.savefig(IMG_FILE)
     plt.close()
-  HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, PHASE_STR, THRESHOLD_STR,
-            TIMESTAMP_STR, TYPE_STR]
+  HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, PHASE_STR, TIMESTAMP_STR,
+            PROBABILITY_STR]
   # True Positives
-  TP = pd.DataFrame(TP, columns=HEADER)
+  TP = pd.DataFrame(TP, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)
   HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, PHASE_STR, THRESHOLD_STR,
             TIMESTAMP_STR, PROBABILITY_STR]
   # False Negatives
-  FN = pd.DataFrame(FN, columns=HEADER)
+  FN = pd.DataFrame(FN, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)
   FN_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  FN_STR + CSV_EXT)
   FN.to_csv(FN_FILE, index=False)
+  HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, PHASE_STR, TIMESTAMP_STR,
+            PROBABILITY_STR]
   # False Positives
-  FP = pd.DataFrame(FP, columns=HEADER)
+  FP = pd.DataFrame(FP, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)
   FP_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  FP_STR + CSV_EXT)
   FP.to_csv(FP_FILE, index=False)
+  return TP
+  # TODO: Redo the plots for the True Positives, False Negatives and False
+  #       Positives
   # Plot the True Positives, False Negatives histogram and the Recall as a
   # function of the threshold for each model and weight
   groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
@@ -480,82 +561,7 @@ def event_parser(filename : Path, stations : list, args : argparse.Namespace) \
     | EVENT | STATION | PHASE | BEGDT | WEIGHT |
     --------------------------------------------
   """
-  global DATA_PATH
-  DATA_PATH = Path(args.directory).parent
-  if args.file is None: raise FileNotFoundError
-  WAVEFORMS_FILE = Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT)
-  ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
-  if ARGUMENTS_FILE.exists() and WAVEFORMS_FILE.exists() and \
-     Pkr.primary_arguments(args) == Pkr.read_arguments(args):
-    # As the arguments are the same, we can use the waveform catalog to search
-    # for the waveforms given the events listed
-    WAVEFORMS = pd.read_csv(WAVEFORMS_FILE)
-    WAVEFORMS[BEG_DATE_STR] = WAVEFORMS[BEG_DATE_STR].apply(lambda x:
-                                UTCDateTime.strptime(str(x), DATE_FMT))
-  else:
-    # As the arguments are different, we need to regenerate the waveform
-    # catalog manually taking into consideration the current arguments
-    CLF_PATH = Path(DATA_PATH, CLF_STR)
-    if args.verbose:
-      print("WARNING: Creating catalog based on all existing files in",
-            CLF_PATH)
-    if not CLF_PATH.exists():
-      print(f"ERROR: {CLF_PATH} does not exist")
-      raise FileNotFoundError
-    WAVEFORMS = []
-    for date_path in CLF_PATH.iterdir():
-      date = UTCDateTime.strptime(date_path.name, DATE_FMT)
-      for network_path in date_path.iterdir():
-        for station_path in network_path.iterdir():
-          WAVEFORMS.append([date, station_path.name])
-    WAVEFORMS = pd.DataFrame(WAVEFORMS, columns=[BEG_DATE_STR, STATION_STR])
-  HEADER = [EVENT_STR, STATION_STR, PHASE_STR, TIMESTAMP_STR, WEIGHT_STR]
-  DATA = []
-  event = 0
-  start, end = args.dates
-  if os.path.isfile(filename):
-    with open(filename, 'r') as fr: lines = fr.readlines()
-    for line in [l.strip() for l in lines]:
-      if EVENT_EXTRACTOR_DAT.match(line):
-        event += 1
-        continue
-      match = RECORD_EXTRACTOR_DAT.match(line)
-      if match:
-        result = match.groupdict()
-        result[BEG_DATE_STR] = UTCDateTime.strptime(result[BEG_DATE_STR],
-                                                    "%y%m%d%H%M")
-        # We only consider the picks from the date range
-        if result[BEG_DATE_STR] < start or \
-          result[BEG_DATE_STR] >= end + ONE_DAY: continue
-        # We only consider the stations that are in the list of predicted
-        # stations
-        result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
-        if WAVEFORMS[(WAVEFORMS[STATION_STR] == result[STATION_STR])].empty:
-          if args.verbose:
-            print(f"WARNING: {result[STATION_STR]} {result[BEG_DATE_STR]} not "
-                  "found")
-          continue
-        result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
-        result[P_TIME_STR] = \
-          result[BEG_DATE_STR] + td(seconds=float(result[P_TIME_STR][:2] + \
-                                                  PERIOD_STR + \
-                                                  result[P_TIME_STR][2:]))
-        DATA.append([event, result[STATION_STR], PWAVE, result[P_TIME_STR],
-                    result[P_WEIGHT_STR]])
-        if result[S_TIME_STR]:
-          result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
-          result[S_TIME_STR] = \
-            result[BEG_DATE_STR] + td(seconds=float(result[S_TIME_STR][:2] + \
-                                                    PERIOD_STR + \
-                                                    result[S_TIME_STR][2:]))
-          DATA.append([event, result[STATION_STR], SWAVE, result[S_TIME_STR],
-                      result[S_WEIGHT_STR]])
-  else:
-    # TODO: Implement the case where the filename is a directory
-    pass
-  # We sort the values by the Primary wave arrival time
-  DATA = pd.DataFrame(DATA, columns=HEADER).sort_values(TIMESTAMP_STR)
-  return DATA
+  return prs.event_parser(filename, *args.dates, args.verbose, set(stations))
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
                       phase = PWAVE) -> None:
@@ -575,12 +581,15 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
     | MODEL | WEIGHT | PHASE | THRESHOLD | TIMESTAMP |
     --------------------------------------------------
   """
-  DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].map(lambda x: x[0] - x[1])
+  if args.verbose: print("Plotting the Time Displacement")
+  DATA[TIMESTAMP_STR] = \
+    DATA[TIMESTAMP_STR].map(lambda x: UTCDateTime(x[0]) - UTCDateTime(x[1]))
+  DATA[PROBABILITY_STR] = DATA[PROBABILITY_STR].map(lambda x: x[1])
   bins = np.linspace(-0.5, 0.5, 21, endpoint=True)
   z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
-  groups = [MODEL_STR, WEIGHT_STR, PHASE_STR, THRESHOLD_STR]
+  groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
   m = 0
-  for groups, dataframe in DATA.groupby(groups):
+  for (model, weight, phase), dataframe in DATA.groupby(groups):
     counts, _ = np.histogram(dataframe[TIMESTAMP_STR], bins=bins)
     m = max(m, max(counts))
   m = (m + 9) // 10 * 10
@@ -588,21 +597,21 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
     fig, _axs = plt.subplots(2, 2, figsize=(10, 7))
     axs = _axs.flatten()
     dataframe_mp = DATA[(DATA[MODEL_STR] == model) &
-                        (DATA[PHASE_STR] == phase)]
+                        (DATA[PHASE_STR] == phase)].reset_index(drop=True)
     for ax, (weight, dataframe) in zip(axs, dataframe_mp.groupby(WEIGHT_STR)):
       ax.set_title(weight)
-      for threshold in z:
-        data = dataframe[dataframe[THRESHOLD_STR] == threshold][TIMESTAMP_STR]
+      dataframe.plot(kind='kde', y=TIMESTAMP_STR, ax=ax, label="KDE",
+                     color="k")
+      for t_i, t_f in zip(z[:-1], z[1:]):
+        data = dataframe[(dataframe[PROBABILITY_STR] >= t_i) &
+                         (dataframe[PROBABILITY_STR] < t_f)][TIMESTAMP_STR]
         # TODO: Consider a KDE plot
         counts, _ = np.histogram(data, bins=bins)
         mu = np.mean(data)
         std = np.std(data)
-        skew = sp.stats.skew(data)
-        ax.plot(bins[:-1], counts, label=rf"$\geq${threshold}, " + \
-                                         rf"$\mu$={mu:.2f}, " + \
-                                         rf"$\sigma$={std:.2f}, " + \
-                                         rf"$\gamma$={skew:.2f}")
-      ax.set(xlim=(-0.5, 0.5), ylim=(0, m))
+        ax.step(bins[:-1], counts, where='mid',
+                label=rf"[{t_i},{t_f}),$\mu$={mu:.2f},$\sigma$={std:.2f}")
+      ax.set(xlim=(-0.5, 1.5), ylim=(0, m))
       ax.grid()
       ax.legend()
     xlabel = "Time Displacement (s)"
@@ -621,18 +630,21 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
 def main(args : argparse.Namespace):
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
-  PRED = Pkr.load_data(args)
+  PRED = load_data(args)
   stations = args.station if (args.station is not None and
                               args.station != ALL_WILDCHAR_STR) else \
-             PRED[STATION_STR].unique()
+             PRED[STATION_STR].unique().tolist()
   TRUE = event_parser(args.file, stations, args)
   if args.verbose:
     TRUE.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
     PRED.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                      PRED_STR + CSV_EXT), index=False)
-  plot_data(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
-  plot_data(copy.deepcopy(TRUE), copy.deepcopy(PRED), args, phase=SWAVE)
+  # plot_data(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
+  # plot_data(copy.deepcopy(TRUE), copy.deepcopy(PRED), args, phase=SWAVE)
   TP = stat_test(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
-  time_displacement(TP, args)
+  if args.verbose:
+    TP.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                   TP_STR + CSV_EXT), index=False)
+  time_displacement(copy.deepcopy(TP), args)
 
 if __name__ == "__main__": main(Pkr.parse_arguments())

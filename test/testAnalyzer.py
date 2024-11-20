@@ -33,35 +33,38 @@ class TestPickParser(unittest.TestCase):
                         Path(MNL_DATA_PATH, "RSFVG-2023.dat").__str__()])
   def test_parse_pick(self):
     args = Pkr.parse_arguments()
-    PRED = Pkr.load_data(args)
+    PRED = load_data(args)
     stations = args.station if (args.station is not None and
                                 args.station != ALL_WILDCHAR_STR) else \
                PRED[STATION_STR].unique()
     TRUE = event_parser(args.file, stations, args)
-    EXPECTED = [[897, "CAE", PWAVE, "2023-06-01T09:27:58.710000Z", 0],
-                [897, "CAE", SWAVE, "2023-06-01T09:27:59.360000Z", 2],
-                [898, "CAE", PWAVE, "2023-06-01T09:53:32.530000Z", 2],
-                [898, "CAE", SWAVE, "2023-06-01T09:53:36.360000Z", 3],
-                [899, "VARA", PWAVE, "2023-06-01T10:02:12.860000Z", 3],
-                [902, "CAE", PWAVE, "2023-06-01T21:41:16.740000Z", 0],
-                [902, "CAE", SWAVE, "2023-06-01T21:41:19.090000Z", 0],
-                [904, "VARA", PWAVE, "2023-06-02T02:18:27.430000Z", 0],
-                [904, "VARA", SWAVE, "2023-06-02T02:18:29.510000Z", 1],
-                [905, "BAD", PWAVE, "2023-06-02T08:50:46.420000Z", 2],
-                [907, "BAD", PWAVE, "2023-06-03T00:31:40.050000Z", 2],
-                [907, "BAD", SWAVE, "2023-06-03T00:31:43.560000Z", 1],
-                [908, "VARA", PWAVE, "2023-06-03T05:18:36.010000Z", 2],
-                [908, "VARA", SWAVE, "2023-06-03T05:18:39.980000Z", 2],
-                [910, "VARA", PWAVE, "2023-06-03T12:33:23.350000Z", 0],
-                [910, "VARA", SWAVE, "2023-06-03T12:33:25.980000Z", 0],
-                [911, "BAD", PWAVE, "2023-06-03T16:54:16.760000Z", 2],
-                [911, "BAD", SWAVE, "2023-06-03T16:54:19.950000Z", 2],
-                [914, "BAD", PWAVE, "2023-06-04T00:03:05.450000Z", 0],
-                [914, "BAD", SWAVE, "2023-06-04T00:04:23.400000Z", 2],
-                [915, "BAD", PWAVE, "2023-06-04T00:25:10.760000Z", 1],
-                [915, "BAD", SWAVE, "2023-06-04T00:25:16.420000Z", 2],
-                [918, "CAE", PWAVE, "2023-06-04T17:57:11.390000Z", 3],
-                [918, "CAE", SWAVE, "2023-06-04T17:57:17.250000Z", 2]]
+    EXPECTED = [[2, "CAE", PWAVE, "2023-06-01T09:27:58.710000Z",0],
+                [2, "CAE", SWAVE, "2023-06-01T09:27:59.360000Z",2],
+                [3, "CAE", PWAVE, "2023-06-01T09:53:32.530000Z",2],
+                [3, "CAE", SWAVE, "2023-06-01T09:53:36.360000Z",3],
+                [4, "VARA", PWAVE, "2023-06-01T10:02:12.860000Z",3],
+                [7, "CAE", PWAVE, "2023-06-01T21:41:16.740000Z",0],
+                [7, "CAE", SWAVE, "2023-06-01T21:41:19.090000Z",0],
+                [9, "VARA", PWAVE, "2023-06-02T02:18:27.430000Z",0],
+                [9, "VARA", SWAVE, "2023-06-02T02:18:29.510000Z",1],
+                [10, "TRI", PWAVE, "2023-06-02T08:50:44.010000Z",0],
+                [10, "BAD", PWAVE, "2023-06-02T08:50:46.420000Z",2],
+                [12, "BAD", PWAVE, "2023-06-03T00:31:40.050000Z",2],
+                [12, "BAD", SWAVE, "2023-06-03T00:31:43.560000Z",1],
+                [13, "VARA", PWAVE, "2023-06-03T05:18:36.010000Z",2],
+                [13, "VARA", SWAVE, "2023-06-03T05:18:39.980000Z",2],
+                [15, "VARA", PWAVE, "2023-06-03T12:33:23.350000Z",0],
+                [15, "VARA", SWAVE, "2023-06-03T12:33:25.980000Z",0],
+                [16, "BAD", PWAVE, "2023-06-03T16:54:16.760000Z",2],
+                [16, "BAD", SWAVE, "2023-06-03T16:54:19.950000Z",2],
+                [19, "BAD", PWAVE, "2023-06-04T00:03:05.450000Z",0],
+                [19, "BAD", SWAVE, "2023-06-04T00:04:23.400000Z",2],
+                [20, "TRI", PWAVE, "2023-06-04T00:25:09.150000Z",3],
+                [20, "TRI", SWAVE, "2023-06-04T00:25:14.520000Z",3],
+                [20, "BAD", PWAVE, "2023-06-04T00:25:10.760000Z",1],
+                [20, "BAD", SWAVE, "2023-06-04T00:25:16.420000Z",2],
+                [23, "CAE", PWAVE, "2023-06-04T17:57:11.390000Z",3],
+                [23, "CAE", SWAVE, "2023-06-04T17:57:17.250000Z",2]]
     self.assertListEqual(EXPECTED, TRUE.values.tolist())
 
 class TestEventCounter(unittest.TestCase):
@@ -71,7 +74,7 @@ class TestEventCounter(unittest.TestCase):
                         Path(MNL_DATA_PATH, "RSFVG-2023.dat").__str__()])
   def test_event_counter(self):
     args = Pkr.parse_arguments()
-    PRED = Pkr.load_data(args)
+    PRED = load_data(args)
     stations = args.station if (args.station is not None and
                                 args.station != ALL_WILDCHAR_STR) else \
                PRED[STATION_STR].unique()
@@ -110,17 +113,18 @@ class TestConfMtx(unittest.TestCase):
                 [0, 1, 0],
                 [0, 0, 0]]
     self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
-    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
-                 (UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
-                  UTCDateTime(2023, 6, 1, 0, 1, 2, 3)), 3],
-                [PHASENET_STR, ORIGINAL_STR, STATION, SWAVE, THRESHOLD,
-                 (UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
-                  UTCDateTime(2023, 6, 1, 0, 4, 5, 6)), 0]]
-    self.assertListEqual(EXPECTED, TP)
+    EXPECTED = set()
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, PWAVE,
+                  (str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3)),
+                   str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3))), (3, 0.43185002)))
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, SWAVE,
+                  (str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6)),
+                   str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6))), (0, 0.3372562)))
+    self.assertSetEqual(EXPECTED, TP)
     EXPECTED = []
     self.assertListEqual(EXPECTED, FN)
-    EXPECTED = []
-    self.assertListEqual(EXPECTED, FP)
+    EXPECTED = set()
+    self.assertSetEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
                        ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
@@ -153,12 +157,12 @@ class TestConfMtx(unittest.TestCase):
                 [1, 0, 0],
                 [0, 0, 0]]
     self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
-    EXPECTED = []
-    self.assertListEqual(EXPECTED, TP)
+    EXPECTED = set()
+    self.assertSetEqual(EXPECTED, TP)
     EXPECTED = []
     self.assertListEqual(EXPECTED, FN)
-    EXPECTED = []
-    self.assertListEqual(EXPECTED, FP)
+    EXPECTED = set()
+    self.assertSetEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
                        ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
@@ -195,18 +199,20 @@ class TestConfMtx(unittest.TestCase):
                 [0, 1, 0],
                 [1, 0, 0]]
     self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
-    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
-                 (UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
-                  UTCDateTime(2023, 6, 1, 0, 1, 2, 3)), 3],
-                 [PHASENET_STR, ORIGINAL_STR, STATION, SWAVE, THRESHOLD,
-                  (UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
-                   UTCDateTime(2023, 6, 1, 0, 4, 5, 6)), 0]]
-    self.assertListEqual(EXPECTED, TP)
+    EXPECTED = set()
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, PWAVE,
+                  (str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3)),
+                   str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3))), (3, 0.43185002)))
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, SWAVE,
+                  (str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6)),
+                   str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6))), (0, 0.3372562)))
+    self.assertSetEqual(EXPECTED, TP)
     EXPECTED = []
     self.assertListEqual(EXPECTED, FN)
-    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
-                 UTCDateTime(2023, 6, 1, 0, 1, 2, 4), 0.43185002]]
-    self.assertListEqual(EXPECTED, FP)
+    EXPECTED = set()
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, PWAVE,
+                  str(UTCDateTime(2023, 6, 1, 0, 1, 2, 4)), 0.43185002))
+    self.assertSetEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
                        ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
@@ -242,16 +248,18 @@ class TestConfMtx(unittest.TestCase):
                 [0, 0, 0],
                 [0, 1, 0]]
     self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
-    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
-                 (UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
-                  UTCDateTime(2023, 6, 1, 0, 1, 2, 3)), 3]]
-    self.assertListEqual(EXPECTED, TP)
+    EXPECTED = set()
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, PWAVE,
+                  (str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3)),
+                   str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3))), (3, 0.43185002)))
+    self.assertSetEqual(EXPECTED, TP)
     EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
                  UTCDateTime(2023, 6, 1, 0, 1, 2, 4), 3]]
     self.assertListEqual(EXPECTED, FN)
-    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, SWAVE, THRESHOLD,
-                 UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0.3372562]]
-    self.assertListEqual(EXPECTED, FP)
+    EXPECTED = set()
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, SWAVE,
+                  str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6)), 0.3372562))
+    self.assertSetEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
                        ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
@@ -281,15 +289,15 @@ class TestConfMtx(unittest.TestCase):
                 [0, 0, 1],
                 [0, 0, 0]]
     self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
-    EXPECTED = []
-    self.assertListEqual(EXPECTED, TP)
+    EXPECTED = set()
+    self.assertSetEqual(EXPECTED, TP)
     EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
                  UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 3],
                 [PHASENET_STR, ORIGINAL_STR, STATION, SWAVE, THRESHOLD,
                  UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0]]
     self.assertListEqual(EXPECTED, FN)
-    EXPECTED = []
-    self.assertListEqual(EXPECTED, FP)
+    EXPECTED = set()
+    self.assertSetEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
                        ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
@@ -322,15 +330,16 @@ class TestConfMtx(unittest.TestCase):
                 [0, 0, 0],
                 [1, 1, 0]]
     self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
-    EXPECTED = []
-    self.assertListEqual(EXPECTED, TP)
+    EXPECTED = set()
+    self.assertSetEqual(EXPECTED, TP)
     EXPECTED = []
     self.assertListEqual(EXPECTED, FN)
-    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
-                 UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 0.43185002],
-                [PHASENET_STR, ORIGINAL_STR, STATION, SWAVE, THRESHOLD,
-                 UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0.3372562]]
-    self.assertListEqual(EXPECTED, FP)
+    EXPECTED = set()
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, PWAVE,
+                  str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3)), 0.43185002))
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, SWAVE,
+                  str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6)), 0.3372562))
+    self.assertSetEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
                        ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
@@ -358,12 +367,12 @@ class TestConfMtx(unittest.TestCase):
                 [0, 0, 0],
                 [0, 0, 0]]
     self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
-    EXPECTED = []
-    self.assertListEqual(EXPECTED, TP)
+    EXPECTED = set()
+    self.assertSetEqual(EXPECTED, TP)
     EXPECTED = []
     self.assertListEqual(EXPECTED, FN)
-    EXPECTED = []
-    self.assertListEqual(EXPECTED, FP)
+    EXPECTED = set()
+    self.assertSetEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
                        ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",
@@ -401,18 +410,20 @@ class TestConfMtx(unittest.TestCase):
                 [0, 1, 0],
                 [0, 1, 0]]
     self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
-    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
-                 (UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
-                  UTCDateTime(2023, 6, 1, 0, 1, 2, 3)), 3],
-                [PHASENET_STR, ORIGINAL_STR, STATION, SWAVE, THRESHOLD,
-                 (UTCDateTime(2023, 6, 1, 0, 1, 2, 4),
-                  UTCDateTime(2023, 6, 1, 0, 1, 2, 4)), 0]]
-    self.assertListEqual(EXPECTED, TP)
+    EXPECTED = set()
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, PWAVE,
+                  (str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3)),
+                   str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3))), (3, 0.43185002)))
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, SWAVE,
+                  (str(UTCDateTime(2023, 6, 1, 0, 1, 2, 4)),
+                   str(UTCDateTime(2023, 6, 1, 0, 1, 2, 4))), (0, 0.3372562)))
+    self.assertSetEqual(EXPECTED, TP)
     EXPECTED = []
     self.assertListEqual(EXPECTED, FN)
-    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, SWAVE, THRESHOLD,
-                 UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0.3372562]]
-    self.assertListEqual(EXPECTED, FP)
+    EXPECTED = set()
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, SWAVE,
+                  str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6)), 0.3372562))
+    self.assertSetEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
                        ["Analyzer.py", "-D", "230601", "230601", "-v", "-d",

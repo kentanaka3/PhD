@@ -1,4 +1,7 @@
 FILENAME,NETWORK,station,CHANNEL,BEGDT
+/Users/admin/Desktop/Monica/PhD/data/test/waveforms/MN.TRI..HHE__20230601T000000Z__20230602T000000Z.mseed,MN,TRI,HHE,230601
+/Users/admin/Desktop/Monica/PhD/data/test/waveforms/MN.TRI..HHN__20230601T000000Z__20230602T000000Z.mseed,MN,TRI,HHN,230601
+/Users/admin/Desktop/Monica/PhD/data/test/waveforms/MN.TRI..HHZ__20230601T000000Z__20230602T000000Z.mseed,MN,TRI,HHZ,230601
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/OX.BAD..HHE__20230601T000000Z__20230602T000000Z.mseed,OX,BAD,HHE,230601
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/OX.BAD..HHN__20230601T000000Z__20230602T000000Z.mseed,OX,BAD,HHN,230601
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/OX.BAD..HHZ__20230601T000000Z__20230602T000000Z.mseed,OX,BAD,HHZ,230601
@@ -8,6 +11,9 @@ FILENAME,NETWORK,station,CHANNEL,BEGDT
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/ST.VARA..EHE__20230601T000000Z__20230602T000000Z.mseed,ST,VARA,EHE,230601
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/ST.VARA..EHN__20230601T000000Z__20230602T000000Z.mseed,ST,VARA,EHN,230601
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/ST.VARA..EHZ__20230601T000000Z__20230602T000000Z.mseed,ST,VARA,EHZ,230601
+/Users/admin/Desktop/Monica/PhD/data/test/waveforms/MN.TRI..HHE__20230602T000000Z__20230603T000000Z.mseed,MN,TRI,HHE,230602
+/Users/admin/Desktop/Monica/PhD/data/test/waveforms/MN.TRI..HHN__20230602T000000Z__20230603T000000Z.mseed,MN,TRI,HHN,230602
+/Users/admin/Desktop/Monica/PhD/data/test/waveforms/MN.TRI..HHZ__20230602T000000Z__20230603T000000Z.mseed,MN,TRI,HHZ,230602
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/OX.BAD..HHE__20230602T000000Z__20230603T000000Z.mseed,OX,BAD,HHE,230602
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/OX.BAD..HHN__20230602T000000Z__20230603T000000Z.mseed,OX,BAD,HHN,230602
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/OX.BAD..HHZ__20230602T000000Z__20230603T000000Z.mseed,OX,BAD,HHZ,230602
@@ -17,6 +23,9 @@ FILENAME,NETWORK,station,CHANNEL,BEGDT
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/ST.VARA..EHE__20230602T000000Z__20230603T000000Z.mseed,ST,VARA,EHE,230602
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/ST.VARA..EHN__20230602T000000Z__20230603T000000Z.mseed,ST,VARA,EHN,230602
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/ST.VARA..EHZ__20230602T000000Z__20230603T000000Z.mseed,ST,VARA,EHZ,230602
+/Users/admin/Desktop/Monica/PhD/data/test/waveforms/MN.TRI..HHE__20230603T000000Z__20230604T000000Z.mseed,MN,TRI,HHE,230603
+/Users/admin/Desktop/Monica/PhD/data/test/waveforms/MN.TRI..HHN__20230603T000000Z__20230604T000000Z.mseed,MN,TRI,HHN,230603
+/Users/admin/Desktop/Monica/PhD/data/test/waveforms/MN.TRI..HHZ__20230603T000000Z__20230604T000000Z.mseed,MN,TRI,HHZ,230603
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/OX.BAD..HHE__20230603T000000Z__20230604T000000Z.mseed,OX,BAD,HHE,230603
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/OX.BAD..HHN__20230603T000000Z__20230604T000000Z.mseed,OX,BAD,HHN,230603
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/OX.BAD..HHZ__20230603T000000Z__20230604T000000Z.mseed,OX,BAD,HHZ,230603
@@ -26,6 +35,9 @@ FILENAME,NETWORK,station,CHANNEL,BEGDT
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/ST.VARA..EHE__20230603T000000Z__20230604T000000Z.mseed,ST,VARA,EHE,230603
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/ST.VARA..EHN__20230603T000000Z__20230604T000000Z.mseed,ST,VARA,EHN,230603
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/ST.VARA..EHZ__20230603T000000Z__20230604T000000Z.mseed,ST,VARA,EHZ,230603
+/Users/admin/Desktop/Monica/PhD/data/test/waveforms/MN.TRI..HHE__20230604T000000Z__20230605T000000Z.mseed,MN,TRI,HHE,230604
+/Users/admin/Desktop/Monica/PhD/data/test/waveforms/MN.TRI..HHN__20230604T000000Z__20230605T000000Z.mseed,MN,TRI,HHN,230604
+/Users/admin/Desktop/Monica/PhD/data/test/waveforms/MN.TRI..HHZ__20230604T000000Z__20230605T000000Z.mseed,MN,TRI,HHZ,230604
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/OX.BAD..HHE__20230604T000000Z__20230605T000000Z.mseed,OX,BAD,HHE,230604
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/OX.BAD..HHN__20230604T000000Z__20230605T000000Z.mseed,OX,BAD,HHN,230604
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/OX.BAD..HHZ__20230604T000000Z__20230605T000000Z.mseed,OX,BAD,HHZ,230604
