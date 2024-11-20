@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 from gamma.utils import association, estimate_eps
 
 from constants import *
-import Picker as Pkr
+import initializer as ini
 
 def station_graph(inventory : obspy.Inventory) -> None:
   x = [station.longitude for network in inventory for station in network]
@@ -174,7 +174,7 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
 def main(args : argparse.Namespace) -> None:
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
-  WAVEFORMS_DATA = Pkr.waveform_table(args)
+  WAVEFORMS_DATA = pkr.waveform_table(args)
   stations = (WAVEFORMS_DATA[NETWORK_STR] + PERIOD_STR + \
               WAVEFORMS_DATA[STATION_STR]).unique()
   INVENTORY = obspy.Inventory()
@@ -185,7 +185,7 @@ def main(args : argparse.Namespace) -> None:
   print(CONFIG)
   # if args.verbose: station_graph(INVENTORY)
   THRESHOLDS = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
-  PRED = Pkr.load_data(args)
+  PRED = pkr.load_data(args)
   for threshold in THRESHOLDS:
     for (model, dataset), dataframe in PRED.groupby([MODEL_STR, WEIGHT_STR]):
       dataframe = dataframe[dataframe[PROBABILITY_STR] >= threshold]\
@@ -193,4 +193,4 @@ def main(args : argparse.Namespace) -> None:
       associate_events(dataframe, CONFIG, model, dataset, threshold)
   return
 
-if __name__ == "__main__": main(Pkr.parse_arguments())
+if __name__ == "__main__": main(ini.parse_arguments())

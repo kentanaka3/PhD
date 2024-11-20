@@ -23,7 +23,7 @@ from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 
 from constants import *
 import parser as prs
-import Picker as Pkr
+import initializer as ini
 
 SORT_HIERARCHY_PRED = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, PROBABILITY_STR]
 
@@ -600,8 +600,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
                         (DATA[PHASE_STR] == phase)].reset_index(drop=True)
     for ax, (weight, dataframe) in zip(axs, dataframe_mp.groupby(WEIGHT_STR)):
       ax.set_title(weight)
-      dataframe.plot(kind='kde', y=TIMESTAMP_STR, ax=ax, label="KDE",
-                     color="k")
+      dataframe.plot(kind='bar', y=TIMESTAMP_STR, ax=ax, color="b", alpha=0.5)
       for t_i, t_f in zip(z[:-1], z[1:]):
         data = dataframe[(dataframe[PROBABILITY_STR] >= t_i) &
                          (dataframe[PROBABILITY_STR] < t_f)][TIMESTAMP_STR]
@@ -647,4 +646,4 @@ def main(args : argparse.Namespace):
                    TP_STR + CSV_EXT), index=False)
   time_displacement(copy.deepcopy(TP), args)
 
-if __name__ == "__main__": main(Pkr.parse_arguments())
+if __name__ == "__main__": main(ini.parse_arguments())

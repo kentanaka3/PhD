@@ -1,17 +1,16 @@
 #!/bin/python
 import os
 from pathlib import Path
-import unittest.mock
 PRJ_PATH = Path(os.path.dirname(__file__)).parent
-SRC_PATH = os.path.join(PRJ_PATH, "src")
+INC_PATH = os.path.join(PRJ_PATH, "inc")
 import sys
 # Add to path
-if SRC_PATH not in sys.path: sys.path.append(SRC_PATH)
+if INC_PATH not in sys.path: sys.path.append(INC_PATH)
 import unittest
+
 from parser import *
 
-BASE_PATH = Path(PRJ_PATH, "data")
-DATA_PATH = Path(BASE_PATH, "test")
+DATA_PATH = Path(PRJ_PATH, "data", "test")
 TEST_PATH = Path(DATA_PATH, "waveforms")
 MNL_DATA_PATH = Path(DATA_PATH, "manual")
 
@@ -29,6 +28,5 @@ class TestParser(unittest.TestCase):
   def test_event_parser_qml(self):
     filename = Path(MNL_DATA_PATH, FILENAME + QML_EXT)
     data = event_parser_qml(filename)
-    print(data)
 
 if __name__ == "__main__": unittest.main()

@@ -1,19 +1,18 @@
 #!/bin/python
 import os
 from pathlib import Path
-import unittest.mock
 PRJ_PATH = Path(os.path.dirname(__file__)).parent
 SRC_PATH = os.path.join(PRJ_PATH, "src")
 import sys
 # Add to path
 if SRC_PATH not in sys.path: sys.path.append(SRC_PATH)
 import unittest
-from Analyzer import *
-import Picker as Pkr
-from constants import *
 
-BASE_PATH = Path(PRJ_PATH, "data")
-DATA_PATH = Path(BASE_PATH, "test")
+from constants import *
+from analyzer import *
+import initializer as ini
+
+DATA_PATH = Path(PRJ_PATH, "data", "test")
 TEST_PATH = Path(DATA_PATH, "waveforms")
 MNL_DATA_PATH = Path(DATA_PATH, "manual")
 
@@ -32,7 +31,7 @@ class TestPickParser(unittest.TestCase):
                         "-D", "230601", "230604", "-v", "--file",
                         Path(MNL_DATA_PATH, "RSFVG-2023.dat").__str__()])
   def test_parse_pick(self):
-    args = Pkr.parse_arguments()
+    args = ini.parse_arguments()
     PRED = load_data(args)
     stations = args.station if (args.station is not None and
                                 args.station != ALL_WILDCHAR_STR) else \
@@ -73,7 +72,7 @@ class TestEventCounter(unittest.TestCase):
                         TEST_PATH.__str__(), "-M", PHASENET_STR, "--file",
                         Path(MNL_DATA_PATH, "RSFVG-2023.dat").__str__()])
   def test_event_counter(self):
-    args = Pkr.parse_arguments()
+    args = ini.parse_arguments()
     PRED = load_data(args)
     stations = args.station if (args.station is not None and
                                 args.station != ALL_WILDCHAR_STR) else \
@@ -97,7 +96,7 @@ class TestConfMtx(unittest.TestCase):
             N [0, 0, 0]
                P  S  N : PRED
     """
-    args = Pkr.parse_arguments()
+    args = ini.parse_arguments()
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), SWAVE, 0]]
@@ -141,7 +140,7 @@ class TestConfMtx(unittest.TestCase):
             N [0, 0, 0]
                P  S  N : PRED
     """
-    args = Pkr.parse_arguments()
+    args = ini.parse_arguments()
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), SWAVE, 0]]
@@ -180,7 +179,7 @@ class TestConfMtx(unittest.TestCase):
             N [1, 0, 0]
                P  S  N : PRED
     """
-    args = Pkr.parse_arguments()
+    args = ini.parse_arguments()
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), SWAVE, 0]]
@@ -231,7 +230,7 @@ class TestConfMtx(unittest.TestCase):
             N [0, 1, 0]
                P  S  N : PRED
     """
-    args = Pkr.parse_arguments()
+    args = ini.parse_arguments()
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 4), PWAVE, 3]]
@@ -276,7 +275,7 @@ class TestConfMtx(unittest.TestCase):
             N [0, 0, 0]
                P  S  N : PRED
     """
-    args = Pkr.parse_arguments()
+    args = ini.parse_arguments()
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), SWAVE, 0]]
@@ -314,7 +313,7 @@ class TestConfMtx(unittest.TestCase):
             N [1, 1, 0]
                P  S  N : PRED
     """
-    args = Pkr.parse_arguments()
+    args = ini.parse_arguments()
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = []
     TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
@@ -355,7 +354,7 @@ class TestConfMtx(unittest.TestCase):
             N [0, 0, 0]
                P  S  N : PRED
     """
-    args = Pkr.parse_arguments()
+    args = ini.parse_arguments()
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = []
     TRUE = pd.DataFrame(TRUE, columns=TRUE_HEADER)
@@ -391,7 +390,7 @@ class TestConfMtx(unittest.TestCase):
             N [0, 1, 0]
                P  S  N : PRED
     """
-    args = Pkr.parse_arguments()
+    args = ini.parse_arguments()
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
     TRUE = [[STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), PWAVE, 3],
             [STATION, UTCDateTime(2023, 6, 1, 0, 1, 2, 4), SWAVE, 0]]
@@ -442,7 +441,7 @@ class TestConfMtx(unittest.TestCase):
             N [0, 1, 0]
                P  S  N : PRED
     """
-    args = Pkr.parse_arguments()
+    args = ini.parse_arguments()
     #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
 
 if __name__ == "__main__": unittest.main()
