@@ -21,7 +21,7 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
                      end : UTCDateTime = None, verbose : bool = False,
                      stations : set = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
-  DATA = []
+  DATA = list()
   event = 0
   with open(filename, 'r') as fr: lines = fr.readlines()
   for line in [l.strip() for l in lines]:
@@ -76,7 +76,7 @@ def event_parser_pun(filename : Path, start : UTCDateTime = None,
                      end : UTCDateTime = None, verbose : bool = False,
                      stations : set = None) -> list:
   if not filename.exists(): raise FileNotFoundError(filename)
-  DATA = []
+  DATA = list()
   with open(filename, 'r') as fr: lines = fr.readlines()[1:]
   for line in [l.strip() for l in lines]:
     match = RECORD_EXTRACTOR_PUN.match(line)
@@ -120,14 +120,22 @@ def event_parser_hpc(filename : Path, start : UTCDateTime = None,
                      end : UTCDateTime = None, verbose : bool = False,
                      stations : set = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
-  DATA = []
+  DATA = list()
   event = 0
 
+RECORD_EXTRACTOR_HPL = re.compile(
+  fr""
+)
 def event_parser_hpl(filename : Path, start : UTCDateTime = None,
                      end : UTCDateTime = None, verbose : bool = False,
                       stations : set = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
-  DATA = []
+  DATA = list()
+  with open(filename, 'r') as fr: lines = fr.readlines()
+  for line in [l.strip() for l in lines]:
+    match = RECORD_EXTRACTOR_HPL.match(line)
+    if match:
+      result = match.groupdict()
 
 def event_parser_qml(filename : Path, start : UTCDateTime = None,
                      end : UTCDateTime = None, verbose : bool = False,
@@ -139,25 +147,28 @@ def event_parser_(filename : Path, start : UTCDateTime = None,
                   end : UTCDateTime = None, verbose : bool = False,
                   stations : set = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
-  if filename.suffix == DAT_EXT:
+  sfx = filename.suffix
+  if sfx == DAT_EXT:
     return event_parser_dat(filename, start, end, verbose, stations)
-  elif filename.suffix == PUN_EXT:
+  elif sfx == PUN_EXT:
     return event_parser_pun(filename, start, end, verbose, stations)
-  elif filename.suffix == HPC_EXT:
+  elif sfx == HPC_EXT:
     return event_parser_hpc(filename, start, end, verbose, stations)
-  elif filename.suffix == HPL_EXT:
+  elif sfx == HPL_EXT:
     return event_parser_hpl(filename, start, end, verbose, stations)
-  elif filename.suffix == QML_EXT:
+  elif sfx == QML_EXT:
     return event_parser_qml(filename, start, end, verbose, stations)
   else:
-    raise ValueError(f"Unknown file extension: {filename.suffix}")
+    raise ValueError(f"Unknown file extension: {sfx}")
 
 def event_parser(filename : Path, start : UTCDateTime = None,
                  end : UTCDateTime = None, verbose : bool = False,
                  stations : set = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
   if filename.is_dir():
-    DATA = []
+    # TODO: Implement parallel processing
+    # TODO: Handle concatenation of dataframes
+    DATA = list()
     for file in filename.iterdir():
       DATA.append(event_parser_(file, start, end, verbose, stations))
     return pd.concat(DATA)

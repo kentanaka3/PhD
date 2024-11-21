@@ -5,7 +5,9 @@ from pathlib import Path
 PRJ_PATH = Path(os.path.dirname(__file__)).parent
 DATA_PATH = Path(PRJ_PATH, "data")
 import json
+import obspy
 import argparse
+import pandas as pd
 from obspy.core.utcdatetime import UTCDateTime
 
 from constants import *
@@ -81,10 +83,12 @@ def parse_arguments():
                            "selected models will not be considered")
   parser.add_argument('-b', "--batch", default=4096, type=int, required=False,
                       help="Batch size for the Machine Learning model")
-  parser.add_argument('-c', "--config", default=None, type=open,
-                      action=LoadFileAction,
+  parser.add_argument('-c', "--config", default=None, type=is_file_path,
                       required=False, metavar=EMPTY_STR,
-                      help="Configuration file path")
+                      help="JSON configuration file path to load the "
+                           "arguments. WARNING: The arguments specified in "
+                           "the command line will overwrite the arguments in "
+                           "the file.")
   parser.add_argument('-d', "--directory", required=False, type=is_dir_path,
                       default=Path(DATA_PATH, WAVEFORMS_STR),
                       help="Directory path to the raw files")
@@ -124,7 +128,7 @@ def parse_arguments():
   domain_group.add_argument("--rectdomain", default=None, type=float, nargs=4,
                             metavar=("min_lat", "max_lat", "min_lon",
                                      "max_lon"),
-                            # default=[44.5, 45, 10, 14.5],
+                            # default=[44.5, 47, 10, 14.5],
                             help="Rectangular domain to download the data: "
                                  "[minimum latitude] [maximum latitude] "
                                  "[minimum longitude] [maximum longitude]")
@@ -140,4 +144,230 @@ def parse_arguments():
   # TODO: Add verbose LEVEL
   verbal_group.add_argument("-v", "--verbose", default=False,
                             action='store_true', help="Verbose mode")
-  return parser.parse_args()
+  args = parser.parse_args()
+  if args.config:
+    with open(args.config, 'r') as fr: config = json.load(fr)
+    for key, value in config.items():
+      if key in vars(args) and vars(args)[key] is None:
+        setattr(args, key, value)
+    # TODO: Fix special cases
+  return args
+
+def dump_args(args : argparse.Namespace, overwrite : bool = False) -> dict:
+  """
+  Return the primary arguments used to execute the program. If the overwrite
+  flag is set to True, then the primary arguments will be saved to a JSON file
+  in the data directory.
+
+  input:
+    - args          (argparse.Namespace)
+    - overwrite     (bool)
+
+  output:
+    - dict
+
+  errors:
+    - None
+
+  notes:
+
+  """
+  global DATA_PATH
+  DATA_PATH = Path(args.directory).parent
+  ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
+  arg_dict = {
+    MODEL_STR     : args.models,
+    WEIGHT_STR    : args.weights,
+    NETWORK_STR   : args.network,
+    STATION_STR   : args.station,
+    CHANNEL_STR   : args.channel,
+    BEG_DATE_STR  : [a.__str__() for a in args.dates] if args.dates else
+                    [a.__str__() for a in args.julian],
+    GROUPS_STR    : args.groups,
+    DIRECTORY_STR : args.directory.relative_to(PRJ_PATH).__str__(),
+    PWAVE         : args.pwave,
+    SWAVE         : args.swave,
+    DENOISER_STR  : args.denoiser,
+    DOMAIN_STR    : args.rectdomain if args.rectdomain else args.circdomain
+  }
+  if overwrite:
+    with open(ARGUMENTS_FILE, 'w') as fw: json.dump(arg_dict, fw, indent=2)
+  return arg_dict
+
+def read_args(args : argparse.Namespace, overwrite : bool = False) -> dict:
+  """
+  Read the primary arguments used to execute the program from a JSON file in
+  the data directory.
+
+  input:
+    - args          (argparse.Namespace)
+    - overwrite     (bool)
+
+  output:
+    - dict
+
+  errors:
+    - FileNotFoundError
+
+  notes:
+
+  """
+  global DATA_PATH
+  DATA_PATH = Path(args.directory).parent
+  ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
+  if not overwrite and ARGUMENTS_FILE.exists():
+    with open(ARGUMENTS_FILE, 'r') as f: arg_dict = json.load(f)
+  else:
+    arg_dict = dump_args(args, overwrite)
+  return arg_dict
+
+def classified_header(args : argparse.Namespace) -> pd.DataFrame:
+  """
+  Construct a table of files based on the specified arguments.
+
+  input:
+    - args        (argparse.Namespace)
+
+  output:
+    - pandas.DataFrame
+
+  errors:
+    - FileNotFoundError
+
+  notes:
+
+  """
+  global DATA_PATH
+  DATA_PATH = Path(args.directory).parent
+  CLF_PATH = Path(DATA_PATH, CLF_STR)
+  if args.verbose: print("Constructing the Table of Classifications")
+  if not CLF_PATH.exists(): raise FileNotFoundError
+  CLASSIFICATIONS = list()
+  start, end = args.dates
+  for date_path in CLF_PATH.iterdir():
+    if date_path.is_dir():
+      c_date = UTCDateTime.strptime(date_path.name, DATE_FMT)
+      if c_date < start or c_date >= end + ONE_DAY: continue
+      for network_path in date_path.iterdir():
+        if network_path.is_dir():
+          for station_path in network_path.iterdir():
+            if station_path.is_dir():
+              for file_path in station_path.iterdir():
+                filename = file_path.stem
+                if args.denoiser and filename.startswith("D"):
+                  vars = filename.split(UNDERSCORE_STR)[1:]
+                  CLASSIFICATIONS.append([str(file_path), *vars])
+                elif not args.denoiser and not filename.startswith("D"):
+                  vars = filename.split(UNDERSCORE_STR)
+                  CLASSIFICATIONS.append([str(file_path), *vars])
+            else:
+              # TODO: Handle daily, network, model, weight files
+              continue
+        else:
+          # TODO: Handle daily, model, weight files
+          continue
+    else: raise NotImplementedError
+  HEADER = [FILENAME_STR, BEG_DATE_STR, NETWORK_STR, STATION_STR, MODEL_STR,
+            WEIGHT_STR]
+  CLASSIFICATIONS = pd.DataFrame(CLASSIFICATIONS, columns=HEADER)
+  R_HEADER = [FILENAME_STR, MODEL_STR, WEIGHT_STR, BEG_DATE_STR, NETWORK_STR,
+              STATION_STR]
+  CLASSIFICATIONS = CLASSIFICATIONS[R_HEADER]
+  if args.network and args.network != [ALL_WILDCHAR_STR]:
+    CLASSIFICATIONS = CLASSIFICATIONS[
+      CLASSIFICATIONS[NETWORK_STR].isin(args.network)]
+  if args.station and args.station != [ALL_WILDCHAR_STR]:
+    CLASSIFICATIONS = CLASSIFICATIONS[
+      CLASSIFICATIONS[STATION_STR].isin(args.station)]
+  CLASSIFICATIONS = CLASSIFICATIONS[
+    CLASSIFICATIONS[MODEL_STR].isin(args.models)]
+  CLASSIFICATIONS = CLASSIFICATIONS[
+    CLASSIFICATIONS[WEIGHT_STR].isin(args.weights)]
+  CLASSIFICATIONS.sort_values(R_HEADER[1:], inplace=True)
+  CLASSIFICATIONS.set_index(FILENAME_STR, inplace=True)
+  return CLASSIFICATIONS
+
+def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
+  """
+  Construct a table of files based on the specified arguments. A JSON file with
+  the arguments will be saved in the data directory to act as a checksum and
+  keep track of the arguments used to construct the table of files.
+
+  input:
+    - args        (argparse.Namespace)
+
+  output:
+    - pandas.DataFrame
+
+  errors:
+    - FileNotFoundError
+
+  notes:
+    If the starttime hour of the trace file is 23, then we assume the trace
+    file records to be the next day
+  """
+  global DATA_PATH
+  DATA_PATH = Path(args.directory).parent
+  WAVEFORMS_FILE = Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT)
+  start, end = args.dates
+  if not args.force and WAVEFORMS_FILE.exists() and \
+    (read_args(args, False) == dump_args(args, True)):
+    # If the table of files already exists, we read the file and return the
+    # table of files.
+    if args.verbose: print("Reading the Table of Files")
+    WAVEFORMS_DATA = pd.read_csv(WAVEFORMS_FILE)
+    WAVEFORMS_DATA[BEG_DATE_STR] = WAVEFORMS_DATA[BEG_DATE_STR].apply(
+      lambda x: UTCDateTime.strptime(str(x), DATE_FMT))
+    WAVEFORMS_DATA = \
+      WAVEFORMS_DATA[(WAVEFORMS_DATA[BEG_DATE_STR] >= start) &
+                     (WAVEFORMS_DATA[BEG_DATE_STR] < end + ONE_DAY)]
+    WAVEFORMS_DATA[BEG_DATE_STR] = WAVEFORMS_DATA[BEG_DATE_STR].apply(
+      lambda x: UTCDateTime.strftime(x, DATE_FMT))
+  else:
+    # Construct the table of files based on the specified arguments
+    WAVEFORMS_DATA = list()
+    if args.verbose: print("Constructing the Table of Files")
+    for trc_file in args.directory.iterdir():
+      try:
+        trc = obspy.read(trc_file, headonly=True)[0].stats
+      except:
+        print(f"WARNING: Unable to read {trc_file}")
+        continue
+      trc_start = UTCDateTime(trc.starttime.date)
+      if trc.starttime.hour == 23: trc_start += ONE_DAY
+      if start <= trc_start and trc_start <= end:
+        WAVEFORMS_DATA.append([trc_file.__str__(), trc.network, trc.station,
+                               trc.channel,
+                               UTCDateTime.strftime(trc_start, DATE_FMT)])
+    HEADER = [FILENAME_STR, NETWORK_STR, STATION_STR, CHANNEL_STR,
+              BEG_DATE_STR]
+    WAVEFORMS_DATA = pd.DataFrame(WAVEFORMS_DATA, columns=HEADER)
+  # Filter the table of files based on the specified arguments
+  if args.network and args.network != [ALL_WILDCHAR_STR]:
+    WAVEFORMS_DATA = \
+      WAVEFORMS_DATA[WAVEFORMS_DATA[NETWORK_STR].isin(args.network)]
+  if args.station and args.station != [ALL_WILDCHAR_STR]:
+    WAVEFORMS_DATA = \
+      WAVEFORMS_DATA[WAVEFORMS_DATA[STATION_STR].isin(args.station)]
+  if args.channel and args.channel != [ALL_WILDCHAR_STR]:
+    WAVEFORMS_DATA = \
+      WAVEFORMS_DATA[WAVEFORMS_DATA[CHANNEL_STR].isin(args.channel)]
+  # If no files were found in the specified directory, return an error message
+  # and exit the program.
+  if WAVEFORMS_DATA.empty and not args.silent:
+    print(f"""FATAL: No files which meet the following criteria:
+         --network {args.network}
+         --station {args.station}
+         --channel {args.channel}
+         --dates   {SPACE_STR.join([d.__str__() for d in args.dates])}
+       were found in the specified directory: {args.directory}""")
+    if args.key is None:
+      print("HINT: If you want to download the data from the server, please "
+            "specify the download option \"--download\" and (if needed) "
+            "provide a key file with the argument \"--key\" <key> for the "
+            "specified client with the argument \"--client\" <client>")
+    raise FileNotFoundError
+  WAVEFORMS_DATA.sort_values([BEG_DATE_STR, FILENAME_STR], inplace=True)
+  WAVEFORMS_DATA.set_index(FILENAME_STR, inplace=True)
+  WAVEFORMS_DATA.to_csv(WAVEFORMS_FILE)
+  return WAVEFORMS_DATA

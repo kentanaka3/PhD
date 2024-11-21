@@ -98,103 +98,6 @@ def data_downloader(args : argparse.Namespace) -> None:
     mdl.download(domain, restrictions, mseed_storage=args.directory.__str__(),
                  stationxml_storage=Path(DATA_PATH, STATION_STR).__str__())
 
-def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
-  """
-  Construct a table of files based on the specified arguments. A JSON file with
-  the arguments will be saved in the data directory to act as a checksum and
-  keep track of the arguments used to construct the table of files.
-
-  input:
-    - args        (argparse.Namespace)
-
-  output:
-    - pandas.DataFrame
-
-  errors:
-    - FileNotFoundError
-
-  notes:
-    If the starttime hour of the trace file is 23, then we assume the trace
-    file records to be the next day
-  """
-  global DATA_PATH
-  DATA_PATH = Path(args.directory).parent
-  HEADER = [FILENAME_STR, NETWORK_STR, STATION_STR, CHANNEL_STR, BEG_DATE_STR]
-  WAVEFORMS_DATA = list()
-  WAVEFORMS_FILE = Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT)
-  ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
-  if args.force or not ARGUMENTS_FILE.exists() or \
-     read_arguments(args) != primary_arguments(args):
-    # If the arguments file does not exist or the arguments are different from
-    # the ones in the JSON file, we save the arguments to the JSON file and
-    # construct the table of files based on the specified arguments.
-    read_arguments(args, overwrite=True)
-  else:
-    # If the arguments are the same as the ones in the JSON file, we load the
-    # table of files from the CSV file.
-    if WAVEFORMS_FILE.exists():
-      if args.verbose:
-        print("Found and loading previously constructed table of files:",
-              WAVEFORMS_FILE)
-      DATAFRAME = pd.read_csv(WAVEFORMS_FILE)
-      DATAFRAME[FILENAME_STR] = DATAFRAME[FILENAME_STR].apply(Path)
-      DATAFRAME[BEG_DATE_STR] = DATAFRAME[BEG_DATE_STR].apply(str)
-      DATAFRAME.set_index(FILENAME_STR, inplace=True)
-      return DATAFRAME
-  if args.download or args.key is not None:
-    # We download the data from the server and construct the table of files 
-    # based on the specified arguments.
-    data_downloader(args)
-  # Construct the table of files based on the specified arguments
-  if args.verbose: print("Constructing the Table of Files")
-  for trc_file in args.directory.iterdir():
-    fr = Path(args.directory, trc_file)
-    if fr.is_file():
-      try:
-        trc = obspy.read(fr, headonly=True)[0].stats
-      except:
-        continue
-      start = UTCDateTime(trc.starttime.date)
-      if trc.starttime.hour == 23: start += ONE_DAY
-      # We start by assuming the trace file meets all the criterias:
-      # (network, station, channel, date range). If the trace file does meet
-      # we save the metadata to the list of files called the waveform table.
-      outcome = True
-      # If the user has specified the network different from the wildcard, then
-      # we check if the network of the trace file is in the list of networks,
-      # otherwise we assume the user wants to analyze all downloaded networks.
-      # The same logic applies to the station and channel.
-      if args.network and args.network != [ALL_WILDCHAR_STR]:
-        outcome = outcome and any([n == trc.network for n in args.network])
-      if args.station and args.station != [ALL_WILDCHAR_STR] and outcome:
-        outcome = outcome and any([n == trc.station for n in args.station])
-      if args.channel and args.channel != [ALL_WILDCHAR_STR] and outcome:
-        outcome = outcome and any([n == trc.channel for n in args.channel])
-      outcome = outcome and (args.dates[0] <= start and start <= args.dates[1])
-      if outcome:
-        WAVEFORMS_DATA.append([fr, trc.network, trc.station, trc.channel,
-                               UTCDateTime.strftime(start, DATE_FMT)])
-  if not WAVEFORMS_DATA and not args.silent:
-    # If no files were found in the specified directory, return an error
-    # message and exit the program.
-    print(f"""FATAL: No files which meet the following criteria:
-         --network {args.network}
-         --station {args.station}
-         --channel {args.channel}
-         --dates   {SPACE_STR.join([d.__str__() for d in args.dates])}
-       were found in the specified directory: {args.directory}""")
-    if args.key is None:
-      print("HINT: If you want to download the data from the server, please "
-            "specify the download option \"--download\" or provide a key file "
-            "with the argument \"--key\" <key> for the specified client with "
-            "the argument \"--client\" <client>")
-    raise FileNotFoundError
-  WAVEFORMS_DATA = \
-    pd.DataFrame(WAVEFORMS_DATA, columns=HEADER).set_index(FILENAME_STR)
-  WAVEFORMS_DATA.sort_values(by=[BEG_DATE_STR, FILENAME_STR], inplace=True)
-  WAVEFORMS_DATA.to_csv(WAVEFORMS_FILE)
-  return WAVEFORMS_DATA
-
 @nb.njit(nogil=True)
 def filter_data_(data : np.array) -> bool:
   for d in data:
@@ -247,71 +150,6 @@ def clean_stream(stream : obspy.Stream, FMT_DICT : dict,
   # TODO: Implement interactive plot
   if args.interactive: pass
   return stream
-
-def primary_arguments(args : argparse.Namespace) -> dict:
-  """
-  Return the primary arguments from the specified file.
-
-  input:
-    - args          (argparse.Namespace)
-
-  output:
-    - dict
-
-  errors:
-    - None
-
-  notes:
-
-  """
-  return {
-    MODEL_STR     : args.models,
-    WEIGHT_STR    : args.weights,
-    NETWORK_STR   : args.network,
-    STATION_STR   : args.station,
-    CHANNEL_STR   : args.channel,
-    BEG_DATE_STR  : [a.__str__() for a in args.dates],
-    GROUPS_STR    : args.groups,
-    DIRECTORY_STR : args.directory.__str__(),
-    PWAVE         : args.pwave,
-    SWAVE         : args.swave,
-    JULIAN_STR    : args.julian,
-    DENOISER_STR  : args.denoiser,
-    DOMAIN_STR    : args.rectdomain if args.rectdomain else args.circdomain,
-    CLIENT_STR    : args.client
-  }
-
-def read_arguments(args : argparse.Namespace, overwrite = False) -> dict:
-  """
-  Read the primary arguments from the arguments file and return the primary
-  arguments dictionary.
-
-  input:
-    - args          (argparse.Namespace)
-    - overwrite     (bool)
-
-  output:
-    - dict
-
-  errors:
-    - FileNotFoundError
-
-  notes:
-
-  """
-  global DATA_PATH
-  DATA_PATH = Path(args.directory).parent
-  ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
-  if overwrite:
-    # Save the arguments to a JSON file
-    with open(ARGUMENTS_FILE, 'w') as fw:
-      json.dump(primary_arguments(args), fw, indent=2)
-  if not ARGUMENTS_FILE.exists() and not args.silent:
-    print("FATAL: Arguments file not found:", ARGUMENTS_FILE)
-    raise FileNotFoundError
-  # Read the arguments from the JSON file
-  with open(ARGUMENTS_FILE, 'r') as fr:
-    return json.load(fr)
 
 def read_traces(trace_files, args : argparse.Namespace) -> obspy.Stream:
   """
@@ -510,7 +348,7 @@ def set_up(args : argparse.Namespace) -> dict:
       print("GPU size:", GPU_SIZE)
     MODELS = [(m, w) for m, w in itertools.product(args.models, args.weights)
               if get_model(m, w, True) is not None]
-    WAVEFORMS_DATA = waveform_table(args)
+    WAVEFORMS_DATA = ini.waveform_table(args)
   MODELS = MPI_COMM.bcast(MODELS, root=0)
   WAVEFORMS_DATA = MPI_COMM.bcast(WAVEFORMS_DATA, root=0)
   # Split the MODELS among the MPI processes

@@ -21,18 +21,14 @@
     "NETWORK",
     "station"
   ],
-  "DIRECTORY": "/Users/admin/Desktop/Monica/PhD/data/test/waveforms",
+  "DIRECTORY": "data/test/waveforms",
   "P": 0.2,
   "S": 0.1,
-  "JULIAN": null,
   "DENOISER": false,
   "DOMAIN": [
     46.3583,
     12.808,
     0.0,
     0.3
-  ],
-  "CLIENT": [
-    "http://158.110.30.217:8080"
   ]
 }

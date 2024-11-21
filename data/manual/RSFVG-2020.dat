@@ -9781,8 +9781,6 @@ VOJSeP 212006151159 5740                                      SE            950 
 CADSeP 212006151159 5761                                      SE            950 g                                       
 COLIeP 212006151159 5800                                      SE            950 g                                       
 ROBSeP 312006151159 5818                                      SE            950 g                                       
-JAVSeP 312006151200 0055                                      SE            950 g                                       
-VINOeP 312006151200 0077                                      SE            950 g                                       
                  1                                                                                                      
 APPIePd012006151728 1896        2229eS 1                      ALD           951 gg                                      
 OZOLePd012006151728 1998        2404eS 2                      ALD       287 951 gg                                      
@@ -12288,7 +12286,6 @@ BAD eP 312007191359 0478         789eS 2                      SLD          1201 
 ROBSeP 212007191423 5761                                      SLD          1202 g                                       
 PREDeP 212007191423 5840        6068eS 2                      SLD        791202 gg                                      
 PTCCeP 212007191423 5846        6120eS 2                      SLD          1202 gg                                      
-LSR eP 212007191253 5874        6171eS 2                      SLD        901202 gg                                      
 DRE eP 212007191423 5883        6200eS 2                      SLD       1241202 gg                                      
 CADSeP 312007191423 5926        6195eS 3                      SLD          1202 gg                                      
 COLIeP 212007191423 5966        6350eS 2                      SLD       1051202 gg                                      
@@ -17850,16 +17847,6 @@ PURAeP 212010161435 0246         589eS 2                      FLD          1754 
 BAD eP 312010161435 0329         689eS 3                      FLD          1754 gg                                      
 VINOeP 312010161435 0332         681eS 2                      FLD          1754 gg                                      
                  1                                              D                                                       
-FUSEePc042010170037 1935        1980eS 4                      FLD       1201755 gg                                      
-BOO ePd012010170037 2085        2250eS 2                      FLD        901755 gg                                      
-CLUDePd012010170037 2087        2250eS 2                      FLD       1041755 gg                                      
-MPRIeP 212010170037 2193        2451eS 2                      FLD        851755 gg                                      
-ZOU eP 312010170037 2208        2451eS 2                      FLD       1181755 gg                                      
-PLROeP 312010170037 2239        2509eS 2                      FLD        981755 gg                                      
-PURAeP 212010170037 2258                                      FLD          1755 g                                       
-BAD eP 312010170037 2327                                      FLD          1755 g                                       
-VINOeP 212010170037 2343        2717eS 2                      FLD          1755 gg                                      
-                 1                                              D                                                       
 MAGAePd012010170121 0209         272eS 1                      LLD          1756 gg                                      
 GAVIeP 212010170121 0495         760eS 2                      LLD       1311756 gg                                      
 BALDePc012010170121 0500         786eS 2                      LLD       1781756 gg                                      
@@ -19652,7 +19639,6 @@ DRE eP 212011181259 5679                                      SE        2011931 
 VOJSeP 212011181259 5802                                      SE           1931 g                                       
 CADSePc212011181259 5825                                      SE           1931 g                                       
 COLIeP 212011181259 5858                                      SE           1931 g                                       
-VINOeP 212011181300 0129                                      SE           1931 g                                       
                  1                                                                                                      
 PANIePc012011181605 4044                                      TE        2011932 g                                       
 GAGGePc012011181605 4102                                      TE        2001932 g                                       

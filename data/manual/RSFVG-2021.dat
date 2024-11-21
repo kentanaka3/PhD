@@ -4721,8 +4721,6 @@ CIMOePd012103291959 5853        6019eS 2                      FLD        98 436 
 STALeP 212103291959 5858        6036eS 2                      FLD           436 gg                                      
 MLN eP 212103291959 5963        6218eS 2                      FLD        96 436 gg                                      
 CSO eP 212103291959 5996        6274eS 2                      FLD       106 436 gg                                      
-APGOeP 212103292000 0071         394eS 3                      FLD       101 436 gg                                      
-CSM eP 212103292000 0084         416eS 2                      FLD        96 436 gg                                      
                  1                                              D                                                       
 MABIeP 212103292250 1263        1331eS 1                      LL            437 gg                                      
 RONCeP 212103292250 1334        1457eS 2                      LL         55 437 gg                                      
@@ -13339,11 +13337,6 @@ APGOeP 312108281859 5872                                      FLD          1332 
 SABOeP 312108281859 5906                                      FLD          1332 g                                       
 CAE eP 312108281859 5961                                      FLD          1332 g                                       
 GORSeP 312108281859 5982                                      FLD          1332 g                                       
-KBA eP 312108281900 0058                                      FLD          1332 g                                       
-AGOReP 312108281900 0187                                      FLD          1332 g                                       
-VARNeP 312108281900 0335                                      FLD          1332 g                                       
-TRI eP 312108281900 0443                                      FLD          1332 g                                       
-JAVSeP 312108281900 0447                                      FLD          1332 g                                       
                  1                                              D                                                       
 FUSEePc012108281902 3120        3304eS 2                      FLD        861333 gg                                      
 BOO eP 212108281902 3205        3473eS 2                      FLD        861333 gg                                      

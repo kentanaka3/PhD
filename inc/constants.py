@@ -1,4 +1,3 @@
-import re
 from collections import deque
 import seisbench.models as sbm
 from datetime import timedelta as td

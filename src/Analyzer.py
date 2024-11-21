@@ -22,8 +22,8 @@ from obspy.core.utcdatetime import UTCDateTime
 from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 
 from constants import *
-import parser as prs
 import initializer as ini
+import parser as prs
 
 SORT_HIERARCHY_PRED = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, PROBABILITY_STR]
 
@@ -58,44 +58,33 @@ def load_data(args : argparse.Namespace) -> pd.DataFrame:
   DATA = []
   HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR,
             PHASE_STR, PROBABILITY_STR]
-  start, end = args.dates
   z = [round(t, 2) for t in np.linspace(0.2, 1.0, 9)]
-  for model in args.models:
-    for weight in args.weights:
-      for date_path in CLF_PATH.iterdir():
-        if args.verbose: HIST = []
-        date = date_path.name
-        date_obj = UTCDateTime.strptime(date, DATE_FMT)
-        if date_obj < start or date_obj >= end + ONE_DAY: continue
-        for network_path in date_path.iterdir():
-          network = network_path.name
-          for station_path in network_path.iterdir():
-            station = station_path.name
-            f = Path(station_path, ("D_" if args.denoiser else EMPTY_STR) + \
-                     UNDERSCORE_STR.join([date, network, station, model,
-                                          weight]) + PICKLE_EXT)
-            PICKS = [[model, weight, p.peak_time.__str__(), network, station,
-                      p.phase, p.peak_value] for p in read_data(f)]
-            DATA += PICKS
-            PICKS = pd.DataFrame(PICKS, columns=HEADER)
-            if args.verbose:
-              w = reversed([len(PICKS[(PICKS[PROBABILITY_STR] >= a) &
-                                      (PICKS[PROBABILITY_STR] < b)].index)
-                            for a, b in zip(z[:-1], z[1:])])
-              HIST.append([station_path.relative_to(date_path).__str__(), *w])
-        if args.verbose:
-          HIST = pd.DataFrame(HIST, columns=[FILE_STR, *reversed(z[:-1])])\
-                   .set_index(FILE_STR).sort_values(z[:-1], ascending=False)
-          IMG_FILE = \
-            Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                 UNDERSCORE_STR.join(["HIST", model, weight, date]) + PNG_EXT)
-          HIST.plot(kind='bar', stacked=True, figsize=(20, 7))
-          for leg in plt.legend().get_texts():
-            leg.set_text(rf"P $\geq$ {leg.get_text()}")
-          plt.title(SPACE_STR.join([model, weight, date]))
-          plt.tight_layout()
-          plt.savefig(IMG_FILE)
-          plt.close()
+  for (model, weight, date), dataframe in \
+    ini.classified_header(args).groupby([MODEL_STR, WEIGHT_STR, BEG_DATE_STR]):
+    if args.verbose: HIST = list()
+    for filepath, (_, _, _, network, station) in dataframe.iterrows():
+      PICKS = [[model, weight, p.peak_time.__str__(), network, station,
+                p.phase, p.peak_value] for p in read_data(filepath)]
+      DATA += PICKS
+      PICKS = pd.DataFrame(PICKS, columns=HEADER)
+      if args.verbose:
+        w = reversed([len(PICKS[(PICKS[PROBABILITY_STR] >= a) &
+                                (PICKS[PROBABILITY_STR] < b)].index)
+                      for a, b in zip(z[:-1], z[1:])])
+        HIST.append([PERIOD_STR.join([network, station]), *w])
+    if args.verbose:
+      HIST = pd.DataFrame(HIST, columns=[ID_STR, *reversed(z[:-1])])\
+               .set_index(ID_STR).sort_values(z[:-1], ascending=False)
+      IMG_FILE = \
+        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+             UNDERSCORE_STR.join(["HIST", model, weight, date]) + PNG_EXT)
+      HIST.plot(kind='bar', stacked=True, figsize=(20, 7))
+      for leg in plt.legend().get_texts():
+        leg.set_text(rf"$\geq$ {leg.get_text()}")
+      plt.title(SPACE_STR.join([model, weight, date]))
+      plt.tight_layout()
+      plt.savefig(IMG_FILE)
+      plt.close()
   DATA = pd.DataFrame(DATA, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)\
            .reset_index(drop=True)
   DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].apply(lambda x : UTCDateTime(x))
@@ -415,6 +404,18 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   FN_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  FN_STR + CSV_EXT)
   FN.to_csv(FN_FILE, index=False)
+  # False Negative Pie plot
+  for (model, weight, phase, threshold), dataframe in \
+    FN.groupby([MODEL_STR, WEIGHT_STR, PHASE_STR, THRESHOLD_STR]):
+    fig, ax = plt.subplots(figsize=(5, 5))
+    dataframe[PROBABILITY_STR].value_counts().plot(kind='pie', ax=ax,
+                                                   autopct='%1.1f%%')
+    IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                    UNDERSCORE_STR.join([FN_STR, model, weight, phase,
+                                         str(threshold)]) + PNG_EXT)
+    plt.savefig(IMG_FILE)
+    plt.close()
+
   HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, PHASE_STR, TIMESTAMP_STR,
             PROBABILITY_STR]
   # False Positives
@@ -543,12 +544,10 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     plt.savefig(IMG_FILE)
   return TP
 
-def event_parser(filename : Path, stations : list, args : argparse.Namespace) \
-      -> pd.DataFrame:
+def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
   """
   input  :
     - filename      (Path)
-    - stations      (list)
     - args          (argparse.Namespace)
 
   output :
@@ -561,7 +560,19 @@ def event_parser(filename : Path, stations : list, args : argparse.Namespace) \
     | EVENT | STATION | PHASE | BEGDT | WEIGHT |
     --------------------------------------------
   """
-  return prs.event_parser(filename, *args.dates, args.verbose, set(stations))
+  WAVEFORMS_DATA = ini.waveform_table(args)
+  # TODO: Stations are not considered due to the low amount of data
+  DATAFRAME = prs.event_parser(filename, *args.dates, args.verbose, None)
+  TRUE = pd.DataFrame(columns=[EVENT_STR, STATION_STR, PHASE_STR,
+                               TIMESTAMP_STR, WEIGHT_STR])
+  for date, dataframe_d in WAVEFORMS_DATA.groupby(BEG_DATE_STR):
+    start = UTCDateTime.strptime(date, DATE_FMT)
+    end = start + ONE_DAY
+    station = dataframe_d[STATION_STR].unique().tolist()
+    TRUE = pd.concat([TRUE, DATAFRAME[(DATAFRAME[TIMESTAMP_STR] >= start) &
+                                      (DATAFRAME[TIMESTAMP_STR] < end) &
+                                      (DATAFRAME[STATION_STR].isin(station))]])
+  return TRUE
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
                       phase = PWAVE) -> None:
@@ -600,16 +611,17 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
                         (DATA[PHASE_STR] == phase)].reset_index(drop=True)
     for ax, (weight, dataframe) in zip(axs, dataframe_mp.groupby(WEIGHT_STR)):
       ax.set_title(weight)
-      dataframe.plot(kind='bar', y=TIMESTAMP_STR, ax=ax, color="b", alpha=0.5)
+      counts, _ = np.histogram(dataframe[TIMESTAMP_STR], bins=bins)
+      mu = np.mean(dataframe[TIMESTAMP_STR])
+      std = np.std(dataframe[TIMESTAMP_STR])
+      ax.bar(bins[:-1], counts, label=rf"$\mu$={mu:.2f},$\sigma$={std:.2f}",
+             alpha=0.5, width=0.05)
       for t_i, t_f in zip(z[:-1], z[1:]):
         data = dataframe[(dataframe[PROBABILITY_STR] >= t_i) &
                          (dataframe[PROBABILITY_STR] < t_f)][TIMESTAMP_STR]
         # TODO: Consider a KDE plot
         counts, _ = np.histogram(data, bins=bins)
-        mu = np.mean(data)
-        std = np.std(data)
-        ax.step(bins[:-1], counts, where='mid',
-                label=rf"[{t_i},{t_f}),$\mu$={mu:.2f},$\sigma$={std:.2f}")
+        ax.step(bins[:-1], counts, where='mid', label=rf"[{t_i},{t_f})")
       ax.set(xlim=(-0.5, 1.5), ylim=(0, m))
       ax.grid()
       ax.legend()
@@ -630,16 +642,14 @@ def main(args : argparse.Namespace):
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
   PRED = load_data(args)
-  stations = args.station if (args.station is not None and
-                              args.station != ALL_WILDCHAR_STR) else \
-             PRED[STATION_STR].unique().tolist()
-  TRUE = event_parser(args.file, stations, args)
+  if args.file is None: raise ValueError("No event file given")
+  TRUE = event_parser(args.file, args)
   if args.verbose:
     TRUE.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
     PRED.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                      PRED_STR + CSV_EXT), index=False)
-  # plot_data(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
-  # plot_data(copy.deepcopy(TRUE), copy.deepcopy(PRED), args, phase=SWAVE)
+  plot_data(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
+  plot_data(copy.deepcopy(TRUE), copy.deepcopy(PRED), args, phase=SWAVE)
   TP = stat_test(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
   if args.verbose:
     TP.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
