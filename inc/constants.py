@@ -204,6 +204,8 @@ RMS_STR         = "RMS"
 ERH_STR         = "ERH"
 ERZ_STR         = "ERZ"
 QM_STR          = "QM"
+LOC_NAME_STR    = "LOC_NAME"
+NOTES_STR       = "NOTES"
 
 # Pretrained model weights
 ADRIAARRAY_STR  = "adriaarray"

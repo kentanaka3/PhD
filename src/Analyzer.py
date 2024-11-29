@@ -208,8 +208,8 @@ def dist_time(T : pd.Series, P : pd.Series) -> float:
 def dist_default(T : pd.Series, P : pd.Series) -> float:
   return (99. * dist_balanced(T, P) + P[PROBABILITY_STR]) / 100.
 
-def plot_timeline(G : nx.Graph, pos : dict, N : int, model_name : str,
-                  dataset_name : str) -> None:
+def plot_timeline(G : nx.Graph, pos : dict[int, tuple[float, int]], N : int,
+                  model_name : str, dataset_name : str) -> None:
   fig, ax = plt.subplots(figsize=(15, 2))
   node_color = [COLOR_ENCODING[G.nodes[node][STATUS_STR]]\
                   [G.nodes[node][PHASE_STR]] for node in G.nodes]
@@ -230,7 +230,7 @@ def plot_timeline(G : nx.Graph, pos : dict, N : int, model_name : str,
 
 def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
              dataset_name : str, threshold : float, args : argparse.Namespace)\
-      -> pd.DataFrame:
+      -> list[pd.DataFrame, list, list, list]:
   """
   input  :
     - TRUE          (pd.DataFrame)
@@ -575,7 +575,7 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
   return TRUE
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
-                      phase = PWAVE) -> None:
+                      phase : str = PWAVE) -> None:
   """
   input  :
     - DATA          (pd.DataFrame)
@@ -622,7 +622,10 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
         # TODO: Consider a KDE plot
         counts, _ = np.histogram(data, bins=bins)
         ax.step(bins[:-1], counts, where='mid', label=rf"[{t_i},{t_f})")
-      ax.set(xlim=(-0.5, 1.5), ylim=(0, m))
+      data = dataframe[dataframe[PROBABILITY_STR] >= z[-1]][TIMESTAMP_STR]
+      counts, _ = np.histogram(data, bins=bins)
+      ax.step(bins[:-1], counts, where='mid', label=rf"[{z[-1]},1)")
+      ax.set(xlim=(-0.5, 1.), ylim=(0, m))
       ax.grid()
       ax.legend()
     xlabel = "Time Displacement (s)"
