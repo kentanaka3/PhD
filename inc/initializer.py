@@ -153,7 +153,8 @@ def parse_arguments():
     # TODO: Fix special cases
   return args
 
-def dump_args(args : argparse.Namespace, overwrite : bool = False) -> dict:
+def dump_args(args : argparse.Namespace,
+              overwrite : bool = False) -> dict[str, str]:
   """
   Return the primary arguments used to execute the program. If the overwrite
   flag is set to True, then the primary arguments will be saved to a JSON file
@@ -175,7 +176,7 @@ def dump_args(args : argparse.Namespace, overwrite : bool = False) -> dict:
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
   ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
-  arg_dict = {
+  arg_dict : dict[str, str] = {
     MODEL_STR     : args.models,
     WEIGHT_STR    : args.weights,
     NETWORK_STR   : args.network,
@@ -194,7 +195,8 @@ def dump_args(args : argparse.Namespace, overwrite : bool = False) -> dict:
     with open(ARGUMENTS_FILE, 'w') as fw: json.dump(arg_dict, fw, indent=2)
   return arg_dict
 
-def read_args(args : argparse.Namespace, overwrite : bool = False) -> dict:
+def read_args(args: argparse.Namespace,
+              overwrite: bool = False) -> dict[str, str]:
   """
   Read the primary arguments used to execute the program from a JSON file in
   the data directory.

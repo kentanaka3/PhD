@@ -26,77 +26,16 @@ from obspy.core.utcdatetime import UTCDateTime
 
 # SeisBench
 import seisbench.util as sbu
-import seisbench.data as sbd
-import seisbench.generate as sbg
+import seisbench.models as sbm
 
 from constants import *
+import downloader as dwn
 import initializer as ini
 
 # TODO: Study GaMMA associator with folder
 # TODO: Colab PyOcto associator to be tested with GaMMA
 # TODO: Get Vel Model
 # TODO: Discuss constants.NORM = "peak"
-
-def data_downloader(args : argparse.Namespace) -> None:
-  """
-  Download the data from the server based on the specified arguments. If the
-  data is already present in the directory, the data will be replaced by the
-  new data.
-
-  input:
-    - args          (argparse.Namespace)
-
-  output:
-    - None
-
-  errors:
-    - None
-
-  notes:
-
-  """
-  global DATA_PATH
-  DATA_PATH = Path(args.directory).parent
-  if args.verbose:
-    print("Downloading the Data to the directory:", args.directory)
-  if args.pyrocko:
-    # We enable the option to use the PyRocko module to download the data as it
-    # is more efficient than the ObsPy module by multithreading the download.
-    import pyrocko as pr
-
-  else:
-    from obspy.clients.fdsn import Client
-    CLIENTS = [Client(client) for client in args.client]
-    if args.rectdomain:
-      from obspy.clients.fdsn.mass_downloader.domain import RectangularDomain
-      domain = RectangularDomain(minlatitude=args.rectdomain[0],
-                                 maxlatitude=args.rectdomain[1],
-                                 minlongitude=args.rectdomain[2],
-                                 maxlongitude=args.rectdomain[3])
-    else:
-      from obspy.clients.fdsn.mass_downloader.domain import CircularDomain
-      domain = CircularDomain(latitude=args.circdomain[0],
-                              longitude=args.circdomain[1],
-                              minradius=args.circdomain[2],
-                              maxradius=args.circdomain[3])
-    from obspy.clients.fdsn.mass_downloader import Restrictions, MassDownloader
-    start, end = args.dates
-    restrictions = Restrictions(starttime=start, endtime=end + ONE_DAY,
-                                network=COMMA_STR.join(args.network),
-                                station=COMMA_STR.join(args.station),
-                                channel_priorities=["HH[ZNE]", "EH[ZNE]",
-                                                    "HN[ZNE]", "HG[ZNE]"],
-                                reject_channels_with_gaps=False,
-                                minimum_length=0.0,
-                                minimum_interstation_distance_in_m=100.0,
-                                location_priorities=["", "00", "10"],
-                                chunklength_in_sec=86400)
-    if args.key:
-      # NOTE: It is assumed a single token file is applicable for all clients
-      for cl in CLIENTS: cl.set_eida_token(args.key, validate=True)
-    mdl = MassDownloader(providers=CLIENTS)
-    mdl.download(domain, restrictions, mseed_storage=args.directory.__str__(),
-                 stationxml_storage=Path(DATA_PATH, STATION_STR).__str__())
 
 @nb.njit(nogil=True)
 def filter_data_(data : np.array) -> bool:
@@ -109,7 +48,7 @@ def filter_data(data : np.array) -> bool:
   # if np.isnan(trc.data).any() or np.isinf(trc.data).any(): return True
   return filter_data_(data)
 
-def clean_stream(stream : obspy.Stream, FMT_DICT : dict,
+def clean_stream(stream : obspy.Stream, FMT_DICT : dict[str, str],
                  args : argparse.Namespace) -> obspy.Stream:
   """
   Clean the stream by resampling, merging, removing NaN and Inf values, and
@@ -151,12 +90,13 @@ def clean_stream(stream : obspy.Stream, FMT_DICT : dict,
   if args.interactive: pass
   return stream
 
-def read_traces(trace_files, args : argparse.Namespace) -> obspy.Stream:
+def read_traces(trace_files : pd.DataFrame, args : argparse.Namespace) \
+    -> obspy.Stream:
   """
   Read the traces from the specified files and return a clean Stream.
 
   input:
-    - trace_files   ()
+    - trace_files   (pd.DataFrame)
     - args          (argparse.Namespace)
 
   output:
@@ -171,8 +111,9 @@ def read_traces(trace_files, args : argparse.Namespace) -> obspy.Stream:
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
   stream = obspy.Stream()
-  FMT_DICT = {category : EMPTY_STR for category in [NETWORK_STR, STATION_STR,
-                                                    CHANNEL_STR, BEG_DATE_STR]}
+  FMT_DICT : dict[str, str] = {category : EMPTY_STR
+                               for category in [NETWORK_STR, STATION_STR,
+                                                CHANNEL_STR, BEG_DATE_STR]}
   for category in args.groups:
     FMT_DICT[category] = trace_files[category].unique()[0]
   for _, row in trace_files.iterrows():
@@ -187,7 +128,7 @@ def read_traces(trace_files, args : argparse.Namespace) -> obspy.Stream:
   return clean_stream(stream, FMT_DICT, args)
 
 def interactive_plot(stream : obspy.Stream, picks : sbu.PickList,
-                     model_name : str, dataset_name) -> None:
+                     model_name : str, dataset_name : str) -> None:
   """
   Plot the Stream with the picks on the Stream.
 
@@ -219,7 +160,8 @@ def interactive_plot(stream : obspy.Stream, picks : sbu.PickList,
   fig.tight_layout()
   plt.show()
 
-def classify_stream(categories : tuple, trace_files, MODELS : dict,
+def classify_stream(categories : tuple[str], trace_files : pd.DataFrame,
+                    MODELS : dict[str, sbm.base.SeisBenchModel],
                     args : argparse.Namespace) -> None:
   """
   Classify the stream. If 'force' is set to True, the classification will be
@@ -227,7 +169,7 @@ def classify_stream(categories : tuple, trace_files, MODELS : dict,
 
   input:
     - categories    (tuple)
-    - trace_files   ()
+    - trace_files   (pd.DataFrame)
     - MODELS        (dict)
     - args          (argparse.Namespace)
 
@@ -281,7 +223,7 @@ def classify_stream(categories : tuple, trace_files, MODELS : dict,
       stream = read_traces(trace_files, args)
       interactive_plot(stream, output, model_name, dataset_name)
 
-def get_model(model_name : str, dataset_name : str, silent = False) \
+def get_model(model_name : str, dataset_name : str, silent : bool = False) \
       -> sbm.base.SeisBenchModel:
   """
   Given a 'model_name' trained on the 'dataset_name', return the associated
@@ -313,7 +255,8 @@ def get_model(model_name : str, dataset_name : str, silent = False) \
   if not silent: print(model_name, model.weights_docstring)
   return model
 
-def set_up(args : argparse.Namespace) -> dict:
+def set_up(args : argparse.Namespace) \
+    -> list[dict[tuple[str], sbm.base.SeisBenchModel], pd.DataFrame]:
   """
   Set up the environment for the pipeline based on the available computational
   resources.
@@ -369,7 +312,7 @@ def set_up(args : argparse.Namespace) -> dict:
 
 def main(args : argparse.Namespace) -> None:
   if args.download:
-    data_downloader(args)
+    dwn.data_downloader(args)
     return
   MODELS, WAVEFORMS_DATA = set_up(args)
   if args.denoiser:
