@@ -4,8 +4,10 @@ Leo:
 	bash Analyze.sh 1 1 MAKE src/Picker.py -D 230601 230605 -v --force
 
 results:
-	cp img/CP_EQTransformer.png doc/img/CP_EQTransformer.png
-	cp img/CP_PhaseNet.png doc/img/CP_PhaseNet.png
+	cp img/CP_EQTransformer_P.png doc/img/
+	cp img/CP_EQTransformer_S.png doc/img/
+	cp img/CP_PhaseNet_P.png doc/img/
+	cp img/CP_PhaseNet_S.png doc/img/
 	cp img/CM_* doc/img/
 	cp img/TD_* doc/img/
 	cp img/TPFN_* doc/img/
