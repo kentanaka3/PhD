@@ -605,7 +605,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
     m = max(m, max(counts))
   m = (m + 9) // 10 * 10
   for model, phase in itertools.product(args.models, [PWAVE, SWAVE]):
-    fig, _axs = plt.subplots(2, 2, figsize=(10, 7))
+    fig, _axs = plt.subplots(2, 2, figsize=(15, 10))
     axs = _axs.flatten()
     dataframe_mp = DATA[(DATA[MODEL_STR] == model) &
                         (DATA[PHASE_STR] == phase)].reset_index(drop=True)
