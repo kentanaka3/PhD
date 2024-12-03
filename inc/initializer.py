@@ -3,14 +3,32 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 from pathlib import Path
 # Set the project folder
 PRJ_PATH = Path(os.path.dirname(__file__)).parent
+IMG_PATH = Path(PRJ_PATH, "img")
 DATA_PATH = Path(PRJ_PATH, "data")
 import json
 import obspy
+import pickle
 import argparse
+import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from obspy.core.utcdatetime import UTCDateTime
 
 from constants import *
+
+def data_loader(filepath : Path) -> any:
+  if not filepath.exists(): raise FileNotFoundError
+  if filepath.suffix == JSON_EXT:
+    with open(filepath, 'r') as f: data = json.load(f)
+  elif filepath.suffix == CSV_EXT:
+    data = pd.read_csv(filepath)
+  elif filepath.suffix == HDF5_EXT:
+    data = pd.read_hdf(filepath)
+  elif filepath.suffix == PICKLE_EXT:
+    with open(filepath, 'rb') as f: data = pickle.load(f)
+  else:
+    raise NotImplementedError
+  return data
 
 def is_date(string : str) -> UTCDateTime:
   return UTCDateTime.strptime(string, DATE_FMT)
@@ -146,7 +164,7 @@ def parse_arguments():
                             action='store_true', help="Verbose mode")
   args = parser.parse_args()
   if args.config:
-    with open(args.config, 'r') as fr: config = json.load(fr)
+    config = data_loader(args.config)
     for key, value in config.items():
       if key in vars(args) and vars(args)[key] is None:
         setattr(args, key, value)
@@ -218,7 +236,7 @@ def read_args(args: argparse.Namespace,
   DATA_PATH = Path(args.directory).parent
   ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
   if not overwrite and ARGUMENTS_FILE.exists():
-    with open(ARGUMENTS_FILE, 'r') as f: arg_dict = json.load(f)
+    arg_dict = data_loader(ARGUMENTS_FILE)
   else:
     arg_dict = dump_args(args, overwrite)
   return arg_dict
@@ -289,6 +307,64 @@ def classified_header(args : argparse.Namespace) -> pd.DataFrame:
   CLASSIFICATIONS.set_index(FILENAME_STR, inplace=True)
   return CLASSIFICATIONS
 
+def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
+  """
+  input  :
+    - args          (argparse.Namespace)
+
+  output :
+    - pd.DataFrame
+
+  errors :
+    - FileNotFoundError
+    - AttributeError
+
+  notes  :
+    | MODEL | WEIGHT | TIMESTAMP | NETWORK | STATION | PHASE | PROBABILITY |
+    ------------------------------------------------------------------------
+
+    The data is loaded from the directory given in the arguments. The data is
+    then sorted by the timestamp and returned as a pandas DataFrame.
+  """
+  global DATA_PATH
+  DATA_PATH  = Path(args.directory).parent
+  CLF_PATH = Path(DATA_PATH, CLF_STR)
+  if not CLF_PATH.exists(): raise FileNotFoundError
+  DATA = []
+  HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR,
+            PHASE_STR, PROBABILITY_STR]
+  z = [round(t, 2) for t in np.linspace(0.2, 1.0, 9)]
+  for (model, weight, date), dataframe in \
+    classified_header(args).groupby([MODEL_STR, WEIGHT_STR, BEG_DATE_STR]):
+    if args.verbose: HIST = list()
+    for filepath, (_, _, _, network, station) in dataframe.iterrows():
+      PICKS = [[model, weight, p.peak_time.__str__(), network, station,
+                p.phase, p.peak_value] for p in data_loader(Path(filepath))]
+      DATA += PICKS
+      PICKS = pd.DataFrame(PICKS, columns=HEADER)
+      if args.verbose:
+        w = reversed([len(PICKS[(PICKS[PROBABILITY_STR] >= a) &
+                                (PICKS[PROBABILITY_STR] < b)].index)
+                      for a, b in zip(z[:-1], z[1:])])
+        HIST.append([PERIOD_STR.join([network, station]), *w])
+    if args.verbose:
+      HIST = pd.DataFrame(HIST, columns=[ID_STR, *reversed(z[:-1])])\
+               .set_index(ID_STR).sort_values(z[:-1], ascending=False)
+      IMG_FILE = \
+        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+             UNDERSCORE_STR.join(["HIST", model, weight, date]) + PNG_EXT)
+      HIST.plot(kind='bar', stacked=True, figsize=(20, 7))
+      for leg in plt.legend().get_texts():
+        leg.set_text(rf"$\geq$ {leg.get_text()}")
+      plt.title(SPACE_STR.join([model, weight, date]))
+      plt.tight_layout()
+      plt.savefig(IMG_FILE)
+      plt.close()
+  DATA = pd.DataFrame(DATA, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)\
+           .reset_index(drop=True)
+  DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].apply(lambda x : UTCDateTime(x))
+  return DATA
+
 def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
   """
   Construct a table of files based on the specified arguments. A JSON file with
@@ -317,7 +393,7 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
     # If the table of files already exists, we read the file and return the
     # table of files.
     if args.verbose: print("Reading the Table of Files")
-    WAVEFORMS_DATA = pd.read_csv(WAVEFORMS_FILE)
+    WAVEFORMS_DATA = data_loader(WAVEFORMS_FILE)
     WAVEFORMS_DATA[BEG_DATE_STR] = WAVEFORMS_DATA[BEG_DATE_STR].apply(
       lambda x: UTCDateTime.strptime(str(x), DATE_FMT))
     WAVEFORMS_DATA = \

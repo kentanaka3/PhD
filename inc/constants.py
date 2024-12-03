@@ -1,8 +1,6 @@
-from collections import deque
 import seisbench.models as sbm
 from datetime import timedelta as td
 
-STREAM_STACK = deque()
 
 SAMPLING_RATE = 100
 
@@ -229,3 +227,5 @@ ODC_CLIENT_STR    = "ODC"
 GEONET_CLIENT_STR = "GEONET"
 OGS_CLIENT_STR    = "http://158.110.30.217:8080"
 RASPISHAKE_CLIENT_STR = "RASPISHAKE"
+
+SORT_HIERARCHY_PRED = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, PROBABILITY_STR]

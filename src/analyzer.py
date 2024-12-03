@@ -9,7 +9,6 @@ import sys
 # Add to path
 if INC_PATH not in sys.path: sys.path.append(INC_PATH)
 import copy
-import pickle
 import argparse
 import itertools
 import numpy as np
@@ -24,71 +23,6 @@ from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 from constants import *
 import initializer as ini
 import parser as prs
-
-SORT_HIERARCHY_PRED = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, PROBABILITY_STR]
-
-def read_data(filepath : Path) -> list:
-  # Load the data
-  with open(filepath, 'rb') as f: data = pickle.load(f)
-  return data
-
-def load_data(args : argparse.Namespace) -> pd.DataFrame:
-  """
-  input  :
-    - args          (argparse.Namespace)
-
-  output :
-    - pd.DataFrame
-
-  errors :
-    - FileNotFoundError
-    - AttributeError
-
-  notes  :
-    | MODEL | WEIGHT | TIMESTAMP | NETWORK | STATION | PHASE | PROBABILITY |
-    ------------------------------------------------------------------------
-
-    The data is loaded from the directory given in the arguments. The data is
-    then sorted by the timestamp and returned as a pandas DataFrame.
-  """
-  global DATA_PATH
-  DATA_PATH  = Path(args.directory).parent
-  CLF_PATH = Path(DATA_PATH, CLF_STR)
-  if not CLF_PATH.exists(): raise FileNotFoundError
-  DATA = []
-  HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR,
-            PHASE_STR, PROBABILITY_STR]
-  z = [round(t, 2) for t in np.linspace(0.2, 1.0, 9)]
-  for (model, weight, date), dataframe in \
-    ini.classified_header(args).groupby([MODEL_STR, WEIGHT_STR, BEG_DATE_STR]):
-    if args.verbose: HIST = list()
-    for filepath, (_, _, _, network, station) in dataframe.iterrows():
-      PICKS = [[model, weight, p.peak_time.__str__(), network, station,
-                p.phase, p.peak_value] for p in read_data(filepath)]
-      DATA += PICKS
-      PICKS = pd.DataFrame(PICKS, columns=HEADER)
-      if args.verbose:
-        w = reversed([len(PICKS[(PICKS[PROBABILITY_STR] >= a) &
-                                (PICKS[PROBABILITY_STR] < b)].index)
-                      for a, b in zip(z[:-1], z[1:])])
-        HIST.append([PERIOD_STR.join([network, station]), *w])
-    if args.verbose:
-      HIST = pd.DataFrame(HIST, columns=[ID_STR, *reversed(z[:-1])])\
-               .set_index(ID_STR).sort_values(z[:-1], ascending=False)
-      IMG_FILE = \
-        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-             UNDERSCORE_STR.join(["HIST", model, weight, date]) + PNG_EXT)
-      HIST.plot(kind='bar', stacked=True, figsize=(20, 7))
-      for leg in plt.legend().get_texts():
-        leg.set_text(rf"$\geq$ {leg.get_text()}")
-      plt.title(SPACE_STR.join([model, weight, date]))
-      plt.tight_layout()
-      plt.savefig(IMG_FILE)
-      plt.close()
-  DATA = pd.DataFrame(DATA, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)\
-           .reset_index(drop=True)
-  DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].apply(lambda x : UTCDateTime(x))
-  return DATA
 
 def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
               args : argparse.Namespace, phase = PWAVE) -> None:
@@ -116,7 +50,7 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
               (PRED[TIMESTAMP_STR] >= start.datetime)]
   TRUE = TRUE[(TRUE[PHASE_STR] == phase)].reset_index(drop=True)
   x = [start.datetime]
-  while x[-1] <= end: x.append(x[-1] + ONE_DAY)
+  while x[-1] <= end.datetime: x.append(x[-1] + ONE_DAY)
   z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
 
   y_true = [len(TRUE[TRUE[TIMESTAMP_STR] <= d].index) for d in x]
@@ -569,9 +503,9 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
     start = UTCDateTime.strptime(date, DATE_FMT)
     end = start + ONE_DAY
     station = dataframe_d[STATION_STR].unique().tolist()
-    TRUE = pd.concat([TRUE, DATAFRAME[(DATAFRAME[TIMESTAMP_STR] >= start) &
-                                      (DATAFRAME[TIMESTAMP_STR] < end) &
-                                      (DATAFRAME[STATION_STR].isin(station))]])
+    TRUE = pd.concat([TRUE, DATAFRAME[
+      (DATAFRAME[TIMESTAMP_STR].between(start, end, inclusive='left')) &
+      (DATAFRAME[STATION_STR].isin(station))]])
   return TRUE
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
@@ -644,7 +578,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
 def main(args : argparse.Namespace):
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
-  PRED = load_data(args)
+  PRED = ini.classified_loader(args)
   if args.file is None: raise ValueError("No event file given")
   TRUE = event_parser(args.file, args)
   if args.verbose:

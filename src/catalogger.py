@@ -9,7 +9,7 @@ DATA_PATH = os.path.join(PRJ_PATH, "data")
 import sys
 # Add to path
 if INC_PATH not in sys.path: sys.path.append(INC_PATH)
-import json
+import copy
 import obspy
 import argparse
 import scipy as sp
@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 from pyproj import Proj
 import matplotlib.pyplot as plt
+from datetime import datetime as dt
 from gamma.utils import association, estimate_eps
 
 from constants import *
@@ -64,8 +65,6 @@ class AssociateConfig:
     self.y_min = self.station[Y_COORD_STR].min()
     self.y_mid = self.station[Y_COORD_STR].median()
     self.y_max = self.station[Y_COORD_STR].max()
-    print(self.x_min, self.x_mid, self.x_max)
-    print(self.y_min, self.y_mid, self.y_max)
     self.center = (self.x_mid, self.y_mid)
     if center: self.center = center
     self.proj = Proj(f"+proj=sterea +lon_0={self.center[0]} "
@@ -158,18 +157,47 @@ class AssociateConfig:
     return
 
 def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
-                     model_name : str, dataset_name : str,
-                     threshold : float) -> None:
-  if PRED.empty: return
+                     args : argparse.Namespace) -> None:
+  if args.verbose: print("Associating events...")
   PRED[ID_STR] = PRED[NETWORK_STR] + PERIOD_STR + PRED[STATION_STR]
+  PRED.drop([NETWORK_STR, STATION_STR], axis=1, inplace=True)
   PRED.rename(columns={PHASE_STR : TYPE_STR}, inplace=True)
   PRED[TIMESTAMP_STR] = PRED[TIMESTAMP_STR].apply(lambda x: x.datetime)
-  catalog, assignment = association(PRED, config.station,
-                                    config=config.__repr__(),
-                                    method=config.method)
-  print(catalog)
-  print(assignment)
-  return
+  z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
+  start, end = args.dates
+  x = [start.datetime]
+  while x[-1] <= end.datetime: x.append(x[-1] + ONE_DAY)
+  DATA = []
+  for (model, dataset), PRE in PRED.groupby([MODEL_STR, WEIGHT_STR]):
+    for start, end in zip(x[:-1], x[1:]):
+      PR = PRE[PRE[TIMESTAMP_STR].between(start, end, inclusive='left')]
+      for threshold in z:
+        PR = PR[PR[PROBABILITY_STR] >= threshold]
+        if PR.empty: continue
+        catalog, assignment = association(PR, config.station,
+                                          config=config.__repr__(),
+                                          method=config.method)
+        if not (len(catalog) or len(assignment)): continue
+        for event in catalog:
+          PICKS = pd.DataFrame([PR.loc[row] for row, iden, _ in assignment
+                                if iden == event["event_index"]])
+          PICKS.drop([MODEL_STR, WEIGHT_STR], axis=1, inplace=True)
+          event['time'] = dt.fromisoformat(event['time'])
+          PICKS[TIMESTAMP_STR] = PICKS[TIMESTAMP_STR].apply(lambda x:
+                                   (x - event['time']).total_seconds())
+          cols = list(PICKS.columns)
+          a, b = cols.index(ID_STR), cols.index(TYPE_STR)
+          cols[b], cols[a] = cols[a], cols[b]
+          DATA.append([model, dataset, threshold, event['time'],
+                       event[X_COORD_STR], event[Y_COORD_STR],
+                       event[Z_COORD_STR], event[MAGNITUDE_STR],
+                       PICKS[cols].values.tolist()])
+  HEADER = [MODEL_STR, WEIGHT_STR, THRESHOLD_STR, TIMESTAMP_STR,
+            X_COORD_STR, Y_COORD_STR, Z_COORD_STR, MAGNITUDE_STR, GROUPS_STR]
+  DATA = pd.DataFrame(DATA, columns=HEADER)
+  FILEPATH = Path(DATA_PATH, AST_STR + CSV_EXT)
+  DATA.to_csv(FILEPATH, index=False)
+  return DATA
 
 def main(args : argparse.Namespace) -> None:
   global DATA_PATH
@@ -185,15 +213,10 @@ def main(args : argparse.Namespace) -> None:
       continue
     INVENTORY.extend(obspy.read_inventory(station_file))
   CONFIG = AssociateConfig(INVENTORY, file=args.file)
-  print(CONFIG)
+  if args.verbose: print(CONFIG)
   # if args.verbose: station_graph(INVENTORY)
-  THRESHOLDS = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
-  PRED = ini.classified_header(args)
-  for threshold in THRESHOLDS:
-    for (model, dataset), dataframe in PRED.groupby([MODEL_STR, WEIGHT_STR]):
-      dataframe = dataframe[dataframe[PROBABILITY_STR] >= threshold]\
-                    .reset_index(drop=True)
-      associate_events(dataframe, CONFIG, model, dataset, threshold)
+  PRED = ini.classified_loader(args)
+  DATA = associate_events(copy.deepcopy(PRED), CONFIG, args)
   return
 
 if __name__ == "__main__": main(ini.parse_arguments())
