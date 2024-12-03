@@ -118,7 +118,7 @@ def read_traces(trace_files : pd.DataFrame, args : argparse.Namespace) \
     FMT_DICT[category] = trace_files[category].unique()[0]
   for _, row in trace_files.iterrows():
     if args.verbose: print("Attempting to read from raw file:", row.name)
-    if not row.name.exists() and not args.silent:
+    if not Path(row.name).exists() and not args.silent:
       # TODO: Download the file
       print("CRITICAL: File not found:", row.name)
       continue

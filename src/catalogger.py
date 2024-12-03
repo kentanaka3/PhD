@@ -179,8 +179,11 @@ def main(args : argparse.Namespace) -> None:
               WAVEFORMS_DATA[STATION_STR]).unique()
   INVENTORY = obspy.Inventory()
   for station in stations:
-    INVENTORY.extend(obspy.read_inventory(Path(DATA_PATH, STATION_STR,
-                                               station + XML_EXT)))
+    station_file = Path(DATA_PATH, STATION_STR, station + XML_EXT)
+    if not station_file.exists():
+      print(f"WARNING: Station file {station_file} does not exist.")
+      continue
+    INVENTORY.extend(obspy.read_inventory(station_file))
   CONFIG = AssociateConfig(INVENTORY, file=args.file)
   print(CONFIG)
   # if args.verbose: station_graph(INVENTORY)
