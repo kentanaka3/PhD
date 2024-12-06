@@ -27,7 +27,8 @@ def data_loader(filepath : Path) -> any:
   elif filepath.suffix == PICKLE_EXT:
     with open(filepath, 'rb') as f: data = pickle.load(f)
   else:
-    raise NotImplementedError
+    print(NotImplementedError)
+    data = None
   return data
 
 def is_date(string : str) -> UTCDateTime:
@@ -241,12 +242,14 @@ def read_args(args: argparse.Namespace,
     arg_dict = dump_args(args, overwrite)
   return arg_dict
 
-def classified_header(args : argparse.Namespace) -> pd.DataFrame:
+def data_header(args : argparse.Namespace,
+                folder : str = CLF_STR) -> pd.DataFrame:
   """
   Construct a table of files based on the specified arguments.
 
   input:
     - args        (argparse.Namespace)
+    - folder      (Path)
 
   output:
     - pandas.DataFrame
@@ -259,12 +262,12 @@ def classified_header(args : argparse.Namespace) -> pd.DataFrame:
   """
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
-  CLF_PATH = Path(DATA_PATH, CLF_STR)
-  if args.verbose: print("Constructing the Table of Classifications")
-  if not CLF_PATH.exists(): raise FileNotFoundError
-  CLASSIFICATIONS = list()
+  PATH = Path(DATA_PATH, folder)
+  if args.verbose: print("Constructing the Table of", folder)
+  if not PATH.exists(): raise FileNotFoundError
+  RESULTS = list()
   start, end = args.dates
-  for date_path in CLF_PATH.iterdir():
+  for date_path in PATH.iterdir():
     if date_path.is_dir():
       c_date = UTCDateTime.strptime(date_path.name, DATE_FMT)
       if c_date < start or c_date >= end + ONE_DAY: continue
@@ -276,10 +279,10 @@ def classified_header(args : argparse.Namespace) -> pd.DataFrame:
                 filename = file_path.stem
                 if args.denoiser and filename.startswith("D"):
                   vars = filename.split(UNDERSCORE_STR)[1:]
-                  CLASSIFICATIONS.append([str(file_path), *vars])
+                  RESULTS.append([str(file_path), *vars])
                 elif not args.denoiser and not filename.startswith("D"):
                   vars = filename.split(UNDERSCORE_STR)
-                  CLASSIFICATIONS.append([str(file_path), *vars])
+                  RESULTS.append([str(file_path), *vars])
             else:
               # TODO: Handle daily, network, model, weight files
               continue
@@ -289,23 +292,26 @@ def classified_header(args : argparse.Namespace) -> pd.DataFrame:
     else: raise NotImplementedError
   HEADER = [FILENAME_STR, BEG_DATE_STR, NETWORK_STR, STATION_STR, MODEL_STR,
             WEIGHT_STR]
-  CLASSIFICATIONS = pd.DataFrame(CLASSIFICATIONS, columns=HEADER)
+  RESULTS = pd.DataFrame(RESULTS, columns=HEADER)
   R_HEADER = [FILENAME_STR, MODEL_STR, WEIGHT_STR, BEG_DATE_STR, NETWORK_STR,
               STATION_STR]
-  CLASSIFICATIONS = CLASSIFICATIONS[R_HEADER]
+  RESULTS = RESULTS[R_HEADER]
   if args.network and args.network != [ALL_WILDCHAR_STR]:
-    CLASSIFICATIONS = CLASSIFICATIONS[
-      CLASSIFICATIONS[NETWORK_STR].isin(args.network)]
+    RESULTS = RESULTS[
+      RESULTS[NETWORK_STR].isin(args.network)]
   if args.station and args.station != [ALL_WILDCHAR_STR]:
-    CLASSIFICATIONS = CLASSIFICATIONS[
-      CLASSIFICATIONS[STATION_STR].isin(args.station)]
-  CLASSIFICATIONS = CLASSIFICATIONS[
-    CLASSIFICATIONS[MODEL_STR].isin(args.models)]
-  CLASSIFICATIONS = CLASSIFICATIONS[
-    CLASSIFICATIONS[WEIGHT_STR].isin(args.weights)]
-  CLASSIFICATIONS.sort_values(R_HEADER[1:], inplace=True)
-  CLASSIFICATIONS.set_index(FILENAME_STR, inplace=True)
-  return CLASSIFICATIONS
+    RESULTS = RESULTS[
+      RESULTS[STATION_STR].isin(args.station)]
+  RESULTS = RESULTS[
+    RESULTS[MODEL_STR].isin(args.models)]
+  RESULTS = RESULTS[
+    RESULTS[WEIGHT_STR].isin(args.weights)]
+  RESULTS.sort_values(R_HEADER[1:], inplace=True)
+  RESULTS.set_index(FILENAME_STR, inplace=True)
+  return RESULTS
+
+def classified_header(args : argparse.Namespace) -> pd.DataFrame:
+  return data_header(args, CLF_STR)
 
 def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
   """
@@ -362,6 +368,63 @@ def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
       plt.close()
   DATA = pd.DataFrame(DATA, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)\
            .reset_index(drop=True)
+  DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].apply(lambda x : UTCDateTime(x))
+  return DATA
+
+def associated_header(args : argparse.Namespace) -> pd.DataFrame:
+  return data_header(args, AST_STR)
+
+def associated_loader(args : argparse.Namespace) -> pd.DataFrame:
+  """
+  input  :
+    - args          (argparse.Namespace)
+
+  output :
+    - pd.DataFrame
+
+  errors :
+    - FileNotFoundError
+    - AttributeError
+
+  notes  :
+    | MODEL | WEIGHT | TIMESTAMP | NETWORK | STATION | PHASE | PROBABILITY |
+    ------------------------------------------------------------------------
+
+    The data is loaded from the directory given in the arguments. The data is
+    then sorted by the timestamp and returned as a pandas DataFrame.
+  """
+  global DATA_PATH
+  DATA_PATH  = Path(args.directory).parent
+  AST_PATH = Path(DATA_PATH, AST_STR)
+  if not AST_PATH.exists(): raise FileNotFoundError
+  DATA = pd.DataFrame(columns=HEADER_PRED)
+  z = [round(t, 2) for t in np.linspace(0.2, 1.0, 9)]
+  for (model, weight, date), dataframe in \
+    associated_header(args).groupby([MODEL_STR, WEIGHT_STR, BEG_DATE_STR]):
+    if args.verbose: HIST = list()
+    for filepath, (_, _, _, network, station) in dataframe.iterrows():
+      PICKS = pd.DataFrame(data_loader(Path(filepath)), columns=HEADER_PRED)
+      DATA = pd.concat([DATA, PICKS], ignore_index=True)
+      if args.verbose:
+        w = reversed([len(PICKS[(PICKS[PROBABILITY_STR] >= a) &
+                                (PICKS[PROBABILITY_STR] < b)].index)
+                      for a, b in zip(z[:-1], z[1:])])
+        HIST.append([PERIOD_STR.join([network, station]), *w])
+    if args.verbose:
+      HIST = pd.DataFrame(HIST, columns=[ID_STR, *reversed(z[:-1])])\
+               .set_index(ID_STR).sort_values(z[:-1], ascending=False)
+      IMG_FILE = \
+        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+             UNDERSCORE_STR.join(["EVNT", model, weight, date]) + PNG_EXT)
+      HIST.plot(kind='bar', stacked=True, figsize=(20, 7))
+      for leg in plt.legend().get_texts():
+        leg.set_text(rf"$\geq$ {leg.get_text()}")
+      plt.title(SPACE_STR.join([model, weight, date]))
+      plt.tight_layout()
+      plt.savefig(IMG_FILE)
+      plt.close()
+  DATA = pd.DataFrame(DATA, columns=HEADER_PRED)\
+           .sort_values(SORT_HIERARCHY_PRED).reset_index(drop=True)
   DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].apply(lambda x : UTCDateTime(x))
   return DATA
 

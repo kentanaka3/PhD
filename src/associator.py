@@ -18,6 +18,7 @@ import pandas as pd
 from pyproj import Proj
 import matplotlib.pyplot as plt
 from datetime import datetime as dt
+from datetime import timedelta as td
 from gamma.utils import association, estimate_eps
 
 from constants import *
@@ -160,17 +161,18 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
                      args : argparse.Namespace) -> None:
   if args.verbose: print("Associating events...")
   PRED[ID_STR] = PRED[NETWORK_STR] + PERIOD_STR + PRED[STATION_STR]
-  PRED.drop([NETWORK_STR, STATION_STR], axis=1, inplace=True)
   PRED.rename(columns={PHASE_STR : TYPE_STR}, inplace=True)
   PRED[TIMESTAMP_STR] = PRED[TIMESTAMP_STR].apply(lambda x: x.datetime)
   z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
   start, end = args.dates
   x = [start.datetime]
   while x[-1] <= end.datetime: x.append(x[-1] + ONE_DAY)
-  DATA = []
+  DATAFRAME = []
+  COLLECTION = set()
   for (model, dataset), PRE in PRED.groupby([MODEL_STR, WEIGHT_STR]):
     for start, end in zip(x[:-1], x[1:]):
       PR = PRE[PRE[TIMESTAMP_STR].between(start, end, inclusive='left')]
+      DATA = []
       for threshold in z:
         PR = PR[PR[PROBABILITY_STR] >= threshold]
         if PR.empty: continue
@@ -192,12 +194,37 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
                        event[X_COORD_STR], event[Y_COORD_STR],
                        event[Z_COORD_STR], event[MAGNITUDE_STR],
                        PICKS[cols].values.tolist()])
+      DATAFRAME.extend(DATA)
+      if not len(DATA): continue
+      model, weight, _, beg_date, _, _, _, _, groups  = DATA[0]
+      COLLECTION.update({(model, weight, beg_date + td(seconds=a), b, c, d, e)
+                         for a, b, c, _, e, d in groups})
   HEADER = [MODEL_STR, WEIGHT_STR, THRESHOLD_STR, TIMESTAMP_STR,
             X_COORD_STR, Y_COORD_STR, Z_COORD_STR, MAGNITUDE_STR, GROUPS_STR]
-  DATA = pd.DataFrame(DATA, columns=HEADER)
+  DATAFRAME = pd.DataFrame(DATAFRAME, columns=HEADER)
   FILEPATH = Path(DATA_PATH, AST_STR + CSV_EXT)
-  DATA.to_csv(FILEPATH, index=False)
-  return DATA
+  DATAFRAME.to_csv(FILEPATH, index=False)
+  HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR,
+            PHASE_STR, PROBABILITY_STR]
+  COLLECTION = pd.DataFrame(list(COLLECTION), columns=HEADER)
+  COLLECTION.sort_values(SORT_HIERARCHY_PRED, inplace=True)
+  COLLECTION = COLLECTION.reset_index(drop=True)
+  COLLECTION.to_csv(Path(DATA_PATH, ("D" if args.denoiser else EMPTY_STR) +
+                         ASCT_STR + CSV_EXT), index=False)
+  for (model, weight, network, station), dataframe in \
+    COLLECTION.groupby([MODEL_STR, WEIGHT_STR, NETWORK_STR, STATION_STR]):
+    for start, end in zip(x[:-1], x[1:]):
+      df = dataframe[dataframe[TIMESTAMP_STR].between(start, end,
+                                                      inclusive='left')]
+      if df.empty: continue
+      start = start.strftime("%y%m%d")
+      FILEPATH = Path(DATA_PATH, AST_STR, start, network, station,
+                      ("D_" if args.denoiser else EMPTY_STR) +
+                      UNDERSCORE_STR.join([start, network, station, model,
+                                           weight]) + CSV_EXT)
+      FILEPATH.parent.mkdir(parents=True, exist_ok=True)
+      df.to_csv(FILEPATH, index=False)
+  return DATAFRAME, COLLECTION
 
 def main(args : argparse.Namespace) -> None:
   global DATA_PATH
@@ -216,7 +243,7 @@ def main(args : argparse.Namespace) -> None:
   if args.verbose: print(CONFIG)
   # if args.verbose: station_graph(INVENTORY)
   PRED = ini.classified_loader(args)
-  DATA = associate_events(copy.deepcopy(PRED), CONFIG, args)
+  DATA, PRED = associate_events(copy.deepcopy(PRED), CONFIG, args)
   return
 
 if __name__ == "__main__": main(ini.parse_arguments())

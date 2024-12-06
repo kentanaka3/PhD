@@ -8,6 +8,27 @@ from datetime import timedelta as td
 
 from constants import *
 
+DEBUG = False
+
+def event_merger_l(NEW : pd.DataFrame, OLD : pd.DataFrame, on : list) \
+      -> pd.DataFrame:
+  if NEW.empty: return OLD
+  if OLD.empty: return NEW
+  cols_n = NEW.columns
+  off = [col for col in cols_n if col not in on]
+  # if DEBUG:
+  #   cols_o = OLD.columns
+  #   assert all([col in cols_n and col in cols_o for col in on])
+  #   assert all([col_a == col_b for col_a, col_b in zip(cols_n, cols_o)])
+  idx_r: int = 0
+  for idx_l, row in NEW.iterrows():
+    if all([row[col] == OLD.loc[idx_r][col] for col in on]):
+      for col in off:
+        row[col] = OLD.loc[idx_r][col] if OLD.loc[idx_r][col] else row[col]
+      NEW.loc[idx_l] = row
+      idx_r += 1
+  return NEW
+
 # TODO: Parse HPC and QML files
 
 # TODO: Implement polarity
@@ -22,16 +43,13 @@ RECORD_EXTRACTOR_DAT = \
              fr"(?P<{S_WEIGHT_STR}>[0-4]))?")                       # S Weight
 EVENT_EXTRACTOR_DAT = re.compile(r"^1(\s+D)*\s*$")                  # Event
 def event_parser_dat(filename : Path, start : UTCDateTime = None,
-                     end : UTCDateTime = None, verbose : bool = False,
+                     end : UTCDateTime = None,
                      stations : set[str] = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
   DATA = list()
-  event: int = 0
   with open(filename, 'r') as fr: lines = fr.readlines()
   for line in [l.strip() for l in lines]:
-    if EVENT_EXTRACTOR_DAT.match(line):
-      event += 1
-      continue
+    if EVENT_EXTRACTOR_DAT.match(line): continue
     match = RECORD_EXTRACTOR_DAT.match(line)
     if match:
       result: dict[str] = match.groupdict()
@@ -48,20 +66,19 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
         result[BEG_DATE_STR] + td(seconds=float(result[P_TIME_STR][:2] + \
                                                 PERIOD_STR + \
                                                 result[P_TIME_STR][2:]))
-      DATA.append([event, result[STATION_STR], PWAVE, result[P_TIME_STR],
-                  result[P_WEIGHT_STR]])
+      DATA.append([None, result[P_TIME_STR], result[P_WEIGHT_STR], PWAVE,
+                   result[STATION_STR]])
       if result[S_TYPE_STR]:
         result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
         result[S_TIME_STR] = \
           result[BEG_DATE_STR] + td(seconds=float(result[S_TIME_STR][:2] + \
                                                   PERIOD_STR + \
                                                   result[S_TIME_STR][2:]))
-        DATA.append([event, result[STATION_STR], SWAVE, result[S_TIME_STR],
-                    result[S_WEIGHT_STR]])
+        DATA.append([None, result[S_TIME_STR], result[S_WEIGHT_STR], SWAVE,
+                     result[STATION_STR]])
       continue
     print("WARNING: (DAT) Unable to parse line:", line)
-  HEADER = [EVENT_STR, STATION_STR, PHASE_STR, TIMESTAMP_STR, WEIGHT_STR]
-  return pd.DataFrame(DATA, columns=HEADER)
+  return pd.DataFrame(DATA, columns=HEADER_MANL)
 
 RECORD_EXTRACTOR_PUN = re.compile(
   fr"^1(?P<{BEG_DATE_STR}>\d{{6}}[\s\d]\d[\s\d]\d)\s"             # Date
@@ -78,10 +95,10 @@ RECORD_EXTRACTOR_PUN = re.compile(
   fr"(?P<{ERZ_STR}>\d\.\d)\s"                                     # ERZ
   fr"(?P<{QM_STR}>[A-Z][0-9])")                                   # QM
 def event_parser_pun(filename : Path, start : UTCDateTime = None,
-                     end : UTCDateTime = None, verbose : bool = False) \
-    -> pd.DataFrame:
+                     end : UTCDateTime = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
-  DATA = list()
+  SOURCE = list()
+  event: int = 0
   with open(filename, 'r') as fr: lines = fr.readlines()[1:]
   for line in [l.strip() for l in lines]:
     match = RECORD_EXTRACTOR_PUN.match(line)
@@ -104,17 +121,15 @@ def event_parser_pun(filename : Path, start : UTCDateTime = None,
       result[RMS_STR] = float(result[RMS_STR])
       result[ERH_STR] = float(result[ERH_STR])
       result[ERZ_STR] = float(result[ERZ_STR])
-      DATA.append([result[BEG_DATE_STR], result[LATITUDE_STR],
-                   result[LONGITUDE_STR], result[LOCAL_DEPTH_STR],
-                   result[MAGNITUDE_STR], result[NO_STR], result[GAP_STR],
-                   result[DMIN_STR], result[RMS_STR], result[ERH_STR],
-                   result[ERZ_STR], result[QM_STR]])
+      SOURCE.append([None, result[BEG_DATE_STR], result[LATITUDE_STR], 
+                     result[LONGITUDE_STR], result[LOCAL_DEPTH_STR],
+                     result[MAGNITUDE_STR], result[NO_STR], result[GAP_STR],
+                     result[DMIN_STR], result[RMS_STR], result[ERH_STR],
+                     result[ERZ_STR], result[QM_STR], None])
+      event += 1
       continue
     print("WARNING: (PUN) Unable to parse line:", line)
-  HEADER = [TIMESTAMP_STR, LATITUDE_STR, LONGITUDE_STR, LOCAL_DEPTH_STR,
-            MAGNITUDE_STR, NO_STR, GAP_STR, DMIN_STR, RMS_STR, ERH_STR,
-            ERZ_STR, QM_STR]
-  return pd.DataFrame(DATA, columns=HEADER)
+  return pd.DataFrame(SOURCE, columns=HEADER_SRC)
 
 RECORD_EXTRACTOR_HPC = re.compile(
   fr"^(?P<{STATION_STR}>[A-Z0-9\s]{{4}})"                         # Station
@@ -126,7 +141,7 @@ RECORD_EXTRACTOR_HPC = re.compile(
   fr"(?P<{S_TYPE_STR}>[ei]{SWAVE}\s)"                             # S Type
   fr"(?P<{S_WEIGHT_STR}>[0-4])")                                  # S Weight
 def event_parser_hpc(filename : Path, start : UTCDateTime = None,
-                     end : UTCDateTime = None, verbose : bool = False,
+                     end : UTCDateTime = None,
                      stations : set[str] = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
   DATA = list()
@@ -138,7 +153,8 @@ RECORD_EXTRACTOR_HPL = re.compile(
   fr".+"                                                          # Unknown
   fr"(?P<{P_TYPE_STR}>[ei]{PWAVE}[cd\s])"                         # P Type
   fr"(?P<{P_WEIGHT_STR}>[0-4])\s"                                 # P Weight
-  fr"(?P<{P_TIME_STR}>[\s\d]\d[\s\d]\d\s[\s\d]\d\.\d{{2}})\s"     # P Time
+  fr"(?P<{P_TIME_STR}>[\s\d]\d[\s\d]\d)\s"                        # P Time
+  fr"(?P<{SECONDS_STR}>[\s\d]\d\.\d{{2}})\s"                      # Seconds
   fr".{{62}}\s"                                                   # Unknown
   fr"((?P<{S_TYPE_STR}>[ei]{SWAVE})\s"                            # S Type
   fr"(?P<{S_WEIGHT_STR}>[0-4])?\s"                                # S Weight
@@ -161,17 +177,17 @@ NOTES_EXTRACTOR_HPL = re.compile(
   fr"^\*\s+(?P<{NOTES_STR}>.*)"
 )
 def event_parser_hpl(filename : Path, start : UTCDateTime = None,
-                     end : UTCDateTime = None, verbose : bool = False,
+                     end : UTCDateTime = None,
                      stations : set[str] = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
-  DATA = list()
+  SOURCE = list()
+  DETECT = list()
   event_id: int = 0
   event_name: str = ""
   event_notes: str = ""
   event_detect: str = False
   event_metadata = dict()
   event_spacetime = (UTCDateTime(0), 0, 0, 0)
-  event_detection = list()
   with open(filename, 'r') as fr: lines = fr.readlines()
   for line in [l.strip() for l in lines]:
     match = LOCATION_EXTRACTOR_HPL.match(line)
@@ -182,7 +198,6 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
     match = EVENT_EXTRACTOR_HPL.match(line)
     if match:
       event_detect = True
-      event_detection = list()
       result : dict[str] = match.groupdict()
       result[EVENT_STR] = int(result[EVENT_STR])
       event_id = result[EVENT_STR]
@@ -196,11 +211,11 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
         continue
       if end is not None and result[BEG_DATE_STR] >= end + ONE_DAY:
         event_detect = False
-        continue
+        break
       result[LATITUDE_STR] = result[LATITUDE_STR].replace(SPACE_STR, "0") \
-                               if result[LATITUDE_STR] else NaN
+                               if result[LATITUDE_STR] else None
       result[LONGITUDE_STR] = result[LONGITUDE_STR].replace(SPACE_STR, "0") \
-                                if result[LONGITUDE_STR] else NaN
+                                if result[LONGITUDE_STR] else None
       result[LOCAL_DEPTH_STR] = float(result[LOCAL_DEPTH_STR]) \
                                   if result[LOCAL_DEPTH_STR] else NaN
       event_spacetime = (result[BEG_DATE_STR], result[LATITUDE_STR],
@@ -212,6 +227,8 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
         MAGNITUDE_STR : result[MAGNITUDE_STR],
         NO_STR        : result[NO_STR]
       }
+      SOURCE.append([event_id, *event_spacetime, result[MAGNITUDE_STR],
+                     result[NO_STR], *([None] * 7)])
       continue
     match = RECORD_EXTRACTOR_HPL.match(line)
     if match and event_detect:
@@ -220,55 +237,78 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
       if stations is not None and result[STATION_STR] not in stations: continue
       result[EVENT_STR] = int(result[EVENT_STR])
       result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
+      result[SECONDS_STR] = td(seconds=float(result[SECONDS_STR]))
+      result[P_TIME_STR] = UTCDateTime.strptime(
+                             event_spacetime[0].date.strftime("%y%m%d") + \
+                              result[P_TIME_STR].replace(SPACE_STR, "0"),
+                              "%y%m%d%H%M")
+      DETECT.append([result[EVENT_STR],
+                     result[P_TIME_STR] + result[SECONDS_STR],
+                     result[P_WEIGHT_STR], PWAVE, result[STATION_STR]])
       if result[S_TYPE_STR]:
         result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
         result[S_TIME_STR] = td(seconds=float(result[S_TIME_STR]))
+        DETECT.append([result[EVENT_STR],
+                       result[P_TIME_STR] + result[S_TIME_STR],
+                       result[S_WEIGHT_STR], SWAVE, result[STATION_STR]])
       continue
     match = NOTES_EXTRACTOR_HPL.match(line)
     if match:
       result : dict[str] = match.groupdict()
       event_notes = result[NOTES_STR]
+      SOURCE[-1][-1] = event_notes
       continue
     if re.match(r"^\s*$", line): continue
     print("WARNING: (HPL) Unable to parse line:", line)
-  HEADER = [ID_STR, LOC_NAME_STR, TIMESTAMP_STR, LATITUDE_STR, LONGITUDE_STR,
-            LOCAL_DEPTH_STR, MAGNITUDE_STR, NO_STR]
-  return pd.DataFrame(DATA)
+  SOURCE = pd.DataFrame(SOURCE, columns=HEADER_SRC)
+  DETECT = pd.DataFrame(DETECT, columns=HEADER_MANL)
+  return SOURCE, DETECT
 
 def event_parser_qml(filename : Path, start : UTCDateTime = None,
-                     end : UTCDateTime = None, verbose : bool = False,
+                     end : UTCDateTime = None,
                      stations : set[str] = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
   pass
 
 def event_parser_(filename : Path, start : UTCDateTime = None,
-                  end : UTCDateTime = None, verbose : bool = False,
-                  stations : set[str] = None) -> pd.DataFrame:
+                  end : UTCDateTime = None, stations : set[str] = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
   sfx = filename.suffix
   if sfx == DAT_EXT:
-    return event_parser_dat(filename, start, end, verbose, stations)
+    return event_parser_dat(filename, start, end, stations)
   elif sfx == PUN_EXT:
-    return event_parser_pun(filename, start, end, verbose)
+    return event_parser_pun(filename, start, end)
   elif sfx == HPC_EXT:
-    return event_parser_hpc(filename, start, end, verbose, stations)
+    return event_parser_hpc(filename, start, end, stations)
   elif sfx == HPL_EXT:
-    return event_parser_hpl(filename, start, end, verbose, stations)
+    return event_parser_hpl(filename, start, end, stations)
   elif sfx == QML_EXT:
-    return event_parser_qml(filename, start, end, verbose, stations)
-  else:
-    raise ValueError(f"Unknown file extension: {sfx}")
+    return event_parser_qml(filename, start, end, stations)
+  print(ValueError(f"Unknown file extension: {sfx}"))
+  return None
 
 def event_parser(filename : Path, start : UTCDateTime = None,
-                 end : UTCDateTime = None, verbose : bool = False,
+                 end : UTCDateTime = None,
                  stations : set[str] = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
   if filename.is_dir():
     # TODO: Implement parallel processing
-    # TODO: Handle concatenation of dataframes
-    DATA = list()
+    SOURCE = pd.DataFrame(columns=HEADER_SRC)
+    DETECT = pd.DataFrame(columns=HEADER_MANL)
     for file in filename.iterdir():
-      DATA.append(event_parser_(file, start, end, verbose, stations))
-    return pd.concat(DATA)
+      sfx = file.suffix
+      if sfx == PUN_EXT:
+        source = event_parser_pun(file, start, end)
+        SOURCE = event_merger_l(SOURCE, source, FIND)
+      elif sfx == DAT_EXT:
+        DETECT = pd.concat([DETECT, event_parser_dat(file, start, end,
+                                                     stations)])
+      elif sfx == HPL_EXT:
+        source, detect = event_parser_hpl(file, start, end, stations)
+        FIND = [TIMESTAMP_STR, LONGITUDE_STR, LATITUDE_STR, LOCAL_DEPTH_STR,
+                MAGNITUDE_STR, NO_STR]
+        SOURCE = event_merger_l(source, SOURCE, FIND)
+        DETECT = pd.merge(DETECT, detect, on=HEADER_MANL, how='inner')
+    return SOURCE, DETECT
   else:
-    return event_parser_(filename, start, end, verbose, stations)
+    return event_parser_(filename, start, end, stations)

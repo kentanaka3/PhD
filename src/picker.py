@@ -9,7 +9,6 @@ DATA_PATH = os.path.join(PRJ_PATH, "data")
 import sys
 # Add to path
 if INC_PATH not in sys.path: sys.path.append(INC_PATH)
-import json
 import torch
 import pickle
 import argparse

@@ -136,8 +136,12 @@ def dist_balanced(T : pd.Series, P : pd.Series) -> float:
 def dist_phase(T : pd.Series, P : pd.Series) -> float:
   return int(P[PHASE_STR] == T[PHASE_STR])
 
-def dist_time(T : pd.Series, P : pd.Series) -> float:
-  return 1. - (P[TEMPORAL_STR] / PICK_OFFSET)
+def dist_time(T : pd.Series, P : pd.Series,
+              offset : td = PICK_OFFSET) -> float:
+  return 1. - (diff_time(T, P) / offset)
+
+def diff_time(T : pd.Series, P : pd.Series) -> float:
+  return td(seconds=abs(P[TIMESTAMP_STR] - T[TIMESTAMP_STR]))
 
 def dist_default(T : pd.Series, P : pd.Series) -> float:
   return (99. * dist_balanced(T, P) + P[PROBABILITY_STR]) / 100.
@@ -201,13 +205,11 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
                      bipartite=0)
     # Position of the nodes in the graph for plotting
     pos[i] = (T[TIMESTAMP_STR] - start, 0)
-    # Create a new column in the Predicted dataframe to store the temporal
-    # difference between the True and Predicted picks
-    PRED[TEMPORAL_STR] = (PRED[TIMESTAMP_STR] - T[TIMESTAMP_STR])\
-                           .apply(lambda x : td(seconds=abs(x)))
+    # Temporal difference between the True and Predicted picks
     # TODO: Consider H71 error interval
     # PICKS = PRED[PRED[TEMPORAL_STR] < H71_OFFSET[T[WEIGHT_STR]]]
-    PICKS = PRED[PRED[TEMPORAL_STR] <= PICK_OFFSET]
+    PICKS = PRED[(PRED[TIMESTAMP_STR] - T[TIMESTAMP_STR])\
+                 .apply(lambda x : td(seconds=abs(x))) <= PICK_OFFSET]
     if PICKS.empty: continue
     # If there are picks within the OFFSET, we change the status of the True
     # and Predicted picks to True Positive and we add the corresponding edges
@@ -242,11 +244,11 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
       if t[PHASE_STR] == p[PHASE_STR]:
         TP.add((model_name, dataset_name, t[STATION_STR], t[PHASE_STR],
                 (str(t[TIMESTAMP_STR]), str(p[TIMESTAMP_STR])),
-                (t[WEIGHT_STR], p[PROBABILITY_STR])))
+                (t[PROBABILITY_STR], p[PROBABILITY_STR])))
     else:
       G.nodes[node][STATUS_STR] = FN_STR
       FN.append([model_name, dataset_name, t[STATION_STR], t[PHASE_STR],
-                 threshold, t[TIMESTAMP_STR].__str__(), t[WEIGHT_STR]])
+                 threshold, t[TIMESTAMP_STR].__str__(), t[PROBABILITY_STR]])
       CFN_MTX.loc[t[PHASE_STR], NONE_STR] += 1
 
   # We traverse the PRED nodes of the graph to update the status and append
@@ -496,17 +498,23 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
   """
   WAVEFORMS_DATA = ini.waveform_table(args)
   # TODO: Stations are not considered due to the low amount of data
-  DATAFRAME = prs.event_parser(filename, *args.dates, args.verbose, None)
-  TRUE = pd.DataFrame(columns=[EVENT_STR, STATION_STR, PHASE_STR,
-                               TIMESTAMP_STR, WEIGHT_STR])
+  SOURCE, DETECT = prs.event_parser(filename, *args.dates, None)
+  print(SOURCE)
+  print(DETECT)
+  exit()
+  TRUE_S = pd.DataFrame(columns=HEADER_SRC)
+  TRUE_D = pd.DataFrame(columns=HEADER_MANL)
   for date, dataframe_d in WAVEFORMS_DATA.groupby(BEG_DATE_STR):
     start = UTCDateTime.strptime(date, DATE_FMT)
     end = start + ONE_DAY
     station = dataframe_d[STATION_STR].unique().tolist()
-    TRUE = pd.concat([TRUE, DATAFRAME[
-      (DATAFRAME[TIMESTAMP_STR].between(start, end, inclusive='left')) &
-      (DATAFRAME[STATION_STR].isin(station))]])
-  return TRUE
+    source = SOURCE[(SOURCE[TIMESTAMP_STR].between(start, end,
+                                                   inclusive='left'))]
+    if not source.empty: TRUE_S = pd.concat([TRUE_S, source])
+    TRUE_D = pd.concat([TRUE_D, DETECT[
+      (DETECT[TIMESTAMP_STR].between(start, end, inclusive='left')) &
+      (DETECT[STATION_STR].isin(station))]])
+  return TRUE_S, TRUE_D
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
                       phase : str = PWAVE) -> None:
@@ -559,7 +567,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
       data = dataframe[dataframe[PROBABILITY_STR] >= z[-1]][TIMESTAMP_STR]
       counts, _ = np.histogram(data, bins=bins)
       ax.step(bins[:-1], counts, where='mid', label=rf"[{z[-1]},1)")
-      ax.set(xlim=(-0.5, 1.), ylim=(0, m))
+      ax.set(xlim=(-0.5, 0.5), ylim=(0, m))
       ax.grid()
       ax.legend()
     xlabel = "Time Displacement (s)"
@@ -580,17 +588,20 @@ def main(args : argparse.Namespace):
   DATA_PATH = Path(args.directory).parent
   PRED = ini.classified_loader(args)
   if args.file is None: raise ValueError("No event file given")
-  TRUE = event_parser(args.file, args)
+  TRUE_S, TRUE_D = event_parser(args.file, args)
+  TRUE_D = TRUE_D[TRUE_D[STATION_STR].isin(PRED[STATION_STR].unique())]
   if args.verbose:
-    TRUE.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
+    TRUE_D.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
     PRED.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                      PRED_STR + CSV_EXT), index=False)
-  plot_data(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
-  plot_data(copy.deepcopy(TRUE), copy.deepcopy(PRED), args, phase=SWAVE)
-  TP = stat_test(copy.deepcopy(TRUE), copy.deepcopy(PRED), args)
+  plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PRED), args)
+  plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PRED), args, phase=SWAVE)
+  TP = stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(PRED), args)
   if args.verbose:
     TP.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                    TP_STR + CSV_EXT), index=False)
   time_displacement(copy.deepcopy(TP), args)
+  PRED = ini.associated_loader(args)
+  print(PRED)
 
 if __name__ == "__main__": main(ini.parse_arguments())

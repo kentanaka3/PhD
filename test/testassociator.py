@@ -9,7 +9,7 @@ if SRC_PATH not in sys.path: sys.path.append(SRC_PATH)
 import unittest
 
 from constants import *
-import catalogger as ctg
+import associator as ctg
 
 DATA_PATH = Path(PRJ_PATH, "data", "test")
 TEST_PATH = Path(DATA_PATH, "waveforms")
