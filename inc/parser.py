@@ -34,12 +34,12 @@ def event_merger_l(NEW : pd.DataFrame, OLD : pd.DataFrame, on : list) \
 # TODO: Implement polarity
 RECORD_EXTRACTOR_DAT = \
   re.compile(fr"^(?P<{STATION_STR}>[A-Z0-9\s]{{4}})"                # Station
-             fr"(?P<{P_TYPE_STR}>[ei]{PWAVE}[cd\s])"                # P Type
+             fr"(?P<{P_TYPE_STR}>[ei\s]{PWAVE}[cd\s])"              # P Type
              fr"(?P<{P_WEIGHT_STR}>[0-4])1"                         # P Weight
              fr"(?P<{BEG_DATE_STR}>\d{{10}})\s"                     # Date
              fr"(?P<{P_TIME_STR}>\d{{4}})\s+"                       # P Time
              fr"((?P<{S_TIME_STR}>\d{{4}}|\d{{3}})"                 # S Time
-             fr"(?P<{S_TYPE_STR}>[ei]{SWAVE})\s"                    # S Type
+             fr"(?P<{S_TYPE_STR}>[ei\s]{SWAVE})\s"                  # S Type
              fr"(?P<{S_WEIGHT_STR}>[0-4]))?")                       # S Weight
 EVENT_EXTRACTOR_DAT = re.compile(r"^1(\s+D)*\s*$")                  # Event
 def event_parser_dat(filename : Path, start : UTCDateTime = None,
@@ -78,7 +78,7 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
                      result[STATION_STR]])
       continue
     print("WARNING: (DAT) Unable to parse line:", line)
-  return pd.DataFrame(DATA, columns=HEADER_MANL)
+  return None, pd.DataFrame(DATA, columns=HEADER_MANL)
 
 RECORD_EXTRACTOR_PUN = re.compile(
   fr"^1(?P<{BEG_DATE_STR}>\d{{6}}[\s\d]\d[\s\d]\d)\s"             # Date
@@ -129,7 +129,7 @@ def event_parser_pun(filename : Path, start : UTCDateTime = None,
       event += 1
       continue
     print("WARNING: (PUN) Unable to parse line:", line)
-  return pd.DataFrame(SOURCE, columns=HEADER_SRC)
+  return pd.DataFrame(SOURCE, columns=HEADER_SRC), None
 
 RECORD_EXTRACTOR_HPC = re.compile(
   fr"^(?P<{STATION_STR}>[A-Z0-9\s]{{4}})"                         # Station
@@ -298,11 +298,11 @@ def event_parser(filename : Path, start : UTCDateTime = None,
     for file in filename.iterdir():
       sfx = file.suffix
       if sfx == PUN_EXT:
-        source = event_parser_pun(file, start, end)
+        source, _ = event_parser_pun(file, start, end)
         SOURCE = event_merger_l(SOURCE, source, FIND)
       elif sfx == DAT_EXT:
-        DETECT = pd.concat([DETECT, event_parser_dat(file, start, end,
-                                                     stations)])
+        _, detect = event_parser_dat(file, start, end, stations) 
+        DETECT = pd.concat([DETECT, detect], ignore_index=True)
       elif sfx == HPL_EXT:
         source, detect = event_parser_hpl(file, start, end, stations)
         FIND = [TIMESTAMP_STR, LONGITUDE_STR, LATITUDE_STR, LOCAL_DEPTH_STR,

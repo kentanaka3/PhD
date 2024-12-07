@@ -499,18 +499,16 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
   WAVEFORMS_DATA = ini.waveform_table(args)
   # TODO: Stations are not considered due to the low amount of data
   SOURCE, DETECT = prs.event_parser(filename, *args.dates, None)
-  print(SOURCE)
-  print(DETECT)
-  exit()
   TRUE_S = pd.DataFrame(columns=HEADER_SRC)
   TRUE_D = pd.DataFrame(columns=HEADER_MANL)
   for date, dataframe_d in WAVEFORMS_DATA.groupby(BEG_DATE_STR):
     start = UTCDateTime.strptime(date, DATE_FMT)
     end = start + ONE_DAY
     station = dataframe_d[STATION_STR].unique().tolist()
-    source = SOURCE[(SOURCE[TIMESTAMP_STR].between(start, end,
-                                                   inclusive='left'))]
-    if not source.empty: TRUE_S = pd.concat([TRUE_S, source])
+    if SOURCE is not None:
+      source = SOURCE[(SOURCE[TIMESTAMP_STR].between(start, end,
+                                                     inclusive='left'))]
+      if not source.empty: TRUE_S = pd.concat([TRUE_S, source])
     TRUE_D = pd.concat([TRUE_D, DETECT[
       (DETECT[TIMESTAMP_STR].between(start, end, inclusive='left')) &
       (DETECT[STATION_STR].isin(station))]])
@@ -594,14 +592,14 @@ def main(args : argparse.Namespace):
     TRUE_D.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
     PRED.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                      PRED_STR + CSV_EXT), index=False)
-  plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PRED), args)
-  plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PRED), args, phase=SWAVE)
+  # plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PRED), args)
+  # plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PRED), args, phase=SWAVE)
   TP = stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(PRED), args)
   if args.verbose:
     TP.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                    TP_STR + CSV_EXT), index=False)
   time_displacement(copy.deepcopy(TP), args)
-  PRED = ini.associated_loader(args)
-  print(PRED)
+  #PRED = ini.associated_loader(args)
+  #print(PRED)
 
 if __name__ == "__main__": main(ini.parse_arguments())
