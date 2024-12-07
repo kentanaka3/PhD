@@ -159,17 +159,16 @@ def interactive_plot(stream : obspy.Stream, picks : sbu.PickList,
   fig.tight_layout()
   plt.show()
 
-def classify_stream(categories : tuple[str], trace_files : pd.DataFrame,
-                    MODELS : dict[str, sbm.base.SeisBenchModel],
-                    args : argparse.Namespace) -> None:
+def classify_stream(clf_files : tuple[list], model : sbm.base.SeisBenchModel,
+                    key : tuple[str], args : argparse.Namespace) -> None:
   """
   Classify the stream. If 'force' is set to True, the classification will be
   performed regardless of the existence of the file.
 
   input:
-    - categories    (tuple)
-    - trace_files   (pd.DataFrame)
-    - MODELS        (dict)
+    - clf_files     (tuple)
+    - model         (seisbench.models.base.SeisBenchModel)
+    - key           (tuple)
     - args          (argparse.Namespace)
 
   output:
@@ -182,45 +181,16 @@ def classify_stream(categories : tuple[str], trace_files : pd.DataFrame,
   """
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
-  categories = [str(c) for c in categories]
-  CLF_PATH = Path(DATA_PATH, CLF_STR, *categories)
-  CLF_PATH.mkdir(parents=True, exist_ok=True)
-  clf_files = \
-    [(Path(CLF_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-           UNDERSCORE_STR.join([*categories, model_name, dataset_name]) + \
-           PICKLE_EXT), model_name, dataset_name)
-     for model_name, dataset_name in MODELS.keys()]
-  if args.force:
-    clf_found = []
-  else:
-    clf_found = [clf for clf in clf_files if clf[0].is_file()]
-    clf_files = [clf for clf in clf_files if not clf[0].is_file()]
-  if clf_files:
-    stream = read_traces(trace_files, args)
-    if args.verbose: print("Classifying the Stream")
-    for CLF_FILE, model_name, dataset_name in clf_files:
-      MODEL = MODELS[(model_name, dataset_name)]
-      if MODEL is None: continue
-      output = MODEL.classify(stream, batch_size=args.batch,
-                              P_threshold=args.pwave,
-                              S_threshold=args.swave).picks
-      with open(CLF_FILE, 'wb') as fp: pickle.dump(output, fp)
-      if args.verbose:
-        print(f"Classification results for model: {model_name}, with "
-              f"preloaded weight: {dataset_name}, categorized by {categories}")
-        print(output)
-      if args.interactive:
-        # TODO: Plot without blocking the execution of the pipeline
-        interactive_plot(stream, output, model_name, dataset_name)
-  for CLF_FILE, model_name, dataset_name in clf_found:
-    with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)
-    if args.verbose:
-      print(f"Classification results for model: {model_name}, with "
-            f"preloaded weight: {dataset_name}, categorized by {categories}")
-      print(output)
-    if args.interactive:
-      stream = read_traces(trace_files, args)
-      interactive_plot(stream, output, model_name, dataset_name)
+  for categories, trace_files in clf_files:
+    output = model.classify(read_traces(trace_files, args),
+                      batch_size=args.batch,
+                      P_threshold=args.pwave,
+                      S_threshold=args.swave).picks
+    CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
+                    ("D_" if args.denoiser else EMPTY_STR) + \
+                    UNDERSCORE_STR.join([*categories, *key]) + \
+                    PICKLE_EXT)
+    with open(CLF_FILE, 'wb') as fp: pickle.dump(output, fp)
 
 def get_model(model_name : str, dataset_name : str, silent : bool = False) \
       -> sbm.base.SeisBenchModel:
@@ -327,14 +297,56 @@ def main(args : argparse.Namespace) -> None:
     if args.timing:
       TIMING = np.zeros(len(WAVEFORMS_DATA.groupby(args.groups)))
       i = 0
-    for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
+    for key in MODELS.keys():
+      key : list[str] = list(key)
+      model = MODELS[(*key,)]
+      if model is None: continue
+      if args.verbose:
+        print("Testing model: {}, with preloaded weight: {}".format(*key))
+      clf_files = []
+      clf_found = []
+      for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
+        categories = [str(c) for c in categories]
+        CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
+                        ("D_" if args.denoiser else EMPTY_STR) + \
+                        UNDERSCORE_STR.join([*categories, *key]) + PICKLE_EXT)
+        if not args.force and CLF_FILE.exists():
+          clf_found.append((categories, trace_files))
+        clf_files.append((categories, trace_files))
+      if not clf_files: continue
       if args.timing: start_time = MPI.Wtime()
-      # Classify the Stream
-      classify_stream(categories, trace_files, MODELS, args)
+      classify_stream(clf_files, model, key, args)
       if args.timing:
-        TIMING[i] = MPI.Wtime() - start_time
+        TIMING[i] += MPI.Wtime() - start_time
         i += 1
+      # Clear the GPU memory (nowait)
       torch.cuda.empty_cache()
+      for categories, trace_files in clf_found:
+        if args.verbose:
+          print("Classification results for model: {}, with preloaded weight: "
+                "{}, categorized by {}".format(*key, categories))
+          CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
+                          ("D_" if args.denoiser else EMPTY_STR) + \
+                          UNDERSCORE_STR.join([*categories, *key]) + \
+                          PICKLE_EXT)
+          with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)
+          print(output)
+        if args.interactive:
+          stream = read_traces(trace_files, args)
+          interactive_plot(stream, output, *key)
+      for categories, trace_files in clf_files:
+        if args.verbose:
+          print("Classification results for model: {}, with preloaded weight: "
+                "{}, categorized by {}".format(*key, categories))
+          CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
+                          ("D_" if args.denoiser else EMPTY_STR) + \
+                          UNDERSCORE_STR.join([*categories, *key]) + \
+                          PICKLE_EXT)
+          with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)
+          print(output)
+        if args.interactive:
+          stream = read_traces(trace_files, args)
+          interactive_plot(stream, output, *key)
     if args.timing:
       global MPI_COMM, MPI_RANK, MPI_SIZE
       TOTALS = np.zeros_like(TIMING)
