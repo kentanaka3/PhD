@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from obspy.core.utcdatetime import UTCDateTime
+from concurrent.futures import ThreadPoolExecutor
 
 from constants import *
 
@@ -468,18 +469,23 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
     # Construct the table of files based on the specified arguments
     WAVEFORMS_DATA = list()
     if args.verbose: print("Constructing the Table of Files")
-    for trc_file in args.directory.iterdir():
+
+    def process_file(trc_file : Path) -> list[str]:
       try:
         trc = obspy.read(trc_file, headonly=True)[0].stats
       except:
         print(f"WARNING: Unable to read {trc_file}")
-        continue
+        return None
       trc_start = UTCDateTime(trc.starttime.date)
       if trc.starttime.hour == 23: trc_start += ONE_DAY
-      if start <= trc_start and trc_start <= end:
-        WAVEFORMS_DATA.append([trc_file.__str__(), trc.network, trc.station,
-                               trc.channel,
-                               UTCDateTime.strftime(trc_start, DATE_FMT)])
+      if start <= trc_start <= end:
+        return [trc_file.__str__(), trc.network, trc.station, trc.channel,
+                UTCDateTime.strftime(trc_start, DATE_FMT)]
+      return None
+    with ThreadPoolExecutor() as executor:
+      results = list(executor.map(process_file, args.directory.iterdir()))
+
+    WAVEFORMS_DATA = [result for result in results if result is not None]
     HEADER = [FILENAME_STR, NETWORK_STR, STATION_STR, CHANNEL_STR,
               BEG_DATE_STR]
     WAVEFORMS_DATA = pd.DataFrame(WAVEFORMS_DATA, columns=HEADER)
@@ -505,8 +511,9 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
     if args.key is None:
       print("HINT: If you want to download the data from the server, please "
             "specify the download option \"--download\" and (if needed) "
-            "provide a key file with the argument \"--key\" <key> for the "
-            "specified client with the argument \"--client\" <client>")
+            "provide a key file with the argument \"--key <key>\" for the "
+            "optionally specified client with the argument \"--client "
+            "<client>\"")
     raise FileNotFoundError
   WAVEFORMS_DATA.sort_values([BEG_DATE_STR, FILENAME_STR], inplace=True)
   WAVEFORMS_DATA.set_index(FILENAME_STR, inplace=True)

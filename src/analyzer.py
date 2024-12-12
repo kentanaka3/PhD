@@ -166,6 +166,400 @@ def plot_timeline(G : nx.Graph, pos : dict[int, tuple[float, int]], N : int,
   plt.show()
   plt.close(fig=fig)
 
+# remove entry based on best_pred_idx (#1 clean phase)
+def remove_entry_with_pred_idx(tp_list, best_pred_idx):
+    tp_list[:] = [entry for entry in tp_list if entry[8] != best_pred_idx]  # entry[8] corresponds to best_pred_idx
+# remove entry based on best_true_idx (#2 clean phase)
+def remove_entry_with_true_idx(tp_list, best_true_idx):
+    tp_list[:] = [entry for entry in tp_list if entry[7] != best_true_idx]  # entry[7] corresponds to best_true_idx
+# remove entry in FP
+def remove_in_fp_fn(fp_list, timestamp):
+    fp_list[:] = [entry for entry in fp_list if entry[4] != timestamp] # entry 4 is the timestamp of the pick to remove
+# check element not in both lists
+def find_unique(list1, list2):
+    return [item for item in list1 if item not in list2]
+
+def conf_mtx2(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
+              dataset_name : str, args : argparse.Namespace) -> pd.DataFrame:
+  N = len(TRUE.index)
+  M = len(PRED.index)
+  start, _ = args.dates
+  tags = [PWAVE, SWAVE, NONE_STR]
+  CFN_MTX = pd.DataFrame(0, index=tags, columns=tags, dtype=int)
+  TRUE[STATUS_STR] = FN_STR
+  PRED[STATUS_STR] = FP_STR
+  print(TRUE)
+  print(PRED)
+  # backup of indices
+  TRUE['index'] = TRUE.index
+  PRED['index'] = PRED.index
+  # Lists to store, day by day, True Positives, False Positives, False Negatives, phases mismatches for the 3 loops
+  # these lists are cleared at next iteration
+  # 1st loop: predicted P over True
+  TP_PredP_part, FP_PredP_part = [], []
+  # true S, predicted P cases
+  tS_pP_PredP_part = []
+  # 2nd loop: predicted S over true
+  TP_PredS_part, FP_PredS_part= [], []
+  # true P, predicted S cases
+  tP_pS_PredS_part = []
+  # 3rd loop: true (P and S) over all predicted
+  TP_TrueP_part, FN_TrueP_part = [], []
+  TP_TrueS_part, FN_TrueS_part = [], []
+  # true P, predicted S cases
+  tP_pS_TrueP_part = []
+  # true S, predicted P cases
+  tS_pP_TrueS_part = []
+  # Set to track predicted picks
+  matched_indices_pred = []
+  # 1st Loop over predicted P-phase picks
+  p_pred_picks_day = PRED[PRED[PHASE_STR] == PWAVE].reset_index(drop=True) # Only predicted P-phase picks
+  for j, pred_pick in p_pred_picks_day.iterrows():
+    # Compare with all true picks (regardless of phase)
+    # If the time difference is within PICK_OFFSET, check for the closest match
+    time_diffs = abs(TRUE['timestamp'] - pred_pick['timestamp'])
+    mask = time_diffs <= PICK_OFFSET
+
+    if not time_diffs[mask].empty:
+      min_time_diff = time_diffs[mask].min()
+      best_true_idx = time_diffs[mask].idxmin()
+      best_pred_idx = p_pred_picks_day['index'].iloc[j] # referred to the PRED dataframe
+
+      # Case of True Positive or False Positive for P-phase
+      best_true_pick = TRUE.loc[best_true_idx]
+      matched_indices_pred.append([best_true_idx, best_pred_idx,best_true_pick[PHASE_STR],pred_pick[PHASE_STR],min_time_diff,pred_pick['probability']]) #keep track of matched indices
+
+      if best_true_pick[PHASE_STR] == PWAVE:
+        # True Positive: P predicted and true phase match
+        TP_PredP_part.append([pred_pick[PHASE_STR], min_time_diff, 
+                              best_true_pick['quality'], best_true_pick[PHASE_STR],best_true_idx,best_pred_idx,best_true_pick['timestamp'],pred_pick['timestamp']])
+      elif best_true_pick[PHASE_STR] == SWAVE:
+        # true S and predicted P phases differ
+        tS_pP_PredP_part.append([pred_pick[PHASE_STR], min_time_diff, 
+                                 best_true_pick['quality'], best_true_pick[PHASE_STR],best_true_idx,best_pred_idx,best_true_pick['timestamp'],pred_pick['timestamp']])
+    else:
+      # False Positive: no true pick matches within the time window
+      FP_PredP_part.append([pred_pick[PHASE_STR], pred_pick['timestamp'], pred_pick['probability']])
+    # close loop
+
+  # 2nd Loop over predicted S picks for true picks
+  s_pred_picks_day = PRED[PRED[PHASE_STR] == SWAVE].reset_index(drop=True)
+
+  for j, pred_pick in s_pred_picks_day.iterrows():
+    # Compare with all true picks (regardless of phase)
+    time_diffs = abs(TRUE['timestamp'] - pred_pick['timestamp'])
+    mask = time_diffs <= PICK_OFFSET
+
+    if not time_diffs[mask].empty:
+      min_time_diff = time_diffs[mask].min()
+      best_true_idx = time_diffs[mask].idxmin()
+      best_pred_idx = s_pred_picks_day['index'].iloc[j] # referred to the PRED dataframe
+
+      # Case of True Positive or False Positive
+      best_true_pick = TRUE.loc[best_true_idx]
+      matched_indices_pred.append([best_true_idx, best_pred_idx,best_true_pick[PHASE_STR],pred_pick[PHASE_STR],min_time_diff,pred_pick['probability']]) # keep track of matched indices
+      
+      if best_true_pick[PHASE_STR] == SWAVE:
+        # True Positive: pred and true phases coincide and it's S
+        TP_PredS_part.append([pred_pick[PHASE_STR], min_time_diff,
+                            best_true_pick['quality'], best_true_pick[PHASE_STR],best_true_idx,best_pred_idx,best_true_pick['timestamp'],pred_pick['timestamp'] ])
+      elif best_true_pick[PHASE_STR] == PWAVE:
+        # true P, predicted S case
+        tP_pS_PredS_part.append([pred_pick[PHASE_STR], min_time_diff,
+                            best_true_pick['quality'], best_true_pick[PHASE_STR],best_true_idx,best_pred_idx,best_true_pick['timestamp'], pred_pick['timestamp']])
+    else:
+      # False Positive: no true pick matches within the window
+      FP_PredS_part.append([pred_pick[PHASE_STR], pred_pick['timestamp'], pred_pick['probability']])
+    # close loop
+
+  # Set to track matched true picks
+  matched_indices_true = []
+
+  # 3rd loop over true picks
+  for i, true_pick in TRUE.iterrows():                  
+    if true_pick[PHASE_STR] == PWAVE:  # True P picks
+      time_diffs = abs(true_pick['timestamp'] - PRED['timestamp'])
+      # If the time difference is within PICK_OFFSET, check for the closest match
+      mask = time_diffs <= PICK_OFFSET
+      if not time_diffs[mask].empty:
+        best_true_idx = i
+        #min_time_diff = time_diffs[mask].min()
+        #best_pred_idx = time_diffs[mask].idxmin()
+        # min time diff with max probability
+        filtered_df = PRED[mask].copy()
+        filtered_df['time_difference'] = time_diffs[mask].values
+        min_time_entry = filtered_df.loc[filtered_df.groupby(
+            'time_difference')['probability'].idxmax()].nsmallest(1, 'time_difference')
+        min_time_diff = min_time_entry['time_difference'].iloc[0]
+        best_pred_idx = min_time_entry['index'].iloc[0]
+        # check for presence of minimum difference in the window
+        best_pred_pick = PRED.loc[best_pred_idx]                             
+        matched_indices_true.append([best_true_idx, best_pred_idx,true_pick[PHASE_STR],best_pred_pick[PHASE_STR],min_time_diff,best_pred_pick['probability']])
+        # Compare with predicted P picks
+        if best_pred_pick[PHASE_STR] == PWAVE:
+          # True Positive: P pick
+          TP_TrueP_part.append([best_pred_pick[PHASE_STR], min_time_diff, 
+                              true_pick['quality'], true_pick[PHASE_STR],best_true_idx,best_pred_idx,true_pick['timestamp'],best_pred_pick['timestamp']])
+        elif best_pred_pick[PHASE_STR] == SWAVE:
+          # true P, predicted S case
+          tP_pS_TrueP_part.append([best_pred_pick[PHASE_STR], min_time_diff, 
+                              true_pick['quality'], true_pick[PHASE_STR],best_true_idx,best_pred_idx,true_pick['timestamp'],best_pred_pick['timestamp']])
+      else:
+        # no presence of predicted in the window, False Negative case
+        FN_TrueP_part.append([true_pick[PHASE_STR], true_pick['timestamp'], true_pick['quality']])
+    elif true_pick[PHASE_STR] == SWAVE:  # True S picks
+      # If the time difference is within PICK_OFFSET, check for the closest match
+      time_diffs = abs(true_pick['timestamp'] - PRED['timestamp'])
+      # If the time difference is within PICK_OFFSET, check for the closest match
+      mask = time_diffs <= PICK_OFFSET
+      if not time_diffs[mask].empty:
+        best_true_idx = i
+        #min_time_diff = time_diffs[mask].min()
+        #best_pred_idx = time_diffs[mask].idxmin()
+        filtered_df = PRED[mask].copy()
+        filtered_df['time_difference'] = time_diffs[mask]
+        min_time_entry = filtered_df.loc[filtered_df.groupby(
+            'time_difference')['probability'].idxmax()].nsmallest(1, 'time_difference')
+        min_time_diff = min_time_entry['time_difference'].iloc[0]
+        best_pred_idx = min_time_entry['index'].iloc[0]
+        
+        # check for presence of minimum difference in the window
+        best_pred_pick = PRED.loc[best_pred_idx]                             
+        matched_indices_true.append([best_true_idx, best_pred_idx,true_pick[PHASE_STR],best_pred_pick[PHASE_STR],min_time_diff,best_pred_pick['probability']])
+        # Predicted S picks                        
+        if best_pred_pick[PHASE_STR] == SWAVE:  
+          # True Positive: S pick
+          TP_TrueS_part.append([best_pred_pick[PHASE_STR], min_time_diff, 
+                              true_pick['quality'], true_pick[PHASE_STR],best_true_idx,best_pred_idx,true_pick['timestamp'],best_pred_pick['timestamp']])
+        elif best_pred_pick[PHASE_STR] == PWAVE:
+          # true S, predicted P case
+          tS_pP_TrueS_part.append([best_pred_pick[PHASE_STR], min_time_diff, 
+                              true_pick['quality'], true_pick[PHASE_STR],best_true_idx,best_pred_idx,true_pick['timestamp'],best_pred_pick['timestamp']])
+      else:
+        # no presence of predicted in the window, False Negative case
+        FN_TrueS_part.append([true_pick[PHASE_STR], true_pick['timestamp'], true_pick['quality']])
+      # close loop
+
+  #print(matched_indices_pred)
+  #print(matched_indices_true)
+
+  # CASE: PICKS WITH SAME TIME DIFFERENCE, BUT DIFFERENT PROBABILITIES
+  final_updated_true = matched_indices_true.copy()
+  final_updated_pred = matched_indices_pred.copy()
+
+  for true_row in final_updated_true:
+    true_best_idx = true_row[0]
+    true_time_diff = true_row[4]
+
+    for pred_row in final_updated_pred:
+      pred_best_idx = pred_row[0]
+      pred_time_diff = pred_row[4]
+
+      # Check for correspondance
+      if true_best_idx == pred_best_idx and true_time_diff == pred_time_diff:
+        # Probabilities comparison
+        if true_row[5] > pred_row[5]:  # true_row has better probability -> substitute predicted with true
+          print(f"P(pred) < P(true): P({pred_best_idx},{pred_row[1]}) < P({true_best_idx},{true_row[1]})")
+          final_updated_pred.remove(pred_row)  # Remove pred_row
+          final_updated_pred.append(true_row)  # Add true_row
+          to_remove = [PRED.loc[pred_row[1]][PHASE_STR],
+                                PRED.loc[pred_row[1]]['timestamp'],
+                                PRED.loc[pred_row[1]]['probability']]
+          to_append = [PRED.loc[true_row[1]][PHASE_STR], true_time_diff, 
+                       TRUE.loc[true_best_idx]['quality'],
+                       TRUE.loc[true_best_idx][PHASE_STR], true_best_idx,
+                       true_row[1], TRUE.loc[true_best_idx]['timestamp'],
+                       PRED.loc[true_row[1]]['timestamp']]
+          # remove predicted and add to FP
+          if pred_row[2] == pred_row[3] == PWAVE:
+            remove_entry_with_pred_idx(TP_PredP_part, pred_row[1])
+            FP_PredP_part.append(to_remove)
+          elif pred_row[2] == pred_row[3] == SWAVE:
+            remove_entry_with_pred_idx(TP_PredS_part, pred_row[1])
+            FP_PredS_part.append(to_remove)
+          elif pred_row[2] == PWAVE and pred_row[3] == SWAVE:
+            remove_entry_with_pred_idx(tP_pS_PredS_part, pred_row[1])
+            FP_PredS_part.append(to_remove)
+          elif pred_row[2] == SWAVE and pred_row[3] == PWAVE:
+            remove_entry_with_pred_idx(tS_pP_PredP_part, pred_row[1])
+            FP_PredP_part.append(to_remove)
+          # now add the true, IF NOT ALREADY IN THE PRED LIST
+          if true_row[2] == true_row[3] == PWAVE and not true_row in final_updated_pred:
+            # add true to TP_PredP
+            TP_PredP_part.append(to_append)
+          elif true_row[2] == true_row[3] == SWAVE and not true_row in final_updated_pred:
+            # add true to TP_PredS
+            TP_PredS_part.append(to_append)
+          # discard phase mismatch entry
+          elif true_row[2] == PWAVE and true_row[3] == SWAVE and not true_row in final_updated_pred:
+            # add true to tP_pS_TrueP
+            tP_pS_PredS_part.append(to_append)
+          elif true_row[2] == SWAVE and true_row[3] == PWAVE and not true_row in final_updated_pred:
+            # add true to tS_pP_TrueP
+            tS_pP_PredP_part.append(to_append)                                    
+        elif pred_row[5] > true_row[5]:  # pred_row has better probability -> substitute true with pred    
+          print(f"P pred > P true: P({pred_best_idx},{pred_row[1]}) > P({true_best_idx},{true_row[1]})")
+          final_updated_true.remove(true_row)  # Remove true_row                                 
+          final_updated_true.append(pred_row)  # Add pred_row
+          to_remove = [TRUE.loc[true_best_idx][PHASE_STR],
+                       TRUE.loc[true_best_idx]['timestamp'],
+                       TRUE.loc[true_best_idx]['quality']]
+          to_append = [PRED.loc[pred_row[1]][PHASE_STR], pred_time_diff,
+                       TRUE.loc[pred_best_idx]['quality'],
+                       TRUE.loc[pred_best_idx][PHASE_STR], pred_best_idx,
+                       pred_row[1], TRUE.loc[pred_best_idx]['timestamp'],
+                       PRED.loc[pred_row[1]]['timestamp']]
+          # remove true and add to FN
+          if true_row[2] == true_row[3] == PWAVE:
+            # add to False Negatives
+            remove_entry_with_true_idx(TP_TrueP_part, true_best_idx)
+            FN_TrueP_part.append(to_remove)
+          elif true_row[2] == true_row[3] == SWAVE:
+            # add to False Negatives
+            remove_entry_with_true_idx(TP_TrueS_part, true_best_idx)
+            FN_TrueS_part.append(to_remove)
+          elif true_row[2] == PWAVE and true_row[3] == SWAVE:
+            remove_entry_with_true_idx(tP_pS_TrueP_part, true_best_idx)
+            FN_TrueP_part.append(to_remove) 
+          elif true_row[2] == SWAVE and true_row[3] == PWAVE:
+            remove_entry_with_true_idx(tS_pP_TrueS_part, true_best_idx)
+            FN_TrueS_part.append(to_remove)
+          # then add the predicted IF NOT ALREADY IN THE TRUE LIST
+          if pred_row[2] == pred_row[3] == PWAVE and not pred_row in final_updated_true:
+            # add pred to TP_TrueP
+            TP_TrueP_part.append(to_append)
+          elif pred_row[2] == pred_row[3] == SWAVE and not pred_row in final_updated_true:
+            # add pred to TP_TrueS
+            TP_TrueS_part.append(to_append)
+          # discard phase mismatch entry
+          elif pred_row[2] == PWAVE and pred_row[3] == SWAVE and not pred_row in final_updated_true:
+            # add pred to tP_pS_TrueP 
+            tP_pS_TrueP_part.append(to_append)
+          elif true_row[2] == SWAVE and true_row[3] == PWAVE and not pred_row in final_updated_true:                                  
+            # add pred to tS_pP_TrueS
+            tS_pP_TrueS_part.append(to_append)
+
+  #final check
+  clean_pred = []
+  clean_true = []
+  # 1st CLEAN PHASE AFTER LOOP
+  # find the smallest time difference for each best_pred_idx with same best_true_idx
+  min_diff_dict_pred = {}
+  for t in final_updated_pred:
+    best_true_idx, best_pred_idx, phase_true, phase_pred, min_time_diff, prob_pred = t
+    if (best_true_idx not in min_diff_dict_pred) or (min_time_diff < min_diff_dict_pred[best_true_idx][4]):
+      min_diff_dict_pred[best_true_idx] = t
+  
+  # handle duplicates
+  for t in final_updated_pred:
+    best_true_idx, best_pred_idx, phase_true, phase_pred, min_time_diff, prob_pred = t
+    if t == min_diff_dict_pred[best_true_idx]:
+      clean_pred.append([best_true_idx, best_pred_idx, phase_true, phase_pred, min_time_diff, prob_pred])
+    else:
+      to_fp = [PRED.loc[best_pred_idx][PHASE_STR],
+               PRED.loc[best_pred_idx]['timestamp'],
+               PRED.loc[best_pred_idx]['probability']]
+      # discard same phase entry
+      if phase_true == phase_pred and phase_true == PWAVE:
+        remove_entry_with_pred_idx(TP_PredP_part, best_pred_idx)
+        # add to False Positives
+        FP_PredP_part.append(to_fp)
+      elif phase_true == phase_pred and phase_true == SWAVE:
+        remove_entry_with_pred_idx(TP_PredS_part, best_pred_idx)
+        # add to False Positives
+        FP_PredS_part.append(to_fp)
+      # discard phase mismatch entry
+      elif phase_true == PWAVE and phase_pred == SWAVE:
+        remove_entry_with_pred_idx(tP_pS_PredS_part, best_pred_idx)
+        FP_PredS_part.append(to_fp)
+      elif phase_true == SWAVE and phase_pred == PWAVE:
+        remove_entry_with_pred_idx(tS_pP_PredP_part, best_pred_idx)
+        FP_PredP_part.append(to_fp) 
+  
+  # 2nd CLEAN PHASE AFTER LOOP
+  # find the smallest time difference for each best_true_idx with same best_pred_idx
+  min_diff_dict_true = {}
+  for t in final_updated_true:
+    best_true_idx, best_pred_idx, phase_true, phase_pred, min_time_diff, prob_pred = t
+    if (best_pred_idx not in min_diff_dict_true) or (min_time_diff < min_diff_dict_true[best_pred_idx][4]):
+      min_diff_dict_true[best_pred_idx] = t
+
+  # handle duplicates
+  for t in final_updated_true:
+    best_true_idx, best_pred_idx, phase_true, phase_pred, min_time_diff, prob_pred = t
+    if t == min_diff_dict_true[best_pred_idx]:
+      clean_true.append([best_true_idx, best_pred_idx, phase_true, phase_pred, min_time_diff, prob_pred])
+    else:
+      to_fn = [TRUE.loc[best_true_idx][PHASE_STR],
+               TRUE.loc[best_true_idx]['timestamp'],
+               TRUE.loc[best_true_idx]['quality']]
+      # discard same phase entry
+      if phase_true == phase_pred == PWAVE:
+        remove_entry_with_true_idx(TP_TrueP_part, best_true_idx)
+        # add to False Negatives
+        FN_TrueP_part.append(to_fn)
+      elif phase_true == phase_pred == SWAVE:
+        remove_entry_with_true_idx(TP_TrueS_part, best_true_idx)
+        # add to False Negatives
+        FN_TrueS_part.append(to_fn)
+      # discard phase mismatch entry
+      elif phase_true == PWAVE and phase_pred == SWAVE:
+        remove_entry_with_true_idx(tP_pS_TrueP_part, best_true_idx)
+        FN_TrueP_part.append(to_fn)
+      elif phase_true == SWAVE and phase_pred == PWAVE:
+        remove_entry_with_true_idx(tS_pP_TrueS_part, best_true_idx)
+        FN_TrueS_part.append(to_fn)
+
+  # case: a pred pick was wrongly associated and put among false positives, 
+  # but it is still present in clean_true
+  missing_pred = find_unique(clean_true,clean_pred)
+  missing_true = find_unique(clean_pred,clean_true)
+  #print(missing_pred)
+  #print(missing_true)
+  if missing_pred:
+    for pick in missing_pred:
+      to_add = [pick[3], pick[4], TRUE.loc[pick[0]]['quality'], pick[2],
+                pick[0], pick[1], TRUE.loc[pick[0]]['timestamp'],
+                PRED.loc[pick[1]]['timestamp']]
+      if pick[2] == pick[3] == PWAVE:
+        TP_PredP_part.append(to_add)
+        # remove from FP if present
+        remove_in_fp_fn(FP_PredP_part, PRED.loc[pick[1]]['timestamp'])
+      if pick[2] == pick[3] == SWAVE:
+        TP_PredS_part.append(to_add)
+        # remove from FP if present
+        remove_in_fp_fn(FP_PredS_part, PRED.loc[pick[1]]['timestamp'])
+      if pick[2] == PWAVE and pick[3] == SWAVE:
+        tP_pS_PredS_part.append(to_add)
+        # remove from FP if present
+        remove_in_fp_fn(FP_PredS_part, PRED.loc[pick[1]]['timestamp'])
+      if pick[2] == SWAVE and pick[3] == PWAVE:
+        tS_pP_PredP_part.append(to_add)
+        # remove from FP if present
+        remove_in_fp_fn(FP_PredP_part, PRED.loc[pick[1]]['timestamp'])
+  elif missing_true:
+    for pick in missing_true:
+      to_add = [pick[3], pick[4], TRUE.loc[pick[0]]['quality'], pick[2],
+                pick[0],pick[1],TRUE.loc[pick[0]]['timestamp'],
+                PRED.loc[pick[1]]['timestamp']]
+      if pick[2] == pick[3] == PWAVE:
+        TP_TrueP_part.append(to_add)
+        # remove from FN if present
+        remove_in_fp_fn(FN_TrueP_part, TRUE.loc[pick[0]]['timestamp'])
+      if pick[2] == pick[3] == SWAVE:
+        TP_TrueS_part.append(to_add)
+        # remove from FN if present
+        remove_in_fp_fn(FN_TrueS_part, TRUE.loc[pick[0]]['timestamp'])
+      if pick[2] == PWAVE and pick[3] == SWAVE:
+        tP_pS_TrueP_part.append(to_add)
+        # remove from FN if present
+        remove_in_fp_fn(FN_TrueP_part, TRUE.loc[pick[0]]['timestamp'])
+      if pick[2] == SWAVE and pick[3] == PWAVE:
+        tS_pP_PredP_part.append(to_add)
+        # remove from FP if present
+        remove_in_fp_fn(FN_TrueS_part, TRUE.loc[pick[0]]['timestamp'])
+  exit()
+
 def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
              dataset_name : str, threshold : float, args : argparse.Namespace)\
       -> list[pd.DataFrame, list, list, list]:

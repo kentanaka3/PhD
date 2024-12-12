@@ -5,6 +5,7 @@ from numpy import nan as NaN
 from obspy import UTCDateTime
 from numpy import isnan as isNaN
 from datetime import timedelta as td
+from concurrent.futures import ThreadPoolExecutor
 
 from constants import *
 
@@ -121,7 +122,7 @@ def event_parser_pun(filename : Path, start : UTCDateTime = None,
       result[RMS_STR] = float(result[RMS_STR])
       result[ERH_STR] = float(result[ERH_STR])
       result[ERZ_STR] = float(result[ERZ_STR])
-      SOURCE.append([None, result[BEG_DATE_STR], result[LATITUDE_STR], 
+      SOURCE.append([None, result[BEG_DATE_STR], result[LATITUDE_STR],
                      result[LONGITUDE_STR], result[LOCAL_DEPTH_STR],
                      result[MAGNITUDE_STR], result[NO_STR], result[GAP_STR],
                      result[DMIN_STR], result[RMS_STR], result[ERH_STR],
@@ -284,7 +285,7 @@ def event_parser_(filename : Path, start : UTCDateTime = None,
     return event_parser_hpl(filename, start, end, stations)
   elif sfx == QML_EXT:
     return event_parser_qml(filename, start, end, stations)
-  print(ValueError(f"Unknown file extension: {sfx}"))
+  print(ValueError(f"WARNING: Unknown file extension: {sfx}"))
   return None
 
 def event_parser(filename : Path, start : UTCDateTime = None,
@@ -292,23 +293,33 @@ def event_parser(filename : Path, start : UTCDateTime = None,
                  stations : set[str] = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
   if filename.is_dir():
-    # TODO: Implement parallel processing
-    SOURCE = pd.DataFrame(columns=HEADER_SRC)
-    DETECT = pd.DataFrame(columns=HEADER_MANL)
-    for file in filename.iterdir():
+    def process_file(file):
       sfx = file.suffix
+      source, detect = None, None
       if sfx == PUN_EXT:
-        source, _ = event_parser_pun(file, start, end)
-        SOURCE = event_merger_l(SOURCE, source, FIND)
+        source, detect = event_parser_pun(file, start, end)
       elif sfx == DAT_EXT:
-        _, detect = event_parser_dat(file, start, end, stations) 
-        DETECT = pd.concat([DETECT, detect], ignore_index=True)
+        source, detect = event_parser_dat(file, start, end, stations)
       elif sfx == HPL_EXT:
         source, detect = event_parser_hpl(file, start, end, stations)
-        FIND = [TIMESTAMP_STR, LONGITUDE_STR, LATITUDE_STR, LOCAL_DEPTH_STR,
+      else:
+        print(ValueError(f"WARNING: Unknown file extension: {sfx}"))
+      return sfx, (source, detect)
+    with ThreadPoolExecutor() as executor:
+      results = list(executor.map(process_file, filename.iterdir()))
+    SOURCE = pd.DataFrame(columns=HEADER_SRC)
+    DETECT = pd.DataFrame(columns=HEADER_MANL)
+    FIND_SRC = [TIMESTAMP_STR, LONGITUDE_STR, LATITUDE_STR, LOCAL_DEPTH_STR,
                 MAGNITUDE_STR, NO_STR]
-        SOURCE = event_merger_l(source, SOURCE, FIND)
-        DETECT = pd.merge(DETECT, detect, on=HEADER_MANL, how='inner')
-    return SOURCE, DETECT
+    FIND_DTC = [TIMESTAMP_STR, PROBABILITY_STR, PHASE_STR, STATION_STR]
+    for sfx, (source, detect) in results:
+      if sfx == PUN_EXT: SOURCE = event_merger_l(SOURCE, source, FIND_SRC)
+      elif sfx == DAT_EXT: DETECT = event_merger_l(DETECT, detect, FIND_DTC)
+      elif sfx == HPL_EXT:
+        SOURCE = event_merger_l(SOURCE, source, FIND_SRC)
+        DETECT = event_merger_l(DETECT, detect, FIND_DTC)
   else:
-    return event_parser_(filename, start, end, stations)
+    SOURCE, DETECT = event_parser_(filename, start, end, stations)
+  if DETECT is not None and not DETECT.empty:
+    SOURCE = SOURCE[SOURCE[ID_STR].isin(DETECT[ID_STR].unique())]
+  return SOURCE, DETECT

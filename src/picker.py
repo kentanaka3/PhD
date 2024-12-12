@@ -17,6 +17,7 @@ import numpy as np
 import numba as nb
 import pandas as pd
 from mpi4py import MPI
+from threading import Thread
 import matplotlib.pyplot as plt
 
 # ObsPy
@@ -36,7 +37,11 @@ import initializer as ini
 # TODO: Get Vel Model
 # TODO: Discuss constants.NORM = "peak"
 
-@nb.njit(nogil=True)
+MPI_RANK = 0
+MPI_SIZE = 1
+MPI_COMM = None
+
+@nb.njit(nogil=True, parallel=True)
 def filter_data_(data : np.array) -> bool:
   for d in data:
     if np.isnan(d) or np.isinf(d): return True
@@ -183,13 +188,13 @@ def classify_stream(clf_files : tuple[list], model : sbm.base.SeisBenchModel,
   DATA_PATH = Path(args.directory).parent
   for categories, trace_files in clf_files:
     output = model.classify(read_traces(trace_files, args),
-                      batch_size=args.batch,
-                      P_threshold=args.pwave,
-                      S_threshold=args.swave).picks
+                            batch_size=args.batch, P_threshold=args.pwave,
+                            S_threshold=args.swave).picks
     CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
                     ("D_" if args.denoiser else EMPTY_STR) + \
                     UNDERSCORE_STR.join([*categories, *key]) + \
                     PICKLE_EXT)
+    CLF_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(CLF_FILE, 'wb') as fp: pickle.dump(output, fp)
 
 def get_model(model_name : str, dataset_name : str, silent : bool = False) \
@@ -295,11 +300,11 @@ def main(args : argparse.Namespace) -> None:
   else: # Test
     if args.verbose: print("Testing the Model")
     if args.timing:
+      # TODO: Fix timing analysis
       TIMING = np.zeros(len(WAVEFORMS_DATA.groupby(args.groups)))
       i = 0
-    for key in MODELS.keys():
+    for key, model in MODELS.items():
       key : list[str] = list(key)
-      model = MODELS[(*key,)]
       if model is None: continue
       if args.verbose:
         print("Testing model: {}, with preloaded weight: {}".format(*key))
@@ -314,6 +319,36 @@ def main(args : argparse.Namespace) -> None:
           clf_found.append((categories, trace_files))
         clf_files.append((categories, trace_files))
       if not clf_files: continue
+
+      """
+      # TODO: Spawn two threads and synchronize them
+      def classify_and_plot():
+        classify_stream(clf_files, model, key, args)
+        for categories, trace_files in clf_files:
+          if args.verbose:
+        print("Classification results for model: {}, with preloaded weight: "
+          "{}, categorized by {}".format(*key, categories))
+        CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
+                ("D_" if args.denoiser else EMPTY_STR) + \
+                UNDERSCORE_STR.join([*categories, *key]) + \
+                PICKLE_EXT)
+        with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)
+        print(output)
+          if args.interactive:
+        stream = read_traces(trace_files, args)
+        interactive_plot(stream, output, *key)
+
+      thread1 = Thread(target=classify_and_plot)
+      thread2 = Thread(target=classify_and_plot)
+
+      thread1.start()
+      thread2.start()
+
+      thread1.join()
+      thread2.join()
+      """
+
+      # P1
       if args.timing: start_time = MPI.Wtime()
       classify_stream(clf_files, model, key, args)
       if args.timing:
@@ -321,6 +356,7 @@ def main(args : argparse.Namespace) -> None:
         i += 1
       # Clear the GPU memory (nowait)
       torch.cuda.empty_cache()
+      # P2
       for categories, trace_files in clf_found:
         if args.verbose:
           print("Classification results for model: {}, with preloaded weight: "
@@ -334,6 +370,7 @@ def main(args : argparse.Namespace) -> None:
         if args.interactive:
           stream = read_traces(trace_files, args)
           interactive_plot(stream, output, *key)
+      # synchronize
       for categories, trace_files in clf_files:
         if args.verbose:
           print("Classification results for model: {}, with preloaded weight: "
