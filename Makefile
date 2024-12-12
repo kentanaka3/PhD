@@ -30,7 +30,7 @@ picker:
 	bash Analyze.sh 1 "1 2 4" AUTOMATER src/picker.py -v --force
 
 analyzer:
-	bash Analyze.sh 1 1 AUTOMATER src/analyzer.py -v --file ./data/manual/RSFVG-2023.dat
+	bash Analyze.sh 1 1 AUTOMATER src/analyzer.py -v --file ./data/manual/RSFVG-2023.dat -D 230601 240630
 
 associator:
 	bash Analyze.sh 1 "1 2 4" AUTOMATER src/catalogger.py -v --force

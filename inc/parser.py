@@ -37,8 +37,8 @@ RECORD_EXTRACTOR_DAT = \
              fr"(?P<{P_TYPE_STR}>[ei\s]{PWAVE}[cd\s])"              # P Type
              fr"(?P<{P_WEIGHT_STR}>[0-4])1"                         # P Weight
              fr"(?P<{BEG_DATE_STR}>\d{{10}})\s"                     # Date
-             fr"(?P<{P_TIME_STR}>\d{{4}})\s+"                       # P Time
-             fr"((?P<{S_TIME_STR}>\d{{4}}|\d{{3}})"                 # S Time
+             fr"(?P<{P_TIME_STR}>[\s\d]\d{{3}}).+"                  # P Time
+             fr"((?P<{S_TIME_STR}>[\s\d]\d{{3}})"                   # S Time
              fr"(?P<{S_TYPE_STR}>[ei\s]{SWAVE})\s"                  # S Type
              fr"(?P<{S_WEIGHT_STR}>[0-4]))?")                       # S Weight
 EVENT_EXTRACTOR_DAT = re.compile(r"^1(\s+D)*\s*$")                  # Event
