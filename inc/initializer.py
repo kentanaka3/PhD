@@ -171,6 +171,8 @@ def parse_arguments():
       if key in vars(args) and vars(args)[key] is None:
         setattr(args, key, value)
     # TODO: Fix special cases
+
+  
   return args
 
 def dump_args(args : argparse.Namespace,
@@ -311,9 +313,6 @@ def data_header(args : argparse.Namespace,
   RESULTS.set_index(FILENAME_STR, inplace=True)
   return RESULTS
 
-def classified_header(args : argparse.Namespace) -> pd.DataFrame:
-  return data_header(args, CLF_STR)
-
 def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
   """
   input  :
@@ -338,20 +337,19 @@ def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
   CLF_PATH = Path(DATA_PATH, CLF_STR)
   if not CLF_PATH.exists(): raise FileNotFoundError
   DATA = []
-  HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR,
-            PHASE_STR, PROBABILITY_STR]
   z = [round(t, 2) for t in np.linspace(0.2, 1.0, 9)]
   for (model, weight, date), dataframe in \
-    classified_header(args).groupby([MODEL_STR, WEIGHT_STR, BEG_DATE_STR]):
+    data_header(args, CLF_STR).groupby([MODEL_STR, WEIGHT_STR, BEG_DATE_STR]):
     if args.verbose: HIST = list()
     for filepath, (_, _, _, network, station) in dataframe.iterrows():
-      PICKS = [[model, weight, p.peak_time.__str__(), network, station,
-                p.phase, p.peak_value] for p in data_loader(Path(filepath))]
-      DATA += PICKS
-      PICKS = pd.DataFrame(PICKS, columns=HEADER)
+      PICK = [[model, weight, None, p.peak_time.__str__(), p.peak_value,
+               p.phase, network, station] for p in data_loader(Path(filepath))]
+      DATA += PICK
+      PICK = pd.DataFrame(PICK, columns=HEADER_PRED)
       if args.verbose:
-        w = reversed([len(PICKS[(PICKS[PROBABILITY_STR] >= a) &
-                                (PICKS[PROBABILITY_STR] < b)].index)
+        # TODO: Use between
+        w = reversed(
+          [len(PICK[PICK[PROBABILITY_STR].between(a, b, inclusive='left')].index)
                       for a, b in zip(z[:-1], z[1:])])
         HIST.append([PERIOD_STR.join([network, station]), *w])
     if args.verbose:
@@ -367,13 +365,10 @@ def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
       plt.tight_layout()
       plt.savefig(IMG_FILE)
       plt.close()
-  DATA = pd.DataFrame(DATA, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)\
-           .reset_index(drop=True)
+  DATA = pd.DataFrame(DATA, columns=HEADER_PRED)\
+           .sort_values(SORT_HIERARCHY_PRED).reset_index(drop=True)
   DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].apply(lambda x : UTCDateTime(x))
   return DATA
-
-def associated_header(args : argparse.Namespace) -> pd.DataFrame:
-  return data_header(args, AST_STR)
 
 def associated_loader(args : argparse.Namespace) -> pd.DataFrame:
   """
@@ -401,11 +396,12 @@ def associated_loader(args : argparse.Namespace) -> pd.DataFrame:
   DATA = pd.DataFrame(columns=HEADER_PRED)
   z = [round(t, 2) for t in np.linspace(0.2, 1.0, 9)]
   for (model, weight, date), dataframe in \
-    associated_header(args).groupby([MODEL_STR, WEIGHT_STR, BEG_DATE_STR]):
+    data_header(args, AST_STR).groupby([MODEL_STR, WEIGHT_STR, BEG_DATE_STR]):
     if args.verbose: HIST = list()
     for filepath, (_, _, _, network, station) in dataframe.iterrows():
       PICKS = pd.DataFrame(data_loader(Path(filepath)), columns=HEADER_PRED)
-      DATA = pd.concat([DATA, PICKS], ignore_index=True)
+      DATA = pd.concat([DATA, PICKS],
+                       ignore_index=True) if not DATA.empty else PICKS
       if args.verbose:
         w = reversed([len(PICKS[(PICKS[PROBABILITY_STR] >= a) &
                                 (PICKS[PROBABILITY_STR] < b)].index)

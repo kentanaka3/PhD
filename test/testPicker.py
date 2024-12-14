@@ -93,15 +93,45 @@ class TestModel(unittest.TestCase):
   def test_classification(self):
     args = ini.parse_arguments()
     MODELS, WAVEFORMS_DATA = set_up(args)
-    for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
-      classify_stream(categories, trace_files, MODELS, args)
+    for key, model in MODELS.items():
+      key : list[str] = list(key)
+      if model is None: continue
+      if args.verbose:
+        print("Testing model: {}, with preloaded weight: {}".format(*key))
+      clf_files = []
+      clf_found = []
+      for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
+        categories = [str(c) for c in categories]
+        CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
+                        ("D_" if args.denoiser else EMPTY_STR) + \
+                        UNDERSCORE_STR.join([*categories, *key]) + PICKLE_EXT)
+        if not args.force and CLF_FILE.exists():
+          clf_found.append((categories, trace_files))
+        clf_files.append((categories, trace_files))
+      if not clf_files: continue
+      classify_stream(clf_files, model, key, args)
 
   @unittest.mock.patch("sys.argv", ["picker.py", "-v", "-d", str(TEST_PATH),
                                     "--denoiser"])
   def test_denoised_classification(self):
     args = ini.parse_arguments()
     MODELS, WAVEFORMS_DATA = set_up(args)
-    for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
-      classify_stream(categories, trace_files, MODELS, args)
+    for key, model in MODELS.items():
+      key : list[str] = list(key)
+      if model is None: continue
+      if args.verbose:
+        print("Testing model: {}, with preloaded weight: {}".format(*key))
+      clf_files = []
+      clf_found = []
+      for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
+        categories = [str(c) for c in categories]
+        CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
+                        ("D_" if args.denoiser else EMPTY_STR) + \
+                        UNDERSCORE_STR.join([*categories, *key]) + PICKLE_EXT)
+        if not args.force and CLF_FILE.exists():
+          clf_found.append((categories, trace_files))
+        clf_files.append((categories, trace_files))
+      if not clf_files: continue
+      classify_stream(clf_files, model, key, args)
 
 if __name__ == "__main__": unittest.main()

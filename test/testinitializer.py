@@ -836,7 +836,7 @@ class TestClassifications(unittest.TestCase):
                                     "-v"])
   def test_default(self):
     args = ini.parse_arguments()
-    CLASSIFICATIONS_DATA = ini.classified_header(args).values.tolist()
+    CLASSIFICATIONS_DATA = ini.data_header(args, CLF_STR).values.tolist()
     EXPECTED = [[EQTRANSFORMER_STR, INSTANCE_STR, "230601", "MN", "TRI"],
                 [EQTRANSFORMER_STR, INSTANCE_STR, "230601", "OX", "BAD"],
                 [EQTRANSFORMER_STR, INSTANCE_STR, "230601", "OX", "CAE"],
@@ -963,7 +963,7 @@ class TestClassifications(unittest.TestCase):
                                     "-N", "OX", "-v"])
   def test_network(self):
     args = ini.parse_arguments()
-    CLASSIFICATIONS_DATA = ini.classified_header(args).values.tolist()
+    CLASSIFICATIONS_DATA = ini.data_header(args, CLF_STR).values.tolist()
     EXPECTED = [[EQTRANSFORMER_STR, INSTANCE_STR, "230601", "OX", "BAD"],
                 [EQTRANSFORMER_STR, INSTANCE_STR, "230601", "OX", "CAE"],
                 [EQTRANSFORMER_STR, INSTANCE_STR, "230602", "OX", "BAD"],
@@ -1034,7 +1034,7 @@ class TestClassifications(unittest.TestCase):
                                     "-N", "OX", "ST", "-v"])
   def test_networks(self):
     args = ini.parse_arguments()
-    CLASSIFICATIONS_DATA = ini.classified_header(args).values.tolist()
+    CLASSIFICATIONS_DATA = ini.data_header(args, CLF_STR).values.tolist()
     EXPECTED = [[EQTRANSFORMER_STR, INSTANCE_STR, "230601", "OX", "BAD"],
                 [EQTRANSFORMER_STR, INSTANCE_STR, "230601", "OX", "CAE"],
                 [EQTRANSFORMER_STR, INSTANCE_STR, "230601", "ST", "VARA"],
@@ -1129,7 +1129,7 @@ class TestClassifications(unittest.TestCase):
                                     "-S", "VARA", "-v"])
   def test_station(self):
     args = ini.parse_arguments()
-    CLASSIFICATIONS_DATA = ini.classified_header(args).values.tolist()
+    CLASSIFICATIONS_DATA = ini.data_header(args, CLF_STR).values.tolist()
     EXPECTED = [[EQTRANSFORMER_STR, INSTANCE_STR, "230601", "ST", "VARA"],
                 [EQTRANSFORMER_STR, INSTANCE_STR, "230603", "ST", "VARA"],
                 [EQTRANSFORMER_STR, INSTANCE_STR, "230604", "ST", "VARA"],
@@ -1160,7 +1160,7 @@ class TestClassifications(unittest.TestCase):
                                     "-S", "VARA", "CAE", "-v"])
   def test_stations(self):
     args = ini.parse_arguments()
-    CLASSIFICATIONS_DATA = ini.classified_header(args).values.tolist()
+    CLASSIFICATIONS_DATA = ini.data_header(args, CLF_STR).values.tolist()
     EXPECTED = [[EQTRANSFORMER_STR, INSTANCE_STR, "230601", "OX", "CAE"],
                 [EQTRANSFORMER_STR, INSTANCE_STR, "230601", "ST", "VARA"],
                 [EQTRANSFORMER_STR, INSTANCE_STR, "230602", "OX", "CAE"],
@@ -1223,7 +1223,7 @@ class TestClassifications(unittest.TestCase):
                                     "-S", "VARA", "EG", "-v"])
   def test_semi_station(self):
     args = ini.parse_arguments()
-    CLASSIFICATIONS_DATA = ini.classified_header(args).values.tolist()
+    CLASSIFICATIONS_DATA = ini.data_header(args, CLF_STR).values.tolist()
     EXPECTED = [[EQTRANSFORMER_STR, INSTANCE_STR, "230601", "ST", "VARA"],
                 [EQTRANSFORMER_STR, INSTANCE_STR, "230603", "ST", "VARA"],
                 [EQTRANSFORMER_STR, INSTANCE_STR, "230604", "ST", "VARA"],
@@ -1254,7 +1254,7 @@ class TestClassifications(unittest.TestCase):
                                     "-M", PHASENET_STR, "-v"])
   def test_model(self):
     args = ini.parse_arguments()
-    CLASSIFICATIONS_DATA = ini.classified_header(args).values.tolist()
+    CLASSIFICATIONS_DATA = ini.data_header(args, CLF_STR).values.tolist()
     EXPECTED = [[PHASENET_STR, INSTANCE_STR, "230601", "MN", "TRI"],
                 [PHASENET_STR, INSTANCE_STR, "230601", "OX", "BAD"],
                 [PHASENET_STR, INSTANCE_STR, "230601", "OX", "CAE"],
@@ -1322,7 +1322,7 @@ class TestClassifications(unittest.TestCase):
                                     "-v"])
   def test_semi_model(self):
     args = ini.parse_arguments()
-    CLASSIFICATIONS_DATA = ini.classified_header(args).values.tolist()
+    CLASSIFICATIONS_DATA = ini.data_header(args, CLF_STR).values.tolist()
     EXPECTED = [[PHASENET_STR, INSTANCE_STR, "230601", "MN", "TRI"],
                 [PHASENET_STR, INSTANCE_STR, "230601", "OX", "BAD"],
                 [PHASENET_STR, INSTANCE_STR, "230601", "OX", "CAE"],
@@ -1389,7 +1389,7 @@ class TestClassifications(unittest.TestCase):
                                     "-W", ORIGINAL_STR, "-v"])
   def test_weight(self):
     args = ini.parse_arguments()
-    CLASSIFICATIONS_DATA = ini.classified_header(args).values.tolist()
+    CLASSIFICATIONS_DATA = ini.data_header(args, CLF_STR).values.tolist()
     EXPECTED = [[EQTRANSFORMER_STR, ORIGINAL_STR, "230601", "MN", "TRI"],
                 [EQTRANSFORMER_STR, ORIGINAL_STR, "230601", "OX", "BAD"],
                 [EQTRANSFORMER_STR, ORIGINAL_STR, "230601", "OX", "CAE"],
@@ -1426,7 +1426,7 @@ class TestClassifications(unittest.TestCase):
                                     "-W", ORIGINAL_STR, INSTANCE_STR, "-v"])
   def test_weights(self):
     args = ini.parse_arguments()
-    CLASSIFICATIONS_DATA = ini.classified_header(args).values.tolist()
+    CLASSIFICATIONS_DATA = ini.data_header(args, CLF_STR).values.tolist()
     EXPECTED = [[EQTRANSFORMER_STR, INSTANCE_STR, "230601", "MN", "TRI"],
                 [EQTRANSFORMER_STR, INSTANCE_STR, "230601", "OX", "BAD"],
                 [EQTRANSFORMER_STR, INSTANCE_STR, "230601", "OX", "CAE"],

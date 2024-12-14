@@ -38,7 +38,7 @@ RECORD_EXTRACTOR_DAT = \
              fr"(?P<{P_TYPE_STR}>[ei\s]{PWAVE}[cd\s])"              # P Type
              fr"(?P<{P_WEIGHT_STR}>[0-4])1"                         # P Weight
              fr"(?P<{BEG_DATE_STR}>\d{{10}})\s"                     # Date
-             fr"(?P<{P_TIME_STR}>[\s\d]\d{{3}}).+"                  # P Time
+             fr"(?P<{P_TIME_STR}>[\s\d]\d{{3}}).{{8}}"                # P Time
              fr"((?P<{S_TIME_STR}>[\s\d]\d{{3}})"                   # S Time
              fr"(?P<{S_TYPE_STR}>[ei\s]{SWAVE})\s"                  # S Type
              fr"(?P<{S_WEIGHT_STR}>[0-4]))?")                       # S Weight
@@ -68,7 +68,7 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
                                                 PERIOD_STR + \
                                                 result[P_TIME_STR][2:]))
       DATA.append([None, result[P_TIME_STR], result[P_WEIGHT_STR], PWAVE,
-                   result[STATION_STR]])
+                   None, result[STATION_STR]])
       if result[S_TYPE_STR]:
         result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
         result[S_TIME_STR] = \
@@ -76,7 +76,7 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
                                                   PERIOD_STR + \
                                                   result[S_TIME_STR][2:]))
         DATA.append([None, result[S_TIME_STR], result[S_WEIGHT_STR], SWAVE,
-                     result[STATION_STR]])
+                     None, result[STATION_STR]])
       continue
     print("WARNING: (DAT) Unable to parse line:", line)
   return None, pd.DataFrame(DATA, columns=HEADER_MANL)
@@ -245,13 +245,13 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
                               "%y%m%d%H%M")
       DETECT.append([result[EVENT_STR],
                      result[P_TIME_STR] + result[SECONDS_STR],
-                     result[P_WEIGHT_STR], PWAVE, result[STATION_STR]])
+                     result[P_WEIGHT_STR], PWAVE, None, result[STATION_STR]])
       if result[S_TYPE_STR]:
         result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
         result[S_TIME_STR] = td(seconds=float(result[S_TIME_STR]))
         DETECT.append([result[EVENT_STR],
                        result[P_TIME_STR] + result[S_TIME_STR],
-                       result[S_WEIGHT_STR], SWAVE, result[STATION_STR]])
+                       result[S_WEIGHT_STR], SWAVE, None, result[STATION_STR]])
       continue
     match = NOTES_EXTRACTOR_HPL.match(line)
     if match:
@@ -318,8 +318,8 @@ def event_parser(filename : Path, start : UTCDateTime = None,
       elif sfx == HPL_EXT:
         SOURCE = event_merger_l(SOURCE, source, FIND_SRC)
         DETECT = event_merger_l(DETECT, detect, FIND_DTC)
+    if DETECT is not None and not DETECT.empty:
+      SOURCE = SOURCE[SOURCE[ID_STR].isin(DETECT[ID_STR].unique())]
   else:
     SOURCE, DETECT = event_parser_(filename, start, end, stations)
-  if DETECT is not None and not DETECT.empty:
-    SOURCE = SOURCE[SOURCE[ID_STR].isin(DETECT[ID_STR].unique())]
   return SOURCE, DETECT

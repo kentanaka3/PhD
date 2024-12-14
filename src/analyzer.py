@@ -636,13 +636,15 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
       p = PRED.iloc[list(G.neighbors(node))[0] - N]
       CFN_MTX.loc[t[PHASE_STR], p[PHASE_STR]] += 1
       if t[PHASE_STR] == p[PHASE_STR]:
-        TP.add((model_name, dataset_name, t[STATION_STR], t[PHASE_STR],
+        TP.add((model_name, dataset_name, t[ID_STR],
                 (str(t[TIMESTAMP_STR]), str(p[TIMESTAMP_STR])),
-                (t[PROBABILITY_STR], p[PROBABILITY_STR])))
+                (t[PROBABILITY_STR], p[PROBABILITY_STR]), t[PHASE_STR],
+                p[NETWORK_STR], t[STATION_STR]))
     else:
       G.nodes[node][STATUS_STR] = FN_STR
-      FN.append([model_name, dataset_name, t[STATION_STR], t[PHASE_STR],
-                 threshold, t[TIMESTAMP_STR].__str__(), t[PROBABILITY_STR]])
+      FN.append([model_name, dataset_name, t[ID_STR] + threshold,
+                 t[TIMESTAMP_STR].__str__(), t[PROBABILITY_STR], t[PHASE_STR],
+                 None, t[STATION_STR]])
       CFN_MTX.loc[t[PHASE_STR], NONE_STR] += 1
 
   # We traverse the PRED nodes of the graph to update the status and append
@@ -651,8 +653,9 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
     if not nx.degree(G, node):
       G.nodes[node][STATUS_STR] = FP_STR
       p = PRED.iloc[node - N]
-      FP.add((model_name, dataset_name, p[STATION_STR], p[PHASE_STR],
-              p[TIMESTAMP_STR].__str__(), p[PROBABILITY_STR]))
+      FP.add((model_name, dataset_name, None, p[TIMESTAMP_STR].__str__(),
+              p[PROBABILITY_STR], p[PHASE_STR], p[NETWORK_STR],
+              p[STATION_STR]))
       CFN_MTX.loc[NONE_STR, p[PHASE_STR]] += 1
   if args.interactive: plot_timeline(G, pos, N, model_name, dataset_name)
   return CFN_MTX, TP, FN, FP
@@ -723,20 +726,16 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
                     PNG_EXT)
     plt.savefig(IMG_FILE)
     plt.close()
-  HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, PHASE_STR, TIMESTAMP_STR,
-            PROBABILITY_STR]
   # True Positives
-  TP = pd.DataFrame(TP, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)
-  HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, PHASE_STR, THRESHOLD_STR,
-            TIMESTAMP_STR, PROBABILITY_STR]
+  TP = pd.DataFrame(TP, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   # False Negatives
-  FN = pd.DataFrame(FN, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)
+  FN = pd.DataFrame(FN, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   FN_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  FN_STR + CSV_EXT)
   FN.to_csv(FN_FILE, index=False)
   # False Negative Pie plot
   for (model, weight, phase, threshold), dataframe in \
-    FN.groupby([MODEL_STR, WEIGHT_STR, PHASE_STR, THRESHOLD_STR]):
+    FN.groupby([MODEL_STR, WEIGHT_STR, PHASE_STR, ID_STR]):
     fig, ax = plt.subplots(figsize=(5, 5))
     dataframe[PROBABILITY_STR].value_counts().plot(kind='pie', ax=ax,
                                                    autopct='%1.1f%%')
@@ -745,11 +744,8 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
                                          str(threshold)]) + PNG_EXT)
     plt.savefig(IMG_FILE)
     plt.close()
-
-  HEADER = [MODEL_STR, WEIGHT_STR, STATION_STR, PHASE_STR, TIMESTAMP_STR,
-            PROBABILITY_STR]
   # False Positives
-  FP = pd.DataFrame(FP, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)
+  FP = pd.DataFrame(FP, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   FP_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  FP_STR + CSV_EXT)
   FP.to_csv(FP_FILE, index=False)
@@ -900,9 +896,10 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
     end = start + ONE_DAY
     station = dataframe_d[STATION_STR].unique().tolist()
     if SOURCE is not None:
-      source = SOURCE[(SOURCE[TIMESTAMP_STR].between(start, end,
-                                                     inclusive='left'))]
-      if not source.empty: TRUE_S = pd.concat([TRUE_S, source])
+      source = SOURCE[SOURCE[TIMESTAMP_STR].between(start, end,
+                                                    inclusive='left')]
+      if not source.empty:
+        TRUE_S = pd.concat([TRUE_S, source]) if not TRUE_S.empty else source
     TRUE_D = pd.concat([TRUE_D, DETECT[
       (DETECT[TIMESTAMP_STR].between(start, end, inclusive='left')) &
       (DETECT[STATION_STR].isin(station))]])
@@ -993,7 +990,8 @@ def main(args : argparse.Namespace):
     TP.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                    TP_STR + CSV_EXT), index=False)
   time_displacement(copy.deepcopy(TP), args)
-  #PRED = ini.associated_loader(args)
-  #print(PRED)
+  PRED = ini.associated_loader(args)
+  print(TRUE_D)
+  print(PRED)
 
 if __name__ == "__main__": main(ini.parse_arguments())

@@ -24,6 +24,10 @@ from gamma.utils import association, estimate_eps
 from constants import *
 import initializer as ini
 
+MPI_RANK = 0
+MPI_SIZE = 1
+MPI_COMM = None
+
 def station_graph(inventory : obspy.Inventory) -> None:
   x = [station.longitude for network in inventory for station in network]
   y = [station.latitude for network in inventory for station in network]
@@ -157,6 +161,22 @@ class AssociateConfig:
     self.dbscan_eps = estimate_eps(self.station, self.vel[PWAVE])
     return
 
+def dates2associate(args : argparse.Namespace) -> tuple:
+  global MPI_RANK, MPI_SIZE, MPI_COMM
+  start, end = args.dates
+  if MPI_SIZE == 1: return start, end
+  end += ONE_DAY
+  DAYS = td(seconds=end - start).days
+  N = td(days=(DAYS // MPI_SIZE))
+  R = td(days=(DAYS % MPI_SIZE))
+  if MPI_RANK < R.days:
+    N += ONE_DAY
+    R = td(0)
+  start += N * MPI_RANK + R
+  end = start + N - ONE_DAY
+  if args.verbose: print(f"Rank {MPI_RANK}: {start} - {end}")
+  return start, end
+
 def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
                      args : argparse.Namespace) -> None:
   if args.verbose: print("Associating events...")
@@ -164,11 +184,11 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
   PRED.rename(columns={PHASE_STR : TYPE_STR}, inplace=True)
   PRED[TIMESTAMP_STR] = PRED[TIMESTAMP_STR].apply(lambda x: x.datetime)
   z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
-  start, end = args.dates
+  start, end = dates2associate(args)
   x = [start.datetime]
   while x[-1] <= end.datetime: x.append(x[-1] + ONE_DAY)
-  DATAFRAME = []
-  COLLECTION = set()
+  SOURCE = []
+  DETECT = pd.DataFrame(columns=HEADER_PRED)
   for (model, dataset), PRE in PRED.groupby([MODEL_STR, WEIGHT_STR]):
     for start, end in zip(x[:-1], x[1:]):
       PR = PRE[PRE[TIMESTAMP_STR].between(start, end, inclusive='left')]
@@ -180,42 +200,29 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
                                           config=config.__repr__(),
                                           method=config.method)
         if not (len(catalog) or len(assignment)): continue
-        for event in catalog:
-          PICKS = pd.DataFrame([PR.loc[row] for row, iden, _ in assignment
-                                if iden == event["event_index"]])
-          PICKS.drop([MODEL_STR, WEIGHT_STR], axis=1, inplace=True)
-          event['time'] = dt.fromisoformat(event['time'])
-          PICKS[TIMESTAMP_STR] = PICKS[TIMESTAMP_STR].apply(lambda x:
-                                   (x - event['time']).total_seconds())
-          cols = list(PICKS.columns)
-          a, b = cols.index(ID_STR), cols.index(TYPE_STR)
-          cols[b], cols[a] = cols[a], cols[b]
-          DATA.append([model, dataset, threshold, event['time'],
-                       event[X_COORD_STR], event[Y_COORD_STR],
-                       event[Z_COORD_STR], event[MAGNITUDE_STR],
-                       PICKS[cols].values.tolist()])
-      DATAFRAME.extend(DATA)
+        for i, event in enumerate(catalog):
+          PICKS = pd.DataFrame(
+            [PR.loc[row] for row, idx, _ in assignment
+             if idx == event["event_index"]]).reset_index(drop=True)
+          PICKS[ID_STR] = i + threshold
+          PICKS.rename(columns={TYPE_STR : PHASE_STR}, inplace=True)
+          DETECT = pd.concat([DETECT, PICKS], ignore_index=True)
+          DATA.append([model, dataset, i + threshold,
+                       dt.fromisoformat(event['time']), event[X_COORD_STR],
+                       event[Y_COORD_STR], event[Z_COORD_STR],
+                       event[MAGNITUDE_STR], *([None] * 7), AST_STR])
       if not len(DATA): continue
-      model, weight, _, beg_date, _, _, _, _, groups  = DATA[0]
-      COLLECTION.update({(model, weight, beg_date + td(seconds=a), b, c, d, e)
-                         for a, b, c, _, e, d in groups})
-  HEADER = [MODEL_STR, WEIGHT_STR, THRESHOLD_STR, TIMESTAMP_STR,
-            X_COORD_STR, Y_COORD_STR, Z_COORD_STR, MAGNITUDE_STR, GROUPS_STR]
-  DATAFRAME = pd.DataFrame(DATAFRAME, columns=HEADER)
+      SOURCE.extend(DATA)
+  SOURCE = pd.DataFrame(SOURCE, columns=HEADER_ASCT)
   FILEPATH = Path(DATA_PATH, AST_STR + CSV_EXT)
-  DATAFRAME.to_csv(FILEPATH, index=False)
-  HEADER = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR,
-            PHASE_STR, PROBABILITY_STR]
-  COLLECTION = pd.DataFrame(list(COLLECTION), columns=HEADER)
-  COLLECTION.sort_values(SORT_HIERARCHY_PRED, inplace=True)
-  COLLECTION = COLLECTION.reset_index(drop=True)
-  COLLECTION.to_csv(Path(DATA_PATH, ("D" if args.denoiser else EMPTY_STR) +
-                         ASCT_STR + CSV_EXT), index=False)
-  for (model, weight, network, station), dataframe in \
-    COLLECTION.groupby([MODEL_STR, WEIGHT_STR, NETWORK_STR, STATION_STR]):
+  SOURCE.to_csv(FILEPATH, index=False)
+  DETECT.sort_values(SORT_HIERARCHY_PRED, inplace=True)
+  DETECT.to_csv(Path(DATA_PATH, ("D" if args.denoiser else EMPTY_STR) +
+                     ASCT_STR + CSV_EXT), index=False)
+  for (model, weight, network, station), df in \
+    DETECT.groupby([MODEL_STR, WEIGHT_STR, NETWORK_STR, STATION_STR]):
     for start, end in zip(x[:-1], x[1:]):
-      df = dataframe[dataframe[TIMESTAMP_STR].between(start, end,
-                                                      inclusive='left')]
+      df = df[df[TIMESTAMP_STR].between(start, end, inclusive='left')]
       if df.empty: continue
       start = start.strftime("%y%m%d")
       FILEPATH = Path(DATA_PATH, AST_STR, start, network, station,
@@ -224,11 +231,34 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
                                            weight]) + CSV_EXT)
       FILEPATH.parent.mkdir(parents=True, exist_ok=True)
       df.to_csv(FILEPATH, index=False)
-  return DATAFRAME, COLLECTION
+  return SOURCE, DETECT
 
-def main(args : argparse.Namespace) -> None:
+def set_up(args : argparse.Namespace) -> AssociateConfig:
+  """
+    Set up the environment for the associator pipeline based on the available
+    computational resources.
+
+  input:
+    - args    (argparse.Namespace) : command line arguments
+
+  output:
+    - CONFIG  (AssociateConfig) : configuration object for the associator
+
+  errors:
+    - FileNotFoundError : if the station file does not exist
+
+  notes:
+
+  """
   global DATA_PATH
   DATA_PATH = Path(args.directory).parent
+  # global MPI_SIZE, MPI_RANK, MPI_COMM
+  # MPI_COMM = MPI.COMM_WORLD
+  # MPI_SIZE = MPI_COMM.Get_size()
+  # MPI_RANK = MPI_COMM.Get_rank()
+  # CONFIG = None
+  # if MPI_RANK == 0:
+  # TODO: Implement the dask client method
   WAVEFORMS_DATA = ini.waveform_table(args)
   stations = (WAVEFORMS_DATA[NETWORK_STR] + PERIOD_STR + \
               WAVEFORMS_DATA[STATION_STR]).unique()
@@ -240,7 +270,13 @@ def main(args : argparse.Namespace) -> None:
       continue
     INVENTORY.extend(obspy.read_inventory(station_file))
   CONFIG = AssociateConfig(INVENTORY, file=args.file)
-  if args.verbose: print(CONFIG)
+  # CONFIG = MPI_COMM.bcast(CONFIG, root=0)
+  return CONFIG
+
+def main(args : argparse.Namespace) -> None:
+  global DATA_PATH
+  DATA_PATH = Path(args.directory).parent
+  CONFIG = set_up(args)
   # if args.verbose: station_graph(INVENTORY)
   PRED = ini.classified_loader(args)
   DATA, PRED = associate_events(copy.deepcopy(PRED), CONFIG, args)

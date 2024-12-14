@@ -17,6 +17,8 @@ MNL_DATA_PATH = Path(DATA_PATH, "manual")
 
 EXPECTED_STR = "expected"
 
+ID = 1
+NETWORK = "MY"
 STATION = "EG"
 THRESHOLD = 0.3
 
@@ -34,31 +36,56 @@ class TestPickParser(unittest.TestCase):
     SOURCE, DETECT = event_parser(args.file, args)
     DETECT = DETECT.values.tolist()
     EXPECTED = [
-      [None, UTCDateTime(2023, 6, 1, 9, 27, 58, 710000), 0, 'P', 'CAE'],
-      [None, UTCDateTime(2023, 6, 1, 9, 27, 59, 360000), 2, 'S', 'CAE'],
-      [None, UTCDateTime(2023, 6, 1, 9, 53, 32, 530000), 2, 'P', 'CAE'],
-      [None, UTCDateTime(2023, 6, 1, 9, 53, 36, 360000), 3, 'S', 'CAE'],
-      [None, UTCDateTime(2023, 6, 1, 10, 2, 12, 860000), 3, 'P', 'VARA'],
-      [None, UTCDateTime(2023, 6, 1, 21, 41, 16, 740000), 0, 'P', 'CAE'],
-      [None, UTCDateTime(2023, 6, 1, 21, 41, 19, 90000), 0, 'S', 'CAE'],
-      [None, UTCDateTime(2023, 6, 2, 8, 50, 44, 10000), 0, 'P', 'TRI'],
-      [None, UTCDateTime(2023, 6, 2, 8, 50, 46, 420000), 2, 'P', 'BAD'],
-      [None, UTCDateTime(2023, 6, 3, 0, 31, 40, 50000), 2, 'P', 'BAD'],
-      [None, UTCDateTime(2023, 6, 3, 0, 31, 43, 560000), 1, 'S', 'BAD'],
-      [None, UTCDateTime(2023, 6, 3, 5, 18, 36, 10000), 2, 'P', 'VARA'],
-      [None, UTCDateTime(2023, 6, 3, 5, 18, 39, 980000), 2, 'S', 'VARA'],
-      [None, UTCDateTime(2023, 6, 3, 12, 33, 23, 350000), 0, 'P', 'VARA'],
-      [None, UTCDateTime(2023, 6, 3, 12, 33, 25, 980000), 0, 'S', 'VARA'],
-      [None, UTCDateTime(2023, 6, 3, 16, 54, 16, 760000), 2, 'P', 'BAD'],
-      [None, UTCDateTime(2023, 6, 3, 16, 54, 19, 950000), 2, 'S', 'BAD'],
-      [None, UTCDateTime(2023, 6, 4, 0, 3, 5, 450000), 0, 'P', 'BAD'],
-      [None, UTCDateTime(2023, 6, 4, 0, 4, 23, 400000), 2, 'S', 'BAD'],
-      [None, UTCDateTime(2023, 6, 4, 0, 25, 9, 150000), 3, 'P', 'TRI'],
-      [None, UTCDateTime(2023, 6, 4, 0, 25, 14, 520000), 3, 'S', 'TRI'],
-      [None, UTCDateTime(2023, 6, 4, 0, 25, 10, 760000), 1, 'P', 'BAD'],
-      [None, UTCDateTime(2023, 6, 4, 0, 25, 16, 420000), 2, 'S', 'BAD'],
-      [None, UTCDateTime(2023, 6, 4, 17, 57, 11, 390000), 3, 'P', 'CAE'],
-      [None, UTCDateTime(2023, 6, 4, 17, 57, 17, 250000), 2, 'S', 'CAE']
+      [None, UTCDateTime(2023, 6, 1, 9, 27, 58, 710000), 0, PWAVE, None,
+       'CAE'],
+      [None, UTCDateTime(2023, 6, 1, 9, 27, 59, 360000), 2, SWAVE, None,
+       'CAE'],
+      [None, UTCDateTime(2023, 6, 1, 9, 53, 32, 530000), 2, PWAVE, None,
+       'CAE'],
+      [None, UTCDateTime(2023, 6, 1, 9, 53, 36, 360000), 3, SWAVE, None,
+       'CAE'],
+      [None, UTCDateTime(2023, 6, 1, 10, 2, 12, 860000), 3, PWAVE, None,
+       'VARA'],
+      [None, UTCDateTime(2023, 6, 1, 21, 41, 16, 740000), 0, PWAVE, None,
+       'CAE'],
+      [None, UTCDateTime(2023, 6, 1, 21, 41, 19, 90000), 0, SWAVE, None,
+       'CAE'],
+      [None, UTCDateTime(2023, 6, 2, 8, 50, 44, 10000), 0, PWAVE, None,
+       'TRI'],
+      [None, UTCDateTime(2023, 6, 2, 8, 50, 46, 420000), 2, PWAVE, None,
+       'BAD'],
+      [None, UTCDateTime(2023, 6, 3, 0, 31, 40, 50000), 2, PWAVE, None,
+       'BAD'],
+      [None, UTCDateTime(2023, 6, 3, 0, 31, 43, 560000), 1, SWAVE, None,
+       'BAD'],
+      [None, UTCDateTime(2023, 6, 3, 5, 18, 36, 10000), 2, PWAVE, None,
+       'VARA'],
+      [None, UTCDateTime(2023, 6, 3, 5, 18, 39, 980000), 2, SWAVE, None,
+       'VARA'],
+      [None, UTCDateTime(2023, 6, 3, 12, 33, 23, 350000), 0, PWAVE, None,
+       'VARA'],
+      [None, UTCDateTime(2023, 6, 3, 12, 33, 25, 980000), 0, SWAVE, None,
+       'VARA'],
+      [None, UTCDateTime(2023, 6, 3, 16, 54, 16, 760000), 2, PWAVE, None,
+       'BAD'],
+      [None, UTCDateTime(2023, 6, 3, 16, 54, 19, 950000), 2, SWAVE, None,
+       'BAD'],
+      [None, UTCDateTime(2023, 6, 4, 0, 3, 5, 450000), 0, PWAVE, None,
+       'BAD'],
+      [None, UTCDateTime(2023, 6, 4, 0, 3, 8, 340000), 2, SWAVE, None,
+       'BAD'],
+      [None, UTCDateTime(2023, 6, 4, 0, 25, 9, 150000), 3, PWAVE, None,
+       'TRI'],
+      [None, UTCDateTime(2023, 6, 4, 0, 25, 14, 520000), 3, SWAVE, None,
+       'TRI'],
+      [None, UTCDateTime(2023, 6, 4, 0, 25, 10, 760000), 1, PWAVE, None,
+       'BAD'],
+      [None, UTCDateTime(2023, 6, 4, 0, 25, 16, 420000), 2, SWAVE, None,
+       'BAD'],
+      [None, UTCDateTime(2023, 6, 4, 17, 57, 11, 390000), 3, PWAVE, None,
+       'CAE'],
+      [None, UTCDateTime(2023, 6, 4, 17, 57, 17, 250000), 2, SWAVE, None,
+       'CAE']
     ]
     self.assertListEqual(EXPECTED, DETECT)
 
@@ -93,15 +120,17 @@ class TestConfMtx(unittest.TestCase):
                P  S  N : PRED
     """
     args = ini.parse_arguments()
-    #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
-    TRUE = [[None, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 3, PWAVE, STATION],
-            [None, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0, SWAVE, STATION]]
+    TRUE = [
+    #  ID             YEAR, M, D, H, M, S, mS prob PHASE NETWORK STATION
+      [ID, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 3, PWAVE, None, STATION],
+      [ID, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0, SWAVE, None, STATION]
+    ]
     TRUE = pd.DataFrame(TRUE, columns=HEADER_MANL)
     PRED = [
       [PHASENET_STR, ORIGINAL_STR, None, UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
-       0.43185002, PWAVE, STATION],
+       0.43185002, PWAVE, NETWORK, STATION],
       [PHASENET_STR, ORIGINAL_STR, None, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
-       0.3372562, SWAVE, STATION]
+       0.3372562, SWAVE, NETWORK, STATION]
     ]
     PRED = pd.DataFrame(PRED, columns=HEADER_PRED)
     CFN_MTX, TP, FN, FP = conf_mtx(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
@@ -111,12 +140,14 @@ class TestConfMtx(unittest.TestCase):
                 [0, 0, 0]]
     self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
     EXPECTED = set()
-    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, PWAVE,
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, ID,
                   (str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3)),
-                   str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3))), (3, 0.43185002)))
-    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, SWAVE,
+                   str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3))), (3, 0.43185002),
+                   PWAVE, NETWORK, STATION))
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, ID,
                   (str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6)),
-                   str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6))), (0, 0.3372562)))
+                   str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6))), (0, 0.3372562),
+                   SWAVE, NETWORK, STATION))
     self.assertSetEqual(EXPECTED, TP)
     EXPECTED = []
     self.assertListEqual(EXPECTED, FN)
@@ -139,15 +170,17 @@ class TestConfMtx(unittest.TestCase):
                P  S  N : PRED
     """
     args = ini.parse_arguments()
-    #          ID            YEAR, M, D, H, M, S, mS WEIGHT PHASE STATION
-    TRUE = [[None, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 3, PWAVE, STATION],
-            [None, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0, SWAVE, STATION]]
+    TRUE = [
+    #  ID             YEAR, M, D, H, M, S, mS Prob PHASE NETWORK STATION
+      [ID, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 3, PWAVE, None, STATION],
+      [ID, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0, SWAVE, None, STATION]
+    ]
     TRUE = pd.DataFrame(TRUE, columns=HEADER_MANL)
     PRED = [
       [PHASENET_STR, ORIGINAL_STR, None, UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
-       0.43185002, SWAVE, STATION],
+       0.43185002, SWAVE, NETWORK, STATION],
       [PHASENET_STR, ORIGINAL_STR, None, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
-       0.3372562, PWAVE, STATION]
+       0.3372562, PWAVE, NETWORK, STATION]
     ]
     PRED = pd.DataFrame(PRED, columns=HEADER_PRED)
     CFN_MTX, TP, FN, FP = conf_mtx(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
@@ -180,17 +213,19 @@ class TestConfMtx(unittest.TestCase):
                P  S  N : PRED
     """
     args = ini.parse_arguments()
-    #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
-    TRUE = [[None, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 3, PWAVE, STATION],
-            [None, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0, SWAVE, STATION]]
+    TRUE = [
+    #  ID             YEAR, M, D, H, M, S, mS Prob PHASE NETWORK STATION
+      [ID, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 3, PWAVE, None, STATION],
+      [ID, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0, SWAVE, None, STATION]
+    ]
     TRUE = pd.DataFrame(TRUE, columns=HEADER_MANL)
     PRED = [
       [PHASENET_STR, ORIGINAL_STR, None, UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
-       0.43185002, PWAVE, STATION],
+       0.43185002, PWAVE, NETWORK, STATION],
       [PHASENET_STR, ORIGINAL_STR, None, UTCDateTime(2023, 6, 1, 0, 1, 2, 4),
-       0.43185002, PWAVE, STATION],
+       0.43185002, PWAVE, NETWORK, STATION],
       [PHASENET_STR, ORIGINAL_STR, None, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
-       0.3372562, SWAVE, STATION]
+       0.3372562, SWAVE, NETWORK, STATION]
     ]
     PRED = pd.DataFrame(PRED, columns=HEADER_PRED)
     CFN_MTX, TP, FN, FP = conf_mtx(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
@@ -200,18 +235,21 @@ class TestConfMtx(unittest.TestCase):
                 [1, 0, 0]]
     self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
     EXPECTED = set()
-    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, PWAVE,
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, ID,
                   (str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3)),
-                   str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3))), (3, 0.43185002)))
-    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, SWAVE,
+                   str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3))), (3, 0.43185002),
+                   PWAVE, NETWORK, STATION))
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, ID,
                   (str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6)),
-                   str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6))), (0, 0.3372562)))
+                   str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6))), (0, 0.3372562),
+                   SWAVE, NETWORK, STATION))
     self.assertSetEqual(EXPECTED, TP)
     EXPECTED = []
     self.assertListEqual(EXPECTED, FN)
     EXPECTED = set()
-    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, PWAVE,
-                  str(UTCDateTime(2023, 6, 1, 0, 1, 2, 4)), 0.43185002))
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, None,
+                  str(UTCDateTime(2023, 6, 1, 0, 1, 2, 4)), 0.43185002,
+                  PWAVE, NETWORK, STATION))
     self.assertSetEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
@@ -232,15 +270,17 @@ class TestConfMtx(unittest.TestCase):
                P  S  N : PRED
     """
     args = ini.parse_arguments()
-    #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
-    TRUE = [[None, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 3, PWAVE, STATION],
-            [None, UTCDateTime(2023, 6, 1, 0, 1, 2, 4), 3, PWAVE, STATION]]
+    TRUE = [
+    #  ID             YEAR, M, D, H, M, S, mS Prob PHASE NETWORK STATION
+      [ID, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 3, PWAVE, None, STATION],
+      [ID, UTCDateTime(2023, 6, 1, 0, 1, 2, 4), 3, PWAVE, None, STATION]
+    ]
     TRUE = pd.DataFrame(TRUE, columns=HEADER_MANL)
     PRED = [
       [PHASENET_STR, ORIGINAL_STR, None, UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
-       0.43185002, PWAVE, STATION],
+       0.43185002, PWAVE, NETWORK, STATION],
       [PHASENET_STR, ORIGINAL_STR, None, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
-       0.3372562, SWAVE, STATION]
+       0.3372562, SWAVE, NETWORK, STATION]
     ]
     PRED = pd.DataFrame(PRED, columns=HEADER_PRED)
     CFN_MTX, TP, FN, FP = conf_mtx(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
@@ -250,16 +290,18 @@ class TestConfMtx(unittest.TestCase):
                 [0, 1, 0]]
     self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
     EXPECTED = set()
-    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, PWAVE,
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, ID,
                   (str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3)),
-                   str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3))), (3, 0.43185002)))
+                   str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3))), (3, 0.43185002),
+                   PWAVE, NETWORK, STATION))
     self.assertSetEqual(EXPECTED, TP)
-    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
-                 UTCDateTime(2023, 6, 1, 0, 1, 2, 4), 3]]
+    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, ID + THRESHOLD,
+                 UTCDateTime(2023, 6, 1, 0, 1, 2, 4), 3, PWAVE, None, STATION]]
     self.assertListEqual(EXPECTED, FN)
     EXPECTED = set()
-    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, SWAVE,
-                  str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6)), 0.3372562))
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, None,
+                  str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6)), 0.3372562,
+                  SWAVE, NETWORK, STATION))
     self.assertSetEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
@@ -278,9 +320,11 @@ class TestConfMtx(unittest.TestCase):
                P  S  N : PRED
     """
     args = ini.parse_arguments()
-    #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
-    TRUE = [[None, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 3, PWAVE, STATION],
-            [None, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0, SWAVE, STATION]]
+    TRUE = [
+    #  ID             YEAR, M, D, H, M, S, mS Prob PHASE NETWORK STATION
+      [ID, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 3, PWAVE, None, STATION],
+      [ID, UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0, SWAVE, None, STATION]
+    ]
     TRUE = pd.DataFrame(TRUE, columns=HEADER_MANL)
     PRED = []
     PRED = pd.DataFrame(PRED, columns=HEADER_PRED)
@@ -292,10 +336,10 @@ class TestConfMtx(unittest.TestCase):
     self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
     EXPECTED = set()
     self.assertSetEqual(EXPECTED, TP)
-    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, STATION, PWAVE, THRESHOLD,
-                 UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 3],
-                [PHASENET_STR, ORIGINAL_STR, STATION, SWAVE, THRESHOLD,
-                 UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0]]
+    EXPECTED = [[PHASENET_STR, ORIGINAL_STR, ID + THRESHOLD,
+                 UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 3, PWAVE, None, STATION],
+                [PHASENET_STR, ORIGINAL_STR, ID + THRESHOLD,
+                 UTCDateTime(2023, 6, 1, 0, 4, 5, 6), 0, SWAVE, None, STATION]]
     self.assertListEqual(EXPECTED, FN)
     EXPECTED = set()
     self.assertSetEqual(EXPECTED, FP)
@@ -316,14 +360,14 @@ class TestConfMtx(unittest.TestCase):
                P  S  N : PRED
     """
     args = ini.parse_arguments()
-    #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
+    #    ID             YEAR, M, D, H, M, S, mS Prob PHASE NETWORK STATION
     TRUE = []
     TRUE = pd.DataFrame(TRUE, columns=HEADER_MANL)
     PRED = [
       [PHASENET_STR, ORIGINAL_STR, None, UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
-       0.43185002, PWAVE, STATION],
+       0.43185002, PWAVE, NETWORK, STATION],
       [PHASENET_STR, ORIGINAL_STR, None, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
-       0.3372562, SWAVE, STATION]
+       0.3372562, SWAVE, NETWORK, STATION]
     ]
     PRED = pd.DataFrame(PRED, columns=HEADER_PRED)
     CFN_MTX, TP, FN, FP = conf_mtx(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
@@ -337,10 +381,12 @@ class TestConfMtx(unittest.TestCase):
     EXPECTED = []
     self.assertListEqual(EXPECTED, FN)
     EXPECTED = set()
-    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, PWAVE,
-                  str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3)), 0.43185002))
-    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, SWAVE,
-                  str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6)), 0.3372562))
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, None,
+                  str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3)), 0.43185002, PWAVE,
+                  NETWORK, STATION))
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, None,
+                  str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6)), 0.3372562, SWAVE,
+                  NETWORK, STATION))
     self.assertSetEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",
@@ -358,7 +404,7 @@ class TestConfMtx(unittest.TestCase):
                P  S  N : PRED
     """
     args = ini.parse_arguments()
-    #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
+    #    ID             YEAR, M, D, H, M, S, mS Prob PHASE NETWORK STATION
     TRUE = []
     TRUE = pd.DataFrame(TRUE, columns=HEADER_MANL)
     PRED = []
@@ -394,17 +440,18 @@ class TestConfMtx(unittest.TestCase):
                P  S  N : PRED
     """
     args = ini.parse_arguments()
-    #        STATION              YEAR, M, D, H, M, S, mS  PHASE WEIGHT
-    TRUE = [[None, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 3, PWAVE, STATION],
-            [None, UTCDateTime(2023, 6, 1, 0, 1, 2, 4), 0, SWAVE, STATION]]
+    TRUE = [
+    #  ID             YEAR, M, D, H, M, S, mS Prob PHASE NETWORK STATION
+      [ID, UTCDateTime(2023, 6, 1, 0, 1, 2, 3), 3, PWAVE, None, STATION],
+      [ID, UTCDateTime(2023, 6, 1, 0, 1, 2, 4), 0, SWAVE, None, STATION]]
     TRUE = pd.DataFrame(TRUE, columns=HEADER_MANL)
     PRED = [
       [PHASENET_STR, ORIGINAL_STR, None, UTCDateTime(2023, 6, 1, 0, 1, 2, 3),
-       0.43185002, PWAVE, STATION],
+       0.43185002, PWAVE, NETWORK, STATION],
       [PHASENET_STR, ORIGINAL_STR, None, UTCDateTime(2023, 6, 1, 0, 1, 2, 4),
-       0.3372562, SWAVE, STATION],
+       0.3372562, SWAVE, NETWORK, STATION],
       [PHASENET_STR, ORIGINAL_STR, None, UTCDateTime(2023, 6, 1, 0, 4, 5, 6),
-       0.3372562, SWAVE, STATION]
+       0.3372562, SWAVE, NETWORK, STATION]
     ]
     PRED = pd.DataFrame(PRED, columns=HEADER_PRED)
     CFN_MTX, TP, FN, FP = conf_mtx(TRUE, PRED, PHASENET_STR, ORIGINAL_STR,
@@ -414,18 +461,21 @@ class TestConfMtx(unittest.TestCase):
                 [0, 1, 0]]
     self.assertListEqual(EXPECTED, CFN_MTX.values.tolist())
     EXPECTED = set()
-    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, PWAVE,
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, ID,
                   (str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3)),
-                   str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3))), (3, 0.43185002)))
-    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, SWAVE,
+                   str(UTCDateTime(2023, 6, 1, 0, 1, 2, 3))), (3, 0.43185002),
+                   PWAVE, NETWORK, STATION))
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, ID,
                   (str(UTCDateTime(2023, 6, 1, 0, 1, 2, 4)),
-                   str(UTCDateTime(2023, 6, 1, 0, 1, 2, 4))), (0, 0.3372562)))
+                   str(UTCDateTime(2023, 6, 1, 0, 1, 2, 4))), (0, 0.3372562),
+                   SWAVE, NETWORK, STATION))
     self.assertSetEqual(EXPECTED, TP)
     EXPECTED = []
     self.assertListEqual(EXPECTED, FN)
     EXPECTED = set()
-    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, STATION, SWAVE,
-                  str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6)), 0.3372562))
+    EXPECTED.add((PHASENET_STR, ORIGINAL_STR, None,
+                  str(UTCDateTime(2023, 6, 1, 0, 4, 5, 6)), 0.3372562, SWAVE,
+                  NETWORK, STATION))
     self.assertSetEqual(EXPECTED, FP)
 
   @unittest.mock.patch("sys.argv",

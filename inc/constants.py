@@ -1,3 +1,4 @@
+from pathlib import Path
 import seisbench.models as sbm
 from datetime import timedelta as td
 
@@ -127,6 +128,36 @@ MODEL_WEIGHTS_DICT = {
                                    norm=NORM)
 }
 
+class DIRSTRUCT():
+  def __init__(self, depth : int, root_dir : Path,
+               categories : list[str] = None, file : str = None):
+    if depth <= 0:
+      raise ValueError("Depth must be greater than 0")
+    self.depth = depth
+    self.root_dir = root_dir
+    if depth == 1 and categories is not None:
+      raise ValueError("Depth is 1, only one category is allowed")
+    self.categories = categories
+    self.path = Path(root_dir, *categories) if categories is not None \
+                                          else Path(root_dir)
+    if type(file) == str:
+      self.path.mkdir(parents=True, exist_ok=True)
+      self.file = Path(self.path, file)
+    # elif type(file) == list(str):
+    #  self.file = [Path(self.path, f) for f in file]
+    else:
+      self.file = None
+
+  def __str__(self):
+    return str(self.path) if self.file is None else str(self.file)
+
+  def update(self, file : str): self.file = Path(self.path, file)
+  def update(self, categories : list[str]):
+    self.categories = categories
+    self.path = Path(self.root_dir, *categories)
+    self.path.mkdir(parents=True, exist_ok=True)
+    self.file = None
+
 # Colors
 COLORS = {
   PWAVE: "C0",
@@ -229,11 +260,16 @@ GEONET_CLIENT_STR = "GEONET"
 OGS_CLIENT_STR    = "http://158.110.30.217:8080"
 RASPISHAKE_CLIENT_STR = "RASPISHAKE"
 
-HEADER_MANL = [ID_STR, TIMESTAMP_STR, PROBABILITY_STR, PHASE_STR, STATION_STR]
+HEADER_FSYS = [FILENAME_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR,
+               CHANNEL_STR]
+HEADER_MANL = [ID_STR, TIMESTAMP_STR, PROBABILITY_STR, PHASE_STR, NETWORK_STR,
+               STATION_STR]
 HEADER_PRED = [MODEL_STR, WEIGHT_STR] + HEADER_MANL
 HEADER_SRC = [ID_STR, TIMESTAMP_STR, LATITUDE_STR, LONGITUDE_STR,
               LOCAL_DEPTH_STR, MAGNITUDE_STR, NO_STR, GAP_STR, DMIN_STR,
               RMS_STR, ERH_STR, ERZ_STR, QM_STR, NOTES_STR]
+HEADER_ASCT = [MODEL_STR, WEIGHT_STR] + HEADER_SRC
 HEADER_SNSR = [STATION_STR, LATITUDE_STR, LONGITUDE_STR, LOCAL_DEPTH_STR,
                TIMESTAMP_STR]
-SORT_HIERARCHY_PRED = [MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, PROBABILITY_STR]
+SORT_HIERARCHY_PRED = [MODEL_STR, WEIGHT_STR, ID_STR, TIMESTAMP_STR,
+                       PROBABILITY_STR]

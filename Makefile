@@ -13,6 +13,12 @@ results:
 	cp img/TPFN_* doc/img/
 	cp img/TPFNFP_* doc/img/
 
+testLcl:
+	python test/testparser.py
+	python test/testanalyzer.py
+	python test/testinitializer.py
+	python test/testpicker.py
+
 testEnv:
 	bash Analyze.sh 1 "1 2 4" TestEnv test/testEnv.py
 

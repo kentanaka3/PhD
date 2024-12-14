@@ -32,16 +32,18 @@ from constants import *
 import downloader as dwn
 import initializer as ini
 
-# TODO: Study GaMMA associator with folder
 # TODO: Colab PyOcto associator to be tested with GaMMA
-# TODO: Get Vel Model
 # TODO: Discuss constants.NORM = "peak"
+# TODO: Create a Directory structure generator for the output
 
 MPI_RANK = 0
 MPI_SIZE = 1
 MPI_COMM = None
+GPU_RANK = -1
+GPU_SIZE = 0
 
-@nb.njit(nogil=True, parallel=True)
+
+@nb.njit(nogil=True)
 def filter_data_(data : np.array) -> bool:
   for d in data:
     if np.isnan(d) or np.isinf(d): return True
@@ -318,8 +320,13 @@ def main(args : argparse.Namespace) -> None:
         if not args.force and CLF_FILE.exists():
           clf_found.append((categories, trace_files))
         clf_files.append((categories, trace_files))
-      if not clf_files: continue
-
+      if clf_files:
+        # P1
+        if args.timing: start_time = MPI.Wtime()
+        classify_stream(clf_files, model, key, args)
+        if args.timing:
+          TIMING[i] += MPI.Wtime() - start_time
+        i += 1
       """
       # TODO: Spawn two threads and synchronize them
       def classify_and_plot():
@@ -347,18 +354,11 @@ def main(args : argparse.Namespace) -> None:
       thread1.join()
       thread2.join()
       """
-
-      # P1
-      if args.timing: start_time = MPI.Wtime()
-      classify_stream(clf_files, model, key, args)
-      if args.timing:
-        TIMING[i] += MPI.Wtime() - start_time
-        i += 1
       # Clear the GPU memory (nowait)
       torch.cuda.empty_cache()
       # P2
-      for categories, trace_files in clf_found:
-        if args.verbose:
+      if args.verbose:
+        for categories, trace_files in clf_found:
           print("Classification results for model: {}, with preloaded weight: "
                 "{}, categorized by {}".format(*key, categories))
           CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
@@ -367,12 +367,12 @@ def main(args : argparse.Namespace) -> None:
                           PICKLE_EXT)
           with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)
           print(output)
-        if args.interactive:
-          stream = read_traces(trace_files, args)
-          interactive_plot(stream, output, *key)
+          if args.interactive:
+            stream = read_traces(trace_files, args)
+            interactive_plot(stream, output, *key)
       # synchronize
-      for categories, trace_files in clf_files:
-        if args.verbose:
+      if args.verbose:
+        for categories, trace_files in clf_files:
           print("Classification results for model: {}, with preloaded weight: "
                 "{}, categorized by {}".format(*key, categories))
           CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
@@ -381,9 +381,9 @@ def main(args : argparse.Namespace) -> None:
                           PICKLE_EXT)
           with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)
           print(output)
-        if args.interactive:
-          stream = read_traces(trace_files, args)
-          interactive_plot(stream, output, *key)
+          if args.interactive:
+            stream = read_traces(trace_files, args)
+            interactive_plot(stream, output, *key)
     if args.timing:
       global MPI_COMM, MPI_RANK, MPI_SIZE
       TOTALS = np.zeros_like(TIMING)
