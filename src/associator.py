@@ -199,15 +199,15 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
       PR = PRE[PRE[TIMESTAMP_STR].between(start, end, inclusive='left')]
       DATA = []
       for threshold in THRESHOLDS:
-        P = PR[PR[PROBABILITY_STR] >= threshold]
-        if P.empty: continue
-        catalog, assignment = association(P, config.station,
+        PR = PR[PR[PROBABILITY_STR] >= threshold]
+        if PR.empty: continue
+        catalog, assignment = association(PR, config.station,
                                           config=config.__repr__(),
                                           method=config.method)
         if not (len(catalog) or len(assignment)): continue
         for i, event in enumerate(catalog):
           PICKS = pd.DataFrame(
-            [P.loc[row] for row, idx, _ in assignment
+            [PR.loc[row] for row, idx, _ in assignment
              if idx == event["event_index"]]).reset_index(drop=True)
           PICKS[ID_STR] = i
           PICKS[THRESHOLD_STR] = threshold
@@ -226,10 +226,10 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
   DETECT.sort_values(SORT_HIERARCHY_PRED, inplace=True)
   DETECT.to_csv(Path(DATA_PATH, ("D" if args.denoiser else EMPTY_STR) +
                      ASCT_STR + CSV_EXT), index=False)
-  for (model, weight, network, station), df in \
+  for (model, weight, network, station), dtfrm in \
     DETECT.groupby([MODEL_STR, WEIGHT_STR, NETWORK_STR, STATION_STR]):
     for start, end in zip(DATES[:-1], DATES[1:]):
-      df = df[df[TIMESTAMP_STR].between(start, end, inclusive='left')]
+      df = dtfrm[dtfrm[TIMESTAMP_STR].between(start, end, inclusive='left')]
       if df.empty: continue
       start = start.strftime("%y%m%d")
       FILEPATH = Path(DATA_PATH, AST_STR, start, network, station,
