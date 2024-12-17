@@ -665,7 +665,7 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
   return CFN_MTX, TP, FN, FP
 
 def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
-              args : argparse.Namespace) -> pd.DataFrame:
+              args : argparse.Namespace, method = "Picker") -> pd.DataFrame:
   """
   input  :
     - TRUE          (pd.DataFrame)
@@ -725,16 +725,19 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
                  label="Number of Picks", aspect=50, shrink=0.8)
     disp.im_.set_clim(1, N_seconds)
     IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                    UNDERSCORE_STR.join([CFN_MTX_STR, model, str(threshold)]) +
-                    PNG_EXT)
+                    UNDERSCORE_STR.join([method, CFN_MTX_STR, model,
+                                         str(threshold)]) + PNG_EXT)
     plt.savefig(IMG_FILE)
     plt.close()
   # True Positives
   TP = pd.DataFrame(TP, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
+  TP_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                  UNDERSCORE_STR.join([method, TP_STR]) + CSV_EXT)
+  TP.to_csv(TP_FILE, index=False)
   # False Negatives
   FN = pd.DataFrame(FN, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   FN_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                 FN_STR + CSV_EXT)
+                 UNDERSCORE_STR.join([method, FN_STR]) + CSV_EXT)
   FN.to_csv(FN_FILE, index=False)
   # False Negative Pie plot
   for (model, weight, phase, threshold), dtfrm in \
@@ -743,14 +746,14 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     dtfrm[PROBABILITY_STR].value_counts().plot(kind='pie', ax=ax,
                                                    autopct='%1.1f%%')
     IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                    UNDERSCORE_STR.join([FN_STR, model, weight, phase,
+                    UNDERSCORE_STR.join([method, FN_STR, model, weight, phase,
                                          str(threshold)]) + PNG_EXT)
     plt.savefig(IMG_FILE)
     plt.close()
   # False Positives
   FP = pd.DataFrame(FP, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   FP_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                 FP_STR + CSV_EXT)
+                 UNDERSCORE_STR.join([method, FP_STR]) + CSV_EXT)
   FP.to_csv(FP_FILE, index=False)
   return TP
   # TODO: Redo the plots for the True Positives, False Negatives and False
@@ -909,7 +912,7 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
   return TRUE_S, TRUE_D
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
-                      phase : str = PWAVE) -> None:
+                      phase : str = PWAVE, method : str = "Picker") -> None:
   """
   input  :
     - DATA          (pd.DataFrame)
@@ -969,9 +972,9 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
     axs[1].set(xlabel=None, xticklabels=[], ylabel=None, yticklabels=[])
     axs[2].set(xlabel=xlabel, ylabel=ylabel)
     axs[3].set(xlabel=xlabel, ylabel=None, yticklabels=[])
-    IMG_FILE = \
-      Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-           UNDERSCORE_STR.join([TIME_DSPLCMT_STR, model, phase]) + PNG_EXT)
+    IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                    UNDERSCORE_STR.join([method, TIME_DSPLCMT_STR, model,
+                                         phase]) + PNG_EXT)
     plt.tight_layout()
     plt.savefig(IMG_FILE)
     plt.close()
@@ -979,6 +982,8 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
 def main(args : argparse.Namespace):
   global DATA_PATH, DATES
   DATA_PATH = Path(args.directory).parent
+  # Picker
+  ANALYSIS = "Picker"
   PRED = ini.classified_loader(args)
   if args.file is None: raise ValueError("No event file given")
   TRUE_S, TRUE_D = event_parser(args.file, args)
@@ -986,21 +991,37 @@ def main(args : argparse.Namespace):
   if args.verbose:
     TRUE_D.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
     PRED.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                     PRED_STR + CSV_EXT), index=False)
+                     UNDERSCORE_STR.join([ANALYSIS, PRED_STR]) + CSV_EXT),
+                     index=False)
   # plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PRED), args)
   # plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PRED), args, phase=SWAVE)
-  TP = stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(PRED), args)
+  TP = stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(PRED), args, ANALYSIS)
   if args.verbose:
     TP.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                   TP_STR + CSV_EXT), index=False)
+                   UNDERSCORE_STR.join([ANALYSIS, TP_STR]) + CSV_EXT),
+                   index=False)
   time_displacement(copy.deepcopy(TP), args)
+  # Associator
+  ANALYSIS = "GaMMA"
   PRED = ini.associated_loader(args)
+  if args.verbose:
+    PRED.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                     UNDERSCORE_STR.join([ANALYSIS, PRED_STR]) + CSV_EXT),
+                     index=False)
   start, end = args.dates
+  TP = pd.DataFrame([], columns=HEADER_PRED)
   if DATES is None:
     DATES = [start]
     while DATES[-1] <= end: DATES.append(DATES[-1] + ONE_DAY)
   for s, e in zip(DATES[:-1], DATES[1:]):
     PRE = PRED[PRED[TIMESTAMP_STR].between(s, e, inclusive='left')]
     if PRE.empty: continue
+    TP = pd.concat([TP, stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(PRE),
+                                  args, ANALYSIS)])
+  if args.verbose:
+    TP.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                   UNDERSCORE_STR.join([ANALYSIS, TP_STR]) + CSV_EXT),
+                   index=False)
+  time_displacement(copy.deepcopy(TP), args)
 
 if __name__ == "__main__": main(ini.parse_arguments())
