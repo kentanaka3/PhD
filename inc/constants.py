@@ -113,13 +113,11 @@ XML_EXT       = PERIOD_STR + XML_STR
 PRC_FMT = SEED_ID_FMT + ".{BEGDT}.{EXT}"
 
 # Models
-DEEPDENOISER_STR  = "DeepDenoiser"
 EQTRANSFORMER_STR = "EQTransformer"
 PHASENET_STR      = "PhaseNet"
 
 # Various pre-trained weights for each model (Add if new are available)
 MODEL_WEIGHTS_DICT = {
-  DEEPDENOISER_STR  : sbm.DeepDenoiser(sampling_rate=SAMPLING_RATE),
   EQTRANSFORMER_STR : sbm.EQTransformer(phases=PWAVE + SWAVE,
                                         sampling_rate=SAMPLING_RATE,
                                         norm=NORM),
@@ -129,19 +127,14 @@ MODEL_WEIGHTS_DICT = {
 }
 
 class DIRSTRUCT():
-  def __init__(self, depth : int, root_dir : Path,
-               categories : list[str] = None, file : str = None):
-    if depth <= 0:
-      raise ValueError("Depth must be greater than 0")
-    self.depth = depth
+  def __init__(self, root_dir : Path, categories : list[str] = None,
+               file = None):
     self.root_dir = root_dir
-    if depth == 1 and categories is not None:
-      raise ValueError("Depth is 1, only one category is allowed")
     self.categories = categories
     self.path = Path(root_dir, *categories) if categories is not None \
                                           else Path(root_dir)
+    self.path.mkdir(parents=True, exist_ok=True)
     if type(file) == str:
-      self.path.mkdir(parents=True, exist_ok=True)
       self.file = Path(self.path, file)
     # elif type(file) == list(str):
     #  self.file = [Path(self.path, f) for f in file]
@@ -155,6 +148,11 @@ class DIRSTRUCT():
   def update(self, categories : list[str]):
     self.categories = categories
     self.path = Path(self.root_dir, *categories)
+    self.path.mkdir(parents=True, exist_ok=True)
+    self.file = None
+  def update(self, root_dir : Path):
+    self.root_dir = root_dir
+    self.path = Path(root_dir, *self.categories)
     self.path.mkdir(parents=True, exist_ok=True)
     self.file = None
 
@@ -260,16 +258,18 @@ GEONET_CLIENT_STR = "GEONET"
 OGS_CLIENT_STR    = "http://158.110.30.217:8080"
 RASPISHAKE_CLIENT_STR = "RASPISHAKE"
 
-HEADER_FSYS = [FILENAME_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR,
-               CHANNEL_STR]
+
+# Headers
+HEADER_MODL = [MODEL_STR, WEIGHT_STR, THRESHOLD_STR]
+HEADER_FSYS = [FILENAME_STR, MODEL_STR, WEIGHT_STR, TIMESTAMP_STR, NETWORK_STR,
+               STATION_STR]
 HEADER_MANL = [ID_STR, TIMESTAMP_STR, PROBABILITY_STR, PHASE_STR, NETWORK_STR,
                STATION_STR]
-HEADER_PRED = [MODEL_STR, WEIGHT_STR] + HEADER_MANL
+HEADER_PRED = HEADER_MODL + HEADER_MANL
 HEADER_SRC = [ID_STR, TIMESTAMP_STR, LATITUDE_STR, LONGITUDE_STR,
               LOCAL_DEPTH_STR, MAGNITUDE_STR, NO_STR, GAP_STR, DMIN_STR,
               RMS_STR, ERH_STR, ERZ_STR, QM_STR, NOTES_STR]
-HEADER_ASCT = [MODEL_STR, WEIGHT_STR] + HEADER_SRC
+HEADER_ASCT = HEADER_MODL + HEADER_SRC
 HEADER_SNSR = [STATION_STR, LATITUDE_STR, LONGITUDE_STR, LOCAL_DEPTH_STR,
                TIMESTAMP_STR]
-SORT_HIERARCHY_PRED = [MODEL_STR, WEIGHT_STR, ID_STR, TIMESTAMP_STR,
-                       PROBABILITY_STR]
+SORT_HIERARCHY_PRED = [*HEADER_MODL, ID_STR, TIMESTAMP_STR]

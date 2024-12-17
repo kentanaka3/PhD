@@ -280,11 +280,8 @@ def data_header(args : argparse.Namespace,
             if station_path.is_dir():
               for file_path in station_path.iterdir():
                 filename = file_path.stem
-                if args.denoiser and filename.startswith("D"):
-                  vars = filename.split(UNDERSCORE_STR)[1:]
-                  RESULTS.append([str(file_path), *vars])
-                elif not args.denoiser and not filename.startswith("D"):
-                  vars = filename.split(UNDERSCORE_STR)
+                if args.denoiser == filename.startswith("D"):
+                  vars = filename.split(UNDERSCORE_STR)[int(args.denoiser):]
                   RESULTS.append([str(file_path), *vars])
             else:
               # TODO: Handle daily, network, model, weight files
@@ -293,12 +290,10 @@ def data_header(args : argparse.Namespace,
           # TODO: Handle daily, model, weight files
           continue
     else: raise NotImplementedError
-  HEADER = [FILENAME_STR, BEG_DATE_STR, NETWORK_STR, STATION_STR, MODEL_STR,
+  HEADER = [FILENAME_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR, MODEL_STR,
             WEIGHT_STR]
   RESULTS = pd.DataFrame(RESULTS, columns=HEADER)
-  R_HEADER = [FILENAME_STR, MODEL_STR, WEIGHT_STR, BEG_DATE_STR, NETWORK_STR,
-              STATION_STR]
-  RESULTS = RESULTS[R_HEADER]
+  RESULTS = RESULTS[HEADER_FSYS]
   if args.network and args.network != [ALL_WILDCHAR_STR]:
     RESULTS = RESULTS[
       RESULTS[NETWORK_STR].isin(args.network)]
@@ -309,9 +304,17 @@ def data_header(args : argparse.Namespace,
     RESULTS[MODEL_STR].isin(args.models)]
   RESULTS = RESULTS[
     RESULTS[WEIGHT_STR].isin(args.weights)]
-  RESULTS.sort_values(R_HEADER[1:], inplace=True)
+  RESULTS.sort_values(HEADER_FSYS[1:], inplace=True)
   RESULTS.set_index(FILENAME_STR, inplace=True)
   return RESULTS
+
+def _loader(args : argparse.Namespace, folder : str) -> pd.DataFrame:
+  if folder == CLF_STR:
+    return classified_loader(args)
+  elif folder == AST_STR:
+    return associated_loader(args)
+  else:
+    return waveform_table(args)
 
 def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
   """
@@ -339,10 +342,10 @@ def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
   DATA = []
   z = [round(t, 2) for t in np.linspace(0.2, 1.0, 9)]
   for (model, weight, date), dataframe in \
-    data_header(args, CLF_STR).groupby([MODEL_STR, WEIGHT_STR, BEG_DATE_STR]):
+    data_header(args, CLF_STR).groupby([MODEL_STR, WEIGHT_STR, TIMESTAMP_STR]):
     if args.verbose: HIST = list()
     for filepath, (_, _, _, network, station) in dataframe.iterrows():
-      PICK = [[model, weight, None, p.peak_time.__str__(), p.peak_value,
+      PICK = [[model, weight, None, None, str(p.peak_time), p.peak_value,
                p.phase, network, station] for p in data_loader(Path(filepath))]
       DATA += PICK
       PICK = pd.DataFrame(PICK, columns=HEADER_PRED)
@@ -396,7 +399,7 @@ def associated_loader(args : argparse.Namespace) -> pd.DataFrame:
   DATA = pd.DataFrame(columns=HEADER_PRED)
   z = [round(t, 2) for t in np.linspace(0.2, 1.0, 9)]
   for (model, weight, date), dataframe in \
-    data_header(args, AST_STR).groupby([MODEL_STR, WEIGHT_STR, BEG_DATE_STR]):
+    data_header(args, AST_STR).groupby([MODEL_STR, WEIGHT_STR, TIMESTAMP_STR]):
     if args.verbose: HIST = list()
     for filepath, (_, _, _, network, station) in dataframe.iterrows():
       PICKS = pd.DataFrame(data_loader(Path(filepath)), columns=HEADER_PRED)
@@ -420,8 +423,7 @@ def associated_loader(args : argparse.Namespace) -> pd.DataFrame:
       plt.tight_layout()
       plt.savefig(IMG_FILE)
       plt.close()
-  DATA = pd.DataFrame(DATA, columns=HEADER_PRED)\
-           .sort_values(SORT_HIERARCHY_PRED).reset_index(drop=True)
+  DATA = DATA.sort_values(SORT_HIERARCHY_PRED).reset_index(drop=True)
   DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].apply(lambda x : UTCDateTime(x))
   return DATA
 

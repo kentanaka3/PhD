@@ -24,6 +24,9 @@ from constants import *
 import initializer as ini
 import parser as prs
 
+THRESHOLDS : list[float] = [round(t, 2) for t in np.linspace(0.1, 0.9, 9)]
+DATES = None
+
 def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
               args : argparse.Namespace, phase = PWAVE) -> None:
   """
@@ -43,19 +46,20 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     The data is plotted for each model and weight. The plots are saved in the
     img directory.
   """
+  global DATES
   MSG = f"Cumulative number of {phase} picks"
   if args.verbose: print(MSG)
   start, end = args.dates
   PRED = PRED[(PRED[PHASE_STR] == phase) &
               (PRED[TIMESTAMP_STR] >= start.datetime)]
   TRUE = TRUE[(TRUE[PHASE_STR] == phase)].reset_index(drop=True)
-  x = [start.datetime]
-  while x[-1] <= end.datetime: x.append(x[-1] + ONE_DAY)
-  z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
+  if DATES is None:
+    DATES = [start.datetime]
+    while DATES[-1] <= end.datetime: DATES.append(DATES[-1] + ONE_DAY)
 
-  y_true = [len(TRUE[TRUE[TIMESTAMP_STR] <= d].index) for d in x]
+  y_true = [len(TRUE[TRUE[TIMESTAMP_STR] <= d].index) for d in DATES]
   # Plot a 2x2 grid for each model and weight
-  for model, dataframe in PRED.groupby(MODEL_STR):
+  for model, dtfrm in PRED.groupby(MODEL_STR):
     _, _axs = plt.subplots(2, 2, figsize=(10, 10))
     axs = _axs.flatten()
     plt.suptitle(model, fontsize=16)
@@ -64,19 +68,19 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     axs[2].set(xlabel="Date", ylabel=MSG)
     axs[3].set(xlabel="Date", yticklabels=[], ylabel=None)
     y_max = 0
-    for i, (weight, data) in enumerate(dataframe.groupby(WEIGHT_STR)):
+    for i, (weight, data) in enumerate(dtfrm.groupby(WEIGHT_STR)):
       axs[i].set_title(weight)
-      for threshold in z:
+      for threshold in THRESHOLDS:
         y = [len(data[(data[PROBABILITY_STR] >= threshold) &
-                      (data[TIMESTAMP_STR] <= d)].index) for d in x]
-        axs[i].plot([np.datetime64(t) for t in x], y,
+                      (data[TIMESTAMP_STR] <= d)].index) for d in DATES]
+        axs[i].plot([np.datetime64(t) for t in DATES], y,
                     label=rf"$\geq$ {threshold}")
         y_max = max(y_max, max(y))
-      axs[i].plot([np.datetime64(t) for t in x], y_true, label="True",
+      axs[i].plot([np.datetime64(t) for t in DATES], y_true, label="True",
                   color="k")
       y_max = max(y_max, max(y_true))
     for ax in axs:
-      ax.set(xlim=(x[0], x[-1]), ylim=(1, y_max), yscale="log")
+      ax.set(xlim=(DATES[0], DATES[-1]), ylim=(1, y_max), yscale="log")
       ax.grid()
       ax.legend()
     axs[2].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
@@ -93,7 +97,7 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     plt.close()
     if args.verbose: print(f"Saving {IMG_FILE}")
   # Plot a 2x2 grid for each model, network and station
-  for (model, network, station), dataframe in \
+  for (model, network, station), dtfrm in \
     PRED.groupby([MODEL_STR, NETWORK_STR, STATION_STR]):
     _, _axs = plt.subplots(2, 2, figsize=(10, 10))
     axs = _axs.flatten()
@@ -103,12 +107,12 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     axs[2].set(xlabel="Date", ylabel=MSG)
     axs[3].set(xlabel="Date", yticklabels=[], ylabel=None)
     y_max = 0
-    for i, (weight, data) in enumerate(dataframe.groupby(WEIGHT_STR)):
+    for i, (weight, data) in enumerate(dtfrm.groupby(WEIGHT_STR)):
       axs[i].set_title(weight)
-      for threshold in z:
+      for threshold in THRESHOLDS:
         y = [len(data[(data[PROBABILITY_STR] >= threshold) &
-                      (data[TIMESTAMP_STR] <= d)].index) for d in x]
-        axs[i].plot([np.datetime64(t) for t in x], y,
+                      (data[TIMESTAMP_STR] <= d)].index) for d in DATES]
+        axs[i].plot([np.datetime64(t) for t in DATES], y,
                     label=rf"$\geq$ {threshold}")
         y_max = max(y_max, max(y))
     for ax in axs:
@@ -636,13 +640,13 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
       p = PRED.iloc[list(G.neighbors(node))[0] - N]
       CFN_MTX.loc[t[PHASE_STR], p[PHASE_STR]] += 1
       if t[PHASE_STR] == p[PHASE_STR]:
-        TP.add((model_name, dataset_name, t[ID_STR],
+        TP.add((model_name, dataset_name, None, t[ID_STR],
                 (str(t[TIMESTAMP_STR]), str(p[TIMESTAMP_STR])),
                 (t[PROBABILITY_STR], p[PROBABILITY_STR]), t[PHASE_STR],
                 p[NETWORK_STR], t[STATION_STR]))
     else:
       G.nodes[node][STATUS_STR] = FN_STR
-      FN.append([model_name, dataset_name, t[ID_STR] + threshold,
+      FN.append([model_name, dataset_name, threshold, t[ID_STR],
                  t[TIMESTAMP_STR].__str__(), t[PROBABILITY_STR], t[PHASE_STR],
                  None, t[STATION_STR]])
       CFN_MTX.loc[t[PHASE_STR], NONE_STR] += 1
@@ -653,7 +657,7 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
     if not nx.degree(G, node):
       G.nodes[node][STATUS_STR] = FP_STR
       p = PRED.iloc[node - N]
-      FP.add((model_name, dataset_name, None, p[TIMESTAMP_STR].__str__(),
+      FP.add((model_name, dataset_name, None, None, str(p[TIMESTAMP_STR]),
               p[PROBABILITY_STR], p[PHASE_STR], p[NETWORK_STR],
               p[STATION_STR]))
       CFN_MTX.loc[NONE_STR, p[PHASE_STR]] += 1
@@ -681,10 +685,9 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   if args.verbose: print("Computing the Confusion Matrix")
   start, end = args.dates
   N_seconds = int((end - start) / (2 * PICK_OFFSET.total_seconds()))
-  z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
   TP, FN, FP = set(), [], set()
   for threshold, (model, dataframe_m) in \
-    itertools.product(z, PRED.groupby(MODEL_STR)):
+    itertools.product(THRESHOLDS, PRED.groupby(MODEL_STR)):
     fig, _axs = plt.subplots(2, 2, figsize=(10, 9))
     axs = _axs.flatten()
     plt.rcParams.update({'font.size': 12})
@@ -734,10 +737,10 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
                  FN_STR + CSV_EXT)
   FN.to_csv(FN_FILE, index=False)
   # False Negative Pie plot
-  for (model, weight, phase, threshold), dataframe in \
-    FN.groupby([MODEL_STR, WEIGHT_STR, PHASE_STR, ID_STR]):
+  for (model, weight, phase, threshold), dtfrm in \
+    FN.groupby([MODEL_STR, WEIGHT_STR, PHASE_STR, THRESHOLD_STR]):
     fig, ax = plt.subplots(figsize=(5, 5))
-    dataframe[PROBABILITY_STR].value_counts().plot(kind='pie', ax=ax,
+    dtfrm[PROBABILITY_STR].value_counts().plot(kind='pie', ax=ax,
                                                    autopct='%1.1f%%')
     IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                     UNDERSCORE_STR.join([FN_STR, model, weight, phase,
@@ -923,16 +926,16 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
     | MODEL | WEIGHT | PHASE | THRESHOLD | TIMESTAMP |
     --------------------------------------------------
   """
+  global THRESHOLDS
   if args.verbose: print("Plotting the Time Displacement")
   DATA[TIMESTAMP_STR] = \
     DATA[TIMESTAMP_STR].map(lambda x: UTCDateTime(x[0]) - UTCDateTime(x[1]))
   DATA[PROBABILITY_STR] = DATA[PROBABILITY_STR].map(lambda x: x[1])
   bins = np.linspace(-0.5, 0.5, 21, endpoint=True)
-  z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
   groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
   m = 0
-  for (model, weight, phase), dataframe in DATA.groupby(groups):
-    counts, _ = np.histogram(dataframe[TIMESTAMP_STR], bins=bins)
+  for (model, weight, phase), dtfrm in DATA.groupby(groups):
+    counts, _ = np.histogram(dtfrm[TIMESTAMP_STR], bins=bins)
     m = max(m, max(counts))
   m = (m + 9) // 10 * 10
   for model, phase in itertools.product(args.models, [PWAVE, SWAVE]):
@@ -940,22 +943,23 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
     axs = _axs.flatten()
     dataframe_mp = DATA[(DATA[MODEL_STR] == model) &
                         (DATA[PHASE_STR] == phase)].reset_index(drop=True)
-    for ax, (weight, dataframe) in zip(axs, dataframe_mp.groupby(WEIGHT_STR)):
+    for ax, (weight, dtfrm) in zip(axs, dataframe_mp.groupby(WEIGHT_STR)):
       ax.set_title(weight)
-      counts, _ = np.histogram(dataframe[TIMESTAMP_STR], bins=bins)
-      mu = np.mean(dataframe[TIMESTAMP_STR])
-      std = np.std(dataframe[TIMESTAMP_STR])
+      counts, _ = np.histogram(dtfrm[TIMESTAMP_STR], bins=bins)
+      mu = np.mean(dtfrm[TIMESTAMP_STR])
+      std = np.std(dtfrm[TIMESTAMP_STR])
       ax.bar(bins[:-1], counts, label=rf"$\mu$={mu:.2f},$\sigma$={std:.2f}",
              alpha=0.5, width=0.05)
-      for t_i, t_f in zip(z[:-1], z[1:]):
-        data = dataframe[(dataframe[PROBABILITY_STR] >= t_i) &
-                         (dataframe[PROBABILITY_STR] < t_f)][TIMESTAMP_STR]
+      for t_i, t_f in zip(THRESHOLDS[:-1], THRESHOLDS[1:]):
+        data = dtfrm[dtfrm[PROBABILITY_STR].between(t_i, t_f, inclusive='left')
+                    ][TIMESTAMP_STR]
         # TODO: Consider a KDE plot
         counts, _ = np.histogram(data, bins=bins)
         ax.step(bins[:-1], counts, where='mid', label=rf"[{t_i},{t_f})")
-      data = dataframe[dataframe[PROBABILITY_STR] >= z[-1]][TIMESTAMP_STR]
+      data = dtfrm[
+               dtfrm[PROBABILITY_STR] >= THRESHOLDS[-1]][TIMESTAMP_STR]
       counts, _ = np.histogram(data, bins=bins)
-      ax.step(bins[:-1], counts, where='mid', label=rf"[{z[-1]},1)")
+      ax.step(bins[:-1], counts, where='mid', label=rf"[{THRESHOLDS[-1]},1)")
       ax.set(xlim=(-0.5, 0.5), ylim=(0, m))
       ax.grid()
       ax.legend()
@@ -973,7 +977,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
     plt.close()
 
 def main(args : argparse.Namespace):
-  global DATA_PATH
+  global DATA_PATH, DATES
   DATA_PATH = Path(args.directory).parent
   PRED = ini.classified_loader(args)
   if args.file is None: raise ValueError("No event file given")
@@ -991,7 +995,12 @@ def main(args : argparse.Namespace):
                    TP_STR + CSV_EXT), index=False)
   time_displacement(copy.deepcopy(TP), args)
   PRED = ini.associated_loader(args)
-  print(TRUE_D)
-  print(PRED)
+  start, end = args.dates
+  if DATES is None:
+    DATES = [start]
+    while DATES[-1] <= end: DATES.append(DATES[-1] + ONE_DAY)
+  for s, e in zip(DATES[:-1], DATES[1:]):
+    PRE = PRED[PRED[TIMESTAMP_STR].between(s, e, inclusive='left')]
+    if PRE.empty: continue
 
 if __name__ == "__main__": main(ini.parse_arguments())

@@ -35,10 +35,10 @@ def event_merger_l(NEW : pd.DataFrame, OLD : pd.DataFrame, on : list) \
 # TODO: Implement polarity
 RECORD_EXTRACTOR_DAT = \
   re.compile(fr"^(?P<{STATION_STR}>[A-Z0-9\s]{{4}})"                # Station
-             fr"(?P<{P_TYPE_STR}>[ei\s]{PWAVE}[cd\s])"              # P Type
+             fr"(?P<{P_TYPE_STR}>[ei\s]{PWAVE}[cC\+dD\-\s])"        # P Type
              fr"(?P<{P_WEIGHT_STR}>[0-4])1"                         # P Weight
              fr"(?P<{BEG_DATE_STR}>\d{{10}})\s"                     # Date
-             fr"(?P<{P_TIME_STR}>[\s\d]\d{{3}}).{{8}}"                # P Time
+             fr"(?P<{P_TIME_STR}>[\s\d]{{4}}).{{8}}"                # P Time
              fr"((?P<{S_TIME_STR}>[\s\d]\d{{3}})"                   # S Time
              fr"(?P<{S_TYPE_STR}>[ei\s]{SWAVE})\s"                  # S Type
              fr"(?P<{S_WEIGHT_STR}>[0-4]))?")                       # S Weight
@@ -134,10 +134,10 @@ def event_parser_pun(filename : Path, start : UTCDateTime = None,
 
 RECORD_EXTRACTOR_HPC = re.compile(
   fr"^(?P<{STATION_STR}>[A-Z0-9\s]{{4}})"                         # Station
-  fr"(?P<{P_TYPE_STR}>[ei]{PWAVE}[cd\s])"                         # P Type
+  fr"(?P<{P_TYPE_STR}>[ei]{PWAVE}[cC\+dD\-\s])"                   # P Type
   fr"(?P<{P_WEIGHT_STR}>[0-4])1"                                  # P Weight
   fr"(?P<{BEG_DATE_STR}>\d{{10}})\s"                              # Date
-  fr"(?P<{P_TIME_STR}>\d{{4}})\s+"                                # P Time
+  fr"(?P<{P_TIME_STR}>[\s\d]{{4}})\s+"                            # P Time
   fr"(?P<{S_TIME_STR}>\d{{4}}|\d{{3}})"                           # S Time
   fr"(?P<{S_TYPE_STR}>[ei]{SWAVE}\s)"                             # S Type
   fr"(?P<{S_WEIGHT_STR}>[0-4])")                                  # S Weight
@@ -152,9 +152,9 @@ RECORD_EXTRACTOR_HPL = re.compile(
   fr"^(?P<{EVENT_STR}>\d+)\s"                                     # Event
   fr"(?P<{STATION_STR}>[A-Z0-9\s]{{4}})\s+"                       # Station
   fr".+"                                                          # Unknown
-  fr"(?P<{P_TYPE_STR}>[ei]{PWAVE}[cd\s])"                         # P Type
+  fr"(?P<{P_TYPE_STR}>[ei]{PWAVE}[cC\+dD\-\s])"                   # P Type
   fr"(?P<{P_WEIGHT_STR}>[0-4])\s"                                 # P Weight
-  fr"(?P<{P_TIME_STR}>[\s\d]\d[\s\d]\d)\s"                        # P Time
+  fr"(?P<{P_TIME_STR}>[\s\d]{{4}})\s"                             # P Time
   fr"(?P<{SECONDS_STR}>[\s\d]\d\.\d{{2}})\s"                      # Seconds
   fr".{{62}}\s"                                                   # Unknown
   fr"((?P<{S_TYPE_STR}>[ei]{SWAVE})\s"                            # S Type

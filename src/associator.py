@@ -19,6 +19,7 @@ from pyproj import Proj
 import matplotlib.pyplot as plt
 from datetime import datetime as dt
 from datetime import timedelta as td
+PROGRAM_NAME = "GaMMA"
 from gamma.utils import association, estimate_eps
 
 from constants import *
@@ -27,6 +28,9 @@ import initializer as ini
 MPI_RANK = 0
 MPI_SIZE = 1
 MPI_COMM = None
+
+THRESHOLDS : list[float] = [round(t, 2) for t in np.linspace(0.1, 0.9, 9)]
+DATES = None
 
 def station_graph(inventory : obspy.Inventory) -> None:
   x = [station.longitude for network in inventory for station in network]
@@ -122,7 +126,7 @@ class AssociateConfig:
     self.min_p_picks_per_eq = 3
     self.min_s_picks_per_eq = 2
 
-    self.max_sigma11 = 1.0
+    self.max_sigma11 = 1.0 # TODO: Explore 2.0
     self.max_sigma22 = 1.0
     self.max_sigma12 = 1.0
 
@@ -179,38 +183,41 @@ def dates2associate(args : argparse.Namespace) -> tuple:
 
 def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
                      args : argparse.Namespace) -> None:
+  global DATES
   if args.verbose: print("Associating events...")
   PRED[ID_STR] = PRED[NETWORK_STR] + PERIOD_STR + PRED[STATION_STR]
   PRED.rename(columns={PHASE_STR : TYPE_STR}, inplace=True)
   PRED[TIMESTAMP_STR] = PRED[TIMESTAMP_STR].apply(lambda x: x.datetime)
-  z = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
   start, end = dates2associate(args)
-  x = [start.datetime]
-  while x[-1] <= end.datetime: x.append(x[-1] + ONE_DAY)
+  if DATES is None:
+    DATES = [start.datetime]
+    while DATES[-1] <= end.datetime: DATES.append(DATES[-1] + ONE_DAY)
   SOURCE = []
   DETECT = pd.DataFrame(columns=HEADER_PRED)
   for (model, dataset), PRE in PRED.groupby([MODEL_STR, WEIGHT_STR]):
-    for start, end in zip(x[:-1], x[1:]):
+    for start, end in zip(DATES[:-1], DATES[1:]):
       PR = PRE[PRE[TIMESTAMP_STR].between(start, end, inclusive='left')]
       DATA = []
-      for threshold in z:
-        PR = PR[PR[PROBABILITY_STR] >= threshold]
-        if PR.empty: continue
-        catalog, assignment = association(PR, config.station,
+      for threshold in THRESHOLDS:
+        P = PR[PR[PROBABILITY_STR] >= threshold]
+        if P.empty: continue
+        catalog, assignment = association(P, config.station,
                                           config=config.__repr__(),
                                           method=config.method)
         if not (len(catalog) or len(assignment)): continue
         for i, event in enumerate(catalog):
           PICKS = pd.DataFrame(
-            [PR.loc[row] for row, idx, _ in assignment
+            [P.loc[row] for row, idx, _ in assignment
              if idx == event["event_index"]]).reset_index(drop=True)
-          PICKS[ID_STR] = i + threshold
+          PICKS[ID_STR] = i
+          PICKS[THRESHOLD_STR] = threshold
           PICKS.rename(columns={TYPE_STR : PHASE_STR}, inplace=True)
           DETECT = pd.concat([DETECT, PICKS], ignore_index=True)
-          DATA.append([model, dataset, i + threshold,
+          DATA.append([model, dataset, threshold, i,
                        dt.fromisoformat(event['time']), event[X_COORD_STR],
                        event[Y_COORD_STR], event[Z_COORD_STR],
-                       event[MAGNITUDE_STR], *([None] * 7), AST_STR])
+                       event[MAGNITUDE_STR], len(PICKS.index), *([None] * 6),
+                       PROGRAM_NAME])
       if not len(DATA): continue
       SOURCE.extend(DATA)
   SOURCE = pd.DataFrame(SOURCE, columns=HEADER_ASCT)
@@ -221,7 +228,7 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
                      ASCT_STR + CSV_EXT), index=False)
   for (model, weight, network, station), df in \
     DETECT.groupby([MODEL_STR, WEIGHT_STR, NETWORK_STR, STATION_STR]):
-    for start, end in zip(x[:-1], x[1:]):
+    for start, end in zip(DATES[:-1], DATES[1:]):
       df = df[df[TIMESTAMP_STR].between(start, end, inclusive='left')]
       if df.empty: continue
       start = start.strftime("%y%m%d")

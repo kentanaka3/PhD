@@ -25,6 +25,7 @@ import obspy
 from obspy.core.utcdatetime import UTCDateTime
 
 # SeisBench
+PROGRAM_NAME = "SeisBench"
 import seisbench.util as sbu
 import seisbench.models as sbm
 
@@ -42,6 +43,9 @@ MPI_COMM = None
 GPU_RANK = -1
 GPU_SIZE = 0
 
+WORKFOLDER = DIRSTRUCT(Path(DATA_PATH, CLF_STR))
+
+DENOISER = None
 
 @nb.njit(nogil=True)
 def filter_data_(data : np.array) -> bool:
@@ -293,7 +297,7 @@ def main(args : argparse.Namespace) -> None:
   MODELS, WAVEFORMS_DATA = set_up(args)
   if args.denoiser:
     global DENOISER
-    DENOISER = get_model(DEEPDENOISER_STR, ORIGINAL_STR, args.silent)
+    DENOISER = sbm.DeepDenoiser(sampling_rate=SAMPLING_RATE)
   if args.train: # Train
     if args.verbose: print("Training the Model")
     # Generate a Dataset
@@ -335,7 +339,7 @@ def main(args : argparse.Namespace) -> None:
           if args.verbose:
         print("Classification results for model: {}, with preloaded weight: "
           "{}, categorized by {}".format(*key, categories))
-        CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
+        CLF_FILE = Path(DATA_PATH, CLF_STR, *categories,
                 ("D_" if args.denoiser else EMPTY_STR) + \
                 UNDERSCORE_STR.join([*categories, *key]) + \
                 PICKLE_EXT)

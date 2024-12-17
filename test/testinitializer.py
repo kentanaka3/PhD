@@ -1318,8 +1318,7 @@ class TestClassifications(unittest.TestCase):
     self.assertListEqual(EXPECTED, CLASSIFICATIONS_DATA)
 
   @unittest.mock.patch("sys.argv", ["picker.py", "-d", TEST_PATH.__str__(),
-                                    "-M", PHASENET_STR, DEEPDENOISER_STR,
-                                    "-v"])
+                                    "-M", PHASENET_STR, "-v"])
   def test_semi_model(self):
     args = ini.parse_arguments()
     CLASSIFICATIONS_DATA = ini.data_header(args, CLF_STR).values.tolist()

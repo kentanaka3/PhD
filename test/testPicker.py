@@ -18,8 +18,8 @@ TEST_PATH = Path(DATA_PATH, "waveforms")
 
 class TestReadTraces(unittest.TestCase):
   def tearDown(self) -> None:
-    Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT).unlink()
-    Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT).unlink()
+    Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT).unlink(missing_ok=True)
+    Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT).unlink(missing_ok=True)
 
   @unittest.mock.patch("sys.argv", ["picker.py", "-G", BEG_DATE_STR, "-v",
                                     "-d", str(TEST_PATH)])
