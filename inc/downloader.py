@@ -29,7 +29,7 @@ def data_downloader(args : argparse.Namespace) -> None:
 
   """
   global DATA_PATH
-  DATA_PATH = Path(args.directory).parent
+  DATA_PATH = args.directory.parent
   if args.verbose:
     print("Downloading the Data to the directory:", args.directory)
   if args.pyrocko:

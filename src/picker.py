@@ -80,7 +80,7 @@ def clean_stream(stream : obspy.Stream, FMT_DICT : dict[str, str],
     TODO: Review the inplace operation of the Stream
   """
   global DATA_PATH
-  DATA_PATH : Path = args.directory.parent
+  DATA_PATH = args.directory.parent
   if args.verbose: print("Cleaning the Stream")
   # Sample has to be 100 Hz
   stream.resample(SAMPLING_RATE)
@@ -119,7 +119,7 @@ def read_traces(trace_files : pd.DataFrame, args : argparse.Namespace) \
 
   """
   global DATA_PATH
-  DATA_PATH : Path = args.directory.parent
+  DATA_PATH = args.directory.parent
   stream = obspy.Stream()
   FMT_DICT : dict[str, str] = {category : EMPTY_STR
                                for category in [NETWORK_STR, STATION_STR,
@@ -190,7 +190,7 @@ def classify_stream(clf_files : tuple[list], model : sbm.base.SeisBenchModel,
 
   """
   global DATA_PATH
-  DATA_PATH : Path = args.directory.parent
+  DATA_PATH = args.directory.parent
   for categories, trace_files in clf_files:
     output = model.classify(read_traces(trace_files, args),
                             batch_size=args.batch, P_threshold=args.pwave,
@@ -290,7 +290,7 @@ def set_up(args : argparse.Namespace) \
 
 def main(args : argparse.Namespace) -> None:
   global DATA_PATH
-  DATA_PATH : Path = args.directory.parent
+  DATA_PATH = args.directory.parent
   if args.download:
     dwn.data_downloader(args)
     return

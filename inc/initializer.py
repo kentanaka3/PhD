@@ -196,7 +196,7 @@ def dump_args(args : argparse.Namespace,
 
   """
   global DATA_PATH
-  DATA_PATH : Path = args.directory.parent
+  DATA_PATH = args.directory.parent
   ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
   arg_dict : dict[str, str] = {
     MODEL_STR     : args.models,
@@ -237,7 +237,7 @@ def read_args(args: argparse.Namespace,
 
   """
   global DATA_PATH
-  DATA_PATH : Path = args.directory.parent
+  DATA_PATH = args.directory.parent
   ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
   if not overwrite and ARGUMENTS_FILE.exists():
     arg_dict = data_loader(ARGUMENTS_FILE)
@@ -264,7 +264,7 @@ def data_header(args : argparse.Namespace,
 
   """
   global DATA_PATH
-  DATA_PATH : Path = args.directory.parent
+  DATA_PATH = args.directory.parent
   PATH = Path(DATA_PATH, folder)
   if args.verbose: print("Constructing the Table of", folder)
   if not PATH.exists(): raise FileNotFoundError
@@ -447,7 +447,7 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
     file records to be the next day
   """
   global DATA_PATH
-  DATA_PATH : Path = args.directory.parent
+  DATA_PATH = args.directory.parent
   WAVEFORMS_FILE = Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT)
   start, end = args.dates
   if not args.force and WAVEFORMS_FILE.exists() and \

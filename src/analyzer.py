@@ -990,7 +990,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
 
 def main(args : argparse.Namespace):
   global DATA_PATH, DATES
-  DATA_PATH : Path = args.directory.parent
+  DATA_PATH = args.directory.parent
   # Picker
   ANALYSIS = "Picker"
   PRED = ini.classified_loader(args)
