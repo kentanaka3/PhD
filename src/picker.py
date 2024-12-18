@@ -291,6 +291,8 @@ def set_up(args : argparse.Namespace) \
           for model_name, dataset_name in MODELS}, WAVEFORMS_DATA
 
 def main(args : argparse.Namespace) -> None:
+  global DATA_PATH
+  DATA_PATH = Path(args.directory).parent
   if args.download:
     dwn.data_downloader(args)
     return
@@ -307,30 +309,29 @@ def main(args : argparse.Namespace) -> None:
     if args.verbose: print("Testing the Model")
     if args.timing:
       # TODO: Fix timing analysis
-      TIMING = np.zeros(len(WAVEFORMS_DATA.groupby(args.groups)))
-      i = 0
-    for key, model in MODELS.items():
+      TIMING = np.zeros(len(MODELS))
+    for i, (key, model) in enumerate(MODELS.items()):
       key : list[str] = list(key)
-      if model is None: continue
       if args.verbose:
         print("Testing model: {}, with preloaded weight: {}".format(*key))
-      clf_files = []
-      clf_found = []
+      clf_files : list[tuple[tuple[str], pd.DataFrame]] = list()
+      clf_found : list[tuple[tuple[str], pd.DataFrame]] = list()
       for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
         categories = [str(c) for c in categories]
         CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
                         ("D_" if args.denoiser else EMPTY_STR) + \
                         UNDERSCORE_STR.join([*categories, *key]) + PICKLE_EXT)
+        print(CLF_FILE)
         if not args.force and CLF_FILE.exists():
           clf_found.append((categories, trace_files))
-        clf_files.append((categories, trace_files))
+        else:
+          clf_files.append((categories, trace_files))
+      print(clf_files)
       if clf_files:
         # P1
         if args.timing: start_time = MPI.Wtime()
         classify_stream(clf_files, model, key, args)
-        if args.timing:
-          TIMING[i] += MPI.Wtime() - start_time
-        i += 1
+        if args.timing: TIMING[i] += MPI.Wtime() - start_time
       """
       # TODO: Spawn two threads and synchronize them
       def classify_and_plot():
@@ -391,8 +392,11 @@ def main(args : argparse.Namespace) -> None:
     if args.timing:
       global MPI_COMM, MPI_RANK, MPI_SIZE
       TOTALS = np.zeros_like(TIMING)
-      MPI_COMM.Reduce([TIMING, MPI.DOUBLE], [TOTALS, MPI.DOUBLE], op=MPI.SUM,
-                      root=0)
+      if MPI_COMM is None:
+        TOTALS = TIMING
+      else:
+        MPI_COMM.Reduce([TIMING, MPI.DOUBLE], [TOTALS, MPI.DOUBLE], op=MPI.SUM,
+                        root=0)
       TOTALS = TOTALS / MPI_SIZE
       if MPI_RANK == 0:
         print(f"  Total time: {sum(TOTALS):.2f} s")
