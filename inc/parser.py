@@ -39,9 +39,11 @@ RECORD_EXTRACTOR_DAT = \
              fr"(?P<{P_WEIGHT_STR}>[0-4])1"                         # P Weight
              fr"(?P<{BEG_DATE_STR}>\d{{10}})\s"                     # Date
              fr"(?P<{P_TIME_STR}>[\s\d]{{4}}).{{8}}"                # P Time
-             fr"((?P<{S_TIME_STR}>[\s\d]\d{{3}})"                   # S Time
+             fr"(((?P<{S_TIME_STR}>[\s\d]{{4}})"                    # S Time
              fr"(?P<{S_TYPE_STR}>[ei\s]{SWAVE})\s"                  # S Type
-             fr"(?P<{S_WEIGHT_STR}>[0-4]))?")                       # S Weight
+             fr"(?P<{S_WEIGHT_STR}>[0-4]))|\s{{8}})\s"              # S Weight
+             fr".{{34}}"                                            # Unknown
+             fr"(?P<{EVENT_STR}>[\s\d]{{4}})")                      # Event
 EVENT_EXTRACTOR_DAT = re.compile(r"^1(\s+D)*\s*$")                  # Event
 def event_parser_dat(filename : Path, start : UTCDateTime = None,
                      end : UTCDateTime = None,
@@ -62,21 +64,22 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
       # We only consider the picks from the stations (if specified)
       result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
       if stations is not None and result[STATION_STR] not in stations: continue
-      result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
+      result[EVENT_STR] = int(result[EVENT_STR])
       result[P_TIME_STR] = \
         result[BEG_DATE_STR] + td(seconds=float(result[P_TIME_STR][:2] + \
                                                 PERIOD_STR + \
                                                 result[P_TIME_STR][2:]))
-      DATA.append([None, result[P_TIME_STR], result[P_WEIGHT_STR], PWAVE,
-                   None, result[STATION_STR]])
+      DATA.append([result[EVENT_STR], result[P_TIME_STR],
+                   int(result[P_WEIGHT_STR]), PWAVE, None,
+                   result[STATION_STR]])
       if result[S_TYPE_STR]:
-        result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
         result[S_TIME_STR] = \
           result[BEG_DATE_STR] + td(seconds=float(result[S_TIME_STR][:2] + \
                                                   PERIOD_STR + \
                                                   result[S_TIME_STR][2:]))
-        DATA.append([None, result[S_TIME_STR], result[S_WEIGHT_STR], SWAVE,
-                     None, result[STATION_STR]])
+        DATA.append([result[EVENT_STR], result[S_TIME_STR],
+                     int(result[S_WEIGHT_STR]), SWAVE, None,
+                     result[STATION_STR]])
       continue
     print("WARNING: (DAT) Unable to parse line:", line)
   return None, pd.DataFrame(DATA, columns=HEADER_MANL)
@@ -150,8 +153,8 @@ def event_parser_hpc(filename : Path, start : UTCDateTime = None,
 
 RECORD_EXTRACTOR_HPL = re.compile(
   fr"^(?P<{EVENT_STR}>\d+)\s"                                     # Event
-  fr"(?P<{STATION_STR}>[A-Z0-9\s]{{4}})\s+"                       # Station
-  fr".+"                                                          # Unknown
+  fr"(?P<{STATION_STR}>[A-Z0-9\s]{{4}})\s{{2}}"                   # Station
+  fr".{{12}}\s"                                                   # Unknown
   fr"(?P<{P_TYPE_STR}>[ei]{PWAVE}[cC\+dD\-\s])"                   # P Type
   fr"(?P<{P_WEIGHT_STR}>[0-4])\s"                                 # P Weight
   fr"(?P<{P_TIME_STR}>[\s\d]{{4}})\s"                             # P Time
@@ -311,7 +314,7 @@ def event_parser(filename : Path, start : UTCDateTime = None,
     DETECT = pd.DataFrame(columns=HEADER_MANL)
     FIND_SRC = [TIMESTAMP_STR, LONGITUDE_STR, LATITUDE_STR, LOCAL_DEPTH_STR,
                 MAGNITUDE_STR, NO_STR]
-    FIND_DTC = [TIMESTAMP_STR, PROBABILITY_STR, PHASE_STR, STATION_STR]
+    FIND_DTC = [ID_STR, TIMESTAMP_STR, PROBABILITY_STR, PHASE_STR, STATION_STR]
     for sfx, (source, detect) in results:
       if sfx == PUN_EXT: SOURCE = event_merger_l(SOURCE, source, FIND_SRC)
       elif sfx == DAT_EXT: DETECT = event_merger_l(DETECT, detect, FIND_DTC)

@@ -132,8 +132,7 @@ def read_traces(trace_files : pd.DataFrame, args : argparse.Namespace) \
       # TODO: Download the file
       print("CRITICAL: File not found:", row.name)
       continue
-    else:
-      stream += obspy.read(row.name)
+    else: stream += obspy.read(row.name)
   # Clean the stream
   return clean_stream(stream, FMT_DICT, args)
 
@@ -198,8 +197,7 @@ def classify_stream(clf_files : tuple[list], model : sbm.base.SeisBenchModel,
                             S_threshold=args.swave).picks
     CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
                     ("D_" if args.denoiser else EMPTY_STR) + \
-                    UNDERSCORE_STR.join([*categories, *key]) + \
-                    PICKLE_EXT)
+                    UNDERSCORE_STR.join([*categories, *key]) + PICKLE_EXT)
     CLF_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(CLF_FILE, 'wb') as fp: pickle.dump(output, fp)
 
@@ -307,9 +305,7 @@ def main(args : argparse.Namespace) -> None:
     # Save the model
   else: # Test
     if args.verbose: print("Testing the Model")
-    if args.timing:
-      # TODO: Fix timing analysis
-      TIMING = np.zeros(len(MODELS))
+    if args.timing: TIMING = np.zeros(len(MODELS))
     for i, (key, model) in enumerate(MODELS.items()):
       key : list[str] = list(key)
       if args.verbose:
@@ -323,10 +319,9 @@ def main(args : argparse.Namespace) -> None:
                         UNDERSCORE_STR.join([*categories, *key]) + PICKLE_EXT)
         if not args.force and CLF_FILE.exists():
           clf_found.append((categories, trace_files))
-        else:
-          clf_files.append((categories, trace_files))
+        else: clf_files.append((categories, trace_files))
+      # P1
       if clf_files:
-        # P1
         if args.timing: start_time = MPI.Wtime()
         classify_stream(clf_files, model, key, args)
         if args.timing: TIMING[i] += MPI.Wtime() - start_time
@@ -371,8 +366,7 @@ def main(args : argparse.Namespace) -> None:
           with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)
           print(output)
           if args.interactive:
-            stream = read_traces(trace_files, args)
-            interactive_plot(stream, output, *key)
+            interactive_plot(read_traces(trace_files, args), output, *key)
       # synchronize
       if args.verbose:
         for categories, trace_files in clf_files:
@@ -385,16 +379,13 @@ def main(args : argparse.Namespace) -> None:
           with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)
           print(output)
           if args.interactive:
-            stream = read_traces(trace_files, args)
-            interactive_plot(stream, output, *key)
+            interactive_plot(read_traces(trace_files, args), output, *key)
     if args.timing:
       global MPI_COMM, MPI_RANK, MPI_SIZE
       TOTALS = np.zeros_like(TIMING)
-      if MPI_COMM is None:
-        TOTALS = TIMING
-      else:
-        MPI_COMM.Reduce([TIMING, MPI.DOUBLE], [TOTALS, MPI.DOUBLE], op=MPI.SUM,
-                        root=0)
+      if MPI_COMM is None: TOTALS = TIMING
+      else: MPI_COMM.Reduce([TIMING, MPI.DOUBLE], [TOTALS, MPI.DOUBLE],
+                            op=MPI.SUM, root=0)
       TOTALS = TOTALS / MPI_SIZE
       if MPI_RANK == 0:
         print(f"  Total time: {sum(TOTALS):.2f} s")
