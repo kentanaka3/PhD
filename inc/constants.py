@@ -46,6 +46,8 @@ FILE_STR = "file"
 TEMPORAL_STR = "tmp"
 STATUS_STR = "status"
 SECONDS_STR = "seconds"
+SOURCE_STR = "SOURCE"
+DETECT_STR = "DETECT"
 
 TRUE_STR = "TRUE"
 PRED_STR = "PRED"

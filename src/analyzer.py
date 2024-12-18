@@ -892,6 +892,8 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
     | EVENT | STATION | PHASE | BEGDT | WEIGHT |
     --------------------------------------------
   """
+  global DATA_PATH
+  DATA_PATH = args.directory.parent
   WAVEFORMS_DATA = ini.waveform_table(args)
   # TODO: Stations are not considered due to the low amount of data
   SOURCE, DETECT = prs.event_parser(filename, *args.dates, None)
@@ -909,6 +911,13 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
     TRUE_D = pd.concat([TRUE_D, DETECT[
       (DETECT[TIMESTAMP_STR].between(start, end, inclusive='left')) &
       (DETECT[STATION_STR].isin(station))]])
+  if args.verbose:
+    TRUE_S.to_csv(Path(DATA_PATH,
+                       UNDERSCORE_STR.join([TRUE_STR, SOURCE_STR]) + CSV_EXT),
+                       index=False)
+    TRUE_D.to_csv(Path(DATA_PATH,
+                       UNDERSCORE_STR.join([TRUE_STR, DETECT_STR]) + CSV_EXT),
+                       index=False)
   return TRUE_S, TRUE_D
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
@@ -981,18 +990,17 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
 
 def main(args : argparse.Namespace):
   global DATA_PATH, DATES
-  DATA_PATH = Path(args.directory).parent
+  DATA_PATH : Path = args.directory.parent
   # Picker
   ANALYSIS = "Picker"
   PRED = ini.classified_loader(args)
-  if args.file is None: raise ValueError("No event file given")
-  TRUE_S, TRUE_D = event_parser(args.file, args)
-  TRUE_D = TRUE_D[TRUE_D[STATION_STR].isin(PRED[STATION_STR].unique())]
   if args.verbose:
-    TRUE_D.to_csv(Path(DATA_PATH, TRUE_STR + CSV_EXT), index=False)
     PRED.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                      UNDERSCORE_STR.join([ANALYSIS, PRED_STR]) + CSV_EXT),
                      index=False)
+  if args.file is None: raise ValueError("No event file given")
+  TRUE_S, TRUE_D = event_parser(args.file, args)
+  TRUE_D = TRUE_D[TRUE_D[STATION_STR].isin(PRED[STATION_STR].unique())]
   # plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PRED), args)
   # plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PRED), args, phase=SWAVE)
   TP = stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(PRED), args, ANALYSIS)

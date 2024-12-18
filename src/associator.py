@@ -258,7 +258,7 @@ def set_up(args : argparse.Namespace) -> AssociateConfig:
 
   """
   global DATA_PATH
-  DATA_PATH = Path(args.directory).parent
+  DATA_PATH : Path = args.directory.parent
   # global MPI_SIZE, MPI_RANK, MPI_COMM
   # MPI_COMM = MPI.COMM_WORLD
   # MPI_SIZE = MPI_COMM.Get_size()
@@ -282,7 +282,7 @@ def set_up(args : argparse.Namespace) -> AssociateConfig:
 
 def main(args : argparse.Namespace) -> None:
   global DATA_PATH
-  DATA_PATH = Path(args.directory).parent
+  DATA_PATH : Path = args.directory.parent
   CONFIG = set_up(args)
   # if args.verbose: station_graph(INVENTORY)
   PRED = ini.classified_loader(args)

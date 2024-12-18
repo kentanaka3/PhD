@@ -24,4 +24,5 @@ etna_data/*
 *.nsys-rep
 data/arguments.json
 *HIST_*_*_*.png
+*EVNT_*_*_*.png
 *CP_*_*_*.png
