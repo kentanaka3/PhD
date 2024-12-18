@@ -30,16 +30,16 @@ testAnalyzer:
 	bash Analyze.sh 1 1 TestAnalyzer test/testAnalyzer.py
 
 testAssociator:
-	bash Analyze.sh 1 "1 2 4" TestAssociator test/testAssociator.py
+	bash Analyze.sh 1 "1 2 4" TestAssociator test/testassociator.py
 
 picker:
-	bash Analyze.sh 1 "1 2 4" AUTOMATER src/picker.py -v --force
+	bash Analyze.sh 1 4 AUTOMATER_PICKER src/picker.py -v -D 230601 240630
 
 analyzer:
-	bash Analyze.sh 1 1 AUTOMATER src/analyzer.py -v --file ./data/manual/RSFVG-2023.dat -D 230601 240630
+	bash Analyze.sh 1 1 AUTOMATER_ANALYZER src/analyzer.py -v --file ./data/manual -D 230601 240630
 
 associator:
-	bash Analyze.sh 1 "1 2 4" AUTOMATER src/catalogger.py -v --force
+	bash Analyze.sh 1 1 AUTOMATER_ASSOCIATOR src/associator.py -v
 
 clean:
 	rm -f k*.err k*.out report*.nsys-rep report*.qdstrm; module purge; clear
