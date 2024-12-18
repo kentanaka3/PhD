@@ -321,12 +321,10 @@ def main(args : argparse.Namespace) -> None:
         CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
                         ("D_" if args.denoiser else EMPTY_STR) + \
                         UNDERSCORE_STR.join([*categories, *key]) + PICKLE_EXT)
-        print(CLF_FILE)
         if not args.force and CLF_FILE.exists():
           clf_found.append((categories, trace_files))
         else:
           clf_files.append((categories, trace_files))
-      print(clf_files)
       if clf_files:
         # P1
         if args.timing: start_time = MPI.Wtime()
