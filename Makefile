@@ -32,6 +32,9 @@ testAnalyzer:
 testAssociator:
 	bash Analyze.sh 1 "1 2 4" TestAssociator test/testassociator.py
 
+testParser:
+	python test/testparser.py
+
 picker:
 	bash Analyze.sh 1 4 AUTOMATER_PICKER src/picker.py -v -D 230601 240630
 
