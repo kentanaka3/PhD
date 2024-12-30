@@ -206,6 +206,89 @@ class TestParser(unittest.TestCase):
   def test_event_parser_hpc(self):
     pass
 
+  @unittest.mock.patch("sys.argv",
+    ["parser.py", "-v", "-d", str(TEST_PATH), "-D", "210101", "210106",
+     "--file", FILENAME.__str__() + QML_EXT, "-S", "BOO","BAD"])
+  def test_event_parser_qml(self):
+    args = ini.parse_arguments()
+    source, detect = event_parser_qml(args.file, *args.dates, args.station)
+    source = source.values.tolist()
+    EXPECTED = [
+      [None, UTCDateTime(2021, 1, 1, 0, 3, 33, 320000), 44.32, 10.881, 30770.0,
+       None, 10, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 1, 3, 10, 51, 510000), 46.0527, 10.5512,
+       2910.0, None, 10, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 1, 3, 59, 14, 770000), 45.2475, 11.0498,
+       5750.0, None, 17, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 1, 11, 33, 12, 80000), 45.89, 11.955,
+       12830.0, None, 8, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 1, 16, 42, 27, 940000), 46.362, 12.4535,
+       6580.0, None, 10, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 1, 20, 2, 20, 630000), 46.2537, 13.3, 7350.0,
+       None, 33, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 2, 5, 4, 29, 180000), 46.0075, 13.9757,
+       22530.0, None, 29, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 3, 1, 15, 39, 460000), 46.9378, 11.3628,
+       7000.0, None, 17, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 3, 13, 24, 53, 130000), 45.6982, 14.2027,
+       9810.0, None, 21, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 4, 11, 5, 28, 910000), 45.7462, 11.0898,
+       4990.0, None, 8, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 4, 12, 35, 35, 430000), 45.5425, 10.8292,
+       8770.0, None, 10, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 4, 13, 58, 53, 730000), 46.5007, 13.1098,
+       8900.0, None, 25, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 4, 16, 20, 13, 340000), 45.7998, 11.3652,
+       11050.0, None, 12, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 4, 21, 12, 15, 270000), 45.2192, 10.777,
+       16980.0, None, 25, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 5, 2, 31, 31, 450000), 46.0593, 11.7803,
+       8640.0, None, 8, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 5, 11, 42, 2, 870000), 46.3697, 12.5718,
+       7770.0, None, 15, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 5, 19, 48, 3, 610000), 46.2372, 14.3093,
+       12330.0, None, 33, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 6, 15, 41, 10, 700000), 46.3618, 12.941,
+       10100.0, None, 18, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 6, 17, 1, 44, 410000), 45.3923, 16.204,
+       23510.0, None, 24, None, None, None, None, None, None, 'earthquake'],
+      [None, UTCDateTime(2021, 1, 6, 19, 47, 6, 420000), 46.589, 10.6327,
+       7170.0, None, 9, None, None, None, None, None, None, 'earthquake']
+    ]
+    self.assertListEqual(EXPECTED, source)
+    detect = detect.values.tolist()
+    EXPECTED = [
+      [None, UTCDateTime(2021, 1, 1, 20, 2, 22, 140000), 0.1, PWAVE, 'OX',
+       'BAD'],
+      [None, UTCDateTime(2021, 1, 1, 20, 2, 23, 300000), 0.2, SWAVE, 'OX',
+       'BAD'],
+      [None, UTCDateTime(2021, 1, 1, 20, 2, 23, 740000), 0.5, PWAVE, 'OX',
+       'BOO'],
+      [None, UTCDateTime(2021, 1, 1, 20, 2, 26, 250000), 0.5, SWAVE, 'OX',
+       'BOO'],
+      [None, UTCDateTime(2021, 1, 2, 5, 4, 40, 180000), 1.0, PWAVE, 'OX',
+       'BAD'],
+      [None, UTCDateTime(2021, 1, 2, 5, 4, 42, 460000), 1.0, PWAVE, 'OX',
+       'BOO'],
+      [None, UTCDateTime(2021, 1, 4, 13, 58, 57, 570000), 0.5, PWAVE, 'OX',
+       'BOO'],
+      [None, UTCDateTime(2021, 1, 4, 13, 59, 0, 460000), 0.5, SWAVE, 'OX',
+       'BOO'],
+      [None, UTCDateTime(2021, 1, 4, 13, 58, 59, 340000), 0.5, PWAVE, 'OX',
+       'BAD'],
+      [None, UTCDateTime(2021, 1, 4, 13, 59, 3, 780000), 0.5, SWAVE, 'OX',
+       'BAD'],
+      [None, UTCDateTime(2021, 1, 5, 19, 48, 17, 750000), 1.0, PWAVE, 'OX',
+       'BAD'],
+      [None, UTCDateTime(2021, 1, 6, 15, 41, 13, 410000), 0.1, PWAVE, 'OX',
+       'BOO'],
+      [None, UTCDateTime(2021, 1, 6, 15, 41, 15, 640000), 0.5, SWAVE, 'OX',
+       'BOO'],
+      [None, UTCDateTime(2021, 1, 6, 15, 41, 15, 650000), 0.5, PWAVE, 'OX',
+       'BAD'],
+      [None, UTCDateTime(2021, 1, 6, 15, 41, 19, 390000), 1.0, SWAVE, 'OX',
+       'BAD']]
+
   @unittest.mock.patch("sys.argv", ["parser.py", "-v", "-d", str(TEST_PATH),
                                     "--file", MNL_DATA_PATH.__str__(),
                                     "-S", "CAE", "BAD"])

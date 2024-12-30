@@ -1030,6 +1030,6 @@ def main(args : argparse.Namespace):
     TP.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                    UNDERSCORE_STR.join([ANALYSIS, TP_STR]) + CSV_EXT),
                    index=False)
-  time_displacement(copy.deepcopy(TP), args)
+  time_displacement(copy.deepcopy(TP), args, method=ANALYSIS)
 
 if __name__ == "__main__": main(ini.parse_arguments())

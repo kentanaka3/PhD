@@ -5,6 +5,7 @@ from numpy import nan as NaN
 from obspy import UTCDateTime
 from numpy import isnan as isNaN
 from datetime import timedelta as td
+from obspy.core.event import read_events as obspy_read_events
 from concurrent.futures import ThreadPoolExecutor
 
 from constants import *
@@ -268,14 +269,75 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
   DETECT = pd.DataFrame(DETECT, columns=HEADER_MANL)
   return SOURCE, DETECT
 
+# TODO: Implement ObsPy Catalog for OGS files
+# TODO: Implement ObsPy Event for OGS files
+# TODO: Implement ObsPy Origin for OGS files
 def event_parser_qml(filename : Path, start : UTCDateTime = None,
                      end : UTCDateTime = None,
                      stations : set[str] = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
-  pass
+  SOURCE : list[list] = list()
+  DETECT : list[list] = list()
+  for event in obspy_read_events(filename):
+    if len(event.origins): e_origin = event.origins[0]
+    else: continue
+    e_time = e_origin.time
+    if start is not None and e_time < start: continue
+    if end is not None and e_time >= end + ONE_DAY: break
+    DETECT.extend([[None, pick.time, pick.time_errors.uncertainty,
+                    pick.phase_hint, pick.waveform_id.network_code,
+                    pick.waveform_id.station_code] for pick in event.picks])
+    SOURCE.append([None, e_time, e_origin.latitude, e_origin.longitude,
+                   e_origin.depth, None, len(event.picks), *([None] * 6),
+                   event.event_type])
+  DETECT = pd.DataFrame(DETECT, columns=HEADER_MANL)
+  DETECT = DETECT[DETECT[STATION_STR].isin(stations)] if stations else DETECT
+  SOURCE = pd.DataFrame(SOURCE, columns=HEADER_SRC)
+  return SOURCE, DETECT
+
+STATION_EXTRACTOR_MOD = re.compile(
+  fr"^(?P<{STATION_STR}>[A-Z0-9\s]{{4}})"                         # Station
+  fr"(?P<{LONGITUDE_STR}>[\s\d]{{4}}\.\d{{2}}[NS])\s"             # Longitude
+  fr"(?P<{LATITUDE_STR}>[\s\d]{{4}}\.\d{{2}}[EW])"                # Latitude
+  fr"(?P<{LOCAL_DEPTH_STR}>[\s\d]{{4}}).*"                        # Depth
+  fr"[\.\s](?P<{TIMESTAMP_STR}>[A-Z\d]+)?\s*$"                    # Unknown
+)
+def event_parser_mod(filename : Path,
+                     stations : set[str] = None) -> dict[str, str]:
+  if not filename.exists(): raise FileNotFoundError(filename)
+  STATIONS = {station : station for station in stations} \
+             if stations is not None else dict()
+  DATA = list()
+  with open(filename, 'r') as fr: lines = fr.readlines()
+  for line in [l.strip() for l in lines]:
+    match = STATION_EXTRACTOR_MOD.match(line)
+    if match:
+      result = match.groupdict()
+      result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
+      if stations is not None and result[STATION_STR] not in STATIONS:
+        continue
+      if len(result[TIMESTAMP_STR]) <= 4:
+        result[TIMESTAMP_STR] = result[STATION_STR]
+      result[LONGITUDE_STR] = \
+        result[LONGITUDE_STR][:2] + DASH_STR + \
+        result[LONGITUDE_STR][2:-1].replace(SPACE_STR, "0")
+      result[LATITUDE_STR] = result[LATITUDE_STR][:2] + DASH_STR + \
+                             result[LATITUDE_STR][2:-1].replace(SPACE_STR, "0")
+      DATA.append([result[STATION_STR], result[LONGITUDE_STR],
+                   result[LATITUDE_STR],
+                   int(result[LOCAL_DEPTH_STR].replace(SPACE_STR, "0")), None])
+      STATIONS[result[STATION_STR]] = result[TIMESTAMP_STR]
+      continue
+    print("WARNING: (MOD) Unable to parse line:", line)
+  DATA = pd.DataFrame(DATA, columns=HEADER_SNSR)
+  DATA = DATA[DATA[STATION_STR].isin(STATIONS.keys())]
+  for code, name in STATIONS.items():
+    DATA.loc[DATA[STATION_STR] == code][TIMESTAMP_STR] = name
+  return STATIONS
 
 def event_parser_(filename : Path, start : UTCDateTime = None,
-                  end : UTCDateTime = None, stations : set[str] = None) -> pd.DataFrame:
+                  end : UTCDateTime = None,
+                  stations : set[str] = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
   sfx = filename.suffix
   if sfx == DAT_EXT:
@@ -286,6 +348,8 @@ def event_parser_(filename : Path, start : UTCDateTime = None,
     return event_parser_hpc(filename, start, end, stations)
   elif sfx == HPL_EXT:
     return event_parser_hpl(filename, start, end, stations)
+  elif sfx == MOD_EXT:
+    return event_parser_mod(filename, start, end, stations)
   elif sfx == QML_EXT:
     return event_parser_qml(filename, start, end, stations)
   print(ValueError(f"WARNING: Unknown file extension: {sfx}"))
@@ -305,6 +369,8 @@ def event_parser(filename : Path, start : UTCDateTime = None,
         source, detect = event_parser_dat(file, start, end, stations)
       elif sfx == HPL_EXT:
         source, detect = event_parser_hpl(file, start, end, stations)
+      elif sfx == QML_EXT:
+        source, detect = event_parser_qml(file, start, end, stations)
       else:
         print(ValueError(f"WARNING: Unknown file extension: {sfx}"))
       return sfx, (source, detect)
@@ -323,6 +389,11 @@ def event_parser(filename : Path, start : UTCDateTime = None,
         DETECT = event_merger_l(DETECT, detect, FIND_DTC)
     if DETECT is not None and not DETECT.empty:
       SOURCE = SOURCE[SOURCE[ID_STR].isin(DETECT[ID_STR].unique())]
+    for file in filename.iterdir():
+      if file.suffix == MOD_EXT:
+        stations = event_parser_mod(file, stations)
+        for code, name in stations.items():
+          DETECT.loc[DETECT[STATION_STR] == code][STATION_STR] = name
   else:
     SOURCE, DETECT = event_parser_(filename, start, end, stations)
   return SOURCE, DETECT
