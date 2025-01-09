@@ -176,7 +176,7 @@ EVENT_EXTRACTOR_HPL = re.compile(
   fr"(?P<{NO_STR}>[\s\d]\d)?\s+"                                  # NO
 )
 LOCATION_EXTRACTOR_HPL = re.compile(
-  fr"^\^(?P<{LOC_NAME_STR}>[A-Z\s]+\s\([A-Z]+\))"
+  fr"^\^(?P<{LOC_NAME_STR}>[A-Z\s\.']+\s\([A-Z]+\))"
 )
 NOTES_EXTRACTOR_HPL = re.compile(
   fr"^\*\s+(?P<{NOTES_STR}>.*)"

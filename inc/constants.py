@@ -68,6 +68,24 @@ F1_STR = "F1 Score"
 PWAVE = "P"
 SWAVE = "S"
 
+PHASES_DICT = {
+  "trace_p_arrival_sample": PWAVE,
+  "trace_pP_arrival_sample": PWAVE,
+  "trace_P_arrival_sample": PWAVE,
+  "trace_P1_arrival_sample": PWAVE,
+  "trace_Pg_arrival_sample": PWAVE,
+  "trace_Pn_arrival_sample": PWAVE,
+  "trace_PmP_arrival_sample": PWAVE,
+  "trace_pwP_arrival_sample": PWAVE,
+  "trace_pwPm_arrival_sample": PWAVE,
+  "trace_s_arrival_sample": SWAVE,
+  "trace_S_arrival_sample": SWAVE,
+  "trace_S1_arrival_sample": SWAVE,
+  "trace_Sg_arrival_sample": SWAVE,
+  "trace_SmS_arrival_sample": SWAVE,
+  "trace_Sn_arrival_sample": SWAVE,
+}
+
 # Thresholds
 PWAVE_THRESHOLD = 0.2
 SWAVE_THRESHOLD = 0.1
@@ -203,6 +221,8 @@ BAYES_GAUSS_MIX_MODEL_STR = "B" + GAUSS_MIX_MODEL_STR
 
 ARGUMENTS_STR = "arguments"
 WAVEFORMS_STR = "waveforms"
+DATASETS_STR = "datasets"
+MODELS_STR = "models"
 
 PHASE_STR = "PHASE"
 EVENT_STR = "EVENT"
@@ -262,7 +282,6 @@ ODC_CLIENT_STR    = "ODC"
 GEONET_CLIENT_STR = "GEONET"
 OGS_CLIENT_STR    = "http://158.110.30.217:8080"
 RASPISHAKE_CLIENT_STR = "RASPISHAKE"
-
 
 # Headers
 HEADER_MODL = [MODEL_STR, WEIGHT_STR, THRESHOLD_STR]

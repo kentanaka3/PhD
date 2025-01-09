@@ -130,6 +130,8 @@ def parse_arguments():
                       required=False, help="Force running all the pipeline")
   parser.add_argument("--pyrocko", default=False, action='store_true',
                       help="Enable PyRocko calls")
+  parser.add_argument("-pyocto", default=False, action='store_true',
+                      help="Enable PyOcto calls")
   parser.add_argument("--timing", default=False, action='store_true',
                       required=False, help="Enable timing")
   date_group = parser.add_mutually_exclusive_group(required=False)

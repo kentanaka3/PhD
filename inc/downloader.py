@@ -71,7 +71,6 @@ def data_downloader(args : argparse.Namespace) -> None:
     mdl.download(domain, restrictions, mseed_storage=args.directory.__str__(),
                  stationxml_storage=Path(DATA_PATH, STATION_STR).__str__())
 
-
 def main(args : argparse.Namespace) -> None:
   """
   Main function to download the data from the server based on the specified

@@ -195,7 +195,7 @@ def classify_stream(clf_files : tuple[list], model : sbm.base.SeisBenchModel,
     output = model.classify(read_traces(trace_files, args),
                             batch_size=args.batch, P_threshold=args.pwave,
                             S_threshold=args.swave).picks
-    CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
+    CLF_FILE = Path(DATA_PATH, CLF_STR, *categories,
                     ("D_" if args.denoiser else EMPTY_STR) + \
                     UNDERSCORE_STR.join([*categories, *key]) + PICKLE_EXT)
     CLF_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -267,8 +267,12 @@ def set_up(args : argparse.Namespace) \
     if args.verbose:
       print("MPI size:", MPI_SIZE)
       print("GPU size:", GPU_SIZE)
-    MODELS = [(m, w) for m, w in itertools.product(args.models, args.weights)
-              if get_model(m, w, True) is not None]
+    if args.train:
+      MODELS = [(m, w) for m, w in itertools.product(args.models, args.weights)
+                if m in MODEL_WEIGHTS_DICT]
+    else:
+      MODELS = [(m, w) for m, w in itertools.product(args.models, args.weights)
+                if get_model(m, w, True) is not None]
     WAVEFORMS_DATA = ini.waveform_table(args)
   MODELS = MPI_COMM.bcast(MODELS, root=0)
   WAVEFORMS_DATA = MPI_COMM.bcast(WAVEFORMS_DATA, root=0)
@@ -284,9 +288,13 @@ def set_up(args : argparse.Namespace) \
   # Assign the models to the current process
   MODELS = MODELS[start_idx:end_idx]
   if args.verbose: print(f"Process {MPI_RANK} handles models {MODELS}")
-  return {(model_name, dataset_name) :
-            get_model(model_name, dataset_name, args.silent)
-          for model_name, dataset_name in MODELS}, WAVEFORMS_DATA
+  if args.train:
+    return {(model_name, dataset_name) : MODEL_WEIGHTS_DICT[model_name]
+            for model_name, dataset_name in MODELS}, WAVEFORMS_DATA
+  else:
+    return {(model_name, dataset_name) :
+              get_model(model_name, dataset_name, args.silent)
+            for model_name, dataset_name in MODELS}, WAVEFORMS_DATA
 
 def main(args : argparse.Namespace) -> None:
   global DATA_PATH
@@ -295,17 +303,59 @@ def main(args : argparse.Namespace) -> None:
     dwn.data_downloader(args)
     return
   MODELS, WAVEFORMS_DATA = set_up(args)
+  if args.timing: TIMING = np.zeros(len(MODELS))
   if args.denoiser:
     global DENOISER
     DENOISER = sbm.DeepDenoiser(sampling_rate=SAMPLING_RATE)
   if args.train: # Train
     if args.verbose: print("Training the Model")
-    # Generate a Dataset
-    # Train the model
-    # Save the model
+    from parser import event_parser
+    import seisbench as sb
+    import seisbench.data as sbd
+    import seisbench.generate as sbg
+    from torch.utils.data import DataLoader
+    for i, (key, model) in enumerate(MODELS.items()):
+      key : list[str] = list(key)
+      dataset_path = Path(sb.cache_root, DATASETS_STR, key[-1])
+      if not dataset_path.exists():
+        #dataset_path.mkdir(parents=True, exist_ok=True)
+        if args.file:
+          SOURCE, DETECT = event_parser(args.file, *args.dates)
+          print(SOURCE, DETECT)
+        else:
+          print("WARNING: obspy.clients.fdsn.header.FDSNNoDataException: "
+                "No data available for request. HTTP Status code: 204")
+          from obspy.clients.fdsn import Client
+          from obspy.core.event import Catalog
+          CATALOG = Catalog()
+          for client in args.client:
+            if args.rectdomain:
+              CATALOG += Client(client).get_events(*args.dates,
+                           minlatitude=args.rectdomain[0],
+                           maxlatitude=args.rectdomain[1],
+                           minlongitude=args.rectdomain[2],
+                           maxlongitude=args.rectdomain[3],
+                           includearrivals=True)
+            elif args.circdomain:
+              CATALOG += Client(client).get_events(*args.dates,
+                           latitude=args.circdomain[0],
+                           longitude=args.circdomain[1],
+                           minradius=args.circdomain[2],
+                           maxradius=args.circdomain[3],
+                           includearrivals=True)
+          # TODO: Extract the SOURCE and DETECT from the CATALOG
+        exit()
+      DATASET = sbd.WaveformDataset(dataset_path, sampling_rate=SAMPLING_RATE)
+      if args.verbose:
+        print("Dataset Metadata:")
+        print(DATASET.metadata)
+      if args.verbose:
+        print("Training model: {}, with weight name: {}".format(*key))
+      # Generate a Dataset
+      # Train the model
+      # Save the model
   else: # Test
     if args.verbose: print("Testing the Model")
-    if args.timing: TIMING = np.zeros(len(MODELS))
     for i, (key, model) in enumerate(MODELS.items()):
       key : list[str] = list(key)
       if args.verbose:
@@ -314,7 +364,7 @@ def main(args : argparse.Namespace) -> None:
       clf_found : list[tuple[tuple[str], pd.DataFrame]] = list()
       for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
         categories = [str(c) for c in categories]
-        CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
+        CLF_FILE = Path(DATA_PATH, CLF_STR, *categories,
                         ("D_" if args.denoiser else EMPTY_STR) + \
                         UNDERSCORE_STR.join([*categories, *key]) + PICKLE_EXT)
         if not args.force and CLF_FILE.exists():
@@ -359,7 +409,7 @@ def main(args : argparse.Namespace) -> None:
         for categories, trace_files in clf_found:
           print("Classification results for model: {}, with preloaded weight: "
                 "{}, categorized by {}".format(*key, categories))
-          CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
+          CLF_FILE = Path(DATA_PATH, CLF_STR, *categories,
                           ("D_" if args.denoiser else EMPTY_STR) + \
                           UNDERSCORE_STR.join([*categories, *key]) + \
                           PICKLE_EXT)
@@ -372,7 +422,7 @@ def main(args : argparse.Namespace) -> None:
         for categories, trace_files in clf_files:
           print("Classification results for model: {}, with preloaded weight: "
                 "{}, categorized by {}".format(*key, categories))
-          CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
+          CLF_FILE = Path(DATA_PATH, CLF_STR, *categories,
                           ("D_" if args.denoiser else EMPTY_STR) + \
                           UNDERSCORE_STR.join([*categories, *key]) + \
                           PICKLE_EXT)

@@ -286,6 +286,8 @@ def main(args : argparse.Namespace) -> None:
   CONFIG = set_up(args)
   # if args.verbose: station_graph(INVENTORY)
   PRED = ini.classified_loader(args)
+  # TODO: Implement the pyocto method
+  if args.pyocto: pass
   DATA, PRED = associate_events(copy.deepcopy(PRED), CONFIG, args)
   return
 
