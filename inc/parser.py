@@ -36,16 +36,17 @@ def event_merger_l(NEW : pd.DataFrame, OLD : pd.DataFrame, on : list) \
 # TODO: Implement polarity
 RECORD_EXTRACTOR_DAT = \
   re.compile(fr"^(?P<{STATION_STR}>[A-Z0-9\s]{{4}})"                # Station
-             fr"(?P<{P_TYPE_STR}>[ei\s]{PWAVE}[cC\+dD\-\s])"        # P Type
-             fr"(?P<{P_WEIGHT_STR}>[0-4])1"                         # P Weight
+             fr"(?P<{P_TYPE_STR}>[aei\s][Pp][cC\+0-4dD\-Up\s])"     # P Type
+             fr"(?P<{P_WEIGHT_STR}>[0-4\s])[1-4]"                   # P Weight
              fr"(?P<{BEG_DATE_STR}>\d{{10}})\s"                     # Date
              fr"(?P<{P_TIME_STR}>[\s\d]{{4}}).{{8}}"                # P Time
              fr"(((?P<{S_TIME_STR}>[\s\d]{{4}})"                    # S Time
-             fr"(?P<{S_TYPE_STR}>[ei\s]{SWAVE})\s"                  # S Type
-             fr"(?P<{S_WEIGHT_STR}>[0-4]))|\s{{8}})\s"              # S Weight
-             fr".{{34}}"                                            # Unknown
-             fr"(?P<{EVENT_STR}>[\s\d]{{4}})")                      # Event
-EVENT_EXTRACTOR_DAT = re.compile(r"^1(\s+D)*\s*$")                  # Event
+             fr"(?P<{S_TYPE_STR}>[esi?46\s][Ss][cC\+0-4dD\-Ue?\s])" # S Type
+             fr"(?P<{S_WEIGHT_STR}>[0-4\s]))|\s{{8}})"              # S Weight
+             fr"(.{{35}}"                                           # Unknown
+             fr"(?P<{EVENT_STR}>[\s\d]{{4}}))*")                    # Event
+EVENT_EXTRACTOR_DAT = re.compile(r"^1\s+.*$")                       # Event
+#print(RECORD_EXTRACTOR_DAT.pattern)
 def event_parser_dat(filename : Path, start : UTCDateTime = None,
                      end : UTCDateTime = None,
                      stations : set[str] = None) -> pd.DataFrame:
@@ -82,6 +83,7 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
                      int(result[S_WEIGHT_STR]), SWAVE, None,
                      result[STATION_STR]])
       continue
+    if line == "": continue
     print("WARNING: (DAT) Unable to parse line:", line)
   return None, pd.DataFrame(DATA, columns=HEADER_MANL)
 
@@ -364,11 +366,13 @@ def event_parser(filename : Path, start : UTCDateTime = None,
       sfx = file.suffix
       source, detect = None, None
       if sfx == PUN_EXT:
-        source, detect = event_parser_pun(file, start, end)
+        #source, detect = event_parser_pun(file, start, end)
+        pass
       elif sfx == DAT_EXT:
         source, detect = event_parser_dat(file, start, end, stations)
       elif sfx == HPL_EXT:
-        source, detect = event_parser_hpl(file, start, end, stations)
+        # source, detect = event_parser_hpl(file, start, end, stations)
+        pass
       elif sfx == QML_EXT:
         source, detect = event_parser_qml(file, start, end, stations)
       else:
