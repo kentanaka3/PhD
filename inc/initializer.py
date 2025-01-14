@@ -100,7 +100,7 @@ def parse_arguments():
                       help="Specify a set of pretrained weights for the "
                            "selected Machine Learning based model. "
                            "WARNING: Weights which are not available for the "
-                           "selected models will not be considered")
+                           "selected models will be skipped.")
   parser.add_argument('-b', "--batch", default=4096, type=int, required=False,
                       help="Batch size for the Machine Learning model")
   parser.add_argument('-c', "--config", default=None, type=is_file_path,
@@ -130,7 +130,7 @@ def parse_arguments():
                       required=False, help="Force running all the pipeline")
   parser.add_argument("--pyrocko", default=False, action='store_true',
                       help="Enable PyRocko calls")
-  parser.add_argument("-pyocto", default=False, action='store_true',
+  parser.add_argument("--pyocto", default=False, action='store_true',
                       help="Enable PyOcto calls")
   parser.add_argument("--timing", default=False, action='store_true',
                       required=False, help="Enable timing")
@@ -158,8 +158,8 @@ def parse_arguments():
                             default=[46.3583, 12.808, 0., 0.3],
                             metavar=("lat", "lon", "min_rad", "max_rad"),
                             help="Circular domain to download the data: "
-                                 "[latitude] [longitude] [minimum radius] "
-                                 "[maximum radius]")
+                                 "[center latitude] [center longitude] "
+                                 "[minimum radius] [maximum radius]")
   verbal_group = parser.add_mutually_exclusive_group(required=False)
   verbal_group.add_argument("--silent", default=False, action='store_true',
                             help="Silent mode")

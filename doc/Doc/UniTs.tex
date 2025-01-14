@@ -1,0 +1,108 @@
+\documentclass[12pt, twoside]{report}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{csquotes}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{a4paper, left=10mm, right=10mm, top=20mm, bottom=17mm,
+          bindingoffset=6mm, headheight=15pt}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{graphicx}
+\graphicspath{ {../img/} }
+\usepackage{amsmath, amssymb, amsfonts, amsthm}
+\usepackage{biblatex}
+\usepackage{fancyhdr}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{setspace}
+\doublespacing
+\usepackage{comment}
+\usepackage{hyperref}
+\usepackage{acro}
+\usepackage{float}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{epstopdf}
+\addbibresource{library.bib}
+\pagestyle{fancy}
+\fancyhead{}
+\fancyhead[RO, LE]{Procedural Machine Learning Pipeline for Earthquake Pick 
+                   Detection and Phase association using High-Performance and 
+                   Cloud Computing infrastructures}
+\fancyfoot{}
+\fancyfoot[LE, RO]{\thepage}
+\fancyfoot[LO, CE]{Chapter \thechapter}
+\fancyfoot[CO, RE]{Ken Tanaka}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\addbibresource{references.bib}
+\title{
+  {\includegraphics[width=0.35\textwidth]{UniTs.pdf}}\\
+  {\huge\bf UNIVERSITÀ DEGLI STUDI DI TRIESTE}{\large}\\
+  \noindent\hrulefill\\
+  {\large\bf Dipartimento di Matematica, Informatica e Geoscienze}\\
+  {\large\bf CORSO DI DOTTORATO DI RICERCA IN}\\
+  {\Large\bf APPLIED DATA SCIENCE AND ARTIFICIAL INTELLIGENCE}\\
+  {\normalsize\bf CICLO XXXIX}\\
+  {\bf TIME SERIES ANALYSIS FOR SEISMIC WAVE DETECTION AND PREDICTION}
+}
+\author{Tanaka Hernandez, Ken}
+\date{June, 2026}
+\DeclareAcronym{ML}{short = ML, long = Machine Learning}
+\DeclareAcronym{CNN}{short = CNN, long = Convolutional Neural Network}
+\DeclareAcronym{RNN}{short = RNN, long = Recurrent Neural Network}
+\DeclareAcronym{OGS}{short = OGS, long = Istituto Nazionale di Oceanografia e di Geofisica Sperimetale}
+\DeclareAcronym{PNRR}{short = PNRR, long = Piano Nazionale di Ripresa e Resilienza}
+\DeclareAcronym{TeRABIT}{short = TeRABIT, long = Terabit Network for Research and Academic Big Data in Italy}
+\DeclareAcronym{INGV}{short = INGV, long = Istituto Nazionale di Geofisica e Vulcanologia}
+\DeclareAcronym{INSTANCE}{short = INSTANCE, long = Italian Seismic Dataset for Machine Learning}
+\DeclareAcronym{SCEDC}{short = SCEDC, long = Southern California Earthquake Data Center}
+\DeclareAcronym{STEAD}{short = STEAD, long = STanford EArthquake Dataset}
+\DeclareAcronym{GaMMA}{short = GaMMA, long = Gaussian Mixture Model Associator}
+\DeclareAcronym{PhaseNet}{short = PhaseNet, long = PhaseNet}
+\DeclareAcronym{EQTransformer}{short = EQTransformer, long = Earthquake Transformer}
+\DeclareAcronym{KNN}{short = KNN, long = K-Nearest Neighbors}
+\DeclareAcronym{SVM}{short = SVM, long = Support Vector Machine}
+\DeclareAcronym{RF}{short = RF, long = Random Forest}
+\DeclareAcronym{LSTM}{short = LSTM, long = Long Short-Term Memory}
+\DeclareAcronym{GRU}{short = GRU, long = Gated Recurrent Unit}
+\DeclareAcronym{MLP}{short = MLP, long = Multilayer Perceptron}
+\DeclareAcronym{PCA}{short = PCA, long = Principal Component Analysis}
+\DeclareAcronym{SVD}{short = SVD, long = Singular Value Decomposition}
+\DeclareAcronym{FFT}{short = FFT, long = Fast Fourier Transform}
+\DeclareAcronym{STFT}{short = STFT, long = Short-Time Fourier transform}
+\DeclareAcronym{FN}{short = FN, long = False Negative}
+\DeclareAcronym{FP}{short = FP, long = False Positive}
+\DeclareAcronym{TN}{short = TN, long = True Negative}
+\DeclareAcronym{TP}{short = TP, long = True Positive}
+\begin{document}
+\maketitle
+\tableofcontents
+\pagenumbering{roman}
+\listoffigures
+\chapter*{Introduction}
+\pagenumbering{arabic}
+\input{chapters/introduction.tex}
+\chapter{Data Description}
+\input{chapters/data_description.tex}
+\begin{figure}
+  \includegraphics{4P.IT08A..230630.pdf}
+  \includegraphics{D_4P.IT08A...230630.pdf}
+\end{figure}
+\chapter{Literature Review}
+ADD traditional methods for seismic wave detection and prediction
+ADD a table of the hyperparameters of the different models
+\input{chapters/literature_review.tex}
+\chapter{Time Series Analysis}
+\input{chapters/time_series_analysis.tex}
+\chapter{Discussion \& Results}
+\input{chapters/discussion_results.tex}
+\chapter{Computation Performance}
+\input{chapters/performance.tex}
+\chapter{Cloud Infrastructure}
+\input{chapters/cloud.tex}
+\chapter{Conclusions}
+\input{chapters/conclusions.tex}
+\printbibliography
+\end{document}
