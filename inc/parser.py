@@ -45,7 +45,7 @@ RECORD_EXTRACTOR_DAT = \
              fr"(?P<{S_WEIGHT_STR}>[0-4\s]))|\s{{8}})"              # S Weight
              fr"(.{{35}}"                                           # Unknown
              fr"(?P<{EVENT_STR}>[\s\d]{{4}}))*")                    # Event
-EVENT_EXTRACTOR_DAT = re.compile(r"^1\s+.*$")                       # Event
+EVENT_EXTRACTOR_DAT = re.compile(r"^1.*$")                          # Event
 #print(RECORD_EXTRACTOR_DAT.pattern)
 def event_parser_dat(filename : Path, start : UTCDateTime = None,
                      end : UTCDateTime = None,

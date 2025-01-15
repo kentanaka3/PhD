@@ -20,7 +20,9 @@
 \usepackage{acro}
 \usepackage{float}
 \usepackage{color}
+\usepackage[table]{xcolor}
 \usepackage{listings}
+\usepackage{enumitem}
 \addbibresource{library.bib}
 
 \DeclareAcronym{ML}{short = ML, long = Machine Learning}
@@ -50,63 +52,81 @@
 \DeclareAcronym{FP}{short = FP, long = False Positive}
 \DeclareAcronym{TN}{short = TN, long = True Negative}
 \DeclareAcronym{TP}{short = TP, long = True Positive}
+\DeclareAcronym{F1}{short = F1, long = F1 Score}
+\DeclareAcronym{SNR}{short = SNR, long = Signal-to-Noise Ratio}
+\DeclareAcronym{DL}{short = DL, long = Deep Learning}
+\DeclareAcronym{HPC}{short = HPC, long = High-Performance Computing}
+\DeclareAcronym{API}{short = API, long = Application Programming Interface}
+\DeclareAcronym{AIC}{short = AIC, long = Akaike Information Criterion}
+\DeclareAcronym{STA/LTA}{short = STA/LTA, long = Short-Time Average/Long-Time Average}
+\DeclareAcronym{GPU}{short = GPU, long = Graphics Processing Unit}
+\DeclareAcronym{CPU}{short = CPU, long = Central Processing Unit}
+\DeclareAcronym{RAM}{short = RAM, long = Random Access Memory}
+\DeclareAcronym{SSD}{short = SSD, long = Solid State Drive}
+\DeclareAcronym{HDD}{short = HDD, long = Hard Disk Drive}
+\DeclareAcronym{CM}{short = CM, long = Confusion Matrix}
+
+\usepackage{setspace}
+\doublespacing
 
 \begin{document}
   \begin{titlepage}
-    \begin{center}
-      \includegraphics[height=2.1cm]{SISSA.png} \hfill
-      \includegraphics[height=2.7cm]{MHPC.png} \hfill
-      \includegraphics[height=2.1cm]{ICTP.jpg}
-      \vspace{1.5cm}
+    \begin{singlespace}
+      \begin{center}
+        \includegraphics[height=2.1cm]{SISSA.png} \hfill
+        \includegraphics[height=2.7cm]{MHPC.png} \hfill
+        \includegraphics[height=2.1cm]{ICTP.jpg}
+        \vspace{1.5cm}
 
-      {\scshape\LARGE Master in High Performance Computing \par}
-      \vspace{1.5cm}
-      {\huge\bfseries Procedural Machine Learning Pipeline for Earthquake Pick 
-      Detection and \par Phase Association using \par High-Performance and 
-      Cloud Computing infrastructures \par}
-    \end{center}
-    \vspace{2cm}
-    \vfill
-    \textit{Supervisor(s)}:\par
-    Dr. \textsc{Monica Sugan},\par
-    Dr. \textsc{Serafina Di Gioia}
-    \vspace{1cm}
-    \begin{flushright}
-      \textit{Candidate}:\par Ken \textsc{Tanaka Hernández}
-    \end{flushright}
-    \vfill
-    \centering
-    {\large\textsc{$10^{\mathrm{th}}$ edition}\\[0.1cm]2023 -- 2024}
-    \vfill
-    \includegraphics[height=2cm]{MHPC2.png}
+        {\scshape\LARGE Master in High Performance Computing \par}
+        \vspace{1.5cm}
+        {\huge\bfseries Procedural Machine Learning Pipeline for Earthquake Pick 
+        Detection and\\ Phase Association using \par High-Performance and 
+        Cloud Computing infrastructures \par}
+      \end{center}
+      \vspace{2cm}
+      \vfill
+      \textit{Supervisor(s)}:\par
+      Dr. \textsc{Monica Sugan},\par
+      Dr. \textsc{Serafina Di Gioia}
+      \vspace{1cm}
+      \begin{flushright}
+        \textit{Candidate}:\par Ken \textsc{Tanaka Hernández}
+      \end{flushright}
+      \vfill
+      \centering
+      {\large\textsc{$10^{\mathrm{th}}$ edition}\\[0.1cm]2023 -- 2024}
+      \vfill
+      \includegraphics[height=2cm]{MHPC2.png}
+    \end{singlespace}
   \end{titlepage}
   \pagenumbering{gobble}
   \chapter*{Acknowledgements}
   \input{MHPC/acknowledgements.tex}
   \newpage
-  \tableofcontents
-  \pagenumbering{roman}
-  \listoffigures
-  \listoftables
-  \printacronyms
-  \chapter*{Introduction}
+  \begin{singlespace}
+    \tableofcontents
+    \pagenumbering{roman}
+    \listoffigures
+    \listoftables
+    \printacronyms
+  \end{singlespace}
+  \chapter{Introduction}
   \pagenumbering{arabic}
   \input{MHPC/introduction.tex}
   \chapter{Data Description}
   \input{MHPC/data_description.tex}
   \chapter{Literature Review}
-  ADD traditional methods for seismic wave detection and prediction
   ADD a table of the hyperparameters of the different models
   \input{MHPC/literature_review.tex}
-  \chapter{Time Series Analysis}
-  \input{MHPC/time_series_analysis.tex}
-  \chapter{Discussion \& Results}
-  \input{MHPC/discussion_results.tex}
-  \chapter{Computation Performance}
+  \chapter{High Performance Computing}
   \input{MHPC/performance.tex}
-  \chapter{Cloud Infrastructure}
+  \chapter{Cloud Computing}
   \input{MHPC/cloud.tex}
-  \chapter{Conclusions}
+  \chapter{Urgent Computing}
+  \input{MHPC/urgent.tex}
+  \chapter{Results}
+  \input{MHPC/results.tex}
+  \chapter{Conclusions \& Discussion}
   \input{MHPC/conclusions.tex}
-  \printbibliography
 \end{document}
