@@ -18,12 +18,20 @@
 \usepackage{comment}
 \usepackage{hyperref}
 \usepackage{acro}
+\usepackage[none]{hyphenat}
 \usepackage{float}
 \usepackage{color}
 \usepackage[table]{xcolor}
 \usepackage{listings}
 \usepackage{enumitem}
 \addbibresource{library.bib}
+\sloppy
+
+\newenvironment{absolutelynopagebreak}
+  {\par\nobreak\vfil\penalty0\vfilneg
+   \vtop\bgroup}
+  {\par\xdef\tpd{\the\prevdepth}\egroup
+   \prevdepth=\tpd}
 
 \DeclareAcronym{ML}{short = ML, long = Machine Learning}
 \DeclareAcronym{CNN}{short = CNN, long = Convolutional Neural Network}
