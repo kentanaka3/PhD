@@ -192,13 +192,15 @@ def classify_stream(clf_files : tuple[list], model : sbm.base.SeisBenchModel,
   global DATA_PATH
   DATA_PATH = args.directory.parent
   for categories, trace_files in clf_files:
-    output = model.classify(read_traces(trace_files, args),
-                            batch_size=args.batch, P_threshold=args.pwave,
-                            S_threshold=args.swave).picks
     CLF_FILE = Path(DATA_PATH, CLF_STR, *categories,
                     ("D_" if args.denoiser else EMPTY_STR) + \
                     UNDERSCORE_STR.join([*categories, *key]) + PICKLE_EXT)
+    if CLF_FILE.exists(): continue
     CLF_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CLF_FILE.touch()
+    output = model.classify(read_traces(trace_files, args),
+                            batch_size=args.batch, P_threshold=args.pwave,
+                            S_threshold=args.swave).picks
     with open(CLF_FILE, 'wb') as fp: pickle.dump(output, fp)
 
 def get_model(model_name : str, dataset_name : str, silent : bool = False) \
@@ -362,6 +364,7 @@ def main(args : argparse.Namespace) -> None:
         print("Testing model: {}, with preloaded weight: {}".format(*key))
       clf_files : list[tuple[tuple[str], pd.DataFrame]] = list()
       clf_found : list[tuple[tuple[str], pd.DataFrame]] = list()
+      RERUN : list[tuple[tuple[str], pd.DataFrame]] = list()
       for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
         categories = [str(c) for c in categories]
         CLF_FILE = Path(DATA_PATH, CLF_STR, *categories,
@@ -413,13 +416,20 @@ def main(args : argparse.Namespace) -> None:
                           ("D_" if args.denoiser else EMPTY_STR) + \
                           UNDERSCORE_STR.join([*categories, *key]) + \
                           PICKLE_EXT)
-          with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)
+          try:
+            with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)
+          except Exception as e:
+            print("WARNING: ", e)
+            RERUN.append((categories, trace_files))
+            CLF_FILE.unlink()
+            continue
           print(output)
           if args.interactive:
             interactive_plot(read_traces(trace_files, args), output, *key)
+      if RERUN: classify_stream(RERUN, model, key, args)
       # synchronize
       if args.verbose:
-        for categories, trace_files in clf_files:
+        for categories, trace_files in clf_files + RERUN:
           print("Classification results for model: {}, with preloaded weight: "
                 "{}, categorized by {}".format(*key, categories))
           CLF_FILE = Path(DATA_PATH, CLF_STR, *categories,
