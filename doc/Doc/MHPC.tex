@@ -26,13 +26,11 @@
 \usepackage{enumitem}
 \addbibresource{library.bib}
 \sloppy
-
 \newenvironment{absolutelynopagebreak}
   {\par\nobreak\vfil\penalty0\vfilneg
    \vtop\bgroup}
   {\par\xdef\tpd{\the\prevdepth}\egroup
    \prevdepth=\tpd}
-
 \DeclareAcronym{ML}{short = ML, long = Machine Learning}
 \DeclareAcronym{CNN}{short = CNN, long = Convolutional Neural Network}
 \DeclareAcronym{RNN}{short = RNN, long = Recurrent Neural Network}
@@ -73,10 +71,7 @@
 \DeclareAcronym{SSD}{short = SSD, long = Solid State Drive}
 \DeclareAcronym{HDD}{short = HDD, long = Hard Disk Drive}
 \DeclareAcronym{CM}{short = CM, long = Confusion Matrix}
-
-\usepackage{setspace}
-\doublespacing
-
+\usepackage[onehalfspacing]{setspace}
 \begin{document}
   \begin{titlepage}
     \begin{singlespace}

@@ -58,30 +58,54 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
     match = RECORD_EXTRACTOR_DAT.match(line)
     if match:
       result: dict[str] = match.groupdict()
-      result[BEG_DATE_STR] = UTCDateTime.strptime(result[BEG_DATE_STR],
-                                                  "%y%m%d%H%M")
+      try:
+        result[BEG_DATE_STR] = UTCDateTime.strptime(result[BEG_DATE_STR],
+                                                    "%y%m%d%H%M")
+      except ValueError:
+        print("WARNING: (DAT) Unable to parse 'date' from line", line)
+        continue
       # We only consider the picks from the date range (if specified)
       if start is not None and result[BEG_DATE_STR] < start: continue
       if end is not None and result[BEG_DATE_STR] >= end + ONE_DAY: continue
       # We only consider the picks from the stations (if specified)
       result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
       if stations is not None and result[STATION_STR] not in stations: continue
-      result[EVENT_STR] = int(result[EVENT_STR])
-      result[P_TIME_STR] = \
-        result[BEG_DATE_STR] + td(seconds=float(result[P_TIME_STR][:2] + \
-                                                PERIOD_STR + \
-                                                result[P_TIME_STR][2:]))
-      DATA.append([result[EVENT_STR], result[P_TIME_STR],
-                   int(result[P_WEIGHT_STR]), PWAVE, None,
-                   result[STATION_STR]])
-      if result[S_TYPE_STR]:
-        result[S_TIME_STR] = \
-          result[BEG_DATE_STR] + td(seconds=float(result[S_TIME_STR][:2] + \
+      try:
+        result[EVENT_STR] = int(result[EVENT_STR])
+      except ValueError:
+        result[EVENT_STR] = None
+        print("WARNING: (DAT) Unable to parse 'event' from line", line)
+      try:
+        result[P_TIME_STR] = \
+          result[BEG_DATE_STR] + td(seconds=float(result[P_TIME_STR][:2] + \
                                                   PERIOD_STR + \
-                                                  result[S_TIME_STR][2:]))
-        DATA.append([result[EVENT_STR], result[S_TIME_STR],
-                     int(result[S_WEIGHT_STR]), SWAVE, None,
-                     result[STATION_STR]])
+                                                  result[P_TIME_STR][2:]))
+      except ValueError:
+        print("WARNING: (DAT) Unable to parse 'P time' from line", line)
+        continue
+      try:
+        result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
+      except ValueError:
+        print("WARNING: (DAT) Unable to parse 'P weight' from line", line)
+        continue
+      DATA.append([result[EVENT_STR], result[P_TIME_STR], result[P_WEIGHT_STR],
+                   PWAVE, None, result[STATION_STR]])
+      if result[S_TYPE_STR]:
+        try:
+          result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
+        except ValueError:
+          print("WARNING: (DAT) Unable to parse 'S weight' from line", line)
+          continue
+        try:
+          result[S_TIME_STR] = \
+            result[BEG_DATE_STR] + td(seconds=float(result[S_TIME_STR][:2] + \
+                                                    PERIOD_STR + \
+                                                    result[S_TIME_STR][2:]))
+        except ValueError:
+          print("WARNING: (DAT) Unable to parse 'S time' from line", line)
+          continue
+        DATA.append([result[EVENT_STR], result[S_TIME_STR], 
+                     result[S_WEIGHT_STR], SWAVE, None, result[STATION_STR]])
       continue
     if line == "": continue
     print("WARNING: (DAT) Unable to parse line:", line)
