@@ -43,7 +43,7 @@ analyzer:
 	bash Analyze.sh 1 1 AUTOMATER_ANALYZER src/analyzer.py -v --file ./data/manual -D 230601 240630
 
 associator:
-	bash Analyze.sh 1 1 AUTOMATER_ASSOCIATOR src/associator.py -v
+	bash Analyze.sh 64 1 AUTOMATER_ASSOCIATOR src/associator.py -v -D 230601 240630
 
 clean:
 	rm -f k*.err k*.out report*.nsys-rep report*.qdstrm; module purge; clear

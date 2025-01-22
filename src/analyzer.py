@@ -525,7 +525,7 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
   SOURCE, DETECT = prs.event_parser(filename, *args.dates, None)
   TRUE_S = pd.DataFrame(columns=HEADER_SRC)
   TRUE_D = pd.DataFrame(columns=HEADER_MANL)
-  for date, dataframe_d in WAVEFORMS_DATA.groupby(BEG_DATE_STR):
+  for date, dataframe_d in WAVEFORMS_DATA.groupby(DATE_STR):
     start = UTCDateTime.strptime(date, DATE_FMT)
     end = start + ONE_DAY
     station = dataframe_d[STATION_STR].unique().tolist()

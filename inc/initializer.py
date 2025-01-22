@@ -73,7 +73,7 @@ def parse_arguments():
                       help="Supporting file path")
   parser.add_argument('-G', "--groups", nargs='+', required=False,
                       metavar=EMPTY_STR,
-                      default=[BEG_DATE_STR, NETWORK_STR, STATION_STR],
+                      default=[DATE_STR, NETWORK_STR, STATION_STR],
                       help="Analize the data based on a specified list")
   parser.add_argument('-K', "--key", default=None, required=False,
                       type=is_file_path, metavar=EMPTY_STR,
@@ -206,7 +206,7 @@ def dump_args(args : argparse.Namespace,
     NETWORK_STR   : args.network,
     STATION_STR   : args.station,
     CHANNEL_STR   : args.channel,
-    BEG_DATE_STR  : [a.__str__() for a in args.dates] if args.dates else
+    DATE_STR      : [a.__str__() for a in args.dates] if args.dates else
                     [a.__str__() for a in args.julian],
     GROUPS_STR    : args.groups,
     DIRECTORY_STR : args.directory.relative_to(PRJ_PATH).__str__(),
@@ -241,10 +241,9 @@ def read_args(args: argparse.Namespace,
   global DATA_PATH
   DATA_PATH = args.directory.parent
   ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
-  if not overwrite and ARGUMENTS_FILE.exists():
-    arg_dict = data_loader(ARGUMENTS_FILE)
-  else:
-    arg_dict = dump_args(args, overwrite)
+  arg_dict = data_loader(ARGUMENTS_FILE) if (not overwrite and
+                                             ARGUMENTS_FILE.exists()) else \
+             dump_args(args, overwrite)
   return arg_dict
 
 def data_header(args : argparse.Namespace,
@@ -458,12 +457,12 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
     # table of files.
     if args.verbose: print("Reading the Table of Files")
     WAVEFORMS_DATA = data_loader(WAVEFORMS_FILE)
-    WAVEFORMS_DATA[BEG_DATE_STR] = WAVEFORMS_DATA[BEG_DATE_STR].apply(
+    WAVEFORMS_DATA[DATE_STR] = WAVEFORMS_DATA[DATE_STR].apply(
       lambda x: UTCDateTime.strptime(str(x), DATE_FMT))
     WAVEFORMS_DATA = \
-      WAVEFORMS_DATA[(WAVEFORMS_DATA[BEG_DATE_STR] >= start) &
-                     (WAVEFORMS_DATA[BEG_DATE_STR] < end + ONE_DAY)]
-    WAVEFORMS_DATA[BEG_DATE_STR] = WAVEFORMS_DATA[BEG_DATE_STR].apply(
+      WAVEFORMS_DATA[(WAVEFORMS_DATA[DATE_STR] >= start) &
+                     (WAVEFORMS_DATA[DATE_STR] < end + ONE_DAY)]
+    WAVEFORMS_DATA[DATE_STR] = WAVEFORMS_DATA[DATE_STR].apply(
       lambda x: UTCDateTime.strftime(x, DATE_FMT))
   else:
     # Construct the table of files based on the specified arguments
@@ -486,19 +485,15 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
       results = list(executor.map(process_file, args.directory.iterdir()))
 
     WAVEFORMS_DATA = [result for result in results if result is not None]
-    HEADER = [FILENAME_STR, NETWORK_STR, STATION_STR, CHANNEL_STR,
-              BEG_DATE_STR]
+    HEADER = [FILENAME_STR, NETWORK_STR, STATION_STR, CHANNEL_STR, DATE_STR]
     WAVEFORMS_DATA = pd.DataFrame(WAVEFORMS_DATA, columns=HEADER)
   # Filter the table of files based on the specified arguments
-  if args.network and args.network != [ALL_WILDCHAR_STR]:
-    WAVEFORMS_DATA = \
-      WAVEFORMS_DATA[WAVEFORMS_DATA[NETWORK_STR].isin(args.network)]
-  if args.station and args.station != [ALL_WILDCHAR_STR]:
-    WAVEFORMS_DATA = \
-      WAVEFORMS_DATA[WAVEFORMS_DATA[STATION_STR].isin(args.station)]
-  if args.channel and args.channel != [ALL_WILDCHAR_STR]:
-    WAVEFORMS_DATA = \
-      WAVEFORMS_DATA[WAVEFORMS_DATA[CHANNEL_STR].isin(args.channel)]
+  for argument, filter in [(args.network, NETWORK_STR),
+                           (args.station, STATION_STR),
+                           (args.channel, CHANNEL_STR)]:
+    if argument and argument != [ALL_WILDCHAR_STR]:
+      WAVEFORMS_DATA = \
+        WAVEFORMS_DATA[WAVEFORMS_DATA[filter].isin(argument)]
   # If no files were found in the specified directory, return an error message
   # and exit the program.
   if WAVEFORMS_DATA.empty and not args.silent:
@@ -515,7 +510,7 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
             "optionally specified client with the argument \"--client "
             "<client>\"")
     raise FileNotFoundError
-  WAVEFORMS_DATA.sort_values([BEG_DATE_STR, FILENAME_STR], inplace=True)
+  WAVEFORMS_DATA.sort_values([DATE_STR, FILENAME_STR], inplace=True)
   WAVEFORMS_DATA.set_index(FILENAME_STR, inplace=True)
   WAVEFORMS_DATA.to_csv(WAVEFORMS_FILE)
   return WAVEFORMS_DATA

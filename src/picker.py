@@ -89,7 +89,7 @@ def clean_stream(stream : obspy.Stream, FMT_DICT : dict[str, str],
   for trc in stream:
     # Remove Stream.Trace if it contains NaN or Inf
     if filter_data(trc.data): stream.remove(trc)
-  start = UTCDateTime.strptime(FMT_DICT[BEG_DATE_STR], DATE_FMT)
+  start = UTCDateTime.strptime(FMT_DICT[DATE_STR], DATE_FMT)
   stream.trim(starttime=start, endtime=start + ONE_DAY, pad=True, fill_value=0,
               nearest_sample=False)
   if args.denoiser:
@@ -123,7 +123,7 @@ def read_traces(trace_files : pd.DataFrame, args : argparse.Namespace) \
   stream = obspy.Stream()
   FMT_DICT : dict[str, str] = {category : EMPTY_STR
                                for category in [NETWORK_STR, STATION_STR,
-                                                CHANNEL_STR, BEG_DATE_STR]}
+                                                CHANNEL_STR, DATE_STR]}
   for category in args.groups:
     FMT_DICT[category] = trace_files[category].unique()[0]
   for _, row in trace_files.iterrows():
