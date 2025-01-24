@@ -35,21 +35,41 @@ def event_merger_l(NEW : pd.DataFrame, OLD : pd.DataFrame, on : list) \
 
 # TODO: Implement polarity
 RECORD_EXTRACTOR_DAT = \
-  re.compile(fr"^(?P<{STATION_STR}>[A-Z0-9\s]{{4}})"                # Station
-             fr"(?P<{P_TYPE_STR}>[aei\s][Pp][cC\+0-4dD\-Up\s])"     # P Type
-             fr"(?P<{P_WEIGHT_STR}>[0-4\s])[1-4]"                   # P Weight
-             fr"(?P<{DATE_STR}>\d{{10}})\s"                         # Date
-             fr"(?P<{P_TIME_STR}>[\s\d]{{4}}).{{8}}"                # P Time
-             fr"(((?P<{S_TIME_STR}>[\s\d]{{4}})"                    # S Time
-             fr"(?P<{S_TYPE_STR}>[esi?46\s][Ss][cC\+0-4dD\-Ue?\s])" # S Type
-             fr"(?P<{S_WEIGHT_STR}>[0-4\s]))|\s{{8}})"              # S Weight
-             fr"(.{{35}}"                                           # Unknown
-             fr"(?P<{EVENT_STR}>[\s\d]{{4}}))*")                    # Event
-EVENT_EXTRACTOR_DAT = re.compile(r"^1.*$")                          # Event
+  re.compile(fr"^(?P<{STATION_STR}>[A-Z0-9\s]{{4}})"                 # Station
+             fr"(?P<{P_TYPE_STR}>[aei\s][Pp][cC\+0-4dD\-Up\s])"      # P Type
+             fr"(?P<{P_WEIGHT_STR}>[0-4\s])"                         # P Weight
+             fr"[1-4]"                                               # Unknown
+             fr"(?P<{DATE_STR}>\d{{10}})\s"                          # Date
+             fr"(?P<{P_TIME_STR}>[\s\d]{{4}})"                       # P Time
+             fr".{{8}}"                                              # Unknown
+             fr"(((?P<{S_TIME_STR}>[\s\d]{{4}})"                     # S Time
+               fr"(?P<{S_TYPE_STR}>[esi?46\s][Ss][cC\+0-4dD\-Ue?\s])"# S Type
+               fr"(?P<{S_WEIGHT_STR}>[0-4\s]))|\s{{8}})"             # S Weight
+             fr"(.{{35}}"                                            # Unknown
+              fr"(?P<{EVENT_STR}>[\s\d]{{4}}))*")                    # Event
+EVENT_EXTRACTOR_DAT = re.compile(r"^1.*$")                           # Event
+EVENT_CONTRIVER_DAT = "{STATION_STR}" + ALL_WILDCHAR_STR + \
+                      PWAVE + ALL_WILDCHAR_STR + \
+                      "{P_WEIGHT_STR}" + ALL_WILDCHAR_STR + \
+                      "{DATE_STR}" + SPACE_STR + \
+                      "{P_TIME_STR}" + ALL_WILDCHAR_STR * 8 + \
+                      "{S_TIME_STR}" + ALL_WILDCHAR_STR + \
+                      SWAVE + ALL_WILDCHAR_STR + \
+                      "{S_WEIGHT_STR}" + ALL_WILDCHAR_STR * 35 + \
+                      "{EVENT_STR}"
 #print(RECORD_EXTRACTOR_DAT.pattern)
 def event_parser_dat(filename : Path, start : UTCDateTime = None,
                      end : UTCDateTime = None,
                      stations : set[str] = None) -> pd.DataFrame:
+  warng_msg : str = "WARNING: (DAT) Unable to parse {value} from line: {line}"
+  notbl_msg : str = "WARNING: (DAT) {title} has NOTABLE value ({value}) in " \
+                                   "line: {line}"
+  unkwn_msg : str = "WARNING: (DAT) {title} has UNKNOWN value ({value}) in " \
+                                   "line: {line}"
+  assgn_msg : str = "WARNING: (DAT) Assining default value ({value}) to " \
+                                   "{title} in line: {line}"
+  # TODO: Attemp restoration before SHUTDOWN
+  error_msg : str = "FATAL: (DAT) "
   if not filename.exists(): raise FileNotFoundError(filename)
   DATA = list()
   with open(filename, 'r') as fr: lines = fr.readlines()
@@ -59,9 +79,15 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
     if match:
       result: dict[str] = match.groupdict()
       try:
-        result[DATE_STR] = UTCDateTime.strptime(result[DATE_STR], "%y%m%d%H%M")
+        if result[DATE_STR][-2:] == "60":
+          result[DATE_STR] = \
+            UTCDateTime.strptime(result[DATE_STR][:-2], DATETIME_FMT[:-4]) + \
+            td(hours=1)
+        else:
+          result[DATE_STR] = UTCDateTime.strptime(result[DATE_STR],
+                                                  DATETIME_FMT[:-2])
       except ValueError:
-        print("WARNING: (DAT) Unable to parse 'date' from line:", line)
+        print(warng_msg.format(value=DATE_STR, line=line))
         continue
       # We only consider the picks from the date range (if specified)
       if start is not None and result[DATE_STR] < start: continue
@@ -73,19 +99,26 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
         result[EVENT_STR] = int(result[EVENT_STR])
       except ValueError:
         result[EVENT_STR] = None
-        print("WARNING: (DAT) Unable to parse 'event' from line:", line)
+        print(warng_msg.format(value=EVENT_STR, line=line))
       try:
         result[P_TIME_STR] = \
           result[DATE_STR] + td(seconds=float(result[P_TIME_STR][:2] + \
-                                                  PERIOD_STR + \
-                                                  result[P_TIME_STR][2:]))
+                                              PERIOD_STR +
+                                              result[P_TIME_STR][2:]))
       except ValueError:
-        print("WARNING: (DAT) Unable to parse 'P time' from line:", line)
+        print(warng_msg.format(value=P_TIME_STR, line=line))
         continue
+      # P Time
+      DEFAULT_VALUE = 0
       try:
-        result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
+        if result[P_WEIGHT_STR] == SPACE_STR:
+          print(notbl_msg.format(P_WEIGHT_STR, SPACE_STR, line))
+          print(assgn_msg.format(DEFAULT_VALUE, P_WEIGHT_STR, line))
+          result[P_WEIGHT_STR] = DEFAULT_VALUE
+        else:
+          result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
       except ValueError:
-        print("WARNING: (DAT) Unable to parse 'P weight' from line:", line)
+        print(warng_msg.format(value=P_WEIGHT_STR, line=line))
         continue
       DATA.append([result[EVENT_STR], result[P_TIME_STR], result[P_WEIGHT_STR],
                    PWAVE, None, result[STATION_STR]])
@@ -93,7 +126,7 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
         try:
           result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
         except ValueError:
-          print("WARNING: (DAT) Unable to parse 'S weight' from line:", line)
+          print(warng_msg.format(value=S_WEIGHT_STR, line=line))
           continue
         try:
           result[S_TIME_STR] = \
@@ -101,13 +134,23 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
                                                 PERIOD_STR + \
                                                 result[S_TIME_STR][2:]))
         except ValueError:
-          print("WARNING: (DAT) Unable to parse 'S time' from line:", line)
+          print(warng_msg.format(value=S_TIME_STR, line=line))
           continue
-        DATA.append([result[EVENT_STR], result[S_TIME_STR], 
+        DATA.append([result[EVENT_STR], result[S_TIME_STR],
                      result[S_WEIGHT_STR], SWAVE, None, result[STATION_STR]])
+      # TODO: Add debug method
+      # if verbose:
+      #   print(line)
+      #   print(EVENT_CONTRIVER_DAT.format(STATION_STR=result[STATION_STR],
+      #                                    P_WEIGHT_STR=result[STATION_STR],
+      #                                    DATE_STR=
+      #                                    "{P_TIME_STR}"
+      #                                    "{S_TIME_STR}"
+      #                                    "{S_WEIGHT_STR}"
+      #                                     "{EVENT_STR}"))
       continue
-    if line == "": continue
-    print("WARNING: (DAT) Unable to parse line:", line)
+    if line == EMPTY_STR: continue
+    print(warng_msg.format(value=EMPTY_STR, line=line))
   return None, pd.DataFrame(DATA, columns=HEADER_MANL)
 
 RECORD_EXTRACTOR_PUN = re.compile(
@@ -136,13 +179,14 @@ def event_parser_pun(filename : Path, start : UTCDateTime = None,
       result : dict[str] = match.groupdict()
       result[SECONDS_STR] = td(seconds=float(result[SECONDS_STR]))
       result[DATE_STR] = UTCDateTime.strptime(
-        result[DATE_STR].replace(SPACE_STR, "0"), "%y%m%d%H%M") + \
-        result[SECONDS_STR]
+        result[DATE_STR].replace(SPACE_STR, ZERO_STR), DATETIME_FMT[:-2]
+      ) + result[SECONDS_STR]
       # We only consider the picks from the date range (if specified)
       if start is not None and result[DATE_STR] < start: continue
       if end is not None and result[DATE_STR] >= end + ONE_DAY: continue
-      result[LATITUDE_STR] = result[LATITUDE_STR].replace(SPACE_STR, "0")
-      result[LONGITUDE_STR] = result[LONGITUDE_STR].replace(SPACE_STR, "0")
+      result[LATITUDE_STR] = result[LATITUDE_STR].replace(SPACE_STR, ZERO_STR)
+      result[LONGITUDE_STR] = result[LONGITUDE_STR].replace(SPACE_STR,
+                                                            ZERO_STR)
       result[LOCAL_DEPTH_STR] = float(result[LOCAL_DEPTH_STR])
       result[MAGNITUDE_STR] = float(result[MAGNITUDE_STR])
       result[NO_STR] = int(result[NO_STR])
@@ -234,7 +278,7 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
       result[SECONDS_STR] = td(seconds=float(result[SECONDS_STR])) \
                               if result[SECONDS_STR] else td(0)
       result[DATE_STR] = UTCDateTime.strptime(
-        result[DATE_STR].replace(SPACE_STR, "0"), "%y%m%d0%H%M") + \
+        result[DATE_STR].replace(SPACE_STR, ZERO_STR), "%y%m%d0%H%M") + \
         result[SECONDS_STR]
       if start is not None and result[DATE_STR] < start:
         event_detect = False
@@ -242,10 +286,11 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
       if end is not None and result[DATE_STR] >= end + ONE_DAY:
         event_detect = False
         break
-      result[LATITUDE_STR] = result[LATITUDE_STR].replace(SPACE_STR, "0") \
+      result[LATITUDE_STR] = result[LATITUDE_STR].replace(SPACE_STR, ZERO_STR) \
                                if result[LATITUDE_STR] else None
-      result[LONGITUDE_STR] = result[LONGITUDE_STR].replace(SPACE_STR, "0") \
-                                if result[LONGITUDE_STR] else None
+      result[LONGITUDE_STR] = \
+        result[LONGITUDE_STR].replace(SPACE_STR, ZERO_STR) \
+        if result[LONGITUDE_STR] else None
       result[LOCAL_DEPTH_STR] = float(result[LOCAL_DEPTH_STR]) \
                                   if result[LOCAL_DEPTH_STR] else NaN
       event_spacetime = (result[DATE_STR], result[LATITUDE_STR],
@@ -269,9 +314,8 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
       result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
       result[SECONDS_STR] = td(seconds=float(result[SECONDS_STR]))
       result[P_TIME_STR] = UTCDateTime.strptime(
-                             event_spacetime[0].date.strftime("%y%m%d") + \
-                              result[P_TIME_STR].replace(SPACE_STR, "0"),
-                              "%y%m%d%H%M")
+        event_spacetime[0].date.strftime(DATE_FMT) + \
+        result[P_TIME_STR].replace(SPACE_STR, ZERO_STR), DATETIME_FMT[:-2])
       DETECT.append([result[EVENT_STR],
                      result[P_TIME_STR] + result[SECONDS_STR],
                      result[P_WEIGHT_STR], PWAVE, None, result[STATION_STR]])
@@ -345,12 +389,12 @@ def event_parser_mod(filename : Path,
         result[TIMESTAMP_STR] = result[STATION_STR]
       result[LONGITUDE_STR] = \
         result[LONGITUDE_STR][:2] + DASH_STR + \
-        result[LONGITUDE_STR][2:-1].replace(SPACE_STR, "0")
+        result[LONGITUDE_STR][2:-1].replace(SPACE_STR, ZERO_STR)
       result[LATITUDE_STR] = result[LATITUDE_STR][:2] + DASH_STR + \
-                             result[LATITUDE_STR][2:-1].replace(SPACE_STR, "0")
+                             result[LATITUDE_STR][2:-1].replace(SPACE_STR, ZERO_STR)
       DATA.append([result[STATION_STR], result[LONGITUDE_STR],
                    result[LATITUDE_STR],
-                   int(result[LOCAL_DEPTH_STR].replace(SPACE_STR, "0")), None])
+                   int(result[LOCAL_DEPTH_STR].replace(SPACE_STR, ZERO_STR)), None])
       STATIONS[result[STATION_STR]] = result[TIMESTAMP_STR]
       continue
     print("WARNING: (MOD) Unable to parse line:", line)

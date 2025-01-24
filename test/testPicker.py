@@ -21,7 +21,7 @@ class TestReadTraces(unittest.TestCase):
     Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT).unlink(missing_ok=True)
     Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT).unlink(missing_ok=True)
 
-  @unittest.mock.patch("sys.argv", ["picker.py", "-G", BEG_DATE_STR, "-v",
+  @unittest.mock.patch("sys.argv", ["picker.py", "-G", DATE_STR, "-v",
                                     "-d", str(TEST_PATH)])
   def test_group_args(self):
     args = ini.parse_arguments()
