@@ -40,6 +40,7 @@ UNDERSCORE_STR = '_'
 DASH_STR = '-'
 SPACE_STR = ' '
 COMMA_STR = ','
+ZERO_STR = "0"
 NONE_STR = "None"
 CLF_STR = "classified"
 AST_STR = "associated"
@@ -49,6 +50,7 @@ STATUS_STR = "status"
 SECONDS_STR = "seconds"
 SOURCE_STR = "SOURCE"
 DETECT_STR = "DETECT"
+UNKNOWN_STR = "UNKNOWN"
 
 TRUE_STR = "TRUE"
 PRED_STR = "PRED"
