@@ -36,17 +36,20 @@ def event_merger_l(NEW : pd.DataFrame, OLD : pd.DataFrame, on : list) \
 # TODO: Implement polarity
 RECORD_EXTRACTOR_DAT = \
   re.compile(fr"^(?P<{STATION_STR}>[A-Z0-9\s]{{4}})"                 # Station
-             fr"(?P<{P_TYPE_STR}>[aei\s][Pp][cC\+0-4dD\-Up\s])"      # P Type
+             fr"(?P<{P_TYPE_STR}>[aei\s][Pp]" \
+                              fr"[cC\+0-4dD\-Up\s])"                 # P Type
              fr"(?P<{P_WEIGHT_STR}>[0-4\s])"                         # P Weight
              fr"[1-4]"                                               # Unknown
              fr"(?P<{DATE_STR}>\d{{10}})\s"                          # Date
              fr"(?P<{P_TIME_STR}>[\s\d]{{4}})"                       # P Time
              fr".{{8}}"                                              # Unknown
              fr"(((?P<{S_TIME_STR}>[\s\d]{{4}})"                     # S Time
-               fr"(?P<{S_TYPE_STR}>[esi?46\s][Ss][cC\+0-4dD\-Ue?\s])"# S Type
+             fr"(?P<{S_TYPE_STR}>[esrwi?13468\s]" \
+                              fr"[Ss][cC\+0-4dD\-Ue?\s])"            # S Type
                fr"(?P<{S_WEIGHT_STR}>[0-4\s]))|\s{{8}})"             # S Weight
              fr"(.{{35}}"                                            # Unknown
               fr"(?P<{EVENT_STR}>[\s\d]{{4}}))*")                    # Event
+#print(RECORD_EXTRACTOR_DAT.pattern)
 EVENT_EXTRACTOR_DAT = re.compile(r"^1.*$")                           # Event
 EVENT_CONTRIVER_DAT = "{STATION_STR}" + ALL_WILDCHAR_STR + \
                       PWAVE + ALL_WILDCHAR_STR + \
@@ -78,6 +81,7 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
     match = RECORD_EXTRACTOR_DAT.match(line)
     if match:
       result: dict[str] = match.groupdict()
+      # Date
       try:
         if result[DATE_STR][-2:] == "60":
           result[DATE_STR] = \
@@ -86,30 +90,37 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
         else:
           result[DATE_STR] = UTCDateTime.strptime(result[DATE_STR],
                                                   DATETIME_FMT[:-2])
-      except ValueError:
+      except ValueError as e:
         print(warng_msg.format(value=DATE_STR, line=line))
+        print(e)
         continue
       # We only consider the picks from the date range (if specified)
       if start is not None and result[DATE_STR] < start: continue
       if end is not None and result[DATE_STR] >= end + ONE_DAY: continue
-      # We only consider the picks from the stations (if specified)
+      # Station, We only consider the picks from the stations (if specified)
       result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
       if stations is not None and result[STATION_STR] not in stations: continue
-      try:
-        result[EVENT_STR] = int(result[EVENT_STR])
-      except ValueError:
-        result[EVENT_STR] = None
-        print(warng_msg.format(value=EVENT_STR, line=line))
-      try:
-        result[P_TIME_STR] = \
-          result[DATE_STR] + td(seconds=float(result[P_TIME_STR][:2] + \
-                                              PERIOD_STR +
-                                              result[P_TIME_STR][2:]))
-      except ValueError:
-        print(warng_msg.format(value=P_TIME_STR, line=line))
-        continue
       # P Time
+      try:
+        result[P_TIME_STR] = result[DATE_STR] + td(seconds=\
+          float(result[P_TIME_STR][:2].replace(SPACE_STR, ZERO_STR) + \
+                PERIOD_STR + \
+                result[P_TIME_STR][2:].replace(SPACE_STR, ZERO_STR)))
+      except ValueError as e:
+        print(warng_msg.format(value=P_TIME_STR, line=line))
+        print(e)
+        continue
+      # Event
+      if result[EVENT_STR]:
+        try:
+          result[EVENT_STR] = int(result[EVENT_STR].replace(SPACE_STR,
+                                                            ZERO_STR))
+        except ValueError as e:
+          result[EVENT_STR] = None
+          print(warng_msg.format(value=EVENT_STR, line=line))
+          print(e)
       DEFAULT_VALUE = 0
+      # P Weight
       try:
         if result[P_WEIGHT_STR] == SPACE_STR:
           print(notbl_msg.format(P_WEIGHT_STR, SPACE_STR, line))
@@ -117,31 +128,43 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
           result[P_WEIGHT_STR] = DEFAULT_VALUE
         else:
           result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
-      except ValueError:
+      except ValueError as e:
         print(warng_msg.format(value=P_WEIGHT_STR, line=line))
+        print(e)
         continue
       DATA.append([result[EVENT_STR], result[P_TIME_STR], result[P_WEIGHT_STR],
                    PWAVE, None, result[STATION_STR]])
+      # S Type
       if result[S_TYPE_STR]:
+        # S Weight
         try:
-          result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
-        except ValueError:
+          if result[S_WEIGHT_STR] == SPACE_STR:
+            print(notbl_msg.format(S_WEIGHT_STR, SPACE_STR, line))
+            print(assgn_msg.format(DEFAULT_VALUE, S_WEIGHT_STR, line))
+            result[S_WEIGHT_STR] = DEFAULT_VALUE
+          else:
+            result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
+        except ValueError as e:
           print(warng_msg.format(value=S_WEIGHT_STR, line=line))
+          print(e)
           continue
+        # S Time
         try:
-          result[S_TIME_STR] = \
-            result[DATE_STR] + td(seconds=float(result[S_TIME_STR][:2] + \
-                                                PERIOD_STR + \
-                                                result[S_TIME_STR][2:]))
-        except ValueError:
+          result[S_TIME_STR] = result[DATE_STR] + td(seconds=float(\
+            result[S_TIME_STR][:2].replace(SPACE_STR, ZERO_STR) + \
+            PERIOD_STR + \
+            result[S_TIME_STR][2:].replace(SPACE_STR, ZERO_STR)))
+        except ValueError as e:
           print(warng_msg.format(value=S_TIME_STR, line=line))
+          print(e)
           continue
         DATA.append([result[EVENT_STR], result[S_TIME_STR],
                      result[S_WEIGHT_STR], SWAVE, None, result[STATION_STR]])
       # TODO: Add debug method
       # if verbose:
       #   print(line)
-      #   print(EVENT_CONTRIVER_DAT.format(STATION_STR=result[STATION_STR],
+      #   with open()
+      #   print(EVENT_CONTRIVER_DAT.format(STATION_STR=result[STATION_STR].lfill(4, SPACE_STR),
       #                                    P_WEIGHT_STR=result[STATION_STR],
       #                                    DATE_STR=
       #                                    "{P_TIME_STR}"
