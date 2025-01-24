@@ -12,12 +12,12 @@
   "NETWORK": null,
   "station": null,
   "CHANNEL": null,
-  "BEGDT": [
+  "DATE": [
     "2023-06-01T00:00:00.000000Z",
     "2023-06-04T00:00:00.000000Z"
   ],
   "GROUPS": [
-    "BEGDT",
+    "DATE",
     "NETWORK",
     "station"
   ],

@@ -365,18 +365,12 @@ def event_parser_(filename : Path, start : UTCDateTime = None,
                   stations : set[str] = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
   sfx = filename.suffix
-  if sfx == DAT_EXT:
-    return event_parser_dat(filename, start, end, stations)
-  elif sfx == PUN_EXT:
-    return event_parser_pun(filename, start, end)
-  elif sfx == HPC_EXT:
-    return event_parser_hpc(filename, start, end, stations)
-  elif sfx == HPL_EXT:
-    return event_parser_hpl(filename, start, end, stations)
-  elif sfx == MOD_EXT:
-    return event_parser_mod(filename, start, end, stations)
-  elif sfx == QML_EXT:
-    return event_parser_qml(filename, start, end, stations)
+  if sfx == DAT_EXT: return event_parser_dat(filename, start, end, stations)
+  elif sfx == PUN_EXT: return event_parser_pun(filename, start, end)
+  elif sfx == HPC_EXT: return event_parser_hpc(filename, start, end, stations)
+  elif sfx == HPL_EXT: return event_parser_hpl(filename, start, end, stations)
+  elif sfx == MOD_EXT: return event_parser_mod(filename, start, end, stations)
+  elif sfx == QML_EXT: return event_parser_qml(filename, start, end, stations)
   print(ValueError(f"WARNING: Unknown file extension: {sfx}"))
   return None
 
@@ -399,8 +393,7 @@ def event_parser(filename : Path, start : UTCDateTime = None,
         pass
       elif sfx == QML_EXT:
         source, detect = event_parser_qml(file, start, end, stations)
-      else:
-        print(ValueError(f"WARNING: Unknown file extension: {sfx}"))
+      else: print(ValueError(f"WARNING: Unknown file extension: {sfx}"))
       return sfx, (source, detect)
     with ThreadPoolExecutor() as executor:
       results = list(executor.map(process_file, filename.iterdir()))
@@ -422,6 +415,5 @@ def event_parser(filename : Path, start : UTCDateTime = None,
         stations = event_parser_mod(file, stations)
         for code, name in stations.items():
           DETECT.loc[DETECT[STATION_STR] == code][STATION_STR] = name
-  else:
-    SOURCE, DETECT = event_parser_(filename, start, end, stations)
+  else: SOURCE, DETECT = event_parser_(filename, start, end, stations)
   return SOURCE, DETECT

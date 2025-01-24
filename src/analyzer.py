@@ -619,7 +619,8 @@ def main(args : argparse.Namespace):
   DATA_PATH = args.directory.parent
   # Picker
   ANALYSIS = "Picker"
-  PRED = ini.classified_loader(args)
+  PRED : pd.DataFrame = ini.classified_loader(args)
+  PRED = PRED[PRED[PROBABILITY_STR] >= args.threshold]
   if args.verbose:
     PRED.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                      UNDERSCORE_STR.join([ANALYSIS, PRED_STR]) + CSV_EXT),

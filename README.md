@@ -177,10 +177,10 @@ the program.
 Picker allows the user to either customize by predefining the default 
 behaviour or specify all the variables on demand or via a configuration file.
 ```
-usage: picker.py [-h] [-C [...]] [-F] [-G  [...]] [-K] [-M  [...]] [-N [...]] 
-                 [-S [...]] [-T] [-W  [...]] [-b BATCH] [-c] [-d DIRECTORY] 
+usage: picker.py [-h] [-C [...]] [-F] [-G  [...]] [-K] [-M  [...]] [-N [...]]
+                 [-S [...]] [-T] [-W  [...]] [-b BATCH] [-c] [-d DIRECTORY]
                  [-p PWAVE] [-s SWAVE] [--client CLIENT [CLIENT ...]]
-                 [--denoiser] [--download] [--interactive] [--force] 
+                 [--denoiser] [--download] [--interactive] [--force]
                  [--pyrocko] [--pyocto] [--timing]
                  [-D YYMMDD YYMMDD | -J YYMMDD YYMMDD]
                  [--rectdomain min_lat max_lat min_lon max_lon |
@@ -211,7 +211,7 @@ options:
   -T, --train           Train the model
   -W  [ ...], --weights  [ ...]
                         Specify a set of pretrained weights for the selected
-                        Machine Learning based model. WARNING: Weights which 
+                        Machine Learning based model. WARNING: Weights which
                         are not available for the selected models will skipped.
   -b BATCH, --batch BATCH
                         Batch size for the Machine Learning model
@@ -257,11 +257,11 @@ An easy way to get started is by executing the following test command:
 
     % python src/picker.py -v --directory data/test/waveforms --interactive
 
-This will run the few test examples of data we have considered worthwhile 
-saving for testing purpouses. It will print all of the messages possible of 
-the execution of the program and the user will be able to pause and interact 
-indefenetely to analyze the output of the program. In order to continue to the 
-next results the user must close the graph plot such that the program may 
+This will run the few test examples of data we have considered worthwhile
+saving for testing purpouses. It will print all of the messages possible of
+the execution of the program and the user will be able to pause and interact
+indefenetely to analyze the output of the program. In order to continue to the
+next results the user must close the graph plot such that the program may
 continue executing.
 ### Next steps
 The following command:

@@ -1,4 +1,4 @@
-FILENAME,NETWORK,station,CHANNEL,BEGDT
+FILENAME,NETWORK,station,CHANNEL,DATE
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/MN.TRI..HHE__20230601T000000Z__20230602T000000Z.mseed,MN,TRI,HHE,230601
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/MN.TRI..HHN__20230601T000000Z__20230602T000000Z.mseed,MN,TRI,HHN,230601
 /Users/admin/Desktop/Monica/PhD/data/test/waveforms/MN.TRI..HHZ__20230601T000000Z__20230602T000000Z.mseed,MN,TRI,HHZ,230601
