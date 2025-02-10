@@ -169,3 +169,34 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+*.mseed
+*.pyc
+*.pkl
+*.DS_Store
+!data/test/waveforms/*
+*/__pycache__/
+doc/References/*
+doc/Reports/*
+doc/Pres/*
+doc/Doc/*
+!doc/Doc/doc.pdf
+!doc/Doc/doc.tex
+!doc/img/*.pdf
+doc/img/*
+doc/Post/*
+!data/classified/*/*/*/*/*/*.pkl
+data/associated/*
+env/*
+*.out
+*.err
+*.csv
+*.sh
+.vscode/*
+etna_data/*
+*.nsys-rep
+data/arguments.json
+*HIST_*_*_*.png
+*EVNT_*_*_*.png
+*CP_*_*_*.png
+*False Negative_*_*.png
