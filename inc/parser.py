@@ -38,19 +38,19 @@ def event_merger_l(NEW : pd.DataFrame, OLD : pd.DataFrame, on : list) \
 # TODO: Implement polarity
 RECORD_EXTRACTOR_DAT = re.compile(
   fr"^(?P<{STATION_STR}>[A-Z0-9\s]{{4}})"                         # Station
-  fr"(?P<{P_TYPE_STR}>[aei1\s][Pp][cC\+0-4dD\-Up\s])"             # P Type
+  fr"(?P<{P_TYPE_STR}>[aei1\s\?][Pp][cC\+0-4dD\-Up\s])"           # P Type
   fr"(?P<{P_WEIGHT_STR}>[0-4\s])"                                 # P Weight
   fr"[1-4\s]"                                                     # Unknown
   fr"(?P<{DATE_STR}>\d{{10}})\s"                                  # Date
   fr"(?P<{P_TIME_STR}>[\s\d]{{4}})"                               # P Time
   fr".{{8}}"                                                      # Unknown
   fr"(((?P<{S_TIME_STR}>[\s\d]{{4}})"                             # S Time
-    fr"(?P<{S_TYPE_STR}>[eirsw?13468\s][Ss][cC\+0-4dD\-Ue?\s])"   # S Type
-    fr"(?P<{S_WEIGHT_STR}>[0-4\s]))|\s{{8}})"                     # S Weight
+    fr"(?P<{S_TYPE_STR}>[eirsw\?13468\s][Ss][cC\+0-4dD\-Ue\?\s])" # S Type
+    fr"(?P<{S_WEIGHT_STR}>[0-5\s]))|\s{{8}})"                     # S Weight
   fr"(.{{35}}"                                                    # Unknown
    fr"(?P<{EVENT_STR}>[\s\d]{{4}}))*")                            # Event
 #print(RECORD_EXTRACTOR_DAT.pattern)
-EVENT_EXTRACTOR_DAT = re.compile(r"^1.*$")                           # Event
+EVENT_EXTRACTOR_DAT = re.compile(r"^1.*$")                        # Event
 EVENT_CONTRIVER_DAT = \
   "{STATION_STR}" + ALL_WILDCHAR_STR + PWAVE + ALL_WILDCHAR_STR + \
   "{P_WEIGHT_STR}" + ALL_WILDCHAR_STR + "{DATE_STR}" + SPACE_STR + \

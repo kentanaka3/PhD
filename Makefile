@@ -43,10 +43,10 @@ picker:
 	python src/picker.py -v
 
 analyzer:
-	python src/analyzer.py -v --file ./data/manual
+	python src/analyzer.py -v --file ./data/manual -D 231130 231130
 
 associator:
-	python src/associator.py -v
+	python src/associator.py -v --file ./data/station/ -D 231130 231130
 
 clean_classify:
 	rm -rf data/classified && clear

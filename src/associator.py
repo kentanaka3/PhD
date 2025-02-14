@@ -223,7 +223,8 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
         PKS = pd.concat([PKS, PICKS], ignore_index=True) if not PKS.empty \
                                                        else PICKS
         SRC.append([model, weight, th, id, dt.fromisoformat(event['time']),
-                    event[X_COORD_STR], event[Y_COORD_STR], event[Z_COORD_STR],
+                    *config.proj(event[X_COORD_STR], event[Y_COORD_STR],
+                                 inverse=True), event[Z_COORD_STR],
                     event[MAGNITUDE_STR], len(PICKS.index), *([None] * 6),
                     PROGRAM_NAME])
         id += 1

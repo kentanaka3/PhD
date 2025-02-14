@@ -16,6 +16,8 @@ from obspy.core.utcdatetime import UTCDateTime
 from concurrent.futures import ThreadPoolExecutor
 
 from constants import *
+from errors import ERRORS
+import parser as prs
 
 def data_loader(filepath : Path) -> any:
   if not filepath.exists(): raise FileNotFoundError
@@ -25,12 +27,24 @@ def data_loader(filepath : Path) -> any:
     with open(filepath, 'r') as f: data = json.load(f)
   elif sfx == CSV_EXT: data = pd.read_csv(filepath)
   elif sfx == HDF5_EXT: data = pd.read_hdf(filepath)
+  elif sfx == MSEED_EXT:
+    try:
+      data = obspy.read(filepath)
+    except:
+      print(filepath)
+      filepath.unlink()
   elif sfx == PICKLE_EXT:
     try:
       with open(filepath, 'rb') as f: data = pickle.load(f)
     except:
       print(filepath)
       filepath.unlink()
+  elif sfx == DAT_EXT: return prs.event_parser_dat(filepath)
+  elif sfx == PUN_EXT: return prs.event_parser_pun(filepath)
+  elif sfx == HPC_EXT: return prs.event_parser_hpc(filepath)
+  elif sfx == HPL_EXT: return prs.event_parser_hpl(filepath)
+  elif sfx == MOD_EXT: return prs.event_parser_mod(filepath)
+  elif sfx == QML_EXT: return prs.event_parser_qml(filepath)
   else: print(NotImplementedError)
   return data
 

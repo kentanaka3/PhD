@@ -192,6 +192,10 @@ env/*
 *.err
 *.csv
 *.sh
+*.qml
+*.blt
+*.ld
+*.prt
 .vscode/*
 etna_data/*
 *.nsys-rep

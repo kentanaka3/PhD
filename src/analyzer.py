@@ -45,18 +45,23 @@ def plot_cluster(PICK : pd.DataFrame, RECD : pd.DataFrame,
     The data is plotted for each model and weight. The plots are saved in the
     img directory.
   """
-  PICK = PICK[PICK[MODEL_STR].isin(args.models) &
-              PICK[WEIGHT_STR].isin(args.weights)].reset_index(drop=True)
+  if args.verbose: print("Plotting the Cluster")
+  m_p, m_r = 0, 0
+  PICK = PICK[(PICK[MODEL_STR].isin(args.models)) &
+              (PICK[WEIGHT_STR].isin(args.weights))].reset_index(drop=True)
+  groups = [MODEL_STR, WEIGHT_STR, STATION_STR]
+  for _, dataframe in PICK.groupby(groups): m_p = max(m_p, dataframe.size)
   RECD = RECD[(RECD[MODEL_STR].isin(args.models)) &
               (RECD[WEIGHT_STR].isin(args.weights)) &
               (RECD[THRESHOLD_STR] >= min(args.pwave,
                                           args.swave))].reset_index(drop=True)
+  for _, dataframe in RECD.groupby(groups): m_r = max(m_r, dataframe.size)
   Ws : int = len(args.weights)
   x : int = int(np.sqrt(Ws))
   y : int = Ws // x + int((Ws % x) != 0)
   for model, dataframe_m in PICK.groupby(MODEL_STR):
     fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
-                                            int(x * Ws - 1) * 1.5))
+                                            int(x * Ws - 1.5) * 1.5))
     axs = _axs.flatten()
     fig.suptitle(model)
     plt.rcParams.update({'font.size': 12})
@@ -68,27 +73,28 @@ def plot_cluster(PICK : pd.DataFrame, RECD : pd.DataFrame,
       for station, P in dataframe_w.groupby(STATION_STR):
         R = RECD[(RECD[MODEL_STR] == model) & (RECD[WEIGHT_STR] == weight) &
                  (RECD[STATION_STR] == station)].reset_index(drop=True)
+        p, r = P.size, R.size
+        if p == 0 or r == 0:
+          print(f"({model},{weight},{station}) was not plotted")
+          continue
         X.append(P.size)
         Y.append(R.size)
         Z.append(station)
-        C.append(R[THRESHOLD_STR].to_list())
-      c = [np.asarray(i).mean() if i else 0 for i in C]
-      disp = ax.scatter(X, Y, c=c)
-      disp.set(clim=(0.1, 1), cmap="turbo", norm="log")
+        C.append(R[THRESHOLD_STR].to_numpy().mean())
+      disp = ax.scatter(X, Y, c=C, cmap="turbo", norm="log", clim=(0.1, 1))
       for i, txt in enumerate(Z): ax.annotate(txt, (X[i] + .5, Y[i] + .5))
-      ax.set(title=weight + SPACE_STR + "({:0.2})".format(np.asarray(c).mean()),
-             xlabel="Picks", xlim=0, ylabel="Events", ylim=0)
+      ax.set(title="{} ({:0.2})".format(weight, np.asarray(C).mean()),
+             xlabel="Picks", xscale="log", xlim=(1, m_p), ylabel="Events",
+             ylim=(1, m_r), yscale="log")
       ax.grid()
     axs[0].set()
     axs[1].set(ylabel=None, yticklabels=[])
     if len(args.weights) > 2:
+      axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
       axs[2].set(title=None)
-      axs[2].set_xlabel(args.weights[2] if len(args.weights) > 2
-                                      else EMPTY_STR, fontsize=14)
       axs[2].xaxis.tick_top()
+      axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
       axs[3].set(ylabel=None, yticklabels=[], title=None)
-      axs[3].set_xlabel(args.weights[3] if len(args.weights) > 3
-                                      else EMPTY_STR, fontsize=14)
       axs[3].xaxis.tick_top()
     fig.subplots_adjust(left=0.08, right=1.08, top=.95, bottom=0.05,
                         wspace=0.1, hspace=0.2)
@@ -173,43 +179,44 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     plt.savefig(IMG_FILE)
     plt.close()
     if args.verbose: print(f"Saving {IMG_FILE}")
-  # Plot a 2x2 grid for each model, network and station
-  for (model, network, station), dtfrm in \
-    PRED.groupby([MODEL_STR, NETWORK_STR, STATION_STR]):
-    _, _axs = plt.subplots(2, 2, figsize=(10, 10))
-    axs = _axs.flatten()
-    plt.suptitle(SPACE_STR.join([model, network, station]), fontsize=16)
-    axs[0].set(xticklabels=[], xlabel=None, ylabel=MSG)
-    axs[1].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None)
-    axs[2].set(xlabel="Date", ylabel=MSG)
-    axs[3].set(xlabel="Date", yticklabels=[], ylabel=None)
-    y_max = 0
-    for i, (weight, data) in enumerate(dtfrm.groupby(WEIGHT_STR)):
-      axs[i].set_title(weight)
-      for threshold in THRESHOLDS:
-        y = [len(data[(data[PROBABILITY_STR] >= threshold) &
-                      (data[TIMESTAMP_STR] <= d)].index) for d in DATES]
-        axs[i].plot([np.datetime64(t) for t in DATES], y,
-                    label=rf"$\geq$ {threshold}")
-        y_max = max(y_max, max(y))
-    for ax in axs:
-      ax.set_ylim(0, y_max)
-      ax.grid()
-      ax.legend()
-    axs[2].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-    for label in axs[2].get_xticklabels():
-      label.set(rotation=30, horizontalalignment='right')
-    axs[3].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-    for label in axs[3].get_xticklabels():
-      label.set(rotation=30, horizontalalignment='right')
-    IMG_FILE = \
-      Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-           UNDERSCORE_STR.join([CMTV_PICKS_STR, model, network,
-                                station, phase]) + PNG_EXT)
-    plt.tight_layout()
-    plt.savefig(IMG_FILE)
-    plt.close()
-    if args.verbose: print(f"Saving {IMG_FILE}")
+  if args.verbose:
+    # Plot a 2x2 grid for each model, network and station
+    for (model, network, station), dtfrm in \
+      PRED.groupby([MODEL_STR, NETWORK_STR, STATION_STR]):
+      _, _axs = plt.subplots(2, 2, figsize=(10, 10))
+      axs = _axs.flatten()
+      plt.suptitle(SPACE_STR.join([model, network, station]), fontsize=16)
+      axs[0].set(xticklabels=[], xlabel=None, ylabel=MSG)
+      axs[1].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None)
+      axs[2].set(xlabel="Date", ylabel=MSG)
+      axs[3].set(xlabel="Date", yticklabels=[], ylabel=None)
+      y_max = 0
+      for i, (weight, data) in enumerate(dtfrm.groupby(WEIGHT_STR)):
+        axs[i].set_title(weight)
+        for threshold in THRESHOLDS:
+          y = [len(data[(data[PROBABILITY_STR] >= threshold) &
+                        (data[TIMESTAMP_STR] <= d)].index) for d in DATES]
+          axs[i].plot([np.datetime64(t) for t in DATES], y,
+                      label=rf"$\geq$ {threshold}")
+          y_max = max(y_max, max(y))
+      for ax in axs:
+        ax.set_ylim(0, y_max)
+        ax.grid()
+        ax.legend()
+      axs[2].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+      for label in axs[2].get_xticklabels():
+        label.set(rotation=30, horizontalalignment='right')
+      axs[3].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+      for label in axs[3].get_xticklabels():
+        label.set(rotation=30, horizontalalignment='right')
+      IMG_FILE = \
+        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+            UNDERSCORE_STR.join([CMTV_PICKS_STR, model, network,
+                                  station, phase]) + PNG_EXT)
+      plt.tight_layout()
+      plt.savefig(IMG_FILE)
+      plt.close()
+      print(f"Saving {IMG_FILE}")
 
 def dist_balanced(T : pd.Series, P : pd.Series) -> float:
   return (dist_time(T, P) + 9. * dist_phase(T, P)) / 10.
@@ -364,8 +371,7 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
   # if args.interactive: plot_timeline(G, pos, N, model_name, dataset_name)
   CFN_MTX, TP, FN, FP = bpg.confMtx()
   TP = set([tuple([model_name, dataset_name, None, *x]) for x in TP])
-  FN = [[model_name, dataset_name,
-         THRESHOLDER_STR.format(p=args.pwave, s=args.swave), *x] for x in FN]
+  FN = [[model_name, dataset_name, None, *x] for x in FN]
   FP = set([tuple([model_name, dataset_name, None, *x]) for x in FP])
   return CFN_MTX, TP, FN, FP
 
@@ -427,13 +433,11 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     axs[0].set()
     axs[1].set(ylabel=None, yticklabels=[])
     if len(args.weights) > 2:
+      axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
       axs[2].set(title=None)
-      axs[2].set_xlabel(args.weights[2] if len(args.weights) > 2
-                                      else EMPTY_STR, fontsize=14)
       axs[2].xaxis.tick_top()
+      axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
       axs[3].set(ylabel=None, yticklabels=[], title=None)
-      axs[3].set_xlabel(args.weights[3] if len(args.weights) > 3
-                                      else EMPTY_STR, fontsize=14)
       axs[3].xaxis.tick_top()
     fig.subplots_adjust(left=0.08, right=1.08, top=.95, bottom=0.05,
                         wspace=0.1, hspace=0.2)
@@ -449,9 +453,10 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     plt.close()
   # True Positives
   TP = pd.DataFrame(TP, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
-  TP_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                  UNDERSCORE_STR.join([method, TP_STR]) + CSV_EXT)
-  TP.to_csv(TP_FILE, index=False)
+  if args.verbose:
+    TP.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                   UNDERSCORE_STR.join([method, TP_STR]) + CSV_EXT),
+              index=False)
   # False Negatives
   FN = pd.DataFrame(FN, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   FN_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
@@ -669,41 +674,50 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
   bins = np.linspace(-0.5, 0.5, 21, endpoint=True)
   groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
   m = 0
-  for (model, weight, phase), dtfrm in DATA.groupby(groups):
+  for _, dtfrm in DATA.groupby(groups):
     counts, _ = np.histogram(dtfrm[TIMESTAMP_STR], bins=bins)
     m = max(m, max(counts))
   m = (m + 9) // 10 * 10
+  Ws : int = len(args.weights)
+  x : int = int(np.sqrt(Ws))
+  y : int = Ws // x + int((Ws % x) != 0)
   for model, phase in itertools.product(args.models, [PWAVE, SWAVE]):
-    fig, _axs = plt.subplots(2, 2, figsize=(15, 10))
+    fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
+                                            int(x * Ws - 1) * 1.5))
     axs = _axs.flatten()
-    dataframe_mp = DATA[(DATA[MODEL_STR] == model) &
-                        (DATA[PHASE_STR] == phase)].reset_index(drop=True)
-    for ax, (weight, dtfrm) in zip(axs, dataframe_mp.groupby(WEIGHT_STR)):
-      ax.set_title(weight)
-      counts, _ = np.histogram(dtfrm[TIMESTAMP_STR], bins=bins)
-      mu = np.mean(dtfrm[TIMESTAMP_STR])
-      std = np.std(dtfrm[TIMESTAMP_STR])
+    plt.rcParams.update({'font.size': 12})
+    fig.suptitle(model)
+    dataframe_p = DATA[(DATA[MODEL_STR] == model) &
+                       (DATA[PHASE_STR] == phase)].reset_index(drop=True)
+    for ax, (weight, dataframe_w) in zip(axs, dataframe_p.groupby(WEIGHT_STR)):
+      counts, _ = np.histogram(dataframe_w[TIMESTAMP_STR], bins=bins)
+      mu = np.mean(dataframe_w[TIMESTAMP_STR])
+      std = np.std(dataframe_w[TIMESTAMP_STR])
       ax.bar(bins[:-1], counts, label=rf"$\mu$={mu:.2f},$\sigma$={std:.2f}",
              alpha=0.5, width=0.05)
       for t_i, t_f in zip(THRESHOLDS[:-1], THRESHOLDS[1:]):
-        data = dtfrm[dtfrm[PROBABILITY_STR].between(t_i, t_f, inclusive='left')
-                    ][TIMESTAMP_STR]
+        data = dataframe_w[dataframe_w[PROBABILITY_STR].between(
+                 t_i, t_f, inclusive='left')][TIMESTAMP_STR]
         # TODO: Consider a KDE plot
         counts, _ = np.histogram(data, bins=bins)
         ax.step(bins[:-1], counts, where='mid', label=rf"[{t_i},{t_f})")
-      data = dtfrm[
-               dtfrm[PROBABILITY_STR] >= THRESHOLDS[-1]][TIMESTAMP_STR]
+      data = dataframe_w[
+               dataframe_w[PROBABILITY_STR] >= THRESHOLDS[-1]][TIMESTAMP_STR]
       counts, _ = np.histogram(data, bins=bins)
       ax.step(bins[:-1], counts, where='mid', label=rf"[{THRESHOLDS[-1]},1)")
-      ax.set(xlim=(-0.5, 0.5), ylim=(0, m))
+      ax.set(title=weight, xlabel="Time Displacement (s)", xlim=(-0.5, 0.5),
+             ylabel=f"Number of {phase} picks", ylim=(0, m))
       ax.grid()
       ax.legend()
-    xlabel = "Time Displacement (s)"
-    ylabel = f"Number of {phase} picks"
-    axs[0].set(xlabel=None, xticklabels=[], ylabel=ylabel)
-    axs[1].set(xlabel=None, xticklabels=[], ylabel=None, yticklabels=[])
-    axs[2].set(xlabel=xlabel, ylabel=ylabel)
-    axs[3].set(xlabel=xlabel, ylabel=None, yticklabels=[])
+    axs[0].set()
+    axs[1].set(ylabel=None, yticklabels=[])
+    if len(args.weights) > 2:
+      axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
+      axs[2].set(title=None)
+      axs[2].xaxis.tick_top()
+      axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
+      axs[3].set(ylabel=None, yticklabels=[], title=None)
+      axs[3].xaxis.tick_top()
     IMG_FILE = \
       Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
            UNDERSCORE_STR.join([method, TIME_DSPLCMT_STR, model, phase,
@@ -729,10 +743,6 @@ def main(args : argparse.Namespace):
   plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args)
   plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args, phase=SWAVE)
   TP = stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args, ANALYSIS)
-  if args.verbose:
-    TP.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                   UNDERSCORE_STR.join([ANALYSIS, TP_STR]) + CSV_EXT),
-                   index=False)
   time_displacement(copy.deepcopy(TP), args)
   # Associator
   ANALYSIS = "GaMMA"
@@ -753,10 +763,6 @@ def main(args : argparse.Namespace):
     if REC.empty: continue
     TP = pd.concat([TP, stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(REC),
                                   args, ANALYSIS)])
-  if args.verbose:
-    TP.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                   UNDERSCORE_STR.join([ANALYSIS, TP_STR]) + CSV_EXT),
-                   index=False)
   time_displacement(copy.deepcopy(TP), args, method=ANALYSIS)
 
 if __name__ == "__main__": main(ini.parse_arguments())
