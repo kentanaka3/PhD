@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 from copy import deepcopy as dcpy
 from datetime import datetime as dt
 from datetime import timedelta as td
-PROGRAM_NAME = "GaMMA"
+from obspy.core.utcdatetime import UTCDateTime
 from gamma.utils import association, estimate_eps
 
 from constants import *
@@ -207,7 +207,7 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
                     *config.proj(event[X_COORD_STR], event[Y_COORD_STR],
                                  inverse=True), event[Z_COORD_STR],
                     event[MAGNITUDE_STR], len(PICKS.index), *([None] * 6),
-                    PROGRAM_NAME])
+                    GMMA_STR])
         id += 1
       SRC = pd.DataFrame(SRC, columns=HEADER_ASCT).sort_values(TIMESTAMP_STR)
       SRC = SRC.reset_index(drop=True)
@@ -290,7 +290,17 @@ def main(args : argparse.Namespace) -> None:
   global DATA_PATH
   DATA_PATH = args.directory.parent
   CONFIG = set_up(args)
-  PRED = ini.classified_loader(args)
+  PRED : pd.DataFrame = pd.DataFrame(columns=HEADER_PRED)
+  PICKPATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                  UNDERSCORE_STR.join([PICKER_STR, PRED_STR]) + CSV_EXT)
+  if (not args.force and PICKPATH.exists() and
+      ini.read_args(args, False) == ini.dump_args(args, True)):
+    if args.verbose: print(f"Loading {PICKPATH}...")
+    PRED = ini.data_loader(PICKPATH)
+    PRED[TIMESTAMP_STR] = PRED[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
+  else:
+    PRED = ini.classified_loader(args)
+    if args.verbose: PRED.to_csv(PICKPATH, index=False)
   # TODO: Implement the pyocto method
   if args.pyocto: pass
   DATA, PRED = associate_events(copy.deepcopy(PRED), CONFIG, args)
