@@ -61,6 +61,29 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
                      end : UTCDateTime = None, stations : set[str] = None,
                      level : str = WARNING_STR) \
     -> tuple[pd.DataFrame, pd.DataFrame]:
+  """
+  Parse the DAT file and return the DataFrame of the manual picks.
+
+  input:
+    - filename  (Path)        : The path to the DAT file
+    - start     (UTCDateTime) : The start date of the picks
+    - end       (UTCDateTime) : The end date of the picks
+    - stations  (set[str])    : The set of stations to consider
+    - level     (str)         : The level of the error message
+
+  output:
+    - pd.DataFrame : Empty DataFrame
+    - pd.DataFrame : The DataFrame of the manual picks
+
+  exceptions:
+    - FileNotFoundError : If the file does not exist
+
+  notes:
+    The DAT file contains the manual picks of the earthquake events by
+    providing the station, the type of the P pick, the weight of the P pick,
+    the date of the pick, the time of the pick, the type of the S pick, the 
+    weight of the S pick, and the time of the S pick.
+  """
   unble_msg : str = ERRORS[level][UNABLE_STR].format(pre="DAT, ",
     verb="parse", type="{type}", post="from line: {line}")
   # TODO: Attemp restoration before SHUTDOWN
@@ -205,6 +228,30 @@ RECORD_CONTRIVER_PUN = \
 def event_parser_pun(filename : Path, start : UTCDateTime = None,
                      end : UTCDateTime = None, level : str = WARNING_STR) \
     -> tuple[pd.DataFrame, pd.DataFrame]:
+  """
+  Parse the PUN file and return the DataFrame of the source.
+
+  input:
+    - filename  (Path)        : The path to the DAT file
+    - start     (UTCDateTime) : The start date of the picks
+    - end       (UTCDateTime) : The end date of the picks
+    - stations  (set[str])    : The set of stations to consider
+    - level     (str)         : The level of the error message
+
+  output:
+    - pd.DataFrame : The DataFrame of the source
+    - pd.DataFrame : Empty DataFrame
+
+  exceptions:
+    - FileNotFoundError : If the file does not exist
+
+  notes:
+    The PUN file contains the source metadata of the earthquake events by
+    providing the date and time of the event, the latitude and longitude of the
+    event, the depth of the event, the magnitude of the event, the number of
+    the event, the gap of the event, the DMIN of the event, the RMS of the
+    event, the ERH of the event, the ERZ of the event, and the QM of the event.
+  """
   unble_msg : str = ERRORS[level][UNABLE_STR].format(pre="PUN, ",
     verb="parse", type="{type}", post="from line: {line}")
   if not filename.exists(): raise FileNotFoundError(filename)
@@ -362,7 +409,36 @@ LOCATION_EXTRACTOR_HPL = re.compile(
 NOTES_EXTRACTOR_HPL = re.compile(fr"^\*\s+(?P<{NOTES_STR}>.*)")
 def event_parser_hpl(filename : Path, start : UTCDateTime = None,
                      end : UTCDateTime = None, stations : set[str] = None,
-                     level : str = WARNING_STR) -> pd.DataFrame:
+                     level : str = WARNING_STR) \
+    -> tuple[pd.DataFrame, pd.DataFrame]:
+  """
+  Parse the HPL file and return the DataFrame of the source and the manual
+  picks.
+
+  input:
+    - filename  (Path)        : The path to the DAT file
+    - start     (UTCDateTime) : The start date of the picks
+    - end       (UTCDateTime) : The end date of the picks
+    - stations  (set[str])    : The set of stations to consider
+    - level     (str)         : The level of the error message
+
+  output:
+    - pd.DataFrame : The DataFrame of the source
+    - pd.DataFrame : The DataFrame of the manual picks
+
+  exceptions:
+    - FileNotFoundError : If the file does not exist
+
+  notes:
+    The HPL file contains the source metadata of the earthquake events by
+    providing the event number, the date and time of the event, the latitude
+    and longitude of the event, the depth of the event, the magnitude of the
+    event, the NO of the event, the GAP of the event, the DMIN of the event,
+    the RMS of the event, the ERH of the event, the ERZ of the event, the QM of
+    the event, the notes of the event, the station, the type of the pick, the
+    weight of the pick, the time of the pick, the seconds of the pick, the type
+    of the S pick, the weight of the S pick, and the time of the S pick.
+  """
   unble_msg : str = ERRORS[level][UNABLE_STR].format(pre="HPL, ",
     verb="parse", type="{type}", post="from line: {line}")
   notbl_msg : str = ERRORS[level][NOTABLE_STR].format(pre="HPL, ",

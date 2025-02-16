@@ -40,13 +40,15 @@ testParser:
 	python test/testparser.py
 
 picker:
-	python src/picker.py -v
+	python src/picker.py -v -D 231130 231130 --force
 
 analyzer:
 	python src/analyzer.py -v --file ./data/manual -D 231130 231130
 
 associator:
-	python src/associator.py -v --file ./data/station/ -D 231130 231130
+	python src/associator.py -v -D 231130 231130
+
+pipeline: picker associator analyzer
 
 clean_classify:
 	rm -rf data/classified && clear

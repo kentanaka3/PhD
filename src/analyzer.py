@@ -27,12 +27,12 @@ THRESHOLDS : list[float] = [round(t, 2) for t in np.linspace(0.1, 0.9, 9)]
 THRESHOLDER_STR = PWAVE + "{p:0.2}" + SWAVE + "{s:0.2}"
 DATES = None
 
-def plot_cluster(PICK : pd.DataFrame, RECD : pd.DataFrame,
+def plot_cluster(PICK : pd.DataFrame, GMMA : pd.DataFrame,
                  args : argparse.Namespace) -> None:
   """
   input  :
     - PICK          (pd.DataFrame)
-    - RECD          (pd.DataFrame)
+    - GMMA          (pd.DataFrame)
     - args          (argparse.Namespace)
 
   output :
@@ -51,11 +51,11 @@ def plot_cluster(PICK : pd.DataFrame, RECD : pd.DataFrame,
               (PICK[WEIGHT_STR].isin(args.weights))].reset_index(drop=True)
   groups = [MODEL_STR, WEIGHT_STR, STATION_STR]
   for _, dataframe in PICK.groupby(groups): m_p = max(m_p, dataframe.size)
-  RECD = RECD[(RECD[MODEL_STR].isin(args.models)) &
-              (RECD[WEIGHT_STR].isin(args.weights)) &
-              (RECD[THRESHOLD_STR] >= min(args.pwave,
+  GMMA = GMMA[(GMMA[MODEL_STR].isin(args.models)) &
+              (GMMA[WEIGHT_STR].isin(args.weights)) &
+              (GMMA[THRESHOLD_STR] >= min(args.pwave,
                                           args.swave))].reset_index(drop=True)
-  for _, dataframe in RECD.groupby(groups): m_r = max(m_r, dataframe.size)
+  for _, dataframe in GMMA.groupby(groups): m_r = max(m_r, dataframe.size)
   Ws : int = len(args.weights)
   x : int = int(np.sqrt(Ws))
   y : int = Ws // x + int((Ws % x) != 0)
@@ -71,8 +71,8 @@ def plot_cluster(PICK : pd.DataFrame, RECD : pd.DataFrame,
       Z = list()
       C = list()
       for station, P in dataframe_w.groupby(STATION_STR):
-        R = RECD[(RECD[MODEL_STR] == model) & (RECD[WEIGHT_STR] == weight) &
-                 (RECD[STATION_STR] == station)].reset_index(drop=True)
+        R = GMMA[(GMMA[MODEL_STR] == model) & (GMMA[WEIGHT_STR] == weight) &
+                 (GMMA[STATION_STR] == station)].reset_index(drop=True)
         p, r = P.size, R.size
         if p == 0 or r == 0:
           print(f"({model},{weight},{station}) was not plotted")
@@ -729,40 +729,47 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
 def main(args : argparse.Namespace):
   global DATA_PATH, DATES
   DATA_PATH = args.directory.parent
-  # Picker
-  ANALYSIS = "Picker"
-  PICK : pd.DataFrame = ini.classified_loader(args)
-  if args.verbose:
-    PICK.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                     UNDERSCORE_STR.join([ANALYSIS, PRED_STR]) + CSV_EXT),
-                     index=False)
+  PICK : pd.DataFrame = pd.DataFrame(columns=HEADER_PRED)
+  GMMA : pd.DataFrame = pd.DataFrame(columns=HEADER_PRED)
+  PICKPATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                  UNDERSCORE_STR.join([PICKER_STR, PRED_STR]) + CSV_EXT)
+  GMMAPATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                  UNDERSCORE_STR.join([GMMA_STR, PRED_STR]) + CSV_EXT)
+  if (not args.force and PICKPATH.exists() and GMMAPATH.exists() and
+      ini.read_args(args, False) == ini.dump_args(args, True)):
+    if args.verbose: print(f"Loading {PICKPATH}...")
+    PICK = ini.data_loader(PICKPATH)
+    PICK[TIMESTAMP_STR] = PICK[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
+    if args.verbose: print(f"Loading {GMMAPATH}...")
+    GMMA = ini.data_loader(GMMAPATH)
+    GMMA[TIMESTAMP_STR] = GMMA[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
+  else:
+    PICK = ini.classified_loader(args)
+    GMMA = ini.associated_loader(args)
+    if args.verbose:
+      PICK.to_csv(PICKPATH, index=False)
+      GMMA.to_csv(GMMAPATH, index=False)
+  plot_cluster(PICK, GMMA, args)
   if not args.file: raise ValueError("No event file given")
   if len(args.file) > 1: raise NotImplementedError("Multiple event files")
   TRUE_S, TRUE_D = event_parser(args.file[0], args)
   TRUE_D = TRUE_D[TRUE_D[STATION_STR].isin(PICK[STATION_STR].unique())]
   plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args)
   plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args, phase=SWAVE)
-  TP = stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args, ANALYSIS)
+  TP = stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args, PICKER_STR)
+  del PICK
   time_displacement(copy.deepcopy(TP), args)
   # Associator
-  ANALYSIS = "GaMMA"
-  RECD : pd.DataFrame = ini.associated_loader(args)
-  if args.verbose:
-    RECD.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                     UNDERSCORE_STR.join([ANALYSIS, PRED_STR]) + CSV_EXT),
-                     index=False)
-  plot_cluster(PICK, RECD, args)
-  del PICK
   start, end = args.dates
   TP = pd.DataFrame([], columns=HEADER_PRED)
   if DATES is None:
     DATES = [start]
     while DATES[-1] <= end: DATES.append(DATES[-1] + ONE_DAY)
   for s, e in zip(DATES[:-1], DATES[1:]):
-    REC = RECD[RECD[TIMESTAMP_STR].between(s, e, inclusive='left')]
+    REC = GMMA[GMMA[TIMESTAMP_STR].between(s, e, inclusive='left')]
     if REC.empty: continue
     TP = pd.concat([TP, stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(REC),
-                                  args, ANALYSIS)])
-  time_displacement(copy.deepcopy(TP), args, method=ANALYSIS)
+                                  args, GMMA_STR)])
+  time_displacement(copy.deepcopy(TP), args, method=GMMA_STR)
 
 if __name__ == "__main__": main(ini.parse_arguments())
