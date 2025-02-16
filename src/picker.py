@@ -194,9 +194,8 @@ def classify_stream(clf_files : tuple[list], model : sbm.base.SeisBenchModel,
     CLF_FILE = Path(DATA_PATH, CLF_STR, *categories,
                     ("D_" if args.denoiser else EMPTY_STR) + \
                     UNDERSCORE_STR.join([*categories, *key]) + PICKLE_EXT)
-    if CLF_FILE.exists(): continue
     CLF_FILE.parent.mkdir(parents=True, exist_ok=True)
-    CLF_FILE.touch()
+    CLF_FILE.touch(exist_ok=True)
     output = model.classify(read_traces(trace_files, args),
                             batch_size=args.batch, P_threshold=args.pwave,
                             S_threshold=args.swave).picks
@@ -435,7 +434,12 @@ def main(args : argparse.Namespace) -> None:
                           ("D_" if args.denoiser else EMPTY_STR) + \
                           UNDERSCORE_STR.join([*categories, *key]) + \
                           PICKLE_EXT)
-          with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)
+          try:
+            with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)
+          except Exception as e:
+            print("WARNING: ", e)
+            os.remove(CLF_FILE)
+            continue
           print(output)
           if args.interactive:
             interactive_plot(read_traces(trace_files, args), output, *key)

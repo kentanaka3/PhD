@@ -729,30 +729,32 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
 def main(args : argparse.Namespace):
   global DATA_PATH, DATES
   DATA_PATH = args.directory.parent
-  # Picker
-  ANALYSIS = "Picker"
-  PICK : pd.DataFrame = ini.classified_loader(args)
-  if args.verbose:
-    PICK.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                     UNDERSCORE_STR.join([ANALYSIS, PRED_STR]) + CSV_EXT),
-                     index=False)
+  PICK : pd.DataFrame = pd.DataFrame(columns=HEADER_PRED)
+  RECD : pd.DataFrame = pd.DataFrame(columns=HEADER_PRED)
+  PICKPATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                  UNDERSCORE_STR.join([PICKER_STR, PRED_STR]) + CSV_EXT)
+  RECDPATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                  UNDERSCORE_STR.join([GaMMA_STR, PRED_STR]) + CSV_EXT)
+  if ini.read_args(args, False) == ini.dump_args(args, True):
+    PICK = ini.data_loader(PICKPATH)
+    RECD = ini.data_loader(RECDPATH)
+  else:
+    PICK = ini.classified_loader(args)
+    RECD = ini.associated_loader(args)
+    if args.verbose:
+      PICK.to_csv(PICKPATH, index=False)
+      RECD.to_csv(RECDPATH, index=False)
+  plot_cluster(PICK, RECD, args)
   if not args.file: raise ValueError("No event file given")
   if len(args.file) > 1: raise NotImplementedError("Multiple event files")
   TRUE_S, TRUE_D = event_parser(args.file[0], args)
   TRUE_D = TRUE_D[TRUE_D[STATION_STR].isin(PICK[STATION_STR].unique())]
   plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args)
   plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args, phase=SWAVE)
-  TP = stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args, ANALYSIS)
+  TP = stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args, PICKER_STR)
+  del PICK
   time_displacement(copy.deepcopy(TP), args)
   # Associator
-  ANALYSIS = "GaMMA"
-  RECD : pd.DataFrame = ini.associated_loader(args)
-  if args.verbose:
-    RECD.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                     UNDERSCORE_STR.join([ANALYSIS, PRED_STR]) + CSV_EXT),
-                     index=False)
-  plot_cluster(PICK, RECD, args)
-  del PICK
   start, end = args.dates
   TP = pd.DataFrame([], columns=HEADER_PRED)
   if DATES is None:
@@ -762,7 +764,7 @@ def main(args : argparse.Namespace):
     REC = RECD[RECD[TIMESTAMP_STR].between(s, e, inclusive='left')]
     if REC.empty: continue
     TP = pd.concat([TP, stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(REC),
-                                  args, ANALYSIS)])
-  time_displacement(copy.deepcopy(TP), args, method=ANALYSIS)
+                                  args, GaMMA_STR)])
+  time_displacement(copy.deepcopy(TP), args, method=GaMMA_STR)
 
 if __name__ == "__main__": main(ini.parse_arguments())

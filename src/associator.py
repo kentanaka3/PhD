@@ -32,32 +32,13 @@ MPI_COMM = None
 
 DATES = None
 
-def station_graph(inventory : obspy.Inventory) -> None:
-  x = [station.longitude for network in inventory for station in network]
-  y = [station.latitude for network in inventory for station in network]
-  station = [station.code for network in inventory for station in network]
-  P = np.c_[x, y] * 1e-3
-  TRI = sp.spatial.Delaunay(P)
-  # TODO: Either replicate the inventory plot method or adapt it to plot
-  #       the Delaunay triangulation
-  fig = inventory.plot(projection="local", show=False, method="cartopy")
-  ax = fig.axes[0]
-  plt.triplot(P[:,0], P[:,1], TRI.simplices.copy(), color='r',
-              linestyle='-', lw=2)
-  for i, txt in enumerate(station):
-    ax.annotate(txt, (P[i, 0], P[i, 1]), color='k', fontweight='bold')
-  plt.tight_layout()
-  IMG_FILE = Path(IMG_PATH, STATION_STR + PNG_EXT)
-  plt.savefig(IMG_FILE)
-  return
-
 class AssociateConfig:
   def __init__(self, INVENTORY : obspy.Inventory, center : tuple = None,
                      x_lim : tuple = None, y_lim : tuple = None,
                      z_lim : tuple = None, t_lim : tuple = None,
                      vel : tuple = None, ncpu : int = 32,
                      method : str = BAYES_GAUSS_MIX_MODEL_STR,
-                     use_amplitude : bool = False, file = None) -> None:
+                     use_amplitude : bool = False, file : Path = None):
     self.dims = [X_COORD_STR, Y_COORD_STR, Z_COORD_STR]
     self.station = pd.DataFrame({(
       PERIOD_STR.join([network.code, station.code]), station.longitude,
@@ -65,6 +46,7 @@ class AssociateConfig:
       for network in INVENTORY for station in network},
       columns=[ID_STR] + self.dims)
     if file is not None:
+      if len(file) > 1: raise NotImplementedError("Multiple station files.")
       # TODO: Implement the file reading method
       pass
     self.x_min = self.station[X_COORD_STR].min()
@@ -131,7 +113,6 @@ class AssociateConfig:
     self.max_sigma12 = 1.0
 
     self.ncpu = ncpu
-    return
 
   def __repr__(self) -> str:
     return {
@@ -297,9 +278,11 @@ def set_up(args : argparse.Namespace) -> AssociateConfig:
       print(f"WARNING: Station file {station_file} does not exist.")
       continue
     INVENTORY.extend(obspy.read_inventory(station_file))
-  if not args.file: raise FileNotFoundError("Station file not found.")
-  if len(args.file) > 1: raise NotImplementedError("Multiple station files.")
-  CONFIG = AssociateConfig(INVENTORY, file=args.file[0])
+  if args.verbose:
+    INVENTORY.plot(projection="local", show=False, method="cartopy", size=5,
+                   water_fill_color="lightblue", color_per_network=True,
+                   outfile=Path(IMG_PATH, STATION_STR + PNG_EXT))
+  CONFIG = AssociateConfig(INVENTORY, file=args.file)
   # CONFIG = MPI_COMM.bcast(CONFIG, root=0)
   return CONFIG
 
@@ -307,7 +290,6 @@ def main(args : argparse.Namespace) -> None:
   global DATA_PATH
   DATA_PATH = args.directory.parent
   CONFIG = set_up(args)
-  # if args.verbose: station_graph(INVENTORY)
   PRED = ini.classified_loader(args)
   # TODO: Implement the pyocto method
   if args.pyocto: pass

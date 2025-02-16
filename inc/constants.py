@@ -63,6 +63,9 @@ TRUE_STR = "TRUE"
 PRED_STR = "PRED"
 ASCT_STR = "ASCT"
 
+PICKER_STR = "Picker"
+GaMMA_STR = "GaMMA"
+
 # Metrics
 TP_STR = "True Positive"
 FP_STR = "False Positive"

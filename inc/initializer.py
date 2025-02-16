@@ -225,8 +225,6 @@ def dump_args(args : argparse.Namespace,
                     [a.__str__() for a in args.julian],
     GROUPS_STR    : args.groups,
     DIRECTORY_STR : args.directory.relative_to(PRJ_PATH).__str__(),
-    PWAVE         : args.pwave,
-    SWAVE         : args.swave,
     DENOISER_STR  : args.denoiser,
     DOMAIN_STR    : args.rectdomain if args.rectdomain else args.circdomain
   }
