@@ -220,6 +220,15 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
                  if not SOURCE.empty else SRC
       DETECT = pd.concat([DETECT, PKS], ignore_index=True) \
                  if not DETECT.empty else PKS
+      if PKS.empty: continue
+      for (network, station), dtfrm in PKS.groupby([NETWORK_STR, STATION_STR]):
+        sdate = start.strftime("%y%m%d")
+        FILEPATH = Path(DATA_PATH, AST_STR, sdate, network, station,
+                        ("D" if args.denoiser else EMPTY_STR) +
+                        UNDERSCORE_STR.join([sdate, network, station, model,
+                                             weight]) + CSV_EXT)
+        FILEPATH.parent.mkdir(parents=True, exist_ok=True)
+        dtfrm.to_csv(FILEPATH, index=False)
   FILEPATH = Path(DATA_PATH, ("D" if args.denoiser else EMPTY_STR) +
                   AST_STR + CSV_EXT)
   SOURCE.sort_values(SORT_HIERARCHY_PRED, inplace=True)
@@ -228,18 +237,6 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
                   ASCT_STR + CSV_EXT)
   DETECT.sort_values(SORT_HIERARCHY_PRED, inplace=True)
   DETECT.to_csv(FILEPATH, index=False)
-  for (model, weight, network, station), dtfrm in \
-    DETECT.groupby([MODEL_STR, WEIGHT_STR, NETWORK_STR, STATION_STR]):
-    for start, end in zip(DATES[:-1], DATES[1:]):
-      df = dtfrm[dtfrm[TIMESTAMP_STR].between(start, end, inclusive='left')]
-      if df.empty: continue
-      start = start.strftime("%y%m%d")
-      FILEPATH = Path(DATA_PATH, AST_STR, start, network, station,
-                      ("D_" if args.denoiser else EMPTY_STR) +
-                      UNDERSCORE_STR.join([start, network, station, model,
-                                           weight]) + CSV_EXT)
-      FILEPATH.parent.mkdir(parents=True, exist_ok=True)
-      df.to_csv(FILEPATH, index=False)
   return SOURCE, DETECT
 
 def set_up(args : argparse.Namespace) -> AssociateConfig:

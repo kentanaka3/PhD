@@ -16,6 +16,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import timedelta as td
+from obspy.geodetics import gps2dist_azimuth
 from obspy.core.utcdatetime import UTCDateTime
 from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 
@@ -46,16 +47,26 @@ def plot_cluster(PICK : pd.DataFrame, GMMA : pd.DataFrame,
     img directory.
   """
   if args.verbose: print("Plotting the Cluster")
-  m_p, m_r = 0, 0
+  max_p, max_r = 0, 0
   PICK = PICK[(PICK[MODEL_STR].isin(args.models)) &
               (PICK[WEIGHT_STR].isin(args.weights))].reset_index(drop=True)
+  min_p = len(PICK.index)
   groups = [MODEL_STR, WEIGHT_STR, STATION_STR]
-  for _, dataframe in PICK.groupby(groups): m_p = max(m_p, dataframe.size)
+  for _, dataframe in PICK.groupby(groups):
+    max_p = max(max_p, len(dataframe.index))
+    min_p = min(min_p, len(dataframe.index))
+  max_p = np.power(10, int(np.log10(max_p)) + 1)
+  min_p = np.power(10, int(np.log10(min_p)))
   GMMA = GMMA[(GMMA[MODEL_STR].isin(args.models)) &
               (GMMA[WEIGHT_STR].isin(args.weights)) &
               (GMMA[THRESHOLD_STR] >= min(args.pwave,
                                           args.swave))].reset_index(drop=True)
-  for _, dataframe in GMMA.groupby(groups): m_r = max(m_r, dataframe.size)
+  min_r = len(GMMA.index)
+  for _, dataframe in GMMA.groupby(groups):
+    max_r = max(max_r, len(dataframe.index))
+    min_r = min(min_r, len(dataframe.index))
+  max_r = np.power(10, int(np.log10(max_r)) + 1)
+  min_r = np.power(10, int(np.log10(min_r)))
   Ws : int = len(args.weights)
   x : int = int(np.sqrt(Ws))
   y : int = Ws // x + int((Ws % x) != 0)
@@ -73,19 +84,19 @@ def plot_cluster(PICK : pd.DataFrame, GMMA : pd.DataFrame,
       for station, P in dataframe_w.groupby(STATION_STR):
         R = GMMA[(GMMA[MODEL_STR] == model) & (GMMA[WEIGHT_STR] == weight) &
                  (GMMA[STATION_STR] == station)].reset_index(drop=True)
-        p, r = P.size, R.size
+        p, r = len(P.index), len(R.index)
         if p == 0 or r == 0:
           print(f"({model},{weight},{station}) was not plotted")
           continue
-        X.append(P.size)
-        Y.append(R.size)
+        X.append(len(P.index))
+        Y.append(len(R.index))
         Z.append(station)
         C.append(R[THRESHOLD_STR].to_numpy().mean())
-      disp = ax.scatter(X, Y, c=C, cmap="turbo", norm="log", clim=(0.1, 1))
+      disp = ax.scatter(X, Y, c=C, cmap="turbo", clim=(0.1, 1))
       for i, txt in enumerate(Z): ax.annotate(txt, (X[i] + .5, Y[i] + .5))
       ax.set(title="{} ({:0.2})".format(weight, np.asarray(C).mean()),
-             xlabel="Picks", xscale="log", xlim=(1, m_p), ylabel="Events",
-             ylim=(1, m_r), yscale="log")
+             xlabel="Picks", xscale="log", xlim=(min_p, max_p),
+             ylabel="Events", yscale="log", ylim=(min_r, max_r))
       ax.grid()
     axs[0].set()
     axs[1].set(ylabel=None, yticklabels=[])
@@ -234,7 +245,6 @@ def diff_time(T : pd.Series, P : pd.Series) -> float:
 def dist_default(T : pd.Series, P : pd.Series) -> float:
   return (99. * dist_balanced(T, P) + P[PROBABILITY_STR]) / 100.
 
-
 class myBPGraph():
   def __init__(self, T : pd.DataFrame, P : pd.DataFrame, weight):
     self.W : function = weight
@@ -331,7 +341,7 @@ class myBPGraph():
       P = nodesP.iloc[x[0]]
       CFN_MTX.loc[T[PHASE_STR], P[PHASE_STR]] += 1
       if T[PHASE_STR] == P[PHASE_STR]:
-        TP.add(((T[ID_STR], P[ID_STR]),
+        TP.add(((T[ID_STR], str(P[ID_STR])),
                 (str(T[TIMESTAMP_STR]), str(P[TIMESTAMP_STR])),
                 (T[PROBABILITY_STR], P[PROBABILITY_STR]), T[PHASE_STR],
                 P[NETWORK_STR], T[STATION_STR]))
@@ -442,7 +452,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     fig.subplots_adjust(left=0.08, right=1.08, top=.95, bottom=0.05,
                         wspace=0.1, hspace=0.2)
     fig.colorbar(disp.im_, ax=axs, orientation='vertical',
-                label="Number of Picks", aspect=50, shrink=0.8)
+                 label="Number of Picks", aspect=50, shrink=0.8)
     disp.im_.set_clim(1, N_seconds)
     IMG_FILE = \
       Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
@@ -453,27 +463,36 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     plt.close()
   # True Positives
   TP = pd.DataFrame(TP, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
-  if args.verbose:
-    TP.to_csv(Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                   UNDERSCORE_STR.join([method, TP_STR]) + CSV_EXT),
-              index=False)
+  # TODO: Implement the threshold for the True Positives
+  for (m, w), df in TP.groupby([MODEL_STR, WEIGHT_STR]):
+    ids = {id[0] : id[1] for id in df[ID_STR].to_list()}
+    for k, v in ids.items():
+      TP.loc[(TP[MODEL_STR] == m) & (TP[WEIGHT_STR] == w) &
+             (TP[ID_STR] == (k, v)), [THRESHOLD_STR, ID_STR]] = [
+        float("{:0.1}".format(min([
+          x[1] for x in df.loc[df[ID_STR] == (k, v),
+                               PROBABILITY_STR].tolist()]))),
+        tuple([k, float(v) if v == "nan" else int(v)])]
+  if args.verbose: TP.to_csv(Path(
+    DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+    UNDERSCORE_STR.join([method, TP_STR]) + CSV_EXT), index=False)
   # False Negatives
   FN = pd.DataFrame(FN, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   FN_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  UNDERSCORE_STR.join([method, FN_STR]) + CSV_EXT)
-  FN.to_csv(FN_FILE, index=False)
+  if args.verbose: FN.to_csv(FN_FILE, index=False)
   # False Positives
   FP = pd.DataFrame(FP, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   FP_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  UNDERSCORE_STR.join([method, FP_STR]) + CSV_EXT)
-  FP.to_csv(FP_FILE, index=False)
+  if args.verbose: FP.to_csv(FP_FILE, index=False)
   # False Negative Pie plot
-  for (model, weight), dtfrm in FN.groupby([MODEL_STR, WEIGHT_STR]):
+  for (model, weight), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
     fig, _ax = plt.subplots(1, 2, figsize=(10, 5))
     plt.suptitle(SPACE_STR.join([model, weight]), fontsize=16)
     for ax, phase in zip(_ax, [PWAVE, SWAVE]):
       ax.set_title(phase)
-      dtfrm[dtfrm[PHASE_STR] == phase][PROBABILITY_STR].value_counts()\
+      df[df[PHASE_STR] == phase][PROBABILITY_STR].value_counts()\
         .plot(kind='pie', ax=ax, autopct='%1.1f%%')
     IMG_FILE = \
       Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
@@ -726,6 +745,14 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
     plt.savefig(IMG_FILE)
     plt.close()
 
+def dist_displacement(TRUE : pd.DataFrame, PRED : pd.DataFrame,
+                      args : argparse.Namespace) -> pd.DataFrame:
+  print("Computing the Displacement")
+  for (model, weight, id), df in PRED.groupby([MODEL_STR, WEIGHT_STR, ID_STR]):
+    print(model, weight, id)
+  #epi_dist, _, _ = gps2dist_azimuth(, float(lon), float(stla), float(stlo))
+  #epi_dist = float(format((epi_dist / 1000), ".4f"))
+
 def main(args : argparse.Namespace):
   global DATA_PATH, DATES
   DATA_PATH = args.directory.parent
@@ -754,8 +781,8 @@ def main(args : argparse.Namespace):
   if len(args.file) > 1: raise NotImplementedError("Multiple event files")
   TRUE_S, TRUE_D = event_parser(args.file[0], args)
   TRUE_D = TRUE_D[TRUE_D[STATION_STR].isin(PICK[STATION_STR].unique())]
-  plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args)
-  plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args, phase=SWAVE)
+  #plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args)
+  #plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args, phase=SWAVE)
   TP = stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args, PICKER_STR)
   del PICK
   time_displacement(copy.deepcopy(TP), args)
@@ -771,5 +798,20 @@ def main(args : argparse.Namespace):
     TP = pd.concat([TP, stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(REC),
                                   args, GMMA_STR)])
   time_displacement(copy.deepcopy(TP), args, method=GMMA_STR)
+  AI = dict()
+  for (m, w), df in TP.groupby([MODEL_STR, WEIGHT_STR]):
+    AI[(m, w)] = {tp : id for (tp, id) in df[ID_STR].unique().tolist()}
+  SRC_ : pd.DataFrame = pd.DataFrame(columns=HEADER_SRC)
+  SRC_PATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                  AST_STR + CSV_EXT)
+  if not SRC_PATH.exists(): print(f"File {SRC_PATH} not found")
+  else:
+    if args.verbose: print(f"Loading {SRC_PATH}...")
+    SRC_ = ini.data_loader(SRC_PATH)
+    SRC_[TIMESTAMP_STR] = SRC_[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
+    for (m, w), ids in AI.items():
+      for tp, id in ids.items():
+        src = SRC_.loc[(SRC_[ID_STR] == id) & (SRC_[MODEL_STR] == m) &
+                       (SRC_[WEIGHT_STR] == w)]
 
 if __name__ == "__main__": main(ini.parse_arguments())

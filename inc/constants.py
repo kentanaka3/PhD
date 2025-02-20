@@ -29,7 +29,8 @@ H71_OFFSET = {
   1 : td(seconds=0.04),
   2 : td(seconds=0.2),
   3 : td(seconds=1),
-  4 : td(seconds=5)
+  4 : td(seconds=5),
+  5 : td(seconds=25)
 }
 ASSOCIATE_OFFSET = td(seconds=1)
 

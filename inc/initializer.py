@@ -385,6 +385,7 @@ def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
       for leg in plt.legend().get_texts():
         leg.set_text(rf"$\geq$ {leg.get_text()}")
       plt.title(SPACE_STR.join([model, weight, date]))
+      plt.ylabel("Number of Picks")
       plt.yscale('log')
       plt.ylim(0.9)
       plt.tight_layout()
@@ -441,6 +442,7 @@ def associated_loader(args : argparse.Namespace) -> pd.DataFrame:
       HIST.plot(kind='bar', stacked=True, figsize=(20, 7))
       for leg in plt.legend().get_texts():
         leg.set_text(rf"$\geq$ {leg.get_text()}")
+      plt.ylabel("Number of Events")
       plt.title(SPACE_STR.join([model, weight, date]))
       plt.tight_layout()
       plt.savefig(IMG_FILE)
