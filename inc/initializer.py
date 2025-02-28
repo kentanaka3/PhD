@@ -129,6 +129,9 @@ def parse_arguments():
   parser.add_argument('-d', "--directory", required=False, type=is_dir_path,
                       default=Path(DATA_PATH, WAVEFORMS_STR),
                       help="Directory path to the raw files")
+  parser.add_argument('-o', "--option", default=ALL_WILDCHAR_STR,
+                      required=False, type=str,
+                      help="Specify a set of options")
   parser.add_argument('-p', "--pwave", default=PWAVE_THRESHOLD, type=float,
                       required=False, help=f"{PWAVE} wave threshold.")
   parser.add_argument('-s', "--swave", default=SWAVE_THRESHOLD, type=float,

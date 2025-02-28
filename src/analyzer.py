@@ -8,13 +8,13 @@ DATA_PATH = os.path.join(PRJ_PATH, "data")
 import sys
 # Add to path
 if INC_PATH not in sys.path: sys.path.append(INC_PATH)
-import copy
 import argparse
 import itertools
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from copy import deepcopy as dcpy
 from datetime import timedelta as td
 from obspy.geodetics import gps2dist_azimuth
 from obspy.core.utcdatetime import UTCDateTime
@@ -47,26 +47,12 @@ def plot_cluster(PICK : pd.DataFrame, GMMA : pd.DataFrame,
     img directory.
   """
   if args.verbose: print("Plotting the Cluster")
-  max_p, max_r = 0, 0
   PICK = PICK[(PICK[MODEL_STR].isin(args.models)) &
               (PICK[WEIGHT_STR].isin(args.weights))].reset_index(drop=True)
-  min_p = len(PICK.index)
-  groups = [MODEL_STR, WEIGHT_STR, STATION_STR]
-  for _, dataframe in PICK.groupby(groups):
-    max_p = max(max_p, len(dataframe.index))
-    min_p = min(min_p, len(dataframe.index))
-  max_p = np.power(10, int(np.log10(max_p)) + 1)
-  min_p = np.power(10, int(np.log10(min_p)))
   GMMA = GMMA[(GMMA[MODEL_STR].isin(args.models)) &
               (GMMA[WEIGHT_STR].isin(args.weights)) &
               (GMMA[THRESHOLD_STR] >= min(args.pwave,
                                           args.swave))].reset_index(drop=True)
-  min_r = len(GMMA.index)
-  for _, dataframe in GMMA.groupby(groups):
-    max_r = max(max_r, len(dataframe.index))
-    min_r = min(min_r, len(dataframe.index))
-  max_r = np.power(10, int(np.log10(max_r)) + 1)
-  min_r = np.power(10, int(np.log10(min_r)))
   Ws : int = len(args.weights)
   x : int = int(np.sqrt(Ws))
   y : int = Ws // x + int((Ws % x) != 0)
@@ -76,6 +62,8 @@ def plot_cluster(PICK : pd.DataFrame, GMMA : pd.DataFrame,
     axs = _axs.flatten()
     fig.suptitle(model)
     plt.rcParams.update({'font.size': 12})
+    max_p, max_r = 0, 0
+    min_p, min_r = len(PICK.index), len(GMMA.index)
     for ax, (weight, dataframe_w) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
       X = list()
       Y = list()
@@ -93,11 +81,17 @@ def plot_cluster(PICK : pd.DataFrame, GMMA : pd.DataFrame,
         Z.append(station)
         C.append(R[THRESHOLD_STR].to_numpy().mean())
       disp = ax.scatter(X, Y, c=C, cmap="turbo", clim=(0.1, 1))
+      max_p, min_p = max(max_p, max(X)), min(min_p, min(X))
+      max_r, min_r = max(max_r, max(Y)), min(min_r, min(Y))
       for i, txt in enumerate(Z): ax.annotate(txt, (X[i] + .5, Y[i] + .5))
       ax.set(title="{} ({:0.2})".format(weight, np.asarray(C).mean()),
-             xlabel="Picks", xscale="log", xlim=(min_p, max_p),
-             ylabel="Events", yscale="log", ylim=(min_r, max_r))
+             xlabel="Picks", xscale="log", ylabel="Events", yscale="log")
       ax.grid()
+    max_p = np.power(10, int(np.log10(max_p)) + 1)
+    min_p = np.power(10, int(np.log10(min_p)))
+    max_r = np.power(10, int(np.log10(max_r)) + 1)
+    min_r = np.power(10, int(np.log10(min_r)))
+    for ax in axs: ax.set(xlim=(min_p, max_p), ylim=(min_r, max_r))
     axs[0].set()
     axs[1].set(ylabel=None, yticklabels=[])
     if len(args.weights) > 2:
@@ -150,46 +144,6 @@ def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     while DATES[-1] <= end.datetime: DATES.append(DATES[-1] + ONE_DAY)
 
   y_true = [len(TRUE[TRUE[TIMESTAMP_STR] <= d].index) for d in DATES]
-  # Plot a 2x2 grid for each model and weight
-  for model, dtfrm in PRED.groupby(MODEL_STR):
-    _, _axs = plt.subplots(2, 2, figsize=(10, 10))
-    axs = _axs.flatten()
-    plt.suptitle(model, fontsize=16)
-    axs[0].set(xticklabels=[], xlabel=None, ylabel=MSG)
-    axs[1].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None)
-    axs[2].set(xlabel="Date", ylabel=MSG)
-    axs[3].set(xlabel="Date", yticklabels=[], ylabel=None)
-    y_max = 0
-    for i, (weight, data) in enumerate(dtfrm.groupby(WEIGHT_STR)):
-      axs[i].set_title(weight)
-      for threshold in THRESHOLDS:
-        y = [len(data[(data[PROBABILITY_STR] >= threshold) &
-                      (data[TIMESTAMP_STR] <= d)].index) for d in DATES]
-        axs[i].plot([np.datetime64(t) for t in DATES], y,
-                    label=rf"$\geq$ {threshold}")
-        y_max = max(y_max, max(y))
-      axs[i].plot([np.datetime64(t) for t in DATES], y_true, label="True",
-                  color="k")
-      y_max = max(y_max, max(y_true))
-    for ax in axs:
-      ax.set(xlim=(DATES[0], DATES[-1]), ylim=(1, y_max), yscale="log")
-      ax.grid()
-      ax.legend()
-    axs[2].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-    for label in axs[2].get_xticklabels():
-      label.set(rotation=30, horizontalalignment='right')
-    axs[3].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-    for label in axs[3].get_xticklabels():
-      label.set(rotation=30, horizontalalignment='right')
-    IMG_FILE = \
-      Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-           UNDERSCORE_STR.join([
-             CMTV_PICKS_STR, model, phase, THRESHOLDER_STR.format(
-               p=args.pwave, s=args.swave)]) + PNG_EXT)
-    plt.tight_layout()
-    plt.savefig(IMG_FILE)
-    plt.close()
-    if args.verbose: print(f"Saving {IMG_FILE}")
   if args.verbose:
     # Plot a 2x2 grid for each model, network and station
     for (model, network, station), dtfrm in \
@@ -622,7 +576,8 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     plt.savefig(IMG_FILE)
   return TP
 
-def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
+def event_parser(filename : Path, args : argparse.Namespace,
+                 stations : dict[str, set[str]] = None) -> pd.DataFrame:
   """
   input  :
     - filename      (Path)
@@ -640,32 +595,19 @@ def event_parser(filename : Path, args : argparse.Namespace) -> pd.DataFrame:
   """
   global DATA_PATH
   DATA_PATH = args.directory.parent
-  WAVEFORMS_DATA = ini.waveform_table(args)
   # TODO: Stations are not considered due to the low amount of data
-  SOURCE, DETECT = prs.event_parser(filename, *args.dates, None)
-  TRUE_S = pd.DataFrame(columns=HEADER_SRC)
-  TRUE_D = pd.DataFrame(columns=HEADER_MANL)
-  for date, dataframe_d in WAVEFORMS_DATA.groupby(DATE_STR):
-    start = UTCDateTime.strptime(date, DATE_FMT)
-    end = start + ONE_DAY
-    if SOURCE is not None:
-      source = SOURCE[SOURCE[TIMESTAMP_STR].between(start, end,
-                                                    inclusive='left')]
-      if not source.empty:
-        TRUE_S = pd.concat([TRUE_S, source.sort_values(by=TIMESTAMP_STR)]) \
-                   if not TRUE_S.empty else source
-    station = dataframe_d[STATION_STR].unique().tolist()
-    TRUE_D = pd.concat([TRUE_D, DETECT[
-      (DETECT[TIMESTAMP_STR].between(start, end, inclusive='left')) &
-      (DETECT[STATION_STR].isin(station))].sort_values(by=TIMESTAMP_STR)])
+  SOURCE, DETECT = prs.event_parser(filename, *args.dates, stations)
   if args.verbose:
-    TRUE_S.to_csv(Path(DATA_PATH,
+    SOURCE.to_csv(Path(DATA_PATH,
                        UNDERSCORE_STR.join([TRUE_STR, SOURCE_STR]) + CSV_EXT),
                        index=False)
-    TRUE_D.to_csv(Path(DATA_PATH,
+    DETECT.to_csv(Path(DATA_PATH,
                        UNDERSCORE_STR.join([TRUE_STR, DETECT_STR]) + CSV_EXT),
                        index=False)
-  return TRUE_S, TRUE_D
+  print(f"True (P): {len(DETECT[DETECT[PHASE_STR] == PWAVE].index)}",
+        f"True (S): {len(DETECT[DETECT[PHASE_STR] == SWAVE].index)}",
+        f"True: {len(DETECT.index)}")
+  return SOURCE, DETECT
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
                       phase : str = PWAVE, method : str = "Picker") -> None:
@@ -753,65 +695,129 @@ def dist_displacement(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   #epi_dist, _, _ = gps2dist_azimuth(, float(lon), float(stla), float(stlo))
   #epi_dist = float(format((epi_dist / 1000), ".4f"))
 
-def main(args : argparse.Namespace):
-  global DATA_PATH, DATES
-  DATA_PATH = args.directory.parent
-  PICK : pd.DataFrame = pd.DataFrame(columns=HEADER_PRED)
-  GMMA : pd.DataFrame = pd.DataFrame(columns=HEADER_PRED)
-  PICKPATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                  UNDERSCORE_STR.join([PICKER_STR, PRED_STR]) + CSV_EXT)
-  GMMAPATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                  UNDERSCORE_STR.join([GMMA_STR, PRED_STR]) + CSV_EXT)
-  if (not args.force and PICKPATH.exists() and GMMAPATH.exists() and
+def _Analysis(args : argparse.Namespace,
+              section : str = PICKER_STR) -> pd.DataFrame:
+  DF : pd.DataFrame = pd.DataFrame(columns=HEADER_PRED)
+  FILEPATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                  UNDERSCORE_STR.join([section, PRED_STR]) + CSV_EXT)
+  if (not args.force and FILEPATH.exists() and
       ini.read_args(args, False) == ini.dump_args(args, True)):
-    if args.verbose: print(f"Loading {PICKPATH}...")
-    PICK = ini.data_loader(PICKPATH)
-    PICK[TIMESTAMP_STR] = PICK[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
-    if args.verbose: print(f"Loading {GMMAPATH}...")
-    GMMA = ini.data_loader(GMMAPATH)
-    GMMA[TIMESTAMP_STR] = GMMA[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
+    if args.verbose: print(f"Loading {FILEPATH}...")
+    DF = ini.data_loader(FILEPATH)
+    DF[TIMESTAMP_STR] = DF[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
   else:
-    PICK = ini.classified_loader(args)
-    GMMA = ini.associated_loader(args)
-    if args.verbose:
-      PICK.to_csv(PICKPATH, index=False)
-      GMMA.to_csv(GMMAPATH, index=False)
-  plot_cluster(PICK, GMMA, args)
-  if not args.file: raise ValueError("No event file given")
-  if len(args.file) > 1: raise NotImplementedError("Multiple event files")
-  TRUE_S, TRUE_D = event_parser(args.file[0], args)
-  TRUE_D = TRUE_D[TRUE_D[STATION_STR].isin(PICK[STATION_STR].unique())]
-  #plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args)
-  #plot_data(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args, phase=SWAVE)
-  TP = stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(PICK), args, PICKER_STR)
-  del PICK
-  time_displacement(copy.deepcopy(TP), args)
-  # Associator
+    DF = ini.classified_loader(args)
+    if args.verbose: DF.to_csv(FILEPATH, index=False)
   start, end = args.dates
-  TP = pd.DataFrame([], columns=HEADER_PRED)
+  DF = DF[DF[TIMESTAMP_STR].between(start, end + ONE_DAY, inclusive='left')]
+  print(f"Pred (P): {len(DF[DF[PHASE_STR] == PWAVE].index)}",
+        f"Pred (S): {len(DF[DF[PHASE_STR] == SWAVE].index)}",
+        f"Pred: {len(DF.index)}")
+  global DATES
   if DATES is None:
     DATES = [start]
     while DATES[-1] <= end: DATES.append(DATES[-1] + ONE_DAY)
+  dates = [np.datetime64(d) for d in DATES]
+  Ws : int = len(args.weights)
+  x : int = int(np.sqrt(Ws))
+  y : int = Ws // x + int((Ws % x) != 0)
+  for (model, phase), dataframe_m in DF.groupby([MODEL_STR, PHASE_STR]):
+    fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
+                                            int(x * Ws - 1) * 1.5))
+    axs = _axs.flatten()
+    plt.rcParams.update({'font.size': 12})
+    fig.suptitle(model)
+    max_h = 0
+    for ax, (weight, dataframe_w) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
+      ax.set_title(weight)
+      for threshold in THRESHOLDS:
+        h = [len(dataframe_w[(dataframe_w[PROBABILITY_STR] >= threshold) &
+                             (dataframe_w[TIMESTAMP_STR] <= d)].index)
+             for d in DATES]
+        ax.plot(dates, h, label=rf"$\geq$ {threshold}")
+        max_h = max(max_h, max(h))
+      ax.set(xlabel=None, yscale="log", ylabel="Number of Picks")
+      ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+      for label in ax.get_xticklabels():
+        label.set(rotation=30, horizontalalignment='right')
+      ax.grid()
+      ax.legend()
+    for ax in axs: ax.set(ylim=(1, max_h))
+    axs[0].set(xticklabels=[])
+    axs[1].set(xticklabels=[], ylabel=None, yticklabels=[])
+    if len(args.weights) > 2:
+      axs[2].set()
+      axs[3].set(ylabel=None, yticklabels=[])
+    plt.tight_layout()
+    IMG_FILE = \
+      Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+           UNDERSCORE_STR.join([CMTV_PICKS_STR, section, model, phase]) + \
+             PNG_EXT)
+    plt.savefig(IMG_FILE)
+    plt.close()
+  return DF
+
+def _Stations(args : argparse.Namespace) -> dict[str, set[str]]:
+  WAVEFORMS = ini.waveform_table(args)
+  WAVEFORMS[DATE_STR] = WAVEFORMS[DATE_STR].apply(
+    lambda x: UTCDateTime.strptime(x, DATE_FMT))
+  start, end = args.dates
+  global DATES
+  if DATES is None:
+    DATES = [start.datetime]
+    while DATES[-1] <= end.datetime: DATES.append(DATES[-1] + ONE_DAY)
+  STATIONS = dict()
   for s, e in zip(DATES[:-1], DATES[1:]):
-    REC = GMMA[GMMA[TIMESTAMP_STR].between(s, e, inclusive='left')]
-    if REC.empty: continue
-    TP = pd.concat([TP, stat_test(copy.deepcopy(TRUE_D), copy.deepcopy(REC),
-                                  args, GMMA_STR)])
-  time_displacement(copy.deepcopy(TP), args, method=GMMA_STR)
-  AI = dict()
-  for (m, w), df in TP.groupby([MODEL_STR, WEIGHT_STR]):
-    AI[(m, w)] = {tp : id for (tp, id) in df[ID_STR].unique().tolist()}
-  SRC_ : pd.DataFrame = pd.DataFrame(columns=HEADER_SRC)
-  SRC_PATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                  AST_STR + CSV_EXT)
-  if not SRC_PATH.exists(): print(f"File {SRC_PATH} not found")
-  else:
-    if args.verbose: print(f"Loading {SRC_PATH}...")
-    SRC_ = ini.data_loader(SRC_PATH)
-    SRC_[TIMESTAMP_STR] = SRC_[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
-    for (m, w), ids in AI.items():
-      for tp, id in ids.items():
-        src = SRC_.loc[(SRC_[ID_STR] == id) & (SRC_[MODEL_STR] == m) &
-                       (SRC_[WEIGHT_STR] == w)]
+    S = WAVEFORMS.loc[WAVEFORMS[DATE_STR].between(s, e, inclusive='left'),
+                      STATION_STR]
+    if S.empty: continue
+    STATIONS[s.strftime(DATE_FMT)] = set(S.unique())
+  return STATIONS
+
+def main(args : argparse.Namespace):
+  global DATA_PATH
+  DATA_PATH = args.directory.parent
+  STATIONS = _Stations(args)
+  if not args.file: raise ValueError("No event file given")
+  if len(args.file) > 1: raise NotImplementedError("Multiple event files")
+  TRUE_S, TRUE_D = event_parser(args.file[0], args, STATIONS)
+  if args.option in [PICKER_STR, ALL_WILDCHAR_STR]:
+    PICK = _Analysis(args, PICKER_STR)
+  if args.option in [GMMA_STR, ALL_WILDCHAR_STR]:
+    GMMA = _Analysis(args, GMMA_STR)
+  if args.option == ALL_WILDCHAR_STR: plot_cluster(PICK, GMMA, args)
+  if args.option in [PICKER_STR, ALL_WILDCHAR_STR]:
+    TP = stat_test(dcpy(TRUE_D), dcpy(PICK), args, PICKER_STR)
+    del PICK
+    time_displacement(dcpy(TP), args)
+  if args.option in [GMMA_STR, ALL_WILDCHAR_STR]:
+    # Associator
+    global DATES
+    start, end = args.dates
+    TP = pd.DataFrame(columns=HEADER_PRED)
+    if DATES is None:
+      DATES = [start]
+      while DATES[-1] <= end: DATES.append(DATES[-1] + ONE_DAY)
+    for s, e in zip(DATES[:-1], DATES[1:]):
+      REC = GMMA[GMMA[TIMESTAMP_STR].between(s, e, inclusive='left')]
+      if REC.empty: continue
+      TP = pd.concat([TP, stat_test(dcpy(TRUE_D), dcpy(REC),
+                                    args, GMMA_STR)])
+    time_displacement(dcpy(TP), args, method=GMMA_STR)
+    AI = dict()
+    for (m, w), df in TP.groupby([MODEL_STR, WEIGHT_STR]):
+      AI[(m, w)] = {tp : id for (tp, id) in df[ID_STR].unique().tolist()}
+    SRC_ : pd.DataFrame = pd.DataFrame(columns=HEADER_SRC)
+    SRC_PATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                    AST_STR + CSV_EXT)
+    if not SRC_PATH.exists(): print(f"File {SRC_PATH} not found")
+    else:
+      if args.verbose: print(f"Loading {SRC_PATH}...")
+      SRC_ = ini.data_loader(SRC_PATH)
+      SRC_[TIMESTAMP_STR] = SRC_[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
+      for (m, w), ids in AI.items():
+        for tp, id in ids.items():
+          src = SRC_.loc[(SRC_[ID_STR] == id) & (SRC_[MODEL_STR] == m) &
+                         (SRC_[WEIGHT_STR] == w)]
 
 if __name__ == "__main__": main(ini.parse_arguments())
