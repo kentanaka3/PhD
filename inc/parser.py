@@ -111,7 +111,7 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
         continue
       # We only consider the picks from the date range (if specified)
       if start is not None and result[DATE_STR] < start: continue
-      if end is not None and result[DATE_STR] >= end + ONE_DAY: continue
+      if end is not None and result[DATE_STR] >= end + ONE_DAY: break
       # Station, We only consider the picks from the stations (if specified)
       result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
       if stations is not None and result[STATION_STR] not in \
@@ -512,9 +512,7 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
         if start is not None and result[DATE_STR] < start:
           event_detect = -1
           continue
-        if end is not None and result[DATE_STR] >= end + ONE_DAY:
-          event_detect = -1
-          continue
+        if end is not None and result[DATE_STR] >= end + ONE_DAY: break
         result[LATITUDE_STR] = result[LATITUDE_STR].replace(SPACE_STR,
                                                             ZERO_STR)\
                                 if result[LATITUDE_STR] else None
@@ -646,13 +644,13 @@ def event_parser(filename : Path, start : UTCDateTime = None,
                  end : UTCDateTime = None,
                  stations : dict[str, set[str]] = None) -> pd.DataFrame:
   if not filename.exists(): raise FileNotFoundError(filename)
+  SOURCE = pd.DataFrame(columns=HEADER_SRC)
+  DETECT = pd.DataFrame(columns=HEADER_MANL)
   if filename.is_dir():
     def process_file(file):
       return file.suffix, (event_parser(file, start, end, stations))
     with ThreadPoolExecutor() as executor:
       results = list(executor.map(process_file, filename.iterdir()))
-    SOURCE = pd.DataFrame(columns=HEADER_SRC)
-    DETECT = pd.DataFrame(columns=HEADER_MANL)
     FIND_SRC = [TIMESTAMP_STR, LONGITUDE_STR, LATITUDE_STR, LOCAL_DEPTH_STR,
                 MAGNITUDE_STR]
     FIND_DTC = [ID_STR, TIMESTAMP_STR, PROBABILITY_STR, PHASE_STR, STATION_STR]
@@ -671,9 +669,9 @@ def event_parser(filename : Path, start : UTCDateTime = None,
     #    for code, name in stations.items():
     #      DETECT.loc[DETECT[STATION_STR] == code][STATION_STR] = name
   else:
-    try:
-      SOURCE, DETECT = event_parser_(filename, start, end, stations)
-    except Exception as e:
-      print(f"WARNING: Unable to parse file: {filename}")
-      print(e)
+    SOURCE, DETECT = event_parser_(filename, start, end, stations)
+    #try:
+    #except Exception as e:
+    #  print(f"WARNING: Unable to parse file: {filename}")
+    #  print(e)
   return SOURCE, DETECT

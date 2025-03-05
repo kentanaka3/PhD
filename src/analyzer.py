@@ -83,7 +83,6 @@ def plot_cluster(PICK : pd.DataFrame, GMMA : pd.DataFrame,
       disp = ax.scatter(X, Y, c=C, cmap="turbo", clim=(0.1, 1))
       max_p, min_p = max(max_p, max(X)), min(min_p, min(X))
       max_r, min_r = max(max_r, max(Y)), min(min_r, min(Y))
-      for i, txt in enumerate(Z): ax.annotate(txt, (X[i] + .5, Y[i] + .5))
       ax.set(title="{} ({:0.2})".format(weight, np.asarray(C).mean()),
              xlabel="Picks", xscale="log", ylabel="Events", yscale="log")
       ax.grid()
@@ -419,6 +418,9 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   TP = pd.DataFrame(TP, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   # TODO: Implement the threshold for the True Positives
   for (m, w), df in TP.groupby([MODEL_STR, WEIGHT_STR]):
+    print(m, w)
+    print(f"cTP (P): {len(df[df[PHASE_STR] == PWAVE].index)}")
+    print(f"cTP (S): {len(df[df[PHASE_STR] == SWAVE].index)}")
     ids = {id[0] : id[1] for id in df[ID_STR].to_list()}
     for k, v in ids.items():
       TP.loc[(TP[MODEL_STR] == m) & (TP[WEIGHT_STR] == w) &
@@ -432,6 +434,10 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     UNDERSCORE_STR.join([method, TP_STR]) + CSV_EXT), index=False)
   # False Negatives
   FN = pd.DataFrame(FN, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
+  for (m, w), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
+    print(m, w)
+    print(f"FN (P): {len(df[df[PHASE_STR] == PWAVE].index)}")
+    print(f"FN (S): {len(df[df[PHASE_STR] == SWAVE].index)}")
   FN_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  UNDERSCORE_STR.join([method, FN_STR]) + CSV_EXT)
   if args.verbose: FN.to_csv(FN_FILE, index=False)
@@ -442,6 +448,9 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   if args.verbose: FP.to_csv(FP_FILE, index=False)
   # False Negative Pie plot
   for (model, weight), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
+    print(model, weight)
+    print("FP (P):", len(df[df[PHASE_STR] == PWAVE].index))
+    print("FP (S):", len(df[df[PHASE_STR] == SWAVE].index))
     fig, _ax = plt.subplots(1, 2, figsize=(10, 5))
     plt.suptitle(SPACE_STR.join([model, weight]), fontsize=16)
     for ax, phase in zip(_ax, [PWAVE, SWAVE]):
@@ -710,9 +719,6 @@ def _Analysis(args : argparse.Namespace,
     if args.verbose: DF.to_csv(FILEPATH, index=False)
   start, end = args.dates
   DF = DF[DF[TIMESTAMP_STR].between(start, end + ONE_DAY, inclusive='left')]
-  print(f"Pred (P): {len(DF[DF[PHASE_STR] == PWAVE].index)}",
-        f"Pred (S): {len(DF[DF[PHASE_STR] == SWAVE].index)}",
-        f"Pred: {len(DF.index)}")
   global DATES
   if DATES is None:
     DATES = [start]
@@ -780,7 +786,7 @@ def main(args : argparse.Namespace):
   STATIONS = _Stations(args)
   if not args.file: raise ValueError("No event file given")
   if len(args.file) > 1: raise NotImplementedError("Multiple event files")
-  TRUE_S, TRUE_D = event_parser(args.file[0], args, STATIONS)
+  TRUE_S, TRUE_D = event_parser(args.file[0], args, None)
   if args.option in [PICKER_STR, ALL_WILDCHAR_STR]:
     PICK = _Analysis(args, PICKER_STR)
   if args.option in [GMMA_STR, ALL_WILDCHAR_STR]:
