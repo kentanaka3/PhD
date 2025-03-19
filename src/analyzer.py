@@ -18,6 +18,7 @@ from copy import deepcopy as dcpy
 from datetime import timedelta as td
 from obspy.geodetics import gps2dist_azimuth
 from obspy.core.utcdatetime import UTCDateTime
+from concurrent.futures import ThreadPoolExecutor
 from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 
 from constants import *
@@ -298,12 +299,17 @@ class myBPGraph():
                 (str(T[TIMESTAMP_STR]), str(P[TIMESTAMP_STR])),
                 (T[PROBABILITY_STR], P[PROBABILITY_STR]), T[PHASE_STR],
                 P[NETWORK_STR], T[STATION_STR]))
-    for p, val in self.G[1].items():
+    def fp(a) -> set[str]:
+      p, val = a
       if len(list(val.items())) == 0:
         P = nodesP.iloc[p]
         CFN_MTX.loc[NONE_STR, P[PHASE_STR]] += 1
-        FP.add((P[ID_STR], P[TIMESTAMP_STR].__str__(), P[PROBABILITY_STR],
-                P[PHASE_STR], P[NETWORK_STR], P[STATION_STR]))
+        return (P[ID_STR], str(P[TIMESTAMP_STR]), P[PROBABILITY_STR],
+                P[PHASE_STR], P[NETWORK_STR], P[STATION_STR])
+      return None
+    with ThreadPoolExecutor() as executor:
+      result = [i for i in executor.map(fp, self.G[1].items()) if i]
+    FP.update(set(result))
     return CFN_MTX, TP, FN, FP
 
 def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
@@ -359,6 +365,10 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   if args.verbose: print("Computing the Confusion Matrix")
   start, end = args.dates
   N_seconds = int((end + ONE_DAY - start) / (2 * PICK_OFFSET.total_seconds()))
+  global DATES
+  if DATES is None:
+    DATES = [start.datetime]
+    while DATES[-1] <= end.datetime: DATES.append(DATES[-1] + ONE_DAY)
   TP, FN, FP = set(), [], set()
   PRED = PRED[((PRED[PHASE_STR] == PWAVE) &
                (PRED[PROBABILITY_STR] >= args.pwave)) |
@@ -378,13 +388,19 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       CFN_MTX = pd.DataFrame(0, index=HEADER_CFMX, columns=HEADER_CFMX,
                              dtype=int)
       for station, PRED_S in dataframe_w.groupby(STATION_STR):
-        TRUE_S = TRUE[TRUE[STATION_STR] == station].reset_index(drop=True)
-        cfn_mtx, tp, fn, fp = conf_mtx(TRUE_S, PRED_S.reset_index(drop=True),
-                                       model, weight, args)
-        CFN_MTX += cfn_mtx
-        TP = TP.union(tp)
-        FN.extend(fn)
-        FP = FP.union(fp)
+        TRUE_S = TRUE[(TRUE[STATION_STR] == station)].reset_index(drop=True)
+        # if TRUE_S.empty: continue
+        for s, e in zip(DATES[:-1], DATES[1:]):
+          TRUE_D = TRUE_S[TRUE_S[TIMESTAMP_STR].between(
+                            s, e, inclusive='left')].reset_index(drop=True)
+          PRED_D = PRED_S[PRED_S[TIMESTAMP_STR].between(
+                            s, e, inclusive='left')].reset_index(drop=True)
+          #if TRUE_D.empty: continue
+          cfn_mtx, tp, fn, fp = conf_mtx(TRUE_D, PRED_D, model, weight, args)
+          CFN_MTX += cfn_mtx
+          TP = TP.union(tp)
+          FN.extend(fn)
+          FP = FP.union(fp)
       CFN_MTX.loc[NONE_STR, NONE_STR] = N_seconds - CFN_MTX.sum().sum()
       disp = ConfMtxDisp(CFN_MTX.values, display_labels=CFN_MTX.columns)
       disp.plot(ax=ax, colorbar=False)
@@ -443,14 +459,15 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   if args.verbose: FN.to_csv(FN_FILE, index=False)
   # False Positives
   FP = pd.DataFrame(FP, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
+  for (m, w), df in FP.groupby([MODEL_STR, WEIGHT_STR]):
+    print(m, w)
+    print(f"FP (P): {len(df[df[PHASE_STR] == PWAVE].index)}")
+    print(f"FP (S): {len(df[df[PHASE_STR] == SWAVE].index)}")
   FP_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  UNDERSCORE_STR.join([method, FP_STR]) + CSV_EXT)
   if args.verbose: FP.to_csv(FP_FILE, index=False)
   # False Negative Pie plot
   for (model, weight), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
-    print(model, weight)
-    print("FP (P):", len(df[df[PHASE_STR] == PWAVE].index))
-    print("FP (S):", len(df[df[PHASE_STR] == SWAVE].index))
     fig, _ax = plt.subplots(1, 2, figsize=(10, 5))
     plt.suptitle(SPACE_STR.join([model, weight]), fontsize=16)
     for ax, phase in zip(_ax, [PWAVE, SWAVE]):
@@ -464,49 +481,52 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
                p=args.pwave, s=args.swave)]) + PNG_EXT)
     plt.savefig(IMG_FILE)
     plt.close()
-  return TP
-  # TODO: Redo the plots for the True Positives, False Negatives and False
-  #       Positives
-  # Plot the True Positives, False Negatives histogram and the Recall as a
-  # function of the threshold for each model and weight
+  # TP FN
   groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
   m = max(TP.groupby(groups)[THRESHOLD_STR].value_counts().max(),
           FN.groupby(groups)[THRESHOLD_STR].value_counts().max())
   m = (m + 9) // 10 * 10
-  for model in args.models:
-    _, _axs = plt.subplots(2, 2, figsize=(15, 10))
+  Ws : int = len(args.weights)
+  x : int = int(np.sqrt(Ws))
+  y : int = Ws // x + int((Ws % x) != 0)
+  for m in args.models:
+    TP_M = TP[TP[MODEL_STR] == m]
+    FN_M = FN[FN[MODEL_STR] == m]
+    fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
+                                            int(x * Ws - 1) * 1.5))
     axs = _axs.flatten()
-    for ax1, weight in zip(axs, args.weights):
+    fig.suptitle(m)
+    plt.rcParams.update({'font.size': 12})
+    for ax1, w in zip(axs, args.weights):
+      TP_W = TP_M[TP_M[WEIGHT_STR] == w]
+      FN_W = FN_M[FN_M[WEIGHT_STR] == w]
+      ax1.set_title(w, fontsize=16)
       ax2 = ax1.twinx()
-      ax1.set_title(weight, fontsize=16)
-      # True Positives
-      tp = TP[(TP[MODEL_STR] == model) & (TP[WEIGHT_STR] == weight)]
-      # P True Positives
-      ptp = tp[tp[PHASE_STR] == PWAVE]
-      ptp = ptp[THRESHOLD_STR].value_counts().sort_index()
-      # S True Positives
-      stp = tp[tp[PHASE_STR] == SWAVE]
-      stp = stp[THRESHOLD_STR].value_counts().sort_index()
-      # False Negatives
-      fn = FN[(FN[MODEL_STR] == model) & (FN[WEIGHT_STR] == weight)]
-      # P False Negatives
-      pfn = fn[fn[PHASE_STR] == PWAVE]
-      pfn = pfn[THRESHOLD_STR].value_counts().sort_index()
-      # S False Negatives
-      sfn = fn[fn[PHASE_STR] == SWAVE]
-      sfn = sfn[THRESHOLD_STR].value_counts().sort_index()
-      pRECALL = ptp / (ptp + pfn)
-      sRECALL = stp / (stp + sfn)
-      RECALL = (ptp + stp) / ((ptp + pfn) + (stp + sfn))
-      pRECALL.plot(ax=ax2, label=PWAVE, use_index=False, color="r")
-      sRECALL.plot(ax=ax2, label=SWAVE, use_index=False, color="b")
-      RECALL.plot(ax=ax2, label=f"{PWAVE} + {SWAVE}", use_index=False,
-                  color="k")
+      df[THRESHOLD_STR].value_counts().sort_index().plot(kind='bar', ax=ax)
+      ax1.set(ylabel="Number of Picks", ylim=(0, m))
+      RECALL = {
+        PWAVE : (0., 0.),
+        SWAVE : (0., 0.),
+        RECALL_STR : 0.
+      }
+      for p in [PWAVE, SWAVE]:
+        tp = TP_W.loc[TP_W[PHASE_STR] == p, THRESHOLD_STR].value_counts() \
+                 .sort_index()
+        fn = FN_W.loc[FN_W[PHASE_STR] == p, THRESHOLD_STR].value_counts() \
+                 .sort_index()
+        RECALL[p] = (tp, fn)
+      RECALL[RECALL_STR] = (RECALL[PWAVE][0] + RECALL[SWAVE][0]) / \
+                           (RECALL[PWAVE][0] + RECALL[PWAVE][1] + \
+                            RECALL[SWAVE][0] + RECALL[SWAVE][1])
+      RECALL[RECALL_STR].plot(ax=ax2, label=f"{PWAVE} + {SWAVE}", color="k")
+      for p in [PWAVE, SWAVE]:
+        (RECALL[p][0] / (RECALL[p][0] + RECALL[p][1])).plot(
+          ax=ax2, label=p, color="r" if p == PWAVE else "b")
       TPFN = pd.DataFrame({
-        SPACE_STR.join([PWAVE, TP_STR]): ptp,
-        SPACE_STR.join([SWAVE, TP_STR]): stp,
-        SPACE_STR.join([PWAVE, FN_STR]): pfn,
-        SPACE_STR.join([SWAVE, FN_STR]): sfn
+        SPACE_STR.join([PWAVE, TP_STR]): RECALL[PWAVE][0],
+        SPACE_STR.join([SWAVE, TP_STR]): RECALL[SWAVE][0],
+        SPACE_STR.join([PWAVE, FN_STR]): RECALL[PWAVE][1],
+        SPACE_STR.join([SWAVE, FN_STR]): RECALL[SWAVE][1]
       })
       TPFN.plot(kind='bar', ax=ax1, width=0.7)
       ax1.set(ylabel="Number of Picks", ylim=(0, m))
@@ -515,25 +535,28 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       ax2.set(yticks=[], yticklabels=[])
       ax1.grid()
       ax1.get_legend().remove()
-    axs[0].set(xlabel=None, xticklabels=[])
-    axs[0].legend()
-    axs[1].set(xlabel=None, xticklabels=[], ylabel=None, yticklabels=[])
-    ax1 = axs[1].twinx()
-    ax1.set(ylabel=RECALL_STR)
-    ax1.set_yticks(yticks)
-    ax1.set_yticklabels(yticklabels)
-    axs[2].set()
-    axs[3].set(xlabel=THRESHOLD_STR, ylabel=None, yticklabels=[])
-    ax2.set_ylabel(RECALL_STR)
-    ax2.set_yticks(yticks)
-    ax2.set_yticklabels(yticklabels)
-    ax2.legend()
-    IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                    UNDERSCORE_STR.join(["TPFN", model]) + PNG_EXT)
+    axs[0].set()
+    axs[1].set(ylabel=None, yticklabels=[])
+    if len(args.weights) > 2:
+      axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
+      axs[2].set(title=None)
+      axs[2].xaxis.tick_top()
+      axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
+      axs[3].set(ylabel=None, yticklabels=[], title=None)
+      axs[3].xaxis.tick_top()
+    fig.subplots_adjust(left=0.08, right=1.08, top=.95, bottom=0.05,
+                        wspace=0.1, hspace=0.2)
+    IMG_FILE = \
+      Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+           UNDERSCORE_STR.join([method, "TPFN", m]) + PNG_EXT)
     plt.tight_layout()
     plt.savefig(IMG_FILE)
     plt.close()
-
+  return TP
+  # TODO: Redo the plots for the True Positives, False Negatives and False
+  #       Positives
+  # Plot the True Positives, False Negatives histogram and the Recall as a
+  # function of the threshold for each model and weight
   m = max(m, FP.groupby(groups)[THRESHOLD_STR].value_counts().max())
   m = (m + 9) // 10 * 10
   for model, phase in itertools.product(args.models, [PWAVE, SWAVE]):
@@ -641,7 +664,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
   DATA[TIMESTAMP_STR] = \
     DATA[TIMESTAMP_STR].map(lambda x: UTCDateTime(x[0]) - UTCDateTime(x[1]))
   DATA[PROBABILITY_STR] = DATA[PROBABILITY_STR].map(lambda x: x[1])
-  bins = np.linspace(-0.5, 0.5, 21, endpoint=True)
+  bins = np.linspace(-0.5, 0.5, 41, endpoint=True)
   groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
   m = 0
   for _, dtfrm in DATA.groupby(groups):
@@ -664,7 +687,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
       mu = np.mean(dataframe_w[TIMESTAMP_STR])
       std = np.std(dataframe_w[TIMESTAMP_STR])
       ax.bar(bins[:-1], counts, label=rf"$\mu$={mu:.2f},$\sigma$={std:.2f}",
-             alpha=0.5, width=0.05)
+             alpha=0.5, width=0.025)
       for t_i, t_f in zip(THRESHOLDS[:-1], THRESHOLDS[1:]):
         data = dataframe_w[dataframe_w[PROBABILITY_STR].between(
                  t_i, t_f, inclusive='left')][TIMESTAMP_STR]
@@ -711,14 +734,16 @@ def _Analysis(args : argparse.Namespace,
                   UNDERSCORE_STR.join([section, PRED_STR]) + CSV_EXT)
   if (not args.force and FILEPATH.exists() and
       ini.read_args(args, False) == ini.dump_args(args, True)):
-    if args.verbose: print(f"Loading {FILEPATH}...")
+    print(f"Loading {FILEPATH}...")
     DF = ini.data_loader(FILEPATH)
-    DF[TIMESTAMP_STR] = DF[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
   else:
-    DF = ini.classified_loader(args)
-    if args.verbose: DF.to_csv(FILEPATH, index=False)
+    DF = ini.classified_loader(args) if section == PICKER_STR else \
+         ini.associated_loader(args)
+  DF[TIMESTAMP_STR] = DF[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
   start, end = args.dates
   DF = DF[DF[TIMESTAMP_STR].between(start, end + ONE_DAY, inclusive='left')]
+  if args.verbose: DF.to_csv(FILEPATH, index=False)
+  else: return DF
   global DATES
   if DATES is None:
     DATES = [start]
@@ -786,29 +811,21 @@ def main(args : argparse.Namespace):
   STATIONS = _Stations(args)
   if not args.file: raise ValueError("No event file given")
   if len(args.file) > 1: raise NotImplementedError("Multiple event files")
-  TRUE_S, TRUE_D = event_parser(args.file[0], args, None)
+  TRUE_S, TRUE_D = event_parser(args.file[0], args, STATIONS)
   if args.option in [PICKER_STR, ALL_WILDCHAR_STR]:
     PICK = _Analysis(args, PICKER_STR)
   if args.option in [GMMA_STR, ALL_WILDCHAR_STR]:
     GMMA = _Analysis(args, GMMA_STR)
   if args.option == ALL_WILDCHAR_STR: plot_cluster(PICK, GMMA, args)
   if args.option in [PICKER_STR, ALL_WILDCHAR_STR]:
+    # Picker
     TP = stat_test(dcpy(TRUE_D), dcpy(PICK), args, PICKER_STR)
     del PICK
     time_displacement(dcpy(TP), args)
   if args.option in [GMMA_STR, ALL_WILDCHAR_STR]:
     # Associator
-    global DATES
-    start, end = args.dates
-    TP = pd.DataFrame(columns=HEADER_PRED)
-    if DATES is None:
-      DATES = [start]
-      while DATES[-1] <= end: DATES.append(DATES[-1] + ONE_DAY)
-    for s, e in zip(DATES[:-1], DATES[1:]):
-      REC = GMMA[GMMA[TIMESTAMP_STR].between(s, e, inclusive='left')]
-      if REC.empty: continue
-      TP = pd.concat([TP, stat_test(dcpy(TRUE_D), dcpy(REC),
-                                    args, GMMA_STR)])
+    TP = stat_test(dcpy(TRUE_D), dcpy(GMMA), args, GMMA_STR)
+    del GMMA
     time_displacement(dcpy(TP), args, method=GMMA_STR)
     AI = dict()
     for (m, w), df in TP.groupby([MODEL_STR, WEIGHT_STR]):

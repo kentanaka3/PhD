@@ -304,10 +304,18 @@ def data_header(args : argparse.Namespace,
                   RESULTS.append([str(file_path), *vars])
             else:
               # TODO: Handle (daily, network, model, weight) files
-              continue
+              filename = station_path.stem
+              if args.denoiser == filename.startswith("D"):
+                vars = filename.split(UNDERSCORE_STR)[int(args.denoiser):]
+                continue
+                RESULTS.append([str(station_path), *vars])
         else:
           # TODO: Handle (daily, model, weight) files
-          continue
+          filename = network_path.stem
+          if args.denoiser == filename.startswith("D"):
+            vars = filename.split(UNDERSCORE_STR)[int(args.denoiser):]
+            continue
+            RESULTS.append([str(network_path), *vars])
     else:
       # TODO: Handle (model, weight) files
       raise NotImplementedError
@@ -368,7 +376,7 @@ def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
     data_header(args, CLF_STR).groupby([MODEL_STR, WEIGHT_STR, TIMESTAMP_STR]):
     if args.verbose: HIST = list()
     for filepath, (_, _, _, network, station) in dataframe.iterrows():
-      PICK = [[model, weight, None, None, str(p.peak_time), p.peak_value,
+      PICK = [[model, weight, None, np.nan, str(p.peak_time), p.peak_value,
                p.phase, network, station] for p in data_loader(Path(filepath))]
       DATA += PICK
       PICK = pd.DataFrame(PICK, columns=HEADER_PRED)
