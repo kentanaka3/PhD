@@ -198,17 +198,33 @@ def diff_time(T : pd.Series, P : pd.Series) -> float:
 
 def dist_default(T : pd.Series, P : pd.Series) -> float:
   return (99. * dist_balanced(T, P) + P[PROBABILITY_STR]) / 100.
+MATCH_CNFG[PICKER_STR].update({DISTANCE_STR : dist_default})
+
+def dist_space(T : pd.Series, P : pd.Series, offset : float = 1.) -> float:
+  return 1. - (float(format(diff_space(T, P) / 1000., ".4f")) / offset)
+
+def diff_space(T : pd.Series, P : pd.Series) -> float:
+  return gps2dist_azimuth(T[LATITUDE_STR], T[LONGITUDE_STR],
+                          P[LATITUDE_STR], P[LONGITUDE_STR])[0]
+
+def dist_event(T : pd.Series, P : pd.Series,
+               time_offset_sec : td = td(seconds=1.5),
+               space_offset_km : float = 5.) -> float:
+  return (dist_time(T, P, time_offset_sec) +
+          dist_space(T, P, space_offset_km)) / 2.
+MATCH_CNFG[GMMA_STR].update({DISTANCE_STR : dist_event})
 
 class myBPGraph():
-  def __init__(self, T : pd.DataFrame, P : pd.DataFrame, weight):
-    self.W : function = weight
+  def __init__(self, T : pd.DataFrame, P : pd.DataFrame,
+               config : dict[str, any]):
+    self.W : function = config[DISTANCE_STR]
     self.M : int = len(P.index)
     self.N : int = 0
     self.P : dict[str, dict[int, ]] = P.to_dict()
     self.T : dict[str, dict[int, ]] = {key : {} for key in T.columns.tolist()}
     self.G : list[dict[int, dict[int, float]], dict[int, dict[int, float]]] = \
                [{}, {i : {} for i in range(self.M)}]
-    for _, t in T.iterrows(): self.incNode(t, 0)
+    for _, t in T.iterrows(): self.incNode(t, 0, config[TIME_DSPLCMT_STR])
 
   def int2bool(self, i : int) -> bool: return i == 1
   def bool2int(self, b : bool) -> int: return 1 if b else 0
@@ -217,25 +233,27 @@ class myBPGraph():
   def addNode(self, u : int, bipartite : int, neighbours = dict())  -> None:
     if u not in self.G[bipartite]: self.G[bipartite][u] = neighbours
 
-  def incNode(self, u : pd.Series, bipartite : int = 1) -> None:
+  def incNode(self, u : pd.Series, bipartite : int = 1,
+              offset : td = PICK_OFFSET) -> None:
     if bipartite == 1:
       for key, val in u.to_dict().items(): self.P[key][self.M] = val
-      x = self.cnxNode(u, bipartite)
+      x = self.cnxNode(u, bipartite, offset=offset)
       self.addNode(self.M, bipartite, x)
       for node, weight in x.items(): self.addEdge(node, self.M, 0, weight)
       self.M += 1
     else:
       for key, val in u.to_dict().items(): self.T[key][self.N] = val
-      x = self.cnxNode(u, bipartite)
+      x = self.cnxNode(u, bipartite, offset=offset)
       self.addNode(self.N, bipartite, x)
       for node, weight in x.items(): self.addEdge(node, self.N, 1, weight)
       self.N += 1
     return
 
-  def cnxNode(self, u : pd.Series, bipartite : int = 1) -> dict[int, float]:
+  def cnxNode(self, u : pd.Series, bipartite : int = 1,
+              offset : td = PICK_OFFSET) -> dict[int, float]:
     v = pd.DataFrame(self.T if bipartite == 1 else self.P)
     v = v[(v[TIMESTAMP_STR] - u[TIMESTAMP_STR])\
-          .apply(lambda x: td(seconds=abs(x))) <= PICK_OFFSET]
+          .apply(lambda x: td(seconds=abs(x))) <= offset]
     if v.empty: return dict()
     return {i : self.W(u, v.loc[i]) for i in v.index}
 
@@ -275,10 +293,11 @@ class myBPGraph():
       self.G[0][t] = {p : w}
       self.G[1][p] = {t : w}
 
-  def confMtx(self) -> pd.DataFrame:
+  def confMtx(self, analyze : str = PICKER_STR) -> pd.DataFrame:
     TP, FN, FP = set(), [], set()
-    CFN_MTX = pd.DataFrame(0, index=HEADER_CFMX, columns=HEADER_CFMX,
-                           dtype=int)
+    match_vals = MATCH_DICT[analyze]
+    match_ttle = MATCH_CTGR[analyze]
+    CFN_MTX = pd.DataFrame(0, index=match_vals, columns=match_vals, dtype=int)
     # We traverse the TRUE nodes of the graph to extract relevant information
     # to the True Positives and False Negatives lists
     nodesT = pd.DataFrame(self.T)
@@ -287,25 +306,44 @@ class myBPGraph():
       T = nodesT.iloc[t]
       x = list(val.keys())
       if len(x) == 0:
-        CFN_MTX.loc[T[PHASE_STR], NONE_STR] += 1
-        FN.append([T[ID_STR], T[TIMESTAMP_STR].__str__(), T[PROBABILITY_STR],
-                   T[PHASE_STR], None, T[STATION_STR]])
+        if PHASE_STR in match_ttle:
+          CFN_MTX.loc[T[PHASE_STR], NONE_STR] += 1
+          FN.append([T[ID_STR], T[TIMESTAMP_STR].__str__(), T[PROBABILITY_STR],
+                    T[PHASE_STR], None, T[STATION_STR]])
+        else:
+          CFN_MTX.loc[EVENT_STR, NONE_STR] += 1
+          FN.append([T[ID_STR], str(T[TIMESTAMP_STR]), T[LATITUDE_STR],
+                     T[LONGITUDE_STR], T[LOCAL_DEPTH_STR], T[MAGNITUDE_STR]])
         continue
       assert len(x) == 1
       P = nodesP.iloc[x[0]]
-      CFN_MTX.loc[T[PHASE_STR], P[PHASE_STR]] += 1
-      if T[PHASE_STR] == P[PHASE_STR]:
+      if PHASE_STR in match_ttle:
+        CFN_MTX.loc[T[PHASE_STR], P[PHASE_STR]] += 1
+        if T[PHASE_STR] == P[PHASE_STR]:
+          TP.add(((T[ID_STR], str(P[ID_STR])),
+                  (str(T[TIMESTAMP_STR]), str(P[TIMESTAMP_STR])),
+                  (T[PROBABILITY_STR], P[PROBABILITY_STR]), T[PHASE_STR],
+                  P[NETWORK_STR], T[STATION_STR]))
+      else:
+        CFN_MTX.loc[EVENT_STR, EVENT_STR] += 1
         TP.add(((T[ID_STR], str(P[ID_STR])),
                 (str(T[TIMESTAMP_STR]), str(P[TIMESTAMP_STR])),
-                (T[PROBABILITY_STR], P[PROBABILITY_STR]), T[PHASE_STR],
-                P[NETWORK_STR], T[STATION_STR]))
+                (T[LATITUDE_STR], P[LATITUDE_STR]),
+                (T[LONGITUDE_STR], P[LONGITUDE_STR]),
+                (T[LOCAL_DEPTH_STR], P[LOCAL_DEPTH_STR]),
+                (T[MAGNITUDE_STR], P[MAGNITUDE_STR])))
     def fp(a) -> set[str]:
       p, val = a
       if len(list(val.items())) == 0:
         P = nodesP.iloc[p]
-        CFN_MTX.loc[NONE_STR, P[PHASE_STR]] += 1
-        return (P[ID_STR], str(P[TIMESTAMP_STR]), P[PROBABILITY_STR],
-                P[PHASE_STR], P[NETWORK_STR], P[STATION_STR])
+        if PHASE_STR in match_ttle:
+          CFN_MTX.loc[NONE_STR, P[PHASE_STR]] += 1
+          return (P[ID_STR], str(P[TIMESTAMP_STR]), P[PROBABILITY_STR],
+                  P[PHASE_STR], P[NETWORK_STR], P[STATION_STR])
+        else:
+          CFN_MTX.loc[NONE_STR, EVENT_STR] += 1
+          return (P[ID_STR], str(P[TIMESTAMP_STR]), P[LATITUDE_STR],
+                  P[LONGITUDE_STR], P[LOCAL_DEPTH_STR], P[MAGNITUDE_STR])
       return None
     with ThreadPoolExecutor() as executor:
       result = [i for i in executor.map(fp, self.G[1].items()) if i]
@@ -313,7 +351,8 @@ class myBPGraph():
     return CFN_MTX, TP, FN, FP
 
 def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
-             dataset_name : str, args : argparse.Namespace)\
+             dataset_name : str, args : argparse.Namespace,
+             config : dict[str, any] = MATCH_CNFG[PICKER_STR]) \
       -> list[pd.DataFrame, list, list, list]:
   """
   input  :
@@ -335,17 +374,18 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
   notes  :
 
   """
-  bpg = myBPGraph(TRUE, PRED, dist_default)
+  bpg = myBPGraph(TRUE, PRED, config)
   bpg.makeMatch()
   # if args.interactive: plot_timeline(G, pos, N, model_name, dataset_name)
-  CFN_MTX, TP, FN, FP = bpg.confMtx()
+  CFN_MTX, TP, FN, FP = bpg.confMtx(config[METHOD_STR])
   TP = set([tuple([model_name, dataset_name, None, *x]) for x in TP])
   FN = [[model_name, dataset_name, None, *x] for x in FN]
   FP = set([tuple([model_name, dataset_name, None, *x]) for x in FP])
   return CFN_MTX, TP, FN, FP
 
 def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
-              args : argparse.Namespace, method = "Picker") -> pd.DataFrame:
+              args : argparse.Namespace,
+              method : str = PICKER_STR) -> pd.DataFrame:
   """
   input  :
     - TRUE          (pd.DataFrame)
@@ -370,10 +410,11 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     DATES = [start.datetime]
     while DATES[-1] <= end.datetime: DATES.append(DATES[-1] + ONE_DAY)
   TP, FN, FP = set(), [], set()
-  PRED = PRED[((PRED[PHASE_STR] == PWAVE) &
-               (PRED[PROBABILITY_STR] >= args.pwave)) |
-              ((PRED[PHASE_STR] == SWAVE) &
-               (PRED[PROBABILITY_STR] >= args.swave))]
+  if PHASE_STR in MATCH_CTGR[method]:
+    PRED = PRED[((PRED[PHASE_STR] == PWAVE) &
+                 (PRED[PROBABILITY_STR] >= args.pwave)) |
+                ((PRED[PHASE_STR] == SWAVE) &
+                 (PRED[PROBABILITY_STR] >= args.swave))]
   Ws : int = len(args.weights)
   x : int = int(np.sqrt(Ws))
   y : int = Ws // x + int((Ws % x) != 0)
@@ -385,18 +426,18 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     fig.suptitle(model)
     for ax, (weight, dataframe_w) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
       ax.set_title(weight)
-      CFN_MTX = pd.DataFrame(0, index=HEADER_CFMX, columns=HEADER_CFMX,
-                             dtype=int)
+      CFN_MTX = pd.DataFrame(0, index=MATCH_DICT[method],
+                             columns=MATCH_DICT[method], dtype=int)
       for station, PRED_S in dataframe_w.groupby(STATION_STR):
         TRUE_S = TRUE[(TRUE[STATION_STR] == station)].reset_index(drop=True)
-        # if TRUE_S.empty: continue
         for s, e in zip(DATES[:-1], DATES[1:]):
           TRUE_D = TRUE_S[TRUE_S[TIMESTAMP_STR].between(
                             s, e, inclusive='left')].reset_index(drop=True)
           PRED_D = PRED_S[PRED_S[TIMESTAMP_STR].between(
                             s, e, inclusive='left')].reset_index(drop=True)
           #if TRUE_D.empty: continue
-          cfn_mtx, tp, fn, fp = conf_mtx(TRUE_D, PRED_D, model, weight, args)
+          cfn_mtx, tp, fn, fp = conf_mtx(TRUE_D, PRED_D, model, weight, args,
+                                         config=MATCH_CNFG[method])
           CFN_MTX += cfn_mtx
           TP = TP.union(tp)
           FN.extend(fn)
@@ -502,7 +543,6 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       FN_W = FN_M[FN_M[WEIGHT_STR] == w]
       ax1.set_title(w, fontsize=16)
       ax2 = ax1.twinx()
-      df[THRESHOLD_STR].value_counts().sort_index().plot(kind='bar', ax=ax)
       ax1.set(ylabel="Number of Picks", ylim=(0, m))
       RECALL = {
         PWAVE : (0., 0.),
@@ -636,9 +676,12 @@ def event_parser(filename : Path, args : argparse.Namespace,
     DETECT.to_csv(Path(DATA_PATH,
                        UNDERSCORE_STR.join([TRUE_STR, DETECT_STR]) + CSV_EXT),
                        index=False)
+  print("Picks Detections")
   print(f"True (P): {len(DETECT[DETECT[PHASE_STR] == PWAVE].index)}",
         f"True (S): {len(DETECT[DETECT[PHASE_STR] == SWAVE].index)}",
         f"True: {len(DETECT.index)}")
+  print("Events Sources")
+  print(f"True: {len(SOURCE.index)}")
   return SOURCE, DETECT
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
@@ -719,14 +762,6 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
     plt.savefig(IMG_FILE)
     plt.close()
 
-def dist_displacement(TRUE : pd.DataFrame, PRED : pd.DataFrame,
-                      args : argparse.Namespace) -> pd.DataFrame:
-  print("Computing the Displacement")
-  for (model, weight, id), df in PRED.groupby([MODEL_STR, WEIGHT_STR, ID_STR]):
-    print(model, weight, id)
-  #epi_dist, _, _ = gps2dist_azimuth(, float(lon), float(stla), float(stlo))
-  #epi_dist = float(format((epi_dist / 1000), ".4f"))
-
 def _Analysis(args : argparse.Namespace,
               section : str = PICKER_STR) -> pd.DataFrame:
   DF : pd.DataFrame = pd.DataFrame(columns=HEADER_PRED)
@@ -797,12 +832,27 @@ def _Stations(args : argparse.Namespace) -> dict[str, set[str]]:
   if DATES is None:
     DATES = [start.datetime]
     while DATES[-1] <= end.datetime: DATES.append(DATES[-1] + ONE_DAY)
+  """
+  STATIONS = {
+    s.strftime(DATE_FMT) : set(WAVEFORMS.loc[WAVEFORMS[DATE_STR].between(
+                             s, e, inclusive='left'), STATION_STR])
+    for s, e in zip(DATES[:-1], DATES[1:])
+  }"""
+  min_s, max_s = np.inf, 0
+  stations = set()
   STATIONS = dict()
   for s, e in zip(DATES[:-1], DATES[1:]):
     S = WAVEFORMS.loc[WAVEFORMS[DATE_STR].between(s, e, inclusive='left'),
                       STATION_STR]
     if S.empty: continue
-    STATIONS[s.strftime(DATE_FMT)] = set(S.unique())
+    S = S.unique()
+    min_s = min(min_s, len(S))
+    max_s = max(max_s, len(S))
+    STATIONS[s.strftime(DATE_FMT)] = set(S)
+    stations.update(S)
+    if args.verbose: print(f"Stations {s.strftime(DATE_FMT)}: {len(S)}")
+  print(f"Min Stations: {min_s}, Max Stations: {max_s}")
+  print(f"Total Stations: {len(stations)}")
   return STATIONS
 
 def main(args : argparse.Namespace):
@@ -811,7 +861,7 @@ def main(args : argparse.Namespace):
   STATIONS = _Stations(args)
   if not args.file: raise ValueError("No event file given")
   if len(args.file) > 1: raise NotImplementedError("Multiple event files")
-  TRUE_S, TRUE_D = event_parser(args.file[0], args, STATIONS)
+  TRUE_S, TRUE_D = event_parser(args.file[0], args, None)
   if args.option in [PICKER_STR, ALL_WILDCHAR_STR]:
     PICK = _Analysis(args, PICKER_STR)
   if args.option in [GMMA_STR, ALL_WILDCHAR_STR]:

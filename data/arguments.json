@@ -1,0 +1,32 @@
+{
+  "MODEL": [
+    "PhaseNet",
+    "EQTransformer"
+  ],
+  "WEIGHT": [
+    "instance",
+    "original",
+    "stead",
+    "scedc"
+  ],
+  "NETWORK": null,
+  "station": null,
+  "CHANNEL": null,
+  "DATE": [
+    "2023-06-01T00:00:00.000000Z",
+    "2023-12-31T00:00:00.000000Z"
+  ],
+  "GROUPS": [
+    "DATE",
+    "NETWORK",
+    "station"
+  ],
+  "DIRECTORY": "data/waveforms",
+  "DENOISER": false,
+  "DOMAIN": [
+    46.3583,
+    12.808,
+    0.0,
+    0.3
+  ]
+}

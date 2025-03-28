@@ -515,10 +515,16 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
         if end is not None and result[DATE_STR] >= end + ONE_DAY: break
         result[LATITUDE_STR] = result[LATITUDE_STR].replace(SPACE_STR,
                                                             ZERO_STR)\
-                                if result[LATITUDE_STR] else None
-        result[LONGITUDE_STR] = \
-          result[LONGITUDE_STR].replace(SPACE_STR, ZERO_STR) \
-          if result[LONGITUDE_STR] else None
+                                 if result[LATITUDE_STR] else None
+        if result[LATITUDE_STR]: 
+          splt = result[LATITUDE_STR].split(DASH_STR)
+          result[LATITUDE_STR] = float(splt[0]) + float(splt[1]) / 60.
+        result[LONGITUDE_STR] = result[LONGITUDE_STR].replace(SPACE_STR,
+                                                              ZERO_STR) \
+                                  if result[LONGITUDE_STR] else None
+        if result[LONGITUDE_STR]:
+          splt = result[LONGITUDE_STR].split(DASH_STR)
+          result[LONGITUDE_STR] = float(splt[0]) + float(splt[1]) / 60.
         result[LOCAL_DEPTH_STR] = float(result[LOCAL_DEPTH_STR]) \
                                     if result[LOCAL_DEPTH_STR] else NaN
         event_spacetime = (result[DATE_STR], result[LATITUDE_STR],

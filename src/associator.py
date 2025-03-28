@@ -21,6 +21,7 @@ from copy import deepcopy as dcpy
 from datetime import datetime as dt
 from datetime import timedelta as td
 from obspy.core.utcdatetime import UTCDateTime
+from concurrent.futures import ThreadPoolExecutor
 from gamma.utils import association, estimate_eps
 
 from constants import *
@@ -175,16 +176,48 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
     while DATES[-1] <= end.datetime: DATES.append(DATES[-1] + ONE_DAY)
   SOURCE = pd.DataFrame(columns=HEADER_ASCT)
   DETECT = pd.DataFrame(columns=HEADER_PRED)
-  for (model, weight), PRE in PRED.groupby([MODEL_STR, WEIGHT_STR]):
-    id : int = 0
-    for start, end in zip(DATES[:-1], DATES[1:]):
+  ids = {model : {weight : 0 for weight in args.weights}
+           for model in args.models}
+  for start, end in zip(DATES[:-1], DATES[1:]):
+    print(f"Processing {start.strftime(DATE_FMT)}...")
+    FOLDER = Path(DATA_PATH, AST_STR, start.strftime(DATE_FMT))
+    FOLDER.mkdir(parents=True, exist_ok=True)
+    for (model, weight), PRE in PRED[PRED[TIMESTAMP_STR].between(
+                                       start, end, inclusive='left')]\
+                                    .groupby([MODEL_STR, WEIGHT_STR]):
+      if not((model in args.models) and (weight in args.weights)): continue
+      FILEPATH = Path(FOLDER, "D" if args.denoiser else EMPTY_STR +
+                      UNDERSCORE_STR.join([start.strftime(DATE_FMT), model,
+                                           weight]) + CSV_EXT)
+      if not args.force and FILEPATH.exists():
+        SOURCE = pd.concat([SOURCE, pd.read_csv(FILEPATH)], ignore_index=True)\
+                   if not SOURCE.empty else pd.read_csv(FILEPATH)
+        def fp(filepath_network : Path) -> None:
+          if filepath_network.is_dir(): 
+            for filepath_station in filepath_network.iterdir():
+              if filepath_station.is_dir():
+                filepath = Path(filepath_station,
+                                "D" if args.denoiser else EMPTY_STR +
+                                UNDERSCORE_STR.join([start.strftime(DATE_FMT),
+                                                     filepath_network.name,
+                                                     filepath_station.name, model,
+                                                     weight]) + CSV_EXT)
+                if filepath.exists():
+                  if args.verbose: print(f"Loading {filepath}...")
+                  DETECT = pd.concat(
+                    [DETECT, pd.read_csv(filepath)], ignore_index=True) \
+                             if not DETECT.empty else pd.read_csv(filepath)
+        with ThreadPoolExecutor() as executor:
+          executor.map(fp, FOLDER.iterdir())
+        continue
+      if args.verbose: print(f"Saving {FILEPATH}...")
+      FILEPATH.touch()
       # For each day in the dataset we will associate the events
-      PR = PRE[PRE[TIMESTAMP_STR].between(start, end, inclusive='left')]
-      if args.force: PR = PR[
-        ((PR[TYPE_STR] == PWAVE) & (PR[PROBABILITY_STR] >= args.pwave)) |
-        ((PR[TYPE_STR] == SWAVE) & (PR[PROBABILITY_STR] >= args.swave))]
-      if PR.empty: continue
-      catalog, assignment = association(PR, config.station,
+      if args.force: PRE = PRE[
+        ((PRE[TYPE_STR] == PWAVE) & (PRE[PROBABILITY_STR] >= args.pwave)) |
+        ((PRE[TYPE_STR] == SWAVE) & (PRE[PROBABILITY_STR] >= args.swave))]
+      if PRE.empty: continue
+      catalog, assignment = association(PRE, config.station,
                                         config=config.__repr__(),
                                         method=config.method)
       if not (len(catalog) or len(assignment)): continue
@@ -192,23 +225,24 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
       PKS = pd.DataFrame(columns=HEADER_PRED)
       for event in catalog:
         PICKS = pd.DataFrame(
-          [PR.loc[row] for row, idx, _ in assignment
+          [PRE.loc[row] for row, idx, _ in assignment
                         if idx == event["event_index"]]).reset_index(drop=True)
         PICKS[MODEL_STR] = model
         PICKS[WEIGHT_STR] = weight
         th = float("{:0.1}".format(PICKS[PROBABILITY_STR].min()))
         PICKS[THRESHOLD_STR] = th
-        PICKS[ID_STR] = id
+        PICKS[ID_STR] = ids[model][weight]
         PICKS.rename(columns={TYPE_STR : PHASE_STR}, inplace=True)
         PICKS.sort_values(TIMESTAMP_STR, inplace=True)
         PKS = pd.concat([PKS, PICKS], ignore_index=True) if not PKS.empty \
                                                        else PICKS
-        SRC.append([model, weight, th, id, dt.fromisoformat(event['time']),
+        SRC.append([model, weight, th, ids[model][weight],
+                    dt.fromisoformat(event['time']),
                     *config.proj(event[X_COORD_STR], event[Y_COORD_STR],
                                  inverse=True), event[Z_COORD_STR],
                     event[MAGNITUDE_STR], len(PICKS.index), *([None] * 6),
                     GMMA_STR])
-        id += 1
+        ids[model][weight] += 1
       SRC = pd.DataFrame(SRC, columns=HEADER_ASCT).sort_values(TIMESTAMP_STR)
       SRC = SRC.reset_index(drop=True)
       L = len(SOURCE)
@@ -216,19 +250,23 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
                                             range(L, L + len(SRC)))}.get
       SRC[ID_STR] = SRC[ID_STR].apply(rpl)
       PKS[ID_STR] = PKS[ID_STR].apply(rpl)
+      SRC.to_csv(FILEPATH, index=False)
       SOURCE = pd.concat([SOURCE, SRC], ignore_index=True) \
                  if not SOURCE.empty else SRC
       DETECT = pd.concat([DETECT, PKS], ignore_index=True) \
                  if not DETECT.empty else PKS
       if PKS.empty: continue
-      for (network, station), dtfrm in PKS.groupby([NETWORK_STR, STATION_STR]):
-        sdate = start.strftime("%y%m%d")
+      sdate = start.strftime("%y%m%d")
+      def fp(x) -> None:
+        (network, station), dtfrm = x
         FILEPATH = Path(DATA_PATH, AST_STR, sdate, network, station,
                         ("D" if args.denoiser else EMPTY_STR) +
                         UNDERSCORE_STR.join([sdate, network, station, model,
                                              weight]) + CSV_EXT)
         FILEPATH.parent.mkdir(parents=True, exist_ok=True)
         dtfrm.to_csv(FILEPATH, index=False)
+      with ThreadPoolExecutor() as executor:
+        executor.map(fp, PKS.groupby([NETWORK_STR, STATION_STR]))
   FILEPATH = Path(DATA_PATH, ("D" if args.denoiser else EMPTY_STR) +
                   AST_STR + CSV_EXT)
   SOURCE.sort_values(SORT_HIERARCHY_PRED, inplace=True)
@@ -276,9 +314,9 @@ def set_up(args : argparse.Namespace) -> AssociateConfig:
       continue
     INVENTORY.extend(obspy.read_inventory(station_file))
   if args.verbose:
-    INVENTORY.plot(projection="local", show=False, method="cartopy", size=5,
+    INVENTORY.plot(projection="local", show=False, method="cartopy", size=25,
                    water_fill_color="lightblue", color_per_network=True,
-                   outfile=Path(IMG_PATH, STATION_STR + PNG_EXT))
+                   label=False, outfile=Path(IMG_PATH, STATION_STR + PNG_EXT))
   CONFIG = AssociateConfig(INVENTORY, file=args.file)
   # CONFIG = MPI_COMM.bcast(CONFIG, root=0)
   return CONFIG

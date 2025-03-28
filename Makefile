@@ -1,5 +1,5 @@
 downloader:
-	python inc/downloader.py -D 231130 231130 -v -N "*" -S "*" --rectdomain 44.5 47 10 14.5
+	python inc/downloader.py -D 230601 231231 -v -N "*" -S "*" --rectdomain 44.5 47 10 14.5
 
 results:
 	cp img/CP_EQTransformer_P.png doc/img/
@@ -40,13 +40,13 @@ testParser:
 	python test/testparser.py
 
 picker:
-	python src/picker.py -v -D 231130 231130 --force
+	python src/picker.py -v -D 230601 231231 --force
 
 analyzer:
-	python src/analyzer.py -v --file ./data/manual -D 231130 231130
+	python src/analyzer.py -v --file ./data/manual -D 230601 231231
 
 associator:
-	python src/associator.py -v -D 231130 231130
+	python src/associator.py -v -D 230601 231231
 
 pipeline: picker associator analyzer
 
