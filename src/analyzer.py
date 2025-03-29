@@ -81,12 +81,18 @@ def plot_cluster(PICK : pd.DataFrame, GMMA : pd.DataFrame,
         Y.append(len(R.index))
         Z.append(station)
         C.append(R[THRESHOLD_STR].to_numpy().mean())
+      if len(X) == 0:
+        print(f"({model},{weight}) was not plotted")
+        continue
       disp = ax.scatter(X, Y, c=C, cmap="turbo", clim=(0.1, 1))
       max_p, min_p = max(max_p, max(X)), min(min_p, min(X))
       max_r, min_r = max(max_r, max(Y)), min(min_r, min(Y))
       ax.set(title="{} ({:0.2})".format(weight, np.asarray(C).mean()),
              xlabel="Picks", xscale="log", ylabel="Events", yscale="log")
       ax.grid()
+    if max_p == 0 or max_r == 0:
+      print(f"({model}) was not plotted")
+      continue
     max_p = np.power(10, int(np.log10(max_p)) + 1)
     min_p = np.power(10, int(np.log10(min_p)))
     max_r = np.power(10, int(np.log10(max_r)) + 1)
@@ -208,8 +214,8 @@ def diff_space(T : pd.Series, P : pd.Series) -> float:
                           P[LATITUDE_STR], P[LONGITUDE_STR])[0]
 
 def dist_event(T : pd.Series, P : pd.Series,
-               time_offset_sec : td = td(seconds=1.5),
-               space_offset_km : float = 5.) -> float:
+               time_offset_sec : td = ASSOCIATE_TIME_OFFSET,
+               space_offset_km : float = ASSOCIATE_DIST_OFFSET) -> float:
   return (dist_time(T, P, time_offset_sec) +
           dist_space(T, P, space_offset_km)) / 2.
 MATCH_CNFG[GMMA_STR].update({DISTANCE_STR : dist_event})
@@ -300,8 +306,9 @@ class myBPGraph():
     CFN_MTX = pd.DataFrame(0, index=match_vals, columns=match_vals, dtype=int)
     # We traverse the TRUE nodes of the graph to extract relevant information
     # to the True Positives and False Negatives lists
-    nodesT = pd.DataFrame(self.T)
-    nodesP = pd.DataFrame(self.P)
+    nodesT = pd.DataFrame(self.T).reset_index(drop=True)
+    nodesP = pd.DataFrame(self.P).reset_index(drop=True)
+    if nodesP.empty: return CFN_MTX, TP, FN, FP
     for t, val in self.G[0].items():
       T = nodesT.iloc[t]
       x = list(val.keys())
@@ -316,6 +323,7 @@ class myBPGraph():
                      T[LONGITUDE_STR], T[LOCAL_DEPTH_STR], T[MAGNITUDE_STR]])
         continue
       assert len(x) == 1
+      if x[0] not in nodesP.index: continue
       P = nodesP.iloc[x[0]]
       if PHASE_STR in match_ttle:
         CFN_MTX.loc[T[PHASE_STR], P[PHASE_STR]] += 1
@@ -335,6 +343,7 @@ class myBPGraph():
     def fp(a) -> set[str]:
       p, val = a
       if len(list(val.items())) == 0:
+        if p not in nodesP.index: return None
         P = nodesP.iloc[p]
         if PHASE_STR in match_ttle:
           CFN_MTX.loc[NONE_STR, P[PHASE_STR]] += 1
@@ -346,7 +355,7 @@ class myBPGraph():
                   P[LONGITUDE_STR], P[LOCAL_DEPTH_STR], P[MAGNITUDE_STR])
       return None
     with ThreadPoolExecutor() as executor:
-      result = [i for i in executor.map(fp, self.G[1].items()) if i]
+      result = [i for i in executor.map(fp, self.G[1].items()) if i is not None]
     FP.update(set(result))
     return CFN_MTX, TP, FN, FP
 
@@ -404,7 +413,8 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   """
   if args.verbose: print("Computing the Confusion Matrix")
   start, end = args.dates
-  N_seconds = int((end + ONE_DAY - start) / (2 * PICK_OFFSET.total_seconds()))
+  N_seconds = int((end + ONE_DAY - start) / \
+                  (2 * MATCH_CNFG[method][TIME_DSPLCMT_STR].total_seconds()))
   global DATES
   if DATES is None:
     DATES = [start.datetime]
@@ -424,24 +434,29 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     axs = _axs.flatten()
     plt.rcParams.update({'font.size': 12})
     fig.suptitle(model)
-    for ax, (weight, dataframe_w) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
+    for ax, (weight, PRED_W) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
       ax.set_title(weight)
       CFN_MTX = pd.DataFrame(0, index=MATCH_DICT[method],
                              columns=MATCH_DICT[method], dtype=int)
-      for station, PRED_S in dataframe_w.groupby(STATION_STR):
-        TRUE_S = TRUE[(TRUE[STATION_STR] == station)].reset_index(drop=True)
-        for s, e in zip(DATES[:-1], DATES[1:]):
-          TRUE_D = TRUE_S[TRUE_S[TIMESTAMP_STR].between(
-                            s, e, inclusive='left')].reset_index(drop=True)
-          PRED_D = PRED_S[PRED_S[TIMESTAMP_STR].between(
-                            s, e, inclusive='left')].reset_index(drop=True)
-          #if TRUE_D.empty: continue
-          cfn_mtx, tp, fn, fp = conf_mtx(TRUE_D, PRED_D, model, weight, args,
+      print(f"Processing {model} {weight}...")
+      if method == PICKER_STR:
+        for station, PRED_S in PRED_W.groupby(STATION_STR):
+          TRUE_S = TRUE[(TRUE[STATION_STR] == station)].reset_index(drop=True)
+          cfn_mtx, tp, fn, fp = conf_mtx(TRUE_S, PRED_S.reset_index(drop=True),
+                                         model, weight, args,
                                          config=MATCH_CNFG[method])
           CFN_MTX += cfn_mtx
           TP = TP.union(tp)
           FN.extend(fn)
           FP = FP.union(fp)
+      else:
+        CFN_MTX, tp, fn, fp = conf_mtx(TRUE.reset_index(drop=True),
+                                       PRED_W.reset_index(drop=True),
+                                       model, weight, args,
+                                       config=MATCH_CNFG[method])
+        TP = TP.union(tp)
+        FN.extend(fn)
+        FP = FP.union(fp)
       CFN_MTX.loc[NONE_STR, NONE_STR] = N_seconds - CFN_MTX.sum().sum()
       disp = ConfMtxDisp(CFN_MTX.values, display_labels=CFN_MTX.columns)
       disp.plot(ax=ax, colorbar=False)
@@ -476,8 +491,10 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   # TODO: Implement the threshold for the True Positives
   for (m, w), df in TP.groupby([MODEL_STR, WEIGHT_STR]):
     print(m, w)
-    print(f"cTP (P): {len(df[df[PHASE_STR] == PWAVE].index)}")
-    print(f"cTP (S): {len(df[df[PHASE_STR] == SWAVE].index)}")
+    if PHASE_STR in MATCH_CNFG[method]:
+      for phase in [PWAVE, SWAVE]:
+        print(f"cTP ({phase}): {len(df[df[PHASE_STR] == phase].index)}")
+    print(f"TP: {len(df.index)}")
     ids = {id[0] : id[1] for id in df[ID_STR].to_list()}
     for k, v in ids.items():
       TP.loc[(TP[MODEL_STR] == m) & (TP[WEIGHT_STR] == w) &
@@ -493,8 +510,10 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   FN = pd.DataFrame(FN, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   for (m, w), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
     print(m, w)
-    print(f"FN (P): {len(df[df[PHASE_STR] == PWAVE].index)}")
-    print(f"FN (S): {len(df[df[PHASE_STR] == SWAVE].index)}")
+    if PHASE_STR in MATCH_CNFG[method]:
+      for phase in [PWAVE, SWAVE]:
+        print(f"FN ({phase}): {len(df[df[PHASE_STR] == phase].index)}")
+    print(f"FN: {len(df.index)}")
   FN_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  UNDERSCORE_STR.join([method, FN_STR]) + CSV_EXT)
   if args.verbose: FN.to_csv(FN_FILE, index=False)
@@ -502,26 +521,30 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   FP = pd.DataFrame(FP, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   for (m, w), df in FP.groupby([MODEL_STR, WEIGHT_STR]):
     print(m, w)
-    print(f"FP (P): {len(df[df[PHASE_STR] == PWAVE].index)}")
-    print(f"FP (S): {len(df[df[PHASE_STR] == SWAVE].index)}")
+    if PHASE_STR in MATCH_CNFG[method]:
+      for phase in [PWAVE, SWAVE]:
+        print(f"FP ({phase}): {len(df[df[PHASE_STR] == phase].index)}")
+    print(f"FP: {len(df.index)}")
   FP_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  UNDERSCORE_STR.join([method, FP_STR]) + CSV_EXT)
   if args.verbose: FP.to_csv(FP_FILE, index=False)
-  # False Negative Pie plot
-  for (model, weight), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
-    fig, _ax = plt.subplots(1, 2, figsize=(10, 5))
-    plt.suptitle(SPACE_STR.join([model, weight]), fontsize=16)
-    for ax, phase in zip(_ax, [PWAVE, SWAVE]):
-      ax.set_title(phase)
-      df[df[PHASE_STR] == phase][PROBABILITY_STR].value_counts()\
-        .plot(kind='pie', ax=ax, autopct='%1.1f%%')
-    IMG_FILE = \
-      Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-           UNDERSCORE_STR.join([
-             method, FN_STR, model, weight, THRESHOLDER_STR.format(
-               p=args.pwave, s=args.swave)]) + PNG_EXT)
-    plt.savefig(IMG_FILE)
-    plt.close()
+  if PHASE_STR in MATCH_CNFG[method]:
+    # False Negative Pie plot
+    for (model, weight), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
+      fig, _ax = plt.subplots(1, 2, figsize=(10, 5))
+      plt.suptitle(SPACE_STR.join([model, weight]), fontsize=16)
+      for ax, phase in zip(_ax, [PWAVE, SWAVE]):
+        ax.set_title(phase)
+        df[df[PHASE_STR] == phase][PROBABILITY_STR].value_counts()\
+          .plot(kind='pie', ax=ax, autopct='%1.1f%%')
+      IMG_FILE = \
+        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+            UNDERSCORE_STR.join([
+              method, FN_STR, model, weight, THRESHOLDER_STR.format(
+                p=args.pwave, s=args.swave)]) + PNG_EXT)
+      plt.savefig(IMG_FILE)
+      plt.close()
+  if method != PICKER_STR: return TP
   # TP FN
   groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
   m = max(TP.groupby(groups)[THRESHOLD_STR].value_counts().max(),
@@ -676,6 +699,9 @@ def event_parser(filename : Path, args : argparse.Namespace,
     DETECT.to_csv(Path(DATA_PATH,
                        UNDERSCORE_STR.join([TRUE_STR, DETECT_STR]) + CSV_EXT),
                        index=False)
+  SOURCE = SOURCE[SOURCE[NOTES_STR].isnull() &
+                  SOURCE[LATITUDE_STR].notna()].reset_index(drop=True)
+  DETECT = DETECT[DETECT[ID_STR].isin(SOURCE[ID_STR])].reset_index(drop=True)
   print("Picks Detections")
   print(f"True (P): {len(DETECT[DETECT[PHASE_STR] == PWAVE].index)}",
         f"True (S): {len(DETECT[DETECT[PHASE_STR] == SWAVE].index)}",
@@ -779,6 +805,7 @@ def _Analysis(args : argparse.Namespace,
   DF = DF[DF[TIMESTAMP_STR].between(start, end + ONE_DAY, inclusive='left')]
   if args.verbose: DF.to_csv(FILEPATH, index=False)
   else: return DF
+  if section != PICKER_STR: return DF
   global DATES
   if DATES is None:
     DATES = [start]
@@ -861,7 +888,7 @@ def main(args : argparse.Namespace):
   STATIONS = _Stations(args)
   if not args.file: raise ValueError("No event file given")
   if len(args.file) > 1: raise NotImplementedError("Multiple event files")
-  TRUE_S, TRUE_D = event_parser(args.file[0], args, None)
+  TRUE_S, TRUE_D = event_parser(args.file[0], args, STATIONS)
   if args.option in [PICKER_STR, ALL_WILDCHAR_STR]:
     PICK = _Analysis(args, PICKER_STR)
   if args.option in [GMMA_STR, ALL_WILDCHAR_STR]:

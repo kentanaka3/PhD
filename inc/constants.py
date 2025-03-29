@@ -32,7 +32,8 @@ H71_OFFSET = {
   4 : td(seconds=5),
   5 : td(seconds=25)
 }
-ASSOCIATE_OFFSET = td(seconds=1)
+ASSOCIATE_TIME_OFFSET = td(seconds=1.5)
+ASSOCIATE_DIST_OFFSET = 5.
 
 # Strings
 EMPTY_STR = ''
@@ -323,7 +324,7 @@ MATCH_CNFG = {
   },
   GMMA_STR : {
     METHOD_STR : GMMA_STR,
-    TIME_DSPLCMT_STR : ASSOCIATE_OFFSET,
+    TIME_DSPLCMT_STR : ASSOCIATE_TIME_OFFSET,
     DISTANCE_STR : None
   },
 }
