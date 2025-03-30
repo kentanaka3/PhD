@@ -299,10 +299,10 @@ class myBPGraph():
       self.G[0][t] = {p : w}
       self.G[1][p] = {t : w}
 
-  def confMtx(self, analyze : str = PICKER_STR) -> pd.DataFrame:
+  def confMtx(self, method : str = PICKER_STR) -> pd.DataFrame:
     TP, FN, FP = set(), [], set()
-    match_vals = MATCH_DICT[analyze]
-    match_ttle = MATCH_CTGR[analyze]
+    match_vals = MATCH_CNFG[method][CATEGORY_STR]
+    match_ttle = MATCH_CNFG[method][HEADER_STR]
     CFN_MTX = pd.DataFrame(0, index=match_vals, columns=match_vals, dtype=int)
     # We traverse the TRUE nodes of the graph to extract relevant information
     # to the True Positives and False Negatives lists
@@ -420,7 +420,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     DATES = [start.datetime]
     while DATES[-1] <= end.datetime: DATES.append(DATES[-1] + ONE_DAY)
   TP, FN, FP = set(), [], set()
-  if PHASE_STR in MATCH_CTGR[method]:
+  if PHASE_STR in MATCH_CNFG[method][HEADER_STR]:
     PRED = PRED[((PRED[PHASE_STR] == PWAVE) &
                  (PRED[PROBABILITY_STR] >= args.pwave)) |
                 ((PRED[PHASE_STR] == SWAVE) &
@@ -436,8 +436,9 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     fig.suptitle(model)
     for ax, (weight, PRED_W) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
       ax.set_title(weight)
-      CFN_MTX = pd.DataFrame(0, index=MATCH_DICT[method],
-                             columns=MATCH_DICT[method], dtype=int)
+      CFN_MTX = pd.DataFrame(0, index=MATCH_CNFG[method][CATEGORY_STR],
+                             columns=MATCH_CNFG[method][CATEGORY_STR],
+                             dtype=int)
       print(f"Processing {model} {weight}...")
       if method == PICKER_STR:
         for station, PRED_S in PRED_W.groupby(STATION_STR):
@@ -459,10 +460,10 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
         FP = FP.union(fp)
       CFN_MTX.loc[NONE_STR, NONE_STR] = N_seconds - CFN_MTX.sum().sum()
       disp = ConfMtxDisp(CFN_MTX.values, display_labels=CFN_MTX.columns)
+      disp.im_.set(clim=(1, N_seconds), cmap="Blues", norm="log")
       disp.plot(ax=ax, colorbar=False)
       for labels in disp.text_.ravel():
         labels.set(color="#E4007C", fontsize=12, fontweight="bold")
-      disp.im_.set(clim=(1, N_seconds), cmap="Blues", norm="log")
     # TODO: Implement the properties of the plot as a function of the number of
     #       weights and coordinates
     axs[0].set()
@@ -491,7 +492,8 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   # TODO: Implement the threshold for the True Positives
   for (m, w), df in TP.groupby([MODEL_STR, WEIGHT_STR]):
     print(m, w)
-    if PHASE_STR in MATCH_CNFG[method]:
+    if df.empty: continue
+    if method == PICKER_STR:
       for phase in [PWAVE, SWAVE]:
         print(f"cTP ({phase}): {len(df[df[PHASE_STR] == phase].index)}")
     print(f"TP: {len(df.index)}")
@@ -502,7 +504,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
         float("{:0.1}".format(min([
           x[1] for x in df.loc[df[ID_STR] == (k, v),
                                PROBABILITY_STR].tolist()]))),
-        tuple([k, float(v) if v == "nan" else int(v)])]
+        tuple([k, float(v) if v == "nan" else int(str(v))])]
   if args.verbose: TP.to_csv(Path(
     DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
     UNDERSCORE_STR.join([method, TP_STR]) + CSV_EXT), index=False)
@@ -510,7 +512,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   FN = pd.DataFrame(FN, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   for (m, w), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
     print(m, w)
-    if PHASE_STR in MATCH_CNFG[method]:
+    if method == PICKER_STR:
       for phase in [PWAVE, SWAVE]:
         print(f"FN ({phase}): {len(df[df[PHASE_STR] == phase].index)}")
     print(f"FN: {len(df.index)}")
@@ -521,14 +523,14 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   FP = pd.DataFrame(FP, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   for (m, w), df in FP.groupby([MODEL_STR, WEIGHT_STR]):
     print(m, w)
-    if PHASE_STR in MATCH_CNFG[method]:
+    if method == PICKER_STR:
       for phase in [PWAVE, SWAVE]:
         print(f"FP ({phase}): {len(df[df[PHASE_STR] == phase].index)}")
     print(f"FP: {len(df.index)}")
   FP_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  UNDERSCORE_STR.join([method, FP_STR]) + CSV_EXT)
   if args.verbose: FP.to_csv(FP_FILE, index=False)
-  if PHASE_STR in MATCH_CNFG[method]:
+  if method == PICKER_STR:
     # False Negative Pie plot
     for (model, weight), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
       fig, _ax = plt.subplots(1, 2, figsize=(10, 5))
@@ -547,26 +549,26 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   if method != PICKER_STR: return TP
   # TP FN
   groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
-  m = max(TP.groupby(groups)[THRESHOLD_STR].value_counts().max(),
-          FN.groupby(groups)[THRESHOLD_STR].value_counts().max())
-  m = (m + 9) // 10 * 10
+  max_threshold = max(TP.groupby(groups)[THRESHOLD_STR].value_counts().max(),
+                      FN.groupby(groups)[THRESHOLD_STR].value_counts().max())
+  max_threshold = (max_threshold + 9) // 10 * 10
   Ws : int = len(args.weights)
   x : int = int(np.sqrt(Ws))
   y : int = Ws // x + int((Ws % x) != 0)
-  for m in args.models:
-    TP_M = TP[TP[MODEL_STR] == m]
-    FN_M = FN[FN[MODEL_STR] == m]
+  for model in args.models:
+    TP_M = TP[TP[MODEL_STR] == model]
+    FN_M = FN[FN[MODEL_STR] == model]
     fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
                                             int(x * Ws - 1) * 1.5))
     axs = _axs.flatten()
-    fig.suptitle(m)
+    fig.suptitle(model)
     plt.rcParams.update({'font.size': 12})
     for ax1, w in zip(axs, args.weights):
       TP_W = TP_M[TP_M[WEIGHT_STR] == w]
       FN_W = FN_M[FN_M[WEIGHT_STR] == w]
       ax1.set_title(w, fontsize=16)
       ax2 = ax1.twinx()
-      ax1.set(ylabel="Number of Picks", ylim=(0, m))
+      ax1.set(ylabel="Number of Picks", ylim=(0, max_threshold))
       RECALL = {
         PWAVE : (0., 0.),
         SWAVE : (0., 0.),
@@ -592,7 +594,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
         SPACE_STR.join([SWAVE, FN_STR]): RECALL[SWAVE][1]
       })
       TPFN.plot(kind='bar', ax=ax1, width=0.7)
-      ax1.set(ylabel="Number of Picks", ylim=(0, m))
+      ax1.set(ylabel="Number of Picks", ylim=(0, max_threshold))
       ax2.set(ylim=(0, 1))
       yticks, yticklabels = ax2.get_yticks(), ax2.get_yticklabels()
       ax2.set(yticks=[], yticklabels=[])
@@ -611,7 +613,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
                         wspace=0.1, hspace=0.2)
     IMG_FILE = \
       Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-           UNDERSCORE_STR.join([method, "TPFN", m]) + PNG_EXT)
+           UNDERSCORE_STR.join([method, "TPFN", model]) + PNG_EXT)
     plt.tight_layout()
     plt.savefig(IMG_FILE)
     plt.close()
@@ -901,7 +903,7 @@ def main(args : argparse.Namespace):
     time_displacement(dcpy(TP), args)
   if args.option in [GMMA_STR, ALL_WILDCHAR_STR]:
     # Associator
-    TP = stat_test(dcpy(TRUE_D), dcpy(GMMA), args, GMMA_STR)
+    TP = stat_test(dcpy(TRUE_D), dcpy(GMMA), args, PICKER_STR)
     del GMMA
     time_displacement(dcpy(TP), args, method=GMMA_STR)
     AI = dict()
