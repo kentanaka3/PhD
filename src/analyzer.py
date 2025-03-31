@@ -308,7 +308,6 @@ class myBPGraph():
     # to the True Positives and False Negatives lists
     nodesT = pd.DataFrame(self.T).reset_index(drop=True)
     nodesP = pd.DataFrame(self.P).reset_index(drop=True)
-    if nodesP.empty: return CFN_MTX, TP, FN, FP
     for t, val in self.G[0].items():
       T = nodesT.iloc[t]
       x = list(val.keys())
@@ -460,8 +459,8 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
         FP = FP.union(fp)
       CFN_MTX.loc[NONE_STR, NONE_STR] = N_seconds - CFN_MTX.sum().sum()
       disp = ConfMtxDisp(CFN_MTX.values, display_labels=CFN_MTX.columns)
-      disp.im_.set(clim=(1, N_seconds), cmap="Blues", norm="log")
       disp.plot(ax=ax, colorbar=False)
+      disp.im_.set(clim=(1, N_seconds), cmap="Blues", norm="log")
       for labels in disp.text_.ravel():
         labels.set(color="#E4007C", fontsize=12, fontweight="bold")
     # TODO: Implement the properties of the plot as a function of the number of
@@ -487,6 +486,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
                p=args.pwave, s=args.swave)]) + PNG_EXT)
     plt.savefig(IMG_FILE)
     plt.close()
+
   # True Positives
   TP = pd.DataFrame(TP, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   # TODO: Implement the threshold for the True Positives
@@ -503,11 +503,11 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
              (TP[ID_STR] == (k, v)), [THRESHOLD_STR, ID_STR]] = [
         float("{:0.1}".format(min([
           x[1] for x in df.loc[df[ID_STR] == (k, v),
-                               PROBABILITY_STR].tolist()]))),
-        tuple([k, float(v) if v == "nan" else int(str(v))])]
+                               PROBABILITY_STR].tolist()]))), tuple([k, v])]
   if args.verbose: TP.to_csv(Path(
     DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
     UNDERSCORE_STR.join([method, TP_STR]) + CSV_EXT), index=False)
+
   # False Negatives
   FN = pd.DataFrame(FN, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   for (m, w), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
@@ -519,6 +519,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   FN_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  UNDERSCORE_STR.join([method, FN_STR]) + CSV_EXT)
   if args.verbose: FN.to_csv(FN_FILE, index=False)
+
   # False Positives
   FP = pd.DataFrame(FP, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   for (m, w), df in FP.groupby([MODEL_STR, WEIGHT_STR]):
@@ -530,8 +531,9 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   FP_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  UNDERSCORE_STR.join([method, FP_STR]) + CSV_EXT)
   if args.verbose: FP.to_csv(FP_FILE, index=False)
+
+  # False Negative Pie plot
   if method == PICKER_STR:
-    # False Negative Pie plot
     for (model, weight), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
       fig, _ax = plt.subplots(1, 2, figsize=(10, 5))
       plt.suptitle(SPACE_STR.join([model, weight]), fontsize=16)
@@ -546,8 +548,9 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
                 p=args.pwave, s=args.swave)]) + PNG_EXT)
       plt.savefig(IMG_FILE)
       plt.close()
-  if method != PICKER_STR: return TP
+
   # TP FN
+  if method != PICKER_STR: return TP
   groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
   max_threshold = max(TP.groupby(groups)[THRESHOLD_STR].value_counts().max(),
                       FN.groupby(groups)[THRESHOLD_STR].value_counts().max())
@@ -611,9 +614,10 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       axs[3].xaxis.tick_top()
     fig.subplots_adjust(left=0.08, right=1.08, top=.95, bottom=0.05,
                         wspace=0.1, hspace=0.2)
-    IMG_FILE = \
-      Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-           UNDERSCORE_STR.join([method, "TPFN", model]) + PNG_EXT)
+    IMG_FILE = Path(
+      IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+      UNDERSCORE_STR.join([method, "TPFN", model, THRESHOLDER_STR.format(
+        p=args.pwave, s=args.swave)]) + PNG_EXT)
     plt.tight_layout()
     plt.savefig(IMG_FILE)
     plt.close()
@@ -791,23 +795,24 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
     plt.close()
 
 def _Analysis(args : argparse.Namespace,
-              section : str = PICKER_STR) -> pd.DataFrame:
-  DF : pd.DataFrame = pd.DataFrame(columns=HEADER_PRED)
+              method : str = PICKER_STR) -> pd.DataFrame:
+  DF : pd.DataFrame = pd.DataFrame(columns=HEADER_MODL +
+                                           MATCH_CNFG[method][HEADER_STR])
   FILEPATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                  UNDERSCORE_STR.join([section, PRED_STR]) + CSV_EXT)
+                  UNDERSCORE_STR.join([method, PRED_STR]) + CSV_EXT)
   if (not args.force and FILEPATH.exists() and
       ini.read_args(args, False) == ini.dump_args(args, True)):
     print(f"Loading {FILEPATH}...")
     DF = ini.data_loader(FILEPATH)
   else:
-    DF = ini.classified_loader(args) if section == PICKER_STR else \
+    DF = ini.classified_loader(args) if method == PICKER_STR else \
          ini.associated_loader(args)
   DF[TIMESTAMP_STR] = DF[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
   start, end = args.dates
   DF = DF[DF[TIMESTAMP_STR].between(start, end + ONE_DAY, inclusive='left')]
   if args.verbose: DF.to_csv(FILEPATH, index=False)
   else: return DF
-  if section != PICKER_STR: return DF
+  if method != PICKER_STR: return DF
   global DATES
   if DATES is None:
     DATES = [start]
@@ -846,7 +851,7 @@ def _Analysis(args : argparse.Namespace,
     plt.tight_layout()
     IMG_FILE = \
       Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-           UNDERSCORE_STR.join([CMTV_PICKS_STR, section, model, phase]) + \
+           UNDERSCORE_STR.join([CMTV_PICKS_STR, method, model, phase]) + \
              PNG_EXT)
     plt.savefig(IMG_FILE)
     plt.close()
@@ -898,28 +903,15 @@ def main(args : argparse.Namespace):
   if args.option == ALL_WILDCHAR_STR: plot_cluster(PICK, GMMA, args)
   if args.option in [PICKER_STR, ALL_WILDCHAR_STR]:
     # Picker
+    print(PICKER_STR)
     TP = stat_test(dcpy(TRUE_D), dcpy(PICK), args, PICKER_STR)
     del PICK
     time_displacement(dcpy(TP), args)
   if args.option in [GMMA_STR, ALL_WILDCHAR_STR]:
-    # Associator
-    TP = stat_test(dcpy(TRUE_D), dcpy(GMMA), args, PICKER_STR)
-    del GMMA
-    time_displacement(dcpy(TP), args, method=GMMA_STR)
-    AI = dict()
-    for (m, w), df in TP.groupby([MODEL_STR, WEIGHT_STR]):
-      AI[(m, w)] = {tp : id for (tp, id) in df[ID_STR].unique().tolist()}
-    SRC_ : pd.DataFrame = pd.DataFrame(columns=HEADER_SRC)
-    SRC_PATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                    AST_STR + CSV_EXT)
-    if not SRC_PATH.exists(): print(f"File {SRC_PATH} not found")
-    else:
-      if args.verbose: print(f"Loading {SRC_PATH}...")
-      SRC_ = ini.data_loader(SRC_PATH)
-      SRC_[TIMESTAMP_STR] = SRC_[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
-      for (m, w), ids in AI.items():
-        for tp, id in ids.items():
-          src = SRC_.loc[(SRC_[ID_STR] == id) & (SRC_[MODEL_STR] == m) &
-                         (SRC_[WEIGHT_STR] == w)]
+    # GMMA
+    print(GMMA_STR)
+    PRED_S = pd.read_csv(Path(DATA_PATH, "D" if args.denoiser else EMPTY_STR +
+                              AST_STR + CSV_EXT))
+    TP = stat_test(dcpy(TRUE_S), dcpy(PRED_S), args, GMMA_STR)
 
 if __name__ == "__main__": main(ini.parse_arguments())
