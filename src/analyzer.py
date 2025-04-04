@@ -65,12 +65,12 @@ def plot_cluster(PICK : pd.DataFrame, GMMA : pd.DataFrame,
     plt.rcParams.update({'font.size': 12})
     max_p, max_r = 0, 0
     min_p, min_r = len(PICK.index), len(GMMA.index)
-    for ax, (weight, dataframe_w) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
+    for ax, (weight, df_w) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
       X = list()
       Y = list()
       Z = list()
       C = list()
-      for station, P in dataframe_w.groupby(STATION_STR):
+      for station, P in df_w.groupby(STATION_STR):
         R = GMMA[(GMMA[MODEL_STR] == model) & (GMMA[WEIGHT_STR] == weight) &
                  (GMMA[STATION_STR] == station)].reset_index(drop=True)
         p, r = len(P.index), len(R.index)
@@ -204,7 +204,8 @@ def diff_time(T : pd.Series, P : pd.Series) -> float:
 
 def dist_default(T : pd.Series, P : pd.Series) -> float:
   return (99. * dist_balanced(T, P) + P[PROBABILITY_STR]) / 100.
-MATCH_CNFG[PICKER_STR].update({DISTANCE_STR : dist_default})
+MATCH_CNFG[CLSSFD_STR].update({DISTANCE_STR : dist_default})
+MATCH_CNFG[DETECT_STR].update({DISTANCE_STR : dist_default})
 
 def dist_space(T : pd.Series, P : pd.Series, offset : float = 1.) -> float:
   return 1. - (float(format(diff_space(T, P) / 1000., ".4f")) / offset)
@@ -218,11 +219,11 @@ def dist_event(T : pd.Series, P : pd.Series,
                space_offset_km : float = ASSOCIATE_DIST_OFFSET) -> float:
   return (dist_time(T, P, time_offset_sec) +
           dist_space(T, P, space_offset_km)) / 2.
-MATCH_CNFG[GMMA_STR].update({DISTANCE_STR : dist_event})
+MATCH_CNFG[SOURCE_STR].update({DISTANCE_STR : dist_event})
 
 class myBPGraph():
   def __init__(self, T : pd.DataFrame, P : pd.DataFrame,
-               config : dict[str, any]):
+               config : dict[str, any] = MATCH_CNFG[CLSSFD_STR]):
     self.W : function = config[DISTANCE_STR]
     self.M : int = len(P.index)
     self.N : int = 0
@@ -230,6 +231,7 @@ class myBPGraph():
     self.T : dict[str, dict[int, ]] = {key : {} for key in T.columns.tolist()}
     self.G : list[dict[int, dict[int, float]], dict[int, dict[int, float]]] = \
                [{}, {i : {} for i in range(self.M)}]
+    self.C : dict[str, any] = config
     for _, t in T.iterrows(): self.incNode(t, 0, config[TIME_DSPLCMT_STR])
 
   def int2bool(self, i : int) -> bool: return i == 1
@@ -299,10 +301,9 @@ class myBPGraph():
       self.G[0][t] = {p : w}
       self.G[1][p] = {t : w}
 
-  def confMtx(self, method : str = PICKER_STR) -> pd.DataFrame:
+  def confMtx(self) -> pd.DataFrame:
     TP, FN, FP = set(), [], set()
-    match_vals = MATCH_CNFG[method][CATEGORY_STR]
-    match_ttle = MATCH_CNFG[method][HEADER_STR]
+    match_vals = self.C[CATEGORY_STR]
     CFN_MTX = pd.DataFrame(0, index=match_vals, columns=match_vals, dtype=int)
     # We traverse the TRUE nodes of the graph to extract relevant information
     # to the True Positives and False Negatives lists
@@ -312,10 +313,10 @@ class myBPGraph():
       T = nodesT.iloc[t]
       x = list(val.keys())
       if len(x) == 0:
-        if PHASE_STR in match_ttle:
+        if self.C[METHOD_STR] in [CLSSFD_STR, DETECT_STR]:
           CFN_MTX.loc[T[PHASE_STR], NONE_STR] += 1
           FN.append([T[ID_STR], T[TIMESTAMP_STR].__str__(), T[PROBABILITY_STR],
-                    T[PHASE_STR], None, T[STATION_STR]])
+                     T[PHASE_STR], None, T[STATION_STR]])
         else:
           CFN_MTX.loc[EVENT_STR, NONE_STR] += 1
           FN.append([T[ID_STR], str(T[TIMESTAMP_STR]), T[LATITUDE_STR],
@@ -324,7 +325,7 @@ class myBPGraph():
       assert len(x) == 1
       if x[0] not in nodesP.index: continue
       P = nodesP.iloc[x[0]]
-      if PHASE_STR in match_ttle:
+      if self.C[METHOD_STR] in [CLSSFD_STR, DETECT_STR]:
         CFN_MTX.loc[T[PHASE_STR], P[PHASE_STR]] += 1
         if T[PHASE_STR] == P[PHASE_STR]:
           TP.add(((T[ID_STR], str(P[ID_STR])),
@@ -344,7 +345,7 @@ class myBPGraph():
       if len(list(val.items())) == 0:
         if p not in nodesP.index: return None
         P = nodesP.iloc[p]
-        if PHASE_STR in match_ttle:
+        if self.C[METHOD_STR] in [CLSSFD_STR, DETECT_STR]:
           CFN_MTX.loc[NONE_STR, P[PHASE_STR]] += 1
           return (P[ID_STR], str(P[TIMESTAMP_STR]), P[PROBABILITY_STR],
                   P[PHASE_STR], P[NETWORK_STR], P[STATION_STR])
@@ -354,13 +355,14 @@ class myBPGraph():
                   P[LONGITUDE_STR], P[LOCAL_DEPTH_STR], P[MAGNITUDE_STR])
       return None
     with ThreadPoolExecutor() as executor:
-      result = [i for i in executor.map(fp, self.G[1].items()) if i is not None]
+      result = [i for i in executor.map(fp, self.G[1].items())
+                   if i is not None]
     FP.update(set(result))
     return CFN_MTX, TP, FN, FP
 
 def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
              dataset_name : str, args : argparse.Namespace,
-             config : dict[str, any] = MATCH_CNFG[PICKER_STR]) \
+             method : str = CLSSFD_STR) \
       -> list[pd.DataFrame, list, list, list]:
   """
   input  :
@@ -382,10 +384,10 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
   notes  :
 
   """
-  bpg = myBPGraph(TRUE, PRED, config)
+  bpg = myBPGraph(TRUE, PRED, config=MATCH_CNFG[method])
   bpg.makeMatch()
   # if args.interactive: plot_timeline(G, pos, N, model_name, dataset_name)
-  CFN_MTX, TP, FN, FP = bpg.confMtx(config[METHOD_STR])
+  CFN_MTX, TP, FN, FP = bpg.confMtx()
   TP = set([tuple([model_name, dataset_name, None, *x]) for x in TP])
   FN = [[model_name, dataset_name, None, *x] for x in FN]
   FP = set([tuple([model_name, dataset_name, None, *x]) for x in FP])
@@ -393,7 +395,7 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
 
 def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
               args : argparse.Namespace,
-              method : str = PICKER_STR) -> pd.DataFrame:
+              method : str = CLSSFD_STR) -> pd.DataFrame:
   """
   input  :
     - TRUE          (pd.DataFrame)
@@ -419,11 +421,13 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     DATES = [start.datetime]
     while DATES[-1] <= end.datetime: DATES.append(DATES[-1] + ONE_DAY)
   TP, FN, FP = set(), [], set()
-  if PHASE_STR in MATCH_CNFG[method][HEADER_STR]:
-    PRED = PRED[((PRED[PHASE_STR] == PWAVE) &
-                 (PRED[PROBABILITY_STR] >= args.pwave)) |
-                ((PRED[PHASE_STR] == SWAVE) &
-                 (PRED[PROBABILITY_STR] >= args.swave))]
+  if method in [CLSSFD_STR, DETECT_STR]:
+    wave_val = min(args.pwave, args.swave)
+    PRED = PRED[PRED[PROBABILITY_STR] >= wave_val]
+    opposite = (SWAVE, args.swave) if args.pwave == wave_val \
+                                 else (PWAVE, args.pwave)
+    PRED = PRED[(PRED[PHASE_STR] == opposite[0]) &
+                (PRED[PROBABILITY_STR] >= opposite[1])]
   Ws : int = len(args.weights)
   x : int = int(np.sqrt(Ws))
   y : int = Ws // x + int((Ws % x) != 0)
@@ -438,22 +442,23 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       CFN_MTX = pd.DataFrame(0, index=MATCH_CNFG[method][CATEGORY_STR],
                              columns=MATCH_CNFG[method][CATEGORY_STR],
                              dtype=int)
+      tp = set()
+      fn = []
+      fp = set()
       print(f"Processing {model} {weight}...")
-      if method == PICKER_STR:
+      if method in [CLSSFD_STR, DETECT_STR]:
         for station, PRED_S in PRED_W.groupby(STATION_STR):
-          TRUE_S = TRUE[(TRUE[STATION_STR] == station)].reset_index(drop=True)
-          cfn_mtx, tp, fn, fp = conf_mtx(TRUE_S, PRED_S.reset_index(drop=True),
-                                         model, weight, args,
-                                         config=MATCH_CNFG[method])
+          cfn_mtx, tp, fn, fp = conf_mtx(
+            TRUE[(TRUE[STATION_STR] == station)].reset_index(drop=True),
+            PRED_S.reset_index(drop=True), model, weight, args, method)
           CFN_MTX += cfn_mtx
           TP = TP.union(tp)
           FN.extend(fn)
           FP = FP.union(fp)
       else:
-        CFN_MTX, tp, fn, fp = conf_mtx(TRUE.reset_index(drop=True),
-                                       PRED_W.reset_index(drop=True),
-                                       model, weight, args,
-                                       config=MATCH_CNFG[method])
+        CFN_MTX, tp, fn, fp = conf_mtx(
+          TRUE.reset_index(drop=True), PRED_W.reset_index(drop=True), model,
+          weight, args, method)
         TP = TP.union(tp)
         FN.extend(fn)
         FP = FP.union(fp)
@@ -493,7 +498,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   for (m, w), df in TP.groupby([MODEL_STR, WEIGHT_STR]):
     print(m, w)
     if df.empty: continue
-    if method == PICKER_STR:
+    if method in [CLSSFD_STR, DETECT_STR]:
       for phase in [PWAVE, SWAVE]:
         print(f"cTP ({phase}): {len(df[df[PHASE_STR] == phase].index)}")
     print(f"TP: {len(df.index)}")
@@ -512,7 +517,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   FN = pd.DataFrame(FN, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   for (m, w), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
     print(m, w)
-    if method == PICKER_STR:
+    if method in [CLSSFD_STR, DETECT_STR]:
       for phase in [PWAVE, SWAVE]:
         print(f"FN ({phase}): {len(df[df[PHASE_STR] == phase].index)}")
     print(f"FN: {len(df.index)}")
@@ -524,7 +529,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   FP = pd.DataFrame(FP, columns=HEADER_PRED).sort_values(SORT_HIERARCHY_PRED)
   for (m, w), df in FP.groupby([MODEL_STR, WEIGHT_STR]):
     print(m, w)
-    if method == PICKER_STR:
+    if method in [CLSSFD_STR, DETECT_STR]:
       for phase in [PWAVE, SWAVE]:
         print(f"FP ({phase}): {len(df[df[PHASE_STR] == phase].index)}")
     print(f"FP: {len(df.index)}")
@@ -533,7 +538,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   if args.verbose: FP.to_csv(FP_FILE, index=False)
 
   # False Negative Pie plot
-  if method == PICKER_STR:
+  if method in [CLSSFD_STR, DETECT_STR]:
     for (model, weight), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
       fig, _ax = plt.subplots(1, 2, figsize=(10, 5))
       plt.suptitle(SPACE_STR.join([model, weight]), fontsize=16)
@@ -550,7 +555,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       plt.close()
 
   # TP FN
-  if method != PICKER_STR: return TP
+  if method not in [CLSSFD_STR, DETECT_STR]: return TP
   groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
   max_threshold = max(TP.groupby(groups)[THRESHOLD_STR].value_counts().max(),
                       FN.groupby(groups)[THRESHOLD_STR].value_counts().max())
@@ -596,13 +601,12 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
         SPACE_STR.join([PWAVE, FN_STR]): RECALL[PWAVE][1],
         SPACE_STR.join([SWAVE, FN_STR]): RECALL[SWAVE][1]
       })
-      TPFN.plot(kind='bar', ax=ax1, width=0.7)
+      TPFN.plot(kind='bar', ax=ax1, width=0.7, legend=True)
       ax1.set(ylabel="Number of Picks", ylim=(0, max_threshold))
       ax2.set(ylim=(0, 1))
       yticks, yticklabels = ax2.get_yticks(), ax2.get_yticklabels()
       ax2.set(yticks=[], yticklabels=[])
       ax1.grid()
-      ax1.get_legend().remove()
     axs[0].set()
     axs[1].set(ylabel=None, yticklabels=[])
     if len(args.weights) > 2:
@@ -717,12 +721,12 @@ def event_parser(filename : Path, args : argparse.Namespace,
   return SOURCE, DETECT
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
-                      phase : str = PWAVE, method : str = "Picker") -> None:
+                      method : str = CLSSFD_STR) -> None:
   """
   input  :
     - DATA          (pd.DataFrame)
     - args          (argparse.Namespace)
-    - phase         (str)
+    - method        (str)
 
   output :
     - None
@@ -740,7 +744,8 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
     DATA[TIMESTAMP_STR].map(lambda x: UTCDateTime(x[0]) - UTCDateTime(x[1]))
   DATA[PROBABILITY_STR] = DATA[PROBABILITY_STR].map(lambda x: x[1])
   bins = np.linspace(-0.5, 0.5, 41, endpoint=True)
-  groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
+  groups = [MODEL_STR, WEIGHT_STR]
+  if method in [CLSSFD_STR, DETECT_STR]: groups.append(PHASE_STR)
   m = 0
   for _, dtfrm in DATA.groupby(groups):
     counts, _ = np.histogram(dtfrm[TIMESTAMP_STR], bins=bins)
@@ -749,53 +754,99 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
   Ws : int = len(args.weights)
   x : int = int(np.sqrt(Ws))
   y : int = Ws // x + int((Ws % x) != 0)
-  for model, phase in itertools.product(args.models, [PWAVE, SWAVE]):
-    fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
-                                            int(x * Ws - 1) * 1.5))
-    axs = _axs.flatten()
-    plt.rcParams.update({'font.size': 12})
-    fig.suptitle(model)
-    dataframe_p = DATA[(DATA[MODEL_STR] == model) &
-                       (DATA[PHASE_STR] == phase)].reset_index(drop=True)
-    for ax, (weight, dataframe_w) in zip(axs, dataframe_p.groupby(WEIGHT_STR)):
-      counts, _ = np.histogram(dataframe_w[TIMESTAMP_STR], bins=bins)
-      mu = np.mean(dataframe_w[TIMESTAMP_STR])
-      std = np.std(dataframe_w[TIMESTAMP_STR])
-      ax.bar(bins[:-1], counts, label=rf"$\mu$={mu:.2f},$\sigma$={std:.2f}",
-             alpha=0.5, width=0.025)
-      for t_i, t_f in zip(THRESHOLDS[:-1], THRESHOLDS[1:]):
-        data = dataframe_w[dataframe_w[PROBABILITY_STR].between(
-                 t_i, t_f, inclusive='left')][TIMESTAMP_STR]
-        # TODO: Consider a KDE plot
-        counts, _ = np.histogram(data, bins=bins)
-        ax.step(bins[:-1], counts, where='mid', label=rf"[{t_i},{t_f})")
-      data = dataframe_w[
-               dataframe_w[PROBABILITY_STR] >= THRESHOLDS[-1]][TIMESTAMP_STR]
-      counts, _ = np.histogram(data, bins=bins)
-      ax.step(bins[:-1], counts, where='mid', label=rf"[{THRESHOLDS[-1]},1)")
-      ax.set(title=weight, xlabel="Time Displacement (s)", xlim=(-0.5, 0.5),
-             ylabel=f"Number of {phase} picks", ylim=(0, m))
-      ax.grid()
-      ax.legend()
-    axs[0].set()
-    axs[1].set(ylabel=None, yticklabels=[])
-    if len(args.weights) > 2:
-      axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
-      axs[2].set(title=None)
-      axs[2].xaxis.tick_top()
-      axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
-      axs[3].set(ylabel=None, yticklabels=[], title=None)
-      axs[3].xaxis.tick_top()
-    IMG_FILE = \
-      Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-           UNDERSCORE_STR.join([method, TIME_DSPLCMT_STR, model, phase,
-             THRESHOLDER_STR.format(p=args.pwave, s=args.swave)]) + PNG_EXT)
-    plt.tight_layout()
-    plt.savefig(IMG_FILE)
-    plt.close()
+  if method in [CLSSFD_STR, DETECT_STR]:
+    for phase, df_p in DATA.groupby(PHASE_STR):
+      for model, df_m in df_p.groupby(MODEL_STR):
+        fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
+                                                int(x * Ws - 1) * 1.5))
+        axs = _axs.flatten()
+        plt.rcParams.update({'font.size': 12})
+        fig.suptitle(model)
+        for ax, (weight, df_w) in zip(axs, df_m.groupby(WEIGHT_STR)):
+          counts, _ = np.histogram(df_w[TIMESTAMP_STR], bins=bins)
+          mu = np.mean(df_w[TIMESTAMP_STR])
+          std = np.std(df_w[TIMESTAMP_STR])
+          ax.bar(bins[:-1], counts, label=rf"$\mu$={mu:.2f},$\sigma$={std:.2f}",
+                alpha=0.5, width=0.025)
+          for t_i, t_f in zip(THRESHOLDS[:-1], THRESHOLDS[1:]):
+            data = df_w[df_w[PROBABILITY_STR].between(
+                     t_i, t_f, inclusive='left')][TIMESTAMP_STR]
+            # TODO: Consider a KDE plot
+            counts, _ = np.histogram(data, bins=bins)
+            ax.step(bins[:-1], counts, where='mid', label=rf"[{t_i},{t_f})")
+          counts, _ = np.histogram(
+            df_w[df_w[PROBABILITY_STR] >= THRESHOLDS[-1]][TIMESTAMP_STR],
+            bins=bins)
+          ax.step(bins[:-1], counts, where='mid',
+                  label=rf"[{THRESHOLDS[-1]},1)")
+          ax.set(title=weight, xlabel="Time Displacement (s)",
+                 xlim=(-0.5, 0.5), ylabel=f"Number of {phase} picks",
+                 ylim=(0, m))
+          ax.grid()
+          ax.legend()
+        axs[0].set()
+        axs[1].set(ylabel=None, yticklabels=[])
+        if len(args.weights) > 2:
+          axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
+          axs[2].set(title=None)
+          axs[2].xaxis.tick_top()
+          axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
+          axs[3].set(ylabel=None, yticklabels=[], title=None)
+          axs[3].xaxis.tick_top()
+        IMG_FILE = \
+          Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+              UNDERSCORE_STR.join([method, TIME_DSPLCMT_STR, model, phase,
+                THRESHOLDER_STR.format(p=args.pwave, s=args.swave)]) + PNG_EXT)
+        plt.tight_layout()
+        plt.savefig(IMG_FILE)
+        plt.close()
+  else:
+    for model, df_m in DATA.groupby(MODEL_STR):
+      fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
+                                              int(x * Ws - 1) * 1.5))
+      axs = _axs.flatten()
+      plt.rcParams.update({'font.size': 12})
+      fig.suptitle(model)
+      for ax, (weight, df_w) in zip(axs, df_m.groupby(WEIGHT_STR)):
+        counts, _ = np.histogram(df_w[TIMESTAMP_STR], bins=bins)
+        mu = np.mean(df_w[TIMESTAMP_STR])
+        std = np.std(df_w[TIMESTAMP_STR])
+        ax.bar(bins[:-1], counts, label=rf"$\mu$={mu:.2f},$\sigma$={std:.2f}",
+              alpha=0.5, width=0.025)
+        for t_i, t_f in zip(THRESHOLDS[:-1], THRESHOLDS[1:]):
+          # TODO: Consider a KDE plot
+          counts, _ = np.histogram(
+            df_w[df_w[PROBABILITY_STR].between(
+              t_i, t_f, inclusive='left')][TIMESTAMP_STR], bins=bins)
+          ax.step(bins[:-1], counts, where='mid', label=rf"[{t_i},{t_f})")
+        counts, _ = np.histogram(
+          df_w[df_w[PROBABILITY_STR] >= THRESHOLDS[-1]][TIMESTAMP_STR],
+          bins=bins)
+        ax.step(bins[:-1], counts, where='mid',
+                label=rf"[{THRESHOLDS[-1]},1)")
+        ax.set(title=weight, xlabel="Time Displacement (s)", xlim=(-0.5, 0.5),
+               ylabel=f"Number of events", ylim=(0, m))
+        ax.grid()
+        ax.legend()
+      axs[0].set()
+      axs[1].set(ylabel=None, yticklabels=[])
+      if len(args.weights) > 2:
+        axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
+        axs[2].set(title=None)
+        axs[2].xaxis.tick_top()
+        axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
+        axs[3].set(ylabel=None, yticklabels=[], title=None)
+        axs[3].xaxis.tick_top()
+      IMG_FILE = \
+        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+            UNDERSCORE_STR.join([method, TIME_DSPLCMT_STR, model,
+              THRESHOLDER_STR.format(p=args.pwave, s=args.swave)]) + PNG_EXT)
+      plt.tight_layout()
+      plt.savefig(IMG_FILE)
+      plt.close()
 
 def _Analysis(args : argparse.Namespace,
-              method : str = PICKER_STR) -> pd.DataFrame:
+              method : str = CLSSFD_STR) -> pd.DataFrame:
   DF : pd.DataFrame = pd.DataFrame(columns=HEADER_MODL +
                                            MATCH_CNFG[method][HEADER_STR])
   FILEPATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
@@ -805,14 +856,14 @@ def _Analysis(args : argparse.Namespace,
     print(f"Loading {FILEPATH}...")
     DF = ini.data_loader(FILEPATH)
   else:
-    DF = ini.classified_loader(args) if method == PICKER_STR else \
+    DF = ini.classified_loader(args) if method == CLSSFD_STR else \
          ini.associated_loader(args)
   DF[TIMESTAMP_STR] = DF[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
   start, end = args.dates
   DF = DF[DF[TIMESTAMP_STR].between(start, end + ONE_DAY, inclusive='left')]
   if args.verbose: DF.to_csv(FILEPATH, index=False)
   else: return DF
-  if method != PICKER_STR: return DF
+  if method != CLSSFD_STR: return DF
   global DATES
   if DATES is None:
     DATES = [start]
@@ -828,12 +879,11 @@ def _Analysis(args : argparse.Namespace,
     plt.rcParams.update({'font.size': 12})
     fig.suptitle(model)
     max_h = 0
-    for ax, (weight, dataframe_w) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
+    for ax, (weight, df_w) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
       ax.set_title(weight)
       for threshold in THRESHOLDS:
-        h = [len(dataframe_w[(dataframe_w[PROBABILITY_STR] >= threshold) &
-                             (dataframe_w[TIMESTAMP_STR] <= d)].index)
-             for d in DATES]
+        h = [len(df_w[(df_w[PROBABILITY_STR] >= threshold) &
+                      (df_w[TIMESTAMP_STR] <= d)].index) for d in DATES]
         ax.plot(dates, h, label=rf"$\geq$ {threshold}")
         max_h = max(max_h, max(h))
       ax.set(xlabel=None, yscale="log", ylabel="Number of Picks")
@@ -896,22 +946,27 @@ def main(args : argparse.Namespace):
   if not args.file: raise ValueError("No event file given")
   if len(args.file) > 1: raise NotImplementedError("Multiple event files")
   TRUE_S, TRUE_D = event_parser(args.file[0], args, STATIONS)
-  if args.option in [PICKER_STR, ALL_WILDCHAR_STR]:
-    PICK = _Analysis(args, PICKER_STR)
-  if args.option in [GMMA_STR, ALL_WILDCHAR_STR]:
-    GMMA = _Analysis(args, GMMA_STR)
-  if args.option == ALL_WILDCHAR_STR: plot_cluster(PICK, GMMA, args)
-  if args.option in [PICKER_STR, ALL_WILDCHAR_STR]:
-    # Picker
-    print(PICKER_STR)
-    TP = stat_test(dcpy(TRUE_D), dcpy(PICK), args, PICKER_STR)
-    del PICK
-    time_displacement(dcpy(TP), args)
-  if args.option in [GMMA_STR, ALL_WILDCHAR_STR]:
-    # GMMA
-    print(GMMA_STR)
+  if args.option in [CLSSFD_STR, ALL_WILDCHAR_STR]:
+    print(CLSSFD_STR)
+    PRED = _Analysis(args, CLSSFD_STR)
+    time_displacement(stat_test(dcpy(TRUE_D), dcpy(PRED), args, CLSSFD_STR),
+                      args, CLSSFD_STR)
+  if args.option in [CLSSFD_STR, DETECT_STR, ALL_WILDCHAR_STR]:
+    print(DETECT_STR)
+    PRED_D = _Analysis(args, DETECT_STR)
+    time_displacement(stat_test(dcpy(TRUE_D), dcpy(PRED_D), args, DETECT_STR),
+                      args, DETECT_STR)
+  if args.option == ALL_WILDCHAR_STR:
+    plot_cluster(PRED, PRED_D, args)
+    # plot_cluster(TRUE_D, PRED_D, args)
+    del PRED, PRED_D
+  if args.option in [SOURCE_STR, ALL_WILDCHAR_STR]:
+    print(SOURCE_STR)
     PRED_S = pd.read_csv(Path(DATA_PATH, "D" if args.denoiser else EMPTY_STR +
                               AST_STR + CSV_EXT))
-    TP = stat_test(dcpy(TRUE_S), dcpy(PRED_S), args, GMMA_STR)
+    PRED_S[TIMESTAMP_STR] = PRED_S[TIMESTAMP_STR].apply(lambda x:
+                                                        UTCDateTime(x))
+    time_displacement(stat_test(dcpy(TRUE_S), dcpy(PRED_S), args, SOURCE_STR),
+                      args, method=SOURCE_STR)
 
 if __name__ == "__main__": main(ini.parse_arguments())
