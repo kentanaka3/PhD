@@ -252,15 +252,25 @@ def set_up(args : argparse.Namespace) \
 
   """
   global GPU_SIZE, GPU_RANK
-  GPU_SIZE = torch.cuda.device_count() if torch.cuda.is_available() else 0
+  GPU_SIZE = 0
   global MPI_SIZE, MPI_RANK, MPI_COMM
   MPI_COMM = MPI.COMM_WORLD
   MPI_SIZE = MPI_COMM.Get_size()
   MPI_RANK = MPI_COMM.Get_rank()
-  if MPI_RANK < GPU_SIZE: GPU_RANK = MPI_RANK % GPU_SIZE
-  if args.verbose: print(f"Setting MPI {MPI_RANK} to " + \
-                         (f"GPU {GPU_RANK}" if GPU_RANK >= 0 else "CPU"))
-  torch.cuda.set_device(GPU_RANK)
+  if torch.cuda.is_available():
+    GPU_SIZE = torch.cuda.device_count()
+    if MPI_RANK < GPU_SIZE: GPU_RANK = MPI_RANK % GPU_SIZE
+    if args.verbose: print(f"Setting MPI {MPI_RANK} to " + \
+                           (f"GPU {GPU_RANK}" if GPU_RANK >= 0 else "CPU"))
+    torch.cuda.set_device(GPU_RANK)
+  elif torch.backends.mps.is_available():
+    GPU_SIZE = 1
+    GPU_RANK = 0
+    if args.verbose: print(f"Setting MPI {MPI_RANK} to GPU {GPU_RANK}")
+    torch.backends.mps.set_device(GPU_RANK)
+  else:
+    if args.verbose: print(f"Setting MPI {MPI_RANK} to CPU")
+    GPU_RANK = -1
   MODELS = None
   WAVEFORMS_DATA = None
   if MPI_RANK == 0:

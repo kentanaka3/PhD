@@ -232,7 +232,7 @@ class myBPGraph():
     self.G : list[dict[int, dict[int, float]], dict[int, dict[int, float]]] = \
                [{}, {i : {} for i in range(self.M)}]
     self.C : dict[str, any] = config
-    for _, t in T.iterrows(): self.incNode(t, 0, config[TIME_DSPLCMT_STR])
+    for _, t in T.iterrows(): self.incNode(t, 0)
 
   def int2bool(self, i : int) -> bool: return i == 1
   def bool2int(self, b : bool) -> int: return 1 if b else 0
@@ -241,27 +241,25 @@ class myBPGraph():
   def addNode(self, u : int, bipartite : int, neighbours = dict())  -> None:
     if u not in self.G[bipartite]: self.G[bipartite][u] = neighbours
 
-  def incNode(self, u : pd.Series, bipartite : int = 1,
-              offset : td = PICK_OFFSET) -> None:
+  def incNode(self, u : pd.Series, bipartite : int = 1) -> None:
     if bipartite == 1:
       for key, val in u.to_dict().items(): self.P[key][self.M] = val
-      x = self.cnxNode(u, bipartite, offset=offset)
+      x = self.cnxNode(u, bipartite)
       self.addNode(self.M, bipartite, x)
       for node, weight in x.items(): self.addEdge(node, self.M, 0, weight)
       self.M += 1
     else:
       for key, val in u.to_dict().items(): self.T[key][self.N] = val
-      x = self.cnxNode(u, bipartite, offset=offset)
+      x = self.cnxNode(u, bipartite)
       self.addNode(self.N, bipartite, x)
       for node, weight in x.items(): self.addEdge(node, self.N, 1, weight)
       self.N += 1
     return
 
-  def cnxNode(self, u : pd.Series, bipartite : int = 1,
-              offset : td = PICK_OFFSET) -> dict[int, float]:
+  def cnxNode(self, u : pd.Series, bipartite : int = 1) -> dict[int, float]:
     v = pd.DataFrame(self.T if bipartite == 1 else self.P)
     v = v[(v[TIMESTAMP_STR] - u[TIMESTAMP_STR])\
-          .apply(lambda x: td(seconds=abs(x))) <= offset]
+          .apply(lambda x: td(seconds=abs(x))) <= self.C[TIME_DSPLCMT_STR]]
     if v.empty: return dict()
     return {i : self.W(u, v.loc[i]) for i in v.index}
 
@@ -323,7 +321,6 @@ class myBPGraph():
                      T[LONGITUDE_STR], T[LOCAL_DEPTH_STR], T[MAGNITUDE_STR]])
         continue
       assert len(x) == 1
-      if x[0] not in nodesP.index: continue
       P = nodesP.iloc[x[0]]
       if self.C[METHOD_STR] in [CLSSFD_STR, DETECT_STR]:
         CFN_MTX.loc[T[PHASE_STR], P[PHASE_STR]] += 1
@@ -384,7 +381,8 @@ def conf_mtx(TRUE : pd.DataFrame, PRED : pd.DataFrame, model_name : str,
   notes  :
 
   """
-  bpg = myBPGraph(TRUE, PRED, config=MATCH_CNFG[method])
+  bpg = myBPGraph(TRUE.reset_index(drop=True),
+                  PRED.reset_index(drop=True), config=MATCH_CNFG[method])
   bpg.makeMatch()
   # if args.interactive: plot_timeline(G, pos, N, model_name, dataset_name)
   CFN_MTX, TP, FN, FP = bpg.confMtx()
@@ -422,12 +420,10 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     while DATES[-1] <= end.datetime: DATES.append(DATES[-1] + ONE_DAY)
   TP, FN, FP = set(), [], set()
   if method in [CLSSFD_STR, DETECT_STR]:
-    wave_val = min(args.pwave, args.swave)
-    PRED = PRED[PRED[PROBABILITY_STR] >= wave_val]
-    opposite = (SWAVE, args.swave) if args.pwave == wave_val \
-                                 else (PWAVE, args.pwave)
-    PRED = PRED[(PRED[PHASE_STR] == opposite[0]) &
-                (PRED[PROBABILITY_STR] >= opposite[1])]
+    PRED = PRED[((PRED[PHASE_STR] == PWAVE) &
+                 (PRED[PROBABILITY_STR] >= args.pwave)) |
+                ((PRED[PHASE_STR] == SWAVE) &
+                 (PRED[PROBABILITY_STR] >= args.swave))].reset_index(drop=True)
   Ws : int = len(args.weights)
   x : int = int(np.sqrt(Ws))
   y : int = Ws // x + int((Ws % x) != 0)
