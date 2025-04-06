@@ -947,15 +947,17 @@ def main(args : argparse.Namespace):
     PRED = _Analysis(args, CLSSFD_STR)
     time_displacement(stat_test(dcpy(TRUE_D), dcpy(PRED), args, CLSSFD_STR),
                       args, CLSSFD_STR)
-  if args.option in [CLSSFD_STR, DETECT_STR, ALL_WILDCHAR_STR]:
-    print(DETECT_STR)
-    PRED_D = _Analysis(args, DETECT_STR)
-    time_displacement(stat_test(dcpy(TRUE_D), dcpy(PRED_D), args, DETECT_STR),
-                      args, DETECT_STR)
-  if args.option == ALL_WILDCHAR_STR:
-    plot_cluster(PRED, PRED_D, args)
+    pass
+  #if args.option in [CLSSFD_STR, DETECT_STR, ALL_WILDCHAR_STR]:
+    #print(DETECT_STR)
+    #PRED_D = _Analysis(args, DETECT_STR)
+    #time_displacement(stat_test(dcpy(TRUE_D), dcpy(PRED_D), args, DETECT_STR),
+    #                  args, DETECT_STR)
+    #pass
+  #if args.option == ALL_WILDCHAR_STR:
+    #plot_cluster(PRED, PRED_D, args)
     # plot_cluster(TRUE_D, PRED_D, args)
-    del PRED, PRED_D
+    #del PRED, PRED_D
   if args.option in [SOURCE_STR, ALL_WILDCHAR_STR]:
     print(SOURCE_STR)
     PRED_S = pd.read_csv(Path(DATA_PATH, "D" if args.denoiser else EMPTY_STR +
