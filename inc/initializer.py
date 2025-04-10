@@ -136,7 +136,8 @@ def parse_arguments():
                       required=False, help=f"{PWAVE} wave threshold.")
   parser.add_argument('-s', "--swave", default=SWAVE_THRESHOLD, type=float,
                       required=False, help=f"{SWAVE} wave threshold.")
-  parser.add_argument("--client", default=[OGS_CLIENT_STR], required=False,
+  parser.add_argument("--client", default=[OGS_CLIENT_STR, INGV_CLIENT_STR,
+                                           GFZ_CLIENT_STR, ], required=False,
                       type=str, nargs='+', help="Client to download the data")
   parser.add_argument("--denoiser", default=False, action='store_true',
                       required=False,
@@ -193,6 +194,7 @@ def parse_arguments():
       if key in vars(args) and vars(args)[key] is None:
         setattr(args, key, value)
     # TODO: Fix special cases
+  #print(vars(args))
   return args
 
 def dump_args(args : argparse.Namespace,
@@ -386,7 +388,7 @@ def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
           [len(PICK[PICK[PROBABILITY_STR].between(a, b, inclusive='left')].index)
                       for a, b in zip(z[:-1], z[1:])])
         HIST.append([PERIOD_STR.join([network, station]), *w])
-    if args.verbose:
+    if args.force and args.verbose:
       HIST = pd.DataFrame(HIST, columns=[ID_STR, *reversed(z[:-1])])\
                .set_index(ID_STR).sort_values(z[:-1], ascending=False)
       IMG_FILE = \
@@ -444,7 +446,7 @@ def associated_loader(args : argparse.Namespace) -> pd.DataFrame:
                                 (PICKS[PROBABILITY_STR] < b)].index)
                       for a, b in zip(z[:-1], z[1:])])
         HIST.append([PERIOD_STR.join([network, station]), *w])
-    if args.verbose:
+    if args.force and args.verbose:
       HIST = pd.DataFrame(HIST, columns=[ID_STR, *reversed(z[:-1])])\
                .set_index(ID_STR).sort_values(z[:-1], ascending=False)
       IMG_FILE = \

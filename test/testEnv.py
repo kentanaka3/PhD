@@ -1,5 +1,5 @@
 def main():
-  print("Hello World!")
+  print("[Hello World!]")
   # Check if the necessary packages are available
   # MPI
   MPI_COMM = None
@@ -10,8 +10,8 @@ def main():
     MPI_COMM = MPI.COMM_WORLD
     MPI_RANK = MPI_COMM.Get_rank()
     MPI_SIZE = MPI_COMM.Get_size()
-    print("MPI is available with rank:", MPI_RANK, "and size:", MPI_SIZE)
-  except ImportError as e: print("MPI is NOT available", e)
+    print("[MPI] is available with rank:", MPI_RANK, "and size:", MPI_SIZE)
+  except ImportError as e: print("[MPI] is NOT available", e)
   # PyTorch
   GPU_DEVICE = "cpu"
   GPU_SIZE = 0
@@ -21,7 +21,7 @@ def main():
     if torch.cuda.is_available():
       GPU_DEVICE = "cuda"
       GPU_SIZE = torch.cuda.device_count()
-      print("Number of CUDA devices: ", GPU_SIZE)
+      print("[PyTorch] Number of CUDA devices: ", GPU_SIZE)
       if MPI_RANK < GPU_SIZE:
         GPU_RANK = MPI_RANK % GPU_SIZE
         torch.cuda.set_device(GPU_RANK)
@@ -33,25 +33,25 @@ def main():
       GPU_DEVICE = "mps"
       GPU_SIZE = 1
       GPU_RANK = 0
-      print("Number of MPS devices: ", GPU_SIZE)
-  except ImportError as e: print("PyTorch is NOT available", e)
+      print("[PyTorch] Number of MPS devices: ", GPU_SIZE)
+  except ImportError as e: print("[PyTorch] is NOT available", e)
   torch.device(GPU_DEVICE)
   try:
     import obspy
-    print("ObsPy is available")
-  except ImportError as e: print("ObsPy is NOT available", e)
+    print("[ObsPy] is available")
+  except ImportError as e: print("[ObsPy] is NOT available", e)
   try:
     import seisbench
-    print("Seisbench is available")
-  except: print("Seisbench is NOT available")
+    print("[Seisbench] is available")
+  except: print("[Seisbench] is NOT available")
   try:
     import numba
-    print(f"Numba is available with: {numba.get_num_threads()} threads")
-  except: print("Numba is NOT available")
+    print(f"[Numba] is available with: {numba.get_num_threads()} threads")
+  except: print("[Numba] is NOT available")
   try:
     import gamma
-    print("GaMMA is available")
-  except: print("GaMMA is NOT available")
+    print("[GaMMA] is available")
+  except: print("[GaMMA] is NOT available")
   return
 
 if __name__ == "__main__": main()

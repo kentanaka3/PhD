@@ -178,6 +178,7 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
   DETECT = pd.DataFrame(columns=HEADER_PRED)
   ids = {model : {weight : 0 for weight in args.weights}
            for model in args.models}
+  args.force = True
   for start, end in zip(DATES[:-1], DATES[1:]):
     print(f"Processing {start.strftime(DATE_FMT)}...")
     FOLDER = Path(DATA_PATH, AST_STR, start.strftime(DATE_FMT))
@@ -193,7 +194,7 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
         SOURCE = pd.concat([SOURCE, pd.read_csv(FILEPATH)], ignore_index=True)\
                    if not SOURCE.empty else pd.read_csv(FILEPATH)
         def fp(filepath_network : Path) -> None:
-          if filepath_network.is_dir(): 
+          if filepath_network.is_dir():
             for filepath_station in filepath_network.iterdir():
               if filepath_station.is_dir():
                 filepath = Path(filepath_station,
@@ -229,7 +230,7 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
                         if idx == event["event_index"]]).reset_index(drop=True)
         PICKS[MODEL_STR] = model
         PICKS[WEIGHT_STR] = weight
-        th = float("{:0.1}".format(PICKS[PROBABILITY_STR].min()))
+        th = float("{:0.1}".format(PICKS[PROBABILITY_STR].mean()))
         PICKS[THRESHOLD_STR] = th
         PICKS[ID_STR] = ids[model][weight]
         PICKS.rename(columns={TYPE_STR : PHASE_STR}, inplace=True)
@@ -268,11 +269,11 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
       with ThreadPoolExecutor() as executor:
         executor.map(fp, PKS.groupby([NETWORK_STR, STATION_STR]))
   FILEPATH = Path(DATA_PATH, ("D" if args.denoiser else EMPTY_STR) +
-                  AST_STR + CSV_EXT)
+                  SOURCE_STR + CSV_EXT)
   SOURCE.sort_values(SORT_HIERARCHY_PRED, inplace=True)
   SOURCE.to_csv(FILEPATH, index=False)
   FILEPATH = Path(DATA_PATH, ("D" if args.denoiser else EMPTY_STR) +
-                  ASCT_STR + CSV_EXT)
+                  DETECT_STR + CSV_EXT)
   DETECT.sort_values(SORT_HIERARCHY_PRED, inplace=True)
   DETECT.to_csv(FILEPATH, index=False)
   return SOURCE, DETECT
@@ -316,7 +317,8 @@ def set_up(args : argparse.Namespace) -> AssociateConfig:
   if args.verbose:
     INVENTORY.plot(projection="local", show=False, method="cartopy", size=25,
                    water_fill_color="lightblue", color_per_network=True,
-                   label=False, outfile=Path(IMG_PATH, STATION_STR + PNG_EXT))
+                   resolution="h", label=False,
+                   outfile=Path(IMG_PATH, STATION_STR + PNG_EXT))
   CONFIG = AssociateConfig(INVENTORY, file=args.file)
   # CONFIG = MPI_COMM.bcast(CONFIG, root=0)
   return CONFIG
@@ -326,19 +328,25 @@ def main(args : argparse.Namespace) -> None:
   DATA_PATH = args.directory.parent
   CONFIG = set_up(args)
   PRED : pd.DataFrame = pd.DataFrame(columns=HEADER_PRED)
-  PICKPATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-                  UNDERSCORE_STR.join([PICKER_STR, PRED_STR]) + CSV_EXT)
-  if (not args.force and PICKPATH.exists() and
+  FILEPATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                  CLSSFD_STR + CSV_EXT)
+  if (not args.force and FILEPATH.exists() and
       ini.read_args(args, False) == ini.dump_args(args, True)):
-    if args.verbose: print(f"Loading {PICKPATH}...")
-    PRED = ini.data_loader(PICKPATH)
+    if args.verbose: print(f"Loading {FILEPATH}...")
+    PRED = ini.data_loader(FILEPATH)
     PRED[TIMESTAMP_STR] = PRED[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
   else:
     PRED = ini.classified_loader(args)
-    if args.verbose: PRED.to_csv(PICKPATH, index=False)
+  PRED = PRED[
+    ((PRED[PHASE_STR] == PWAVE) & (PRED[PROBABILITY_STR] >= args.pwave)) |
+    ((PRED[PHASE_STR] == SWAVE) & (PRED[PROBABILITY_STR] >= args.swave))]
+  if args.verbose: PRED.to_csv(FILEPATH, index=False)
+  if PRED.empty:
+    print("No events to associate.")
+    return
   # TODO: Implement the pyocto method
   if args.pyocto: pass
-  DATA, PRED = associate_events(copy.deepcopy(PRED), CONFIG, args)
+  SOURCE, DETECT = associate_events(PRED, CONFIG, args)
   return
 
 if __name__ == "__main__": main(ini.parse_arguments())
