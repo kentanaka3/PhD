@@ -1,3 +1,4 @@
+import numpy as np
 from pathlib import Path
 import seisbench.models as sbm
 from datetime import timedelta as td
@@ -16,7 +17,10 @@ MPI_COMM = None
 GPU_SIZE = 0
 GPU_RANK = -1
 
-NORM = "peak" # "peak" or "std"
+THRESHOLDS : list[float] = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
+DATES = None
+
+NORM = "std" # "peak" or "std"
 
 # DateTime, TimeDelta and Format constants
 DATE_FMT = "%y%m%d"
@@ -24,6 +28,7 @@ TIME_FMT = "%H%M%S"
 DATETIME_FMT = DATE_FMT + TIME_FMT
 ONE_DAY = td(days=1)
 PICK_OFFSET = td(seconds=0.5)
+PICK_OFFSET_TRAIN = td(seconds=60)
 H71_OFFSET = {
   0 : td(seconds=0.01),
   1 : td(seconds=0.04),
@@ -65,20 +70,21 @@ UNABLE_STR = "UNABLE"
 TRUE_STR = "TRUE"
 PRED_STR = "PRED"
 ASCT_STR = "ASCT"
+STAT_STR = "STAT"
+FALSE_STR = "FALSE"
 
-PICKER_STR = "Picker"
 GMMA_STR = "GaMMA"
 OCTO_STR = "PyOcto"
 
 # Metrics
-TP_STR = "True Positive"
-FP_STR = "False Positive"
-FN_STR = "False Negative"
-TN_STR = "True Negative"
-ACCURACY_STR = "Accuracy"
-PRECISION_STR = "Precision"
-RECALL_STR = "Recall"
-F1_STR = "F1 Score"
+TP_STR = "TP"
+FP_STR = "FP"
+FN_STR = "FN"
+TN_STR = "TN"
+ACCURACY_STR = "AC"
+PRECISION_STR = "PC"
+RECALL_STR = "RC"
+F1_STR = "F1"
 DISTANCE_STR = "Distance"
 
 # Phases
@@ -104,8 +110,7 @@ PHASES_DICT = {
 }
 
 # Thresholds
-PWAVE_THRESHOLD = 0.2
-SWAVE_THRESHOLD = 0.1
+PWAVE_THRESHOLD = SWAVE_THRESHOLD = 0.2
 
 SEED_ID_FMT = "{NETWORK}.{STATION}..{CHANNEL}"
 
@@ -121,7 +126,7 @@ BLT_STR       = "blt"
 CSV_STR       = "csv"
 DAT_STR       = "dat"
 EPS_STR       = "eps"
-HDF5_STR      = "h5"
+HDF5_STR      = "hdf5"
 HPC_STR       = "hpc"
 HPL_STR       = "hpl"
 JSON_STR      = "json"
@@ -224,9 +229,12 @@ COLOR_ENCODING = {
   }
 }
 
+OGS_PROJECTION = "+proj=sterea +lon_0={lon} +lat_0={lat} +units=km"
+
 # Data components
 ID_STR = "id"
 TIMESTAMP_STR = "timestamp"
+METADATA_STR = "metadata"
 PROBABILITY_STR = "prob"
 TYPE_STR = "type"
 LONGITUDE_STR = "longitude"
@@ -323,6 +331,7 @@ HEADER_SRC = [ID_STR, TIMESTAMP_STR, LATITUDE_STR, LONGITUDE_STR,
 HEADER_ASCT = HEADER_MODL + HEADER_SRC
 HEADER_SNSR = [STATION_STR, LATITUDE_STR, LONGITUDE_STR, LOCAL_DEPTH_STR,
                TIMESTAMP_STR]
+HEADER_STAT = [MODEL_STR, WEIGHT_STR, STAT_STR] + THRESHOLDS
 SORT_HIERARCHY_PRED = [MODEL_STR, WEIGHT_STR, ID_STR, TIMESTAMP_STR]
 MATCH_CNFG = {
   CLSSFD_STR : {
@@ -349,3 +358,6 @@ MATCH_CNFG = {
     HEADER_STR : HEADER_SRC
   },
 }
+
+# SPECULATIVE
+MAX_PICKS_YEAR = 1e6

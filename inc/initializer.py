@@ -6,12 +6,13 @@ PRJ_PATH = Path(os.path.dirname(__file__)).parent
 IMG_PATH = Path(PRJ_PATH, "img")
 DATA_PATH = Path(PRJ_PATH, "data")
 import json
-import obspy
 import pickle
 import argparse
 import numpy as np
+import obspy as op
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from obspy.core.utcdatetime import UTCDateTime
 from concurrent.futures import ThreadPoolExecutor
 
@@ -29,7 +30,7 @@ def data_loader(filepath : Path) -> any:
   elif sfx == HDF5_EXT: data = pd.read_hdf(filepath)
   elif sfx == MSEED_EXT:
     try:
-      data = obspy.read(filepath)
+      data = op.read(filepath)
     except:
       print(filepath)
       filepath.unlink()
@@ -136,8 +137,11 @@ def parse_arguments():
                       required=False, help=f"{PWAVE} wave threshold.")
   parser.add_argument('-s', "--swave", default=SWAVE_THRESHOLD, type=float,
                       required=False, help=f"{SWAVE} wave threshold.")
-  parser.add_argument("--client", default=[OGS_CLIENT_STR], required=False,
-                      type=str, nargs='+', help="Client to download the data")
+  parser.add_argument("--client", default=[OGS_CLIENT_STR, INGV_CLIENT_STR,
+                                           GFZ_CLIENT_STR, IRIS_CLIENT_STR,
+                                           ETH_CLIENT_STR, ORFEUS_CLIENT_STR],
+                      required=False, type=str, nargs='+',
+                      help="Client to download the data")
   parser.add_argument("--denoiser", default=False, action='store_true',
                       required=False,
                       help="Enable Deep Denoiser model to filter the noise "
@@ -193,6 +197,7 @@ def parse_arguments():
       if key in vars(args) and vars(args)[key] is None:
         setattr(args, key, value)
     # TODO: Fix special cases
+  #print(vars(args))
   return args
 
 def dump_args(args : argparse.Namespace,
@@ -326,15 +331,11 @@ def data_header(args : argparse.Namespace,
   RESULTS = pd.DataFrame(RESULTS, columns=HEADER)
   RESULTS = RESULTS[HEADER_FSYS]
   if args.network and args.network != [ALL_WILDCHAR_STR]:
-    RESULTS = RESULTS[
-      RESULTS[NETWORK_STR].isin(args.network)]
+    RESULTS = RESULTS[RESULTS[NETWORK_STR].isin(args.network)]
   if args.station and args.station != [ALL_WILDCHAR_STR]:
-    RESULTS = RESULTS[
-      RESULTS[STATION_STR].isin(args.station)]
-  RESULTS = RESULTS[
-    RESULTS[MODEL_STR].isin(args.models)]
-  RESULTS = RESULTS[
-    RESULTS[WEIGHT_STR].isin(args.weights)]
+    RESULTS = RESULTS[RESULTS[STATION_STR].isin(args.station)]
+  RESULTS = RESULTS[RESULTS[MODEL_STR].isin(args.models)]
+  RESULTS = RESULTS[RESULTS[WEIGHT_STR].isin(args.weights)]
   RESULTS.sort_values(HEADER_FSYS[1:], inplace=True)
   RESULTS.set_index(FILENAME_STR, inplace=True)
   return RESULTS
@@ -346,6 +347,34 @@ def _loader(args : argparse.Namespace, folder : str) -> pd.DataFrame:
     return associated_loader(args)
   else:
     return waveform_table(args)
+
+def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
+                STATIONS : dict[str, set[str]] = None) \
+      -> tuple[pd.DataFrame, pd.DataFrame]:
+  assert len(args.file) == 1
+  global DATA_PATH
+  DATA_PATH = args.directory.parent
+  if STATIONS is None: STATIONS = station_loader(args, WAVEFORMS)
+  SOURCE, DETECT = prs.event_parser(args.file[0], *args.dates, STATIONS)
+  if args.verbose:
+    SOURCE.to_csv(Path(DATA_PATH,
+                       UNDERSCORE_STR.join([TRUE_STR, SOURCE_STR]) + CSV_EXT),
+                       index=False)
+    DETECT.to_csv(Path(DATA_PATH,
+                       UNDERSCORE_STR.join([TRUE_STR, DETECT_STR]) + CSV_EXT),
+                       index=False)
+  SOURCE = SOURCE[SOURCE[NOTES_STR].isnull() &
+                  SOURCE[LATITUDE_STR].notna()].reset_index(drop=True)
+  DETECT = DETECT[DETECT[ID_STR].isin(SOURCE[ID_STR])].reset_index(drop=True)
+  print("Picks Detections")
+  for phase in [PWAVE, SWAVE]:
+    print(f"True ({phase}): {len(DETECT[DETECT[PHASE_STR] == phase].index)}")
+  print(f"True: {len(DETECT.index)}")
+  print("Events Sources")
+  print(f"True: {len(SOURCE.index)}")
+  if args.verbose:
+    pass
+  return SOURCE, DETECT
 
 def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
   """
@@ -376,22 +405,25 @@ def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
     data_header(args, CLF_STR).groupby([MODEL_STR, WEIGHT_STR, TIMESTAMP_STR]):
     if args.verbose: HIST = list()
     for filepath, (_, _, _, network, station) in dataframe.iterrows():
-      PICK = [[model, weight, None, np.nan, str(p.peak_time), p.peak_value,
-               p.phase, network, station] for p in data_loader(Path(filepath))]
+      PICK = [[model, weight,
+               float("{:0.1f}".format(int(p.peak_value * 10) / 10.)), np.nan,
+               str(p.peak_time), p.peak_value, p.phase, network, station]
+              for p in data_loader(Path(filepath))]
       DATA += PICK
       PICK = pd.DataFrame(PICK, columns=HEADER_PRED)
       if args.verbose:
         # TODO: Use between
-        w = reversed(
-          [len(PICK[PICK[PROBABILITY_STR].between(a, b, inclusive='left')].index)
-                      for a, b in zip(z[:-1], z[1:])])
+        w = reversed([
+              len(PICK[PICK[PROBABILITY_STR].between(a, b,
+                                                     inclusive='left')].index)
+              for a, b in zip(z[:-1], z[1:])])
         HIST.append([PERIOD_STR.join([network, station]), *w])
-    if args.verbose:
+    if args.force and args.verbose:
       HIST = pd.DataFrame(HIST, columns=[ID_STR, *reversed(z[:-1])])\
                .set_index(ID_STR).sort_values(z[:-1], ascending=False)
       IMG_FILE = \
         Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-             UNDERSCORE_STR.join(["HIST", model, weight, date]) + PNG_EXT)
+             UNDERSCORE_STR.join([CLSSFD_STR, model, weight, date]) + PNG_EXT)
       HIST.plot(kind='bar', stacked=True, figsize=(20, 7))
       for leg in plt.legend().get_texts():
         leg.set_text(rf"$\geq$ {leg.get_text()}")
@@ -444,12 +476,12 @@ def associated_loader(args : argparse.Namespace) -> pd.DataFrame:
                                 (PICKS[PROBABILITY_STR] < b)].index)
                       for a, b in zip(z[:-1], z[1:])])
         HIST.append([PERIOD_STR.join([network, station]), *w])
-    if args.verbose:
+    if args.force and args.verbose:
       HIST = pd.DataFrame(HIST, columns=[ID_STR, *reversed(z[:-1])])\
                .set_index(ID_STR).sort_values(z[:-1], ascending=False)
       IMG_FILE = \
         Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-             UNDERSCORE_STR.join(["EVNT", model, weight, date]) + PNG_EXT)
+             UNDERSCORE_STR.join([DETECT_STR, model, weight, date]) + PNG_EXT)
       HIST.plot(kind='bar', stacked=True, figsize=(20, 7))
       for leg in plt.legend().get_texts():
         leg.set_text(rf"$\geq$ {leg.get_text()}")
@@ -497,7 +529,7 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
       WAVEFORMS_DATA[(WAVEFORMS_DATA[DATE_STR] >= start) &
                      (WAVEFORMS_DATA[DATE_STR] < end + ONE_DAY)]
     WAVEFORMS_DATA[DATE_STR] = WAVEFORMS_DATA[DATE_STR].apply(
-      lambda x: UTCDateTime.strftime(x, DATE_FMT))
+      lambda x: x.strftime(DATE_FMT))
   else:
     # Construct the table of files based on the specified arguments
     WAVEFORMS_DATA = list()
@@ -505,7 +537,7 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
 
     def process_file(trc_file : Path) -> list[str]:
       try:
-        trc = obspy.read(trc_file, headonly=True)[0].stats
+        trc = op.read(trc_file, headonly=True)[0].stats
       except:
         print(f"WARNING: Unable to read {trc_file}")
         return None
@@ -513,7 +545,7 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
       if trc.starttime.hour == 23: trc_start += ONE_DAY
       if start <= trc_start < end + ONE_DAY:
         return [trc_file.__str__(), trc.network, trc.station, trc.channel,
-                UTCDateTime.strftime(trc_start, DATE_FMT)]
+                trc_start.strftime(DATE_FMT)]
       return None
     with ThreadPoolExecutor() as executor: results = list(executor.map(
       process_file, args.directory.iterdir()))
@@ -548,3 +580,62 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
   WAVEFORMS_DATA.set_index(FILENAME_STR, inplace=True)
   WAVEFORMS_DATA.to_csv(WAVEFORMS_FILE)
   return WAVEFORMS_DATA
+
+def station_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None)\
+      -> dict[str, set[str]]:
+  if WAVEFORMS is None: WAVEFORMS = waveform_table(args)
+  WAVEFORMS[DATE_STR] = WAVEFORMS[DATE_STR].apply(
+    lambda x: UTCDateTime.strptime(x, DATE_FMT))
+  start, end = args.dates
+  global DATES
+  if DATES is None:
+    DATES = [start.datetime]
+    while DATES[-1] <= end.datetime: DATES.append(DATES[-1] + ONE_DAY)
+  min_s, max_s = np.inf, 0
+  stations = set()
+  STATIONS = dict()
+  for start, end in zip(DATES[:-1], DATES[1:]):
+    ST = WAVEFORMS.loc[WAVEFORMS[DATE_STR].between(
+          start, end, inclusive='left'), [NETWORK_STR, STATION_STR]]
+    if ST.empty: continue
+    ST[ID_STR] = ST[NETWORK_STR] + PERIOD_STR + ST[STATION_STR]
+    ST = ST[ID_STR].unique()
+    min_s = min(min_s, len(ST))
+    max_s = max(max_s, len(ST))
+    STATIONS[start.strftime(DATE_FMT)] = set([station.split(PERIOD_STR)[1]
+                                              for station in ST])
+    stations.update(ST)
+    if args.verbose: print(f"Stations {start.strftime(DATE_FMT)}: {len(ST)}")
+  print(f"Min Stations: {min_s}, Max Stations: {max_s}")
+  print(f"Total Stations: {len(stations)}")
+  if args.verbose:
+    # Plot the stations
+    INVENTORY = op.Inventory()
+    for station in stations:
+      STATION_PATH = Path(DATA_PATH, STATION_STR, station + XML_EXT)
+      if not STATION_PATH.exists():
+        print(f"WARNING: Station file {STATION_PATH} does not exist.")
+        continue
+      INVENTORY.extend(op.read_inventory(STATION_PATH))
+    INVENTORY.plot(projection="local", show=False, method="cartopy", size=25,
+                   water_fill_color="lightblue", color_per_network=True,
+                   resolution="h", label=False,
+                   outfile=Path(IMG_PATH, STATION_STR + PNG_EXT))
+    # Plot the Number of station in time
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.set_title("Active number of stations per day")
+    ax.set(xlabel="Date", ylabel="Number of stations")
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    for label in ax.get_xticklabels():
+      label.set(rotation=30, horizontalalignment='right')
+    ax.grid()
+    ax.plot(DATES[:-1], [len(STATIONS[d.strftime(DATE_FMT)])
+                         for d in DATES[:-1]], label="Number of stations")
+    ax.legend()
+    start, end = args.dates
+    IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) +
+                    UNDERSCORE_STR.join([STATION_STR, start.strftime(DATE_FMT),
+                                         end.strftime(DATE_FMT)]) + PNG_EXT)
+    plt.savefig(IMG_FILE)
+    plt.close()
+  return STATIONS

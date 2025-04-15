@@ -114,8 +114,9 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
       if end is not None and result[DATE_STR] >= end + ONE_DAY: break
       # Station, We only consider the picks from the stations (if specified)
       result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
-      if stations is not None and result[STATION_STR] not in \
-        stations[result[DATE_STR].strftime(DATE_FMT)]: continue
+      date = result[DATE_STR].strftime(DATE_FMT)
+      if (stations is not None and date in stations and
+          result[STATION_STR] not in stations[date]): continue
       # P Time
       try:
         result[P_TIME_STR] = result[DATE_STR] + td(seconds=\
@@ -129,8 +130,9 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
       # Event
       if result[EVENT_STR]:
         try:
-          result[EVENT_STR] = int(result[EVENT_STR].replace(SPACE_STR,
-                                                            ZERO_STR))
+          result[EVENT_STR] = \
+            int(result[EVENT_STR].replace(SPACE_STR, ZERO_STR)) + \
+            result[DATE_STR].year * MAX_PICKS_YEAR
         except ValueError as e:
           result[EVENT_STR] = None
           print(unble_msg.format(type=EVENT_STR, line=line))
@@ -463,18 +465,17 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
         result : dict[str] = match.groupdict()
         date = UTCDateTime(event_spacetime[0].date)
         result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
-        if stations and result[STATION_STR] not in \
-          stations[date.strftime(DATE_FMT)]: continue
-        result[EVENT_STR] = int(result[EVENT_STR])
+        if (stations and date.strftime(DATE_FMT) in stations and
+            result[STATION_STR] not in stations[date.strftime(DATE_FMT)]):
+          continue
+        result[EVENT_STR] = int(result[EVENT_STR]) + date.year * MAX_PICKS_YEAR
         result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
         if result[SECONDS_STR] == SPACE_STR*5:
           result[SECONDS_STR] = td(0)
           msg = notbl_msg.format(value=SPACE_STR*5, key=SECONDS_STR,
                                  line=line.strip())
-          if level == WARNING_STR:
-            print(msg)
-          else:
-            raise ValueError(msg)
+          if level == WARNING_STR: print(msg)
+          else: raise ValueError(msg)
         else:
           result[SECONDS_STR] = td(seconds=float(result[SECONDS_STR]))
         result[P_TIME_STR] = result[P_TIME_STR].replace(SPACE_STR, ZERO_STR)
@@ -503,12 +504,12 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
       if match:
         result : dict[str] = match.groupdict()
         result[EVENT_STR] = int(result[EVENT_STR])
-        event_id = result[EVENT_STR]
         result[SECONDS_STR] = td(seconds=float(result[SECONDS_STR])) \
                                 if result[SECONDS_STR] else td(0)
         result[DATE_STR] = UTCDateTime.strptime(
           result[DATE_STR].replace(SPACE_STR, ZERO_STR), "%y%m%d0%H%M") + \
           result[SECONDS_STR]
+        event_id = result[EVENT_STR] + result[DATE_STR].year * MAX_PICKS_YEAR
         if start is not None and result[DATE_STR] < start:
           event_detect = -1
           continue
@@ -516,7 +517,7 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
         result[LATITUDE_STR] = result[LATITUDE_STR].replace(SPACE_STR,
                                                             ZERO_STR)\
                                  if result[LATITUDE_STR] else None
-        if result[LATITUDE_STR]: 
+        if result[LATITUDE_STR]:
           splt = result[LATITUDE_STR].split(DASH_STR)
           result[LATITUDE_STR] = float(splt[0]) + float(splt[1]) / 60.
         result[LONGITUDE_STR] = result[LONGITUDE_STR].replace(SPACE_STR,
@@ -648,7 +649,8 @@ def event_parser_(filename : Path, start : UTCDateTime = None,
 
 def event_parser(filename : Path, start : UTCDateTime = None,
                  end : UTCDateTime = None,
-                 stations : dict[str, set[str]] = None) -> pd.DataFrame:
+                 stations : dict[str, set[str]] = None) \
+      -> tuple[pd.DataFrame, pd.DataFrame]:
   if not filename.exists(): raise FileNotFoundError(filename)
   SOURCE = pd.DataFrame(columns=HEADER_SRC)
   DETECT = pd.DataFrame(columns=HEADER_MANL)
@@ -669,11 +671,6 @@ def event_parser(filename : Path, start : UTCDateTime = None,
         DETECT = event_merger_l(DETECT, detect, FIND_DTC)
     if DETECT is not None and not DETECT.empty:
       SOURCE = SOURCE[SOURCE[ID_STR].isin(DETECT[ID_STR].unique())]
-    #for file in filename.iterdir():
-    #  if file.suffix == MOD_EXT:
-    #    stations = event_parser_mod(file, stations)
-    #    for code, name in stations.items():
-    #      DETECT.loc[DETECT[STATION_STR] == code][STATION_STR] = name
   else:
     SOURCE, DETECT = event_parser_(filename, start, end, stations)
     #try:

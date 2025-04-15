@@ -9,7 +9,7 @@ fastrlock==0.8.3
 filelock==3.17.0
 fonttools==4.55.8
 fsspec==2025.2.0
-GMMA @ git+https://github.com/wayneweiqiang/GaMMA.git@67ba817661c6eeae19f38984fe162920478a6c56
+GMMA @ git+https://github.com/wayneweiqiang/GaMMA.git@cc69ff110e13c445168512d698eec098abca2ff6
 greenlet==3.1.1
 h5py==3.12.1
 idna==3.10
@@ -49,12 +49,13 @@ python-dateutil==2.9.0.post0
 pytz==2025.1
 requests==2.32.3
 scikit-learn==1.6.1
-scipy==1.15.1
+scipy==1.15.2
 seisbench==0.8.2
+setuptools==75.8.0
 six==1.17.0
 SQLAlchemy==1.4.54
 sympy==1.13.1
-threadpoolctl==3.5.0
+threadpoolctl==3.6.0
 torch==2.5.1+cu121
 torchaudio==2.5.1+cu121
 torchvision==0.20.1+cu121

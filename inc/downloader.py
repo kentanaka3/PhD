@@ -38,8 +38,6 @@ def data_downloader(args : argparse.Namespace) -> None:
     import pyrocko as pr
 
   else:
-    from obspy.clients.fdsn import Client
-    CLIENTS = [Client(client) for client in args.client]
     if args.rectdomain:
       from obspy.clients.fdsn.mass_downloader.domain import RectangularDomain
       domain = RectangularDomain(minlatitude=args.rectdomain[0],
@@ -64,10 +62,17 @@ def data_downloader(args : argparse.Namespace) -> None:
                                 minimum_interstation_distance_in_m=100.0,
                                 location_priorities=["", "00", "10"],
                                 chunklength_in_sec=86400)
+    from obspy.clients.fdsn import Client
+    CLIENTS = {client : Client(client) for client in args.client}
     if args.key:
       # NOTE: It is assumed a single token file is applicable for all clients
-      for cl in CLIENTS: cl.set_eida_token(args.key, validate=True)
-    mdl = MassDownloader(providers=CLIENTS)
+      for cl, CL in CLIENTS:
+        if cl in [INGV_CLIENT_STR, GFZ_CLIENT_STR]:
+          try:
+            CL.set_eida_token(args.key, validate=True)
+          except Exception as e:
+            print(f"Error setting token for {cl}: {e}")
+    mdl = MassDownloader(providers=CLIENTS.values())
     mdl.download(domain, restrictions, mseed_storage=args.directory.__str__(),
                  stationxml_storage=Path(DATA_PATH, STATION_STR).__str__())
 

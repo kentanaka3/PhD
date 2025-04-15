@@ -19,5 +19,4 @@ from constants import *
 import matplotlib.pyplot as plt
 
 args = ini.parse_arguments()
-aly.plot_cluster(ini.classified_loader(args), ini.associated_loader(args),
-                 args)
+SOURCE, DETECT = ini.true_loader(args)
