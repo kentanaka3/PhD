@@ -203,4 +203,5 @@ data/arguments.json
 *HIST_*_*_*.png
 *EVNT_*_*_*.png
 *CP_*_*_*.png
-*False Negative_*_*.png
+*FN_*_*.png
+*.hdf5

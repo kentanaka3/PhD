@@ -8,6 +8,7 @@ DATA_PATH = os.path.join(PRJ_PATH, "data")
 import sys
 # Add to path
 if INC_PATH not in sys.path: sys.path.append(INC_PATH)
+import obspy
 import argparse
 import itertools
 import obspy as op
@@ -19,16 +20,13 @@ from copy import deepcopy as dcpy
 from datetime import timedelta as td
 from obspy.geodetics import gps2dist_azimuth
 from obspy.core.utcdatetime import UTCDateTime
-from concurrent.futures import ThreadPoolExecutor
 from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 
 from constants import *
 import initializer as ini
 import parser as prs
 
-THRESHOLDS : list[float] = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
 THRESHOLDER_STR = PWAVE + "{p:0.2}" + SWAVE + "{s:0.2}"
-DATES = None
 
 def plot_cluster(PICK : pd.DataFrame, GMMA : pd.DataFrame,
                  args : argparse.Namespace) -> None:
@@ -323,37 +321,43 @@ class myBPGraph():
                      None, None, None, None, None, None, None, None])
         continue
       assert len(x) == 1
-      P = nodesP.iloc[x[0]]
+      P = nodesP.iloc[x[0]].to_dict()
+      P[ID_STR] = str(P[ID_STR])
+      P[TIMESTAMP_STR] = str(P[TIMESTAMP_STR])
       if self.C[METHOD_STR] in [CLSSFD_STR, DETECT_STR]:
+        P[THRESHOLD_STR] = float("{:0.1f}".format(
+          int(P[PROBABILITY_STR] * 10) / 10.))
         CFN_MTX.loc[T[PHASE_STR], P[PHASE_STR]] += 1
         if T[PHASE_STR] == P[PHASE_STR]:
-          TP.add((P[THRESHOLD_STR], (T[ID_STR], str(P[ID_STR])),
-                  (str(T[TIMESTAMP_STR]), str(P[TIMESTAMP_STR])),
+          TP.add((P[THRESHOLD_STR], (T[ID_STR], P[ID_STR]),
+                  (str(T[TIMESTAMP_STR]), P[TIMESTAMP_STR]),
                   (T[PROBABILITY_STR], P[PROBABILITY_STR]), T[PHASE_STR],
                   P[NETWORK_STR], T[STATION_STR]))
       else:
         CFN_MTX.loc[EVENT_STR, EVENT_STR] += 1
-        TP.add((P[THRESHOLD_STR], (T[ID_STR], str(P[ID_STR])),
-                (str(T[TIMESTAMP_STR]), str(P[TIMESTAMP_STR])),
+        TP.add((P[THRESHOLD_STR], (T[ID_STR], P[ID_STR]),
+                (str(T[TIMESTAMP_STR]), P[TIMESTAMP_STR]),
                 (T[LATITUDE_STR], P[LATITUDE_STR]),
                 (T[LONGITUDE_STR], P[LONGITUDE_STR]),
                 (T[LOCAL_DEPTH_STR], P[LOCAL_DEPTH_STR]),
                 (T[MAGNITUDE_STR], P[MAGNITUDE_STR]), None, None, None, None,
-                None, None, None, (SOURCE_STR, P[NOTES_STR])))
+                None, None, None, (SOURCE_STR, str(P[NOTES_STR]).rstrip())))
     result = []
     for p, val in self.G[1].items():
       if len(list(val.items())) == 0:
-        P = nodesP.iloc[p]
+        P = nodesP.iloc[p].to_dict()
+        P[ID_STR] = str(P[ID_STR])
+        P[TIMESTAMP_STR] = str(P[TIMESTAMP_STR])
         if self.C[METHOD_STR] in [CLSSFD_STR, DETECT_STR]:
           CFN_MTX.loc[NONE_STR, P[PHASE_STR]] += 1
-          result.append((P[ID_STR], str(P[TIMESTAMP_STR]), P[PROBABILITY_STR],
+          result.append((P[ID_STR], P[TIMESTAMP_STR], P[PROBABILITY_STR],
                          P[PHASE_STR], P[NETWORK_STR], P[STATION_STR]))
         else:
           CFN_MTX.loc[NONE_STR, EVENT_STR] += 1
-          result.append((P[ID_STR], str(P[TIMESTAMP_STR]), P[LATITUDE_STR],
+          result.append((P[ID_STR], P[TIMESTAMP_STR], P[LATITUDE_STR],
                          P[LONGITUDE_STR], P[LOCAL_DEPTH_STR],
                          P[MAGNITUDE_STR], None, None, None, None, None, None,
-                         None, P[NOTES_STR]))
+                         None, str(P[NOTES_STR]).rstrip()))
     FP.update(set(result))
     return CFN_MTX, TP, FN, FP
 
@@ -438,27 +442,36 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       CFN_MTX = pd.DataFrame(0, index=MATCH_CNFG[method][CATEGORY_STR],
                              columns=MATCH_CNFG[method][CATEGORY_STR],
                              dtype=int)
-      tp = set()
-      fn = []
-      fp = set()
+      cfn_mtx = pd.DataFrame(0, index=MATCH_CNFG[method][CATEGORY_STR],
+                             columns=MATCH_CNFG[method][CATEGORY_STR],
+                             dtype=int)
+      tp, fn, fp = set(), [], set()
       print(f"Processing {model} {weight}...")
       if method in [CLSSFD_STR, DETECT_STR]:
+        tmp_cfn_mtx = pd.DataFrame(0, index=MATCH_CNFG[method][CATEGORY_STR],
+                                   columns=MATCH_CNFG[method][CATEGORY_STR],
+                                   dtype=int)
+        tmp_tp, tmp_fn, tmp_fp = set(), [], set()
         for station, PRED_S in PRED_W.groupby(STATION_STR):
-          cfn_mtx, tp, fn, fp = conf_mtx(
+          tmp_cfn_mtx, tmp_tp, tmp_fn, tmp_fp = conf_mtx(
             TRUE[(TRUE[STATION_STR] == station)].reset_index(drop=True),
             PRED_S.reset_index(drop=True), model, weight, args, method)
-          CFN_MTX += cfn_mtx
-          TP = TP.union(tp)
-          FN.extend(fn)
-          FP = FP.union(fp)
+          cfn_mtx += tmp_cfn_mtx
+          tp = tp.union(tmp_tp)
+          fn.extend(tmp_fn)
+          fp = fp.union(tmp_fp)
       else:
-        CFN_MTX, tp, fn, fp = conf_mtx(
+        cfn_mtx, tp, fn, fp = conf_mtx(
           TRUE.reset_index(drop=True), PRED_W.reset_index(drop=True), model,
           weight, args, method)
-        TP = TP.union(tp)
-        FN.extend(fn)
-        FP = FP.union(fp)
+      CFN_MTX += cfn_mtx
       CFN_MTX.loc[NONE_STR, NONE_STR] = N_seconds - CFN_MTX.sum().sum()
+      TP = TP.union(tp)
+      print(f"{model} {weight} {TP_STR}: {len(tp)}")
+      FN.extend(fn)
+      print(f"{model} {weight} {FN_STR}: {len(fn)}")
+      FP = FP.union(fp)
+      print(f"{model} {weight} {FP_STR}: {len(fp)}")
       disp = ConfMtxDisp(CFN_MTX.values, display_labels=CFN_MTX.columns)
       disp.plot(ax=ax, colorbar=False)
       disp.im_.set(clim=(1, N_seconds), cmap="Blues", norm="log")
@@ -489,58 +502,137 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     plt.close()
 
   HEADER = HEADER_MODL + MATCH_CNFG[method][HEADER_STR]
-  print(HEADER)
   # True Positives
-  TP = pd.DataFrame(TP, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)
-  print(TP)
-  # TODO: Implement the threshold for the True Positives
-  for (m, w), df in TP.groupby([MODEL_STR, WEIGHT_STR]):
-    print(m, w)
-    if df.empty: continue
-    tp = len(df.index)
-    ids = {id[0] : id[1] for id in df[ID_STR].to_list()}
-    if method in [CLSSFD_STR, DETECT_STR]:
+  TP = pd.DataFrame(TP, columns=HEADER).sort_values(
+         SORT_HIERARCHY_PRED).reset_index(drop=True)
+  if method in [CLSSFD_STR, DETECT_STR]:
+    for (m, w), df in TP.groupby([MODEL_STR, WEIGHT_STR]):
+      print(m, w)
+      if df.empty: continue
+      tp = len(df.index)
       tp_s = len(df[df[PHASE_STR] == SWAVE].index)
       print(f"cTP ({PWAVE}): {tp - tp_s}")
       print(f"cTP ({SWAVE}): {tp_s}")
-      for k, v in ids.items():
-        TP.loc[(TP[MODEL_STR] == m) & (TP[WEIGHT_STR] == w) &
-               (TP[ID_STR] == (k, v)), [THRESHOLD_STR, ID_STR]] = [
-          float("{:0.1}".format(min([x[1] for x in df.loc[
-            df[ID_STR] == (k, v), PROBABILITY_STR].tolist()]))),
-          tuple([k, v])]
-    print(f"TP: {tp}")
-  if args.verbose: TP.to_csv(Path(
-    DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-    UNDERSCORE_STR.join([method, TP_STR]) + CSV_EXT), index=False)
+  TP_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+                 UNDERSCORE_STR.join([method, TP_STR]) + CSV_EXT)
+  if args.verbose: TP.to_csv(TP_FILE, index=False)
 
   # False Negatives
   FN = pd.DataFrame(FN, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)
-  for (m, w), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
-    print(m, w)
-    fn = len(df.index)
-    if method in [CLSSFD_STR, DETECT_STR]:
+  if method in [CLSSFD_STR, DETECT_STR]:
+    for (m, w), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
+      print(m, w)
+      if df.empty: continue
+      fn = len(df.index)
       fn_s = len(df[df[PHASE_STR] == SWAVE].index)
-      print(f"FN ({PWAVE}): {fn - fn_s}")
-      print(f"FN ({SWAVE}): {fn_s}")
-    print(f"FN: {fn}")
+      print(f"{FN_STR} ({PWAVE}): {fn - fn_s}")
+      print(f"{FN_STR} ({SWAVE}): {fn_s}")
   FN_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  UNDERSCORE_STR.join([method, FN_STR]) + CSV_EXT)
   if args.verbose: FN.to_csv(FN_FILE, index=False)
 
   # False Positives
   FP = pd.DataFrame(FP, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)
-  for (m, w), df in FP.groupby([MODEL_STR, WEIGHT_STR]):
-    print(m, w)
-    fp = len(df.index)
-    if method in [CLSSFD_STR, DETECT_STR]:
+  if method in [CLSSFD_STR, DETECT_STR]:
+    for (m, w), df in FP.groupby([MODEL_STR, WEIGHT_STR]):
+      print(m, w)
+      if df.empty: continue
+      fp = len(df.index)
       fp_s = len(df[df[PHASE_STR] == SWAVE].index)
-      print(f"FP ({PWAVE}): {fp - fp_s}")
-      print(f"FP ({SWAVE}): {fp_s}")
-    print(f"FP: {len(df.index)}")
+      print(f"{FP_STR} ({PWAVE}): {fp - fp_s}")
+      print(f"{FP_STR} ({SWAVE}): {fp_s}")
   FP_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  UNDERSCORE_STR.join([method, FP_STR]) + CSV_EXT)
   if args.verbose: FP.to_csv(FP_FILE, index=False)
+
+
+  # File all the results for the date range
+  STAT = list()
+  for model in args.models:
+    for weight in args.weights:
+      for stat in [TP_STR, FP_STR, FN_STR]:
+        if method in [CLSSFD_STR, DETECT_STR]:
+          for phase in [PWAVE, SWAVE]:
+            STAT.append([model, weight, stat + phase, *([0.]*len(THRESHOLDS))])
+        else:
+          STAT.append([model, weight, stat, *([0.] * len(THRESHOLDS))])
+  STAT = pd.DataFrame(STAT, columns=HEADER_STAT)
+  STAT_FILEPATH = Path(
+    DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + UNDERSCORE_STR.join([
+      method, STAT_STR, start.strftime(DATE_FMT), end.strftime(DATE_FMT)]) + 
+    CSV_EXT)
+  if STAT_FILEPATH.exists(): 
+    stat = pd.read_csv(STAT_FILEPATH)
+    head = [MODEL_STR, WEIGHT_STR, STAT_STR]
+    for _, row in stat.iterrows():
+      r = STAT.loc[(STAT[head] == row[head]).all(axis=1)]
+      # If the row is not in the dataframe, add it, update it, otherwise
+      if r.empty: STAT.loc[len(STAT)] = row.tolist()
+      else: STAT.loc[(STAT[head] == row[head]).all(axis=1)] = row.tolist()
+  if method in [CLSSFD_STR, DETECT_STR]:
+    groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
+    for (model, weight, phase), df in TP.groupby(groups):
+      tp = len(df[df[PHASE_STR] == phase].index)
+      STAT.loc[(STAT[MODEL_STR] == model) & (STAT[WEIGHT_STR] == weight) &
+               (STAT[STAT_STR] == TP_STR + phase),
+               args.pwave if phase == PWAVE else args.swave] = tp
+    for (model, weight, phase), df in FN.groupby(groups):
+      fn = len(df[df[PHASE_STR] == phase].index)
+      STAT.loc[(STAT[MODEL_STR] == model) & (STAT[WEIGHT_STR] == weight) &
+               (STAT[STAT_STR] == FN_STR + phase),
+               args.pwave if phase == PWAVE else args.swave] = fn
+    for (model, weight, phase), df in FP.groupby(groups):
+      fp = len(df[df[PHASE_STR] == phase].index)
+      STAT.loc[(STAT[MODEL_STR] == model) & (STAT[WEIGHT_STR] == weight) &
+               (STAT[STAT_STR] == FP_STR + phase),
+               args.pwave if phase == PWAVE else args.swave] = fp
+  else:
+    for (model, weight), df in TP.groupby([MODEL_STR, WEIGHT_STR]):
+      STAT.loc[(STAT[MODEL_STR] == model) & (STAT[WEIGHT_STR] == weight) &
+               (STAT[STAT_STR] == TP_STR), args.pwave] = len(df.index)
+    for (model, weight), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
+      STAT.loc[(STAT[MODEL_STR] == model) & (STAT[WEIGHT_STR] == weight) &
+               (STAT[STAT_STR] == FN_STR), args.pwave] = len(df.index)
+    for (model, weight), df in FP.groupby([MODEL_STR, WEIGHT_STR]):
+      STAT.loc[(STAT[MODEL_STR] == model) & (STAT[WEIGHT_STR] == weight) &
+               (STAT[STAT_STR] == FP_STR), args.pwave] = len(df.index)
+  print(STAT)
+  STAT.to_csv(STAT_FILEPATH, index=False)
+
+  # True Positive Probability distribution plot
+  if method in [CLSSFD_STR, DETECT_STR]:
+    for model, tp_m in TP.groupby(MODEL_STR):
+      fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
+                                              int(x * Ws - 1) * 1.5))
+      axs = _axs.flatten()
+      plt.rcParams.update({'font.size': 12})
+      fig.suptitle(model)
+      for ax, (weight, tp_w) in zip(axs, tp_m.groupby(WEIGHT_STR)):
+        ax.set_title(weight)
+        for phase in [PWAVE, SWAVE]:
+          tp = zip(*tp_w[tp_w[PHASE_STR] == phase][PROBABILITY_STR].to_list())
+          ax.scatter(*list(tp).reverse(), label=phase, marker="o",
+                     c=COLOR_ENCODING[TP_STR][phase])
+          ax.set(xlabel="Operator Weight", ylabel="Prediction Probability",
+                 yscale="log", ylim=(0.1, 1.))
+          ax.legend()
+          ax.grid()
+      axs[0].set()
+      axs[1].set(ylabel=None, yticklabels=[])
+      if len(args.weights) > 2:
+        axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
+        axs[2].set(title=None)
+        axs[2].xaxis.tick_top()
+        axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
+        axs[3].set(ylabel=None, yticklabels=[], title=None)
+        axs[3].xaxis.tick_top()
+      IMG_FILE = \
+        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+              UNDERSCORE_STR.join([
+                method, TP_STR, model, THRESHOLDER_STR.format(
+                  p=args.pwave, s=args.swave)]) + PNG_EXT)
+      plt.savefig(IMG_FILE)
+      plt.close()
 
   # False Negative Pie plot
   if method in [CLSSFD_STR, DETECT_STR]:
@@ -686,45 +778,6 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     plt.savefig(IMG_FILE)
   return TP
 
-def event_parser(filename : Path, args : argparse.Namespace,
-                 stations : dict[str, set[str]] = None) -> pd.DataFrame:
-  """
-  input  :
-    - filename      (Path)
-    - args          (argparse.Namespace)
-
-  output :
-    - pd.DataFrame
-
-  errors :
-    - FileNotFoundError
-
-  notes  :
-    | EVENT | STATION | PHASE | BEGDT | WEIGHT |
-    --------------------------------------------
-  """
-  global DATA_PATH
-  DATA_PATH = args.directory.parent
-  # TODO: Stations are not considered due to the low amount of data
-  SOURCE, DETECT = prs.event_parser(filename, *args.dates, stations)
-  if args.verbose:
-    SOURCE.to_csv(Path(DATA_PATH,
-                       UNDERSCORE_STR.join([TRUE_STR, SOURCE_STR]) + CSV_EXT),
-                       index=False)
-    DETECT.to_csv(Path(DATA_PATH,
-                       UNDERSCORE_STR.join([TRUE_STR, DETECT_STR]) + CSV_EXT),
-                       index=False)
-  SOURCE = SOURCE[SOURCE[NOTES_STR].isnull() &
-                  SOURCE[LATITUDE_STR].notna()].reset_index(drop=True)
-  DETECT = DETECT[DETECT[ID_STR].isin(SOURCE[ID_STR])].reset_index(drop=True)
-  print("Picks Detections")
-  print(f"True (P): {len(DETECT[DETECT[PHASE_STR] == PWAVE].index)}",
-        f"True (S): {len(DETECT[DETECT[PHASE_STR] == SWAVE].index)}",
-        f"True: {len(DETECT.index)}")
-  print("Events Sources")
-  print(f"True: {len(SOURCE.index)}")
-  return SOURCE, DETECT
-
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
                       method : str = CLSSFD_STR) -> None:
   """
@@ -814,7 +867,6 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
       plt.rcParams.update({'font.size': 12})
       fig.suptitle(model)
       for ax, (weight, df_w) in zip(axs, df_m.groupby(WEIGHT_STR)):
-        print(df_w)
         counts, _ = np.histogram(df_w[TIMESTAMP_STR], bins=bins)
         mu = np.mean(df_w[TIMESTAMP_STR])
         std = np.std(df_w[TIMESTAMP_STR])
@@ -864,7 +916,7 @@ def _Analysis(args : argparse.Namespace,
   DF = DF[DF[TIMESTAMP_STR].between(start, end + ONE_DAY, inclusive='left')]
   if args.verbose: DF.to_csv(FILEPATH, index=False)
   else: return DF
-  if method != CLSSFD_STR: return DF
+  if method == CLSSFD_STR: return DF
   global DATES
   if DATES is None:
     DATES = [start]
@@ -908,54 +960,10 @@ def _Analysis(args : argparse.Namespace,
     plt.close()
   return DF
 
-def _Stations(args : argparse.Namespace) -> dict[str, set[str]]:
-  WAVEFORMS = ini.waveform_table(args)
-  WAVEFORMS[DATE_STR] = WAVEFORMS[DATE_STR].apply(
-    lambda x: UTCDateTime.strptime(x, DATE_FMT))
-  start, end = args.dates
-  global DATES
-  if DATES is None:
-    DATES = [start.datetime]
-    while DATES[-1] <= end.datetime: DATES.append(DATES[-1] + ONE_DAY)
-  """
-  STATIONS = {
-    s.strftime(DATE_FMT) : set(WAVEFORMS.loc[WAVEFORMS[DATE_STR].between(
-                             s, e, inclusive='left'), STATION_STR])
-    for s, e in zip(DATES[:-1], DATES[1:])
-  }"""
-  min_s, max_s = np.inf, 0
-  stations = set()
-  STATIONS = dict()
-  for s, e in zip(DATES[:-1], DATES[1:]):
-    S = WAVEFORMS.loc[WAVEFORMS[DATE_STR].between(s, e, inclusive='left'),
-                      STATION_STR]
-    if S.empty: continue
-    S = S.unique()
-    min_s = min(min_s, len(S))
-    max_s = max(max_s, len(S))
-    STATIONS[s.strftime(DATE_FMT)] = set(S)
-    stations.update(S)
-    if args.verbose: print(f"Stations {s.strftime(DATE_FMT)}: {len(S)}")
-  print(f"Min Stations: {min_s}, Max Stations: {max_s}")
-  print(f"Total Stations: {len(stations)}")
-  return STATIONS
-
 def main(args : argparse.Namespace):
   global DATA_PATH
   DATA_PATH = args.directory.parent
-  stream = op.read([f for f in args.directory.iterdir()][0])[0]
-  stream = stream.resample(SAMPLING_RATE)
-  # TODO: Consider using the Stream.detrend() method
-  start = UTCDateTime(stream.stats.starttime.date)
-  if stream.stats.starttime.hour == 23: start += ONE_DAY
-  stream.trim(starttime=start, endtime=start + ONE_DAY, pad=True, fill_value=0,
-              nearest_sample=False)
-  fig, ax = plt.subplots(figsize=(10, 5))
-  stream.plot(fig=fig, type='dayplot', show=True)
-  STATIONS = _Stations(args)
-  if not args.file: raise ValueError("No event file given")
-  if len(args.file) > 1: raise NotImplementedError("Multiple event files")
-  TRUE_S, TRUE_D = event_parser(args.file[0], args, STATIONS)
+  TRUE_S, TRUE_D = ini.true_loader(args)
   if args.option in [CLSSFD_STR, ALL_WILDCHAR_STR]:
     print(CLSSFD_STR)
     PRED = _Analysis(args, CLSSFD_STR)
@@ -975,7 +983,7 @@ def main(args : argparse.Namespace):
   if args.option in [SOURCE_STR, ALL_WILDCHAR_STR]:
     print(SOURCE_STR)
     PRED_S = ini.data_loader(Path(
-      DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + SOURCE_STR + 
+      DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + SOURCE_STR +
       CSV_EXT))
     PRED_S[TIMESTAMP_STR] = PRED_S[TIMESTAMP_STR].apply(lambda x:
                                                         UTCDateTime(x))

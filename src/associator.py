@@ -59,8 +59,8 @@ class AssociateConfig:
     self.y_max = self.station[Y_COORD_STR].max()
     self.center = (self.x_mid, self.y_mid)
     if center: self.center = center
-    self.proj = Proj(f"+proj=sterea +lon_0={self.center[0]} "
-                     f"+lat_0={self.center[1]} +units=km")
+    self.proj = Proj(OGS_PROJECTION.format(lon=self.center[0],
+                                           lat=self.center[1]))
     # from deg to km
     self.station[[X_COORD_STR, Y_COORD_STR]] = \
       self.station.apply(lambda s:
@@ -239,10 +239,10 @@ def associate_events(PRED : pd.DataFrame, config : AssociateConfig,
                                                        else PICKS
         SRC.append([model, weight, th, ids[model][weight],
                     dt.fromisoformat(event['time']),
-                    *config.proj(event[X_COORD_STR], event[Y_COORD_STR],
-                                 inverse=True), event[Z_COORD_STR],
-                    event[MAGNITUDE_STR], len(PICKS.index), *([None] * 6),
-                    GMMA_STR])
+                    *reversed(config.proj(
+                      event[X_COORD_STR], event[Y_COORD_STR], inverse=True)),
+                    event[Z_COORD_STR], event[MAGNITUDE_STR], len(PICKS.index),
+                    *([None] * 6), GMMA_STR])
         ids[model][weight] += 1
       SRC = pd.DataFrame(SRC, columns=HEADER_ASCT).sort_values(TIMESTAMP_STR)
       SRC = SRC.reset_index(drop=True)
@@ -314,11 +314,6 @@ def set_up(args : argparse.Namespace) -> AssociateConfig:
       print(f"WARNING: Station file {station_file} does not exist.")
       continue
     INVENTORY.extend(obspy.read_inventory(station_file))
-  if args.verbose:
-    INVENTORY.plot(projection="local", show=False, method="cartopy", size=25,
-                   water_fill_color="lightblue", color_per_network=True,
-                   resolution="h", label=False,
-                   outfile=Path(IMG_PATH, STATION_STR + PNG_EXT))
   CONFIG = AssociateConfig(INVENTORY, file=args.file)
   # CONFIG = MPI_COMM.bcast(CONFIG, root=0)
   return CONFIG
