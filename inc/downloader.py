@@ -63,15 +63,19 @@ def data_downloader(args : argparse.Namespace) -> None:
                                 location_priorities=["", "00", "10"],
                                 chunklength_in_sec=86400)
     from obspy.clients.fdsn import Client
-    CLIENTS = {client : Client(client) for client in args.client}
-    if args.key:
-      # NOTE: It is assumed a single token file is applicable for all clients
-      for cl, CL in CLIENTS:
-        if cl in [INGV_CLIENT_STR, GFZ_CLIENT_STR]:
-          try:
-            CL.set_eida_token(args.key, validate=True)
-          except Exception as e:
-            print(f"Error setting token for {cl}: {e}")
+    CLIENTS = dict()
+    for client in args.client:
+      try:
+        CLIENTS[client] = Client(client)
+      except Exception as e:
+        print(f"Error creating client {client}: {e}")
+        continue
+      if args.key and client in [INGV_CLIENT_STR, GFZ_CLIENT_STR]:
+        # NOTE: It is assumed a single token file is applicable for all clients
+        try:
+          Client(client).set_eida_token(args.key, validate=True)
+        except Exception as e:
+          print(f"Error setting token for {client}: {e}")
     mdl = MassDownloader(providers=CLIENTS.values())
     mdl.download(domain, restrictions, mseed_storage=args.directory.__str__(),
                  stationxml_storage=Path(DATA_PATH, STATION_STR).__str__())
