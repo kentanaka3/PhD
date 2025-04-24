@@ -40,7 +40,7 @@ testParser:
 	python test/testparser.py
 
 picker:
-	python src/picker.py -v -D 230601 231231 --force
+	python src/picker.py -v -D 230601 231231
 
 analyzer:
 	python src/analyzer.py -v --file ./data/manual -D 230601 231231

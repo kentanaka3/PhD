@@ -12,6 +12,8 @@ if INC_PATH not in sys.path: sys.path.append(INC_PATH)
 import argparse
 import numpy as np
 import pandas as pd
+import cartopy.crs as ccrs
+import matplotlib.pyplot as plt
 # ObsPy
 import obspy
 from obspy.core.utcdatetime import UTCDateTime
@@ -19,10 +21,7 @@ from obspy.core.utcdatetime import UTCDateTime
 import seisbench.data as sbd
 import seisbench.util as sbu
 
-
 from constants import *
-import parser as prs
-import analyzer as ana
 import initializer as ini
 
 class TrainConfig:
@@ -43,6 +42,10 @@ def dataset_loader(args : argparse.Namespace):
   DATA = sbd.WaveformDataset(DATASET_PATH, WEIGHT)
   if args.verbose and args.force:
     w, m = DATA.get_sample(int(np.random.random() * len(DATA)))
+  fig = DATA.plot_map(res="50m")
+  global IMG_PATH
+  fig.savefig(Path(IMG_PATH, WEIGHT + PNG_EXT), bbox_inches='tight')
+  plt.close()
 
 def dataset_builder(args : argparse.Namespace, SOURCE : pd.DataFrame = None,
                     DETECT : pd.DataFrame = None,
@@ -102,8 +105,8 @@ def dataset_builder(args : argparse.Namespace, SOURCE : pd.DataFrame = None,
                                nearest_sample=True)
           stream.resample(SAMPLING_RATE)
         # TODO: If filtered, consider that for TEST must be filtered as well
-        stream.detrend(type="linear").filter(type="highpass", freq=1., corners=4,
-                                            zerophase=True)
+        #stream.detrend(type="linear").filter(type="highpass", freq=1., corners=4,
+        #                                     zerophase=True)
         # TODO: Warning msg
         if len(stream) == 0: continue
         actual_t_start, data, _ = sbu.stream_to_array(

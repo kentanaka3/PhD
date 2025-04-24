@@ -9,8 +9,12 @@
     "stead",
     "scedc"
   ],
-  "NETWORK": null,
-  "station": null,
+  "NETWORK": [
+    "*"
+  ],
+  "station": [
+    "*"
+  ],
   "CHANNEL": null,
   "DATE": [
     "2023-06-01T00:00:00.000000Z",

@@ -8,10 +8,7 @@ DATA_PATH = os.path.join(PRJ_PATH, "data")
 import sys
 # Add to path
 if INC_PATH not in sys.path: sys.path.append(INC_PATH)
-import obspy
 import argparse
-import itertools
-import obspy as op
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -24,7 +21,6 @@ from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 
 from constants import *
 import initializer as ini
-import parser as prs
 
 THRESHOLDER_STR = PWAVE + "{p:0.2}" + SWAVE + "{s:0.2}"
 
@@ -118,76 +114,6 @@ def plot_cluster(PICK : pd.DataFrame, GMMA : pd.DataFrame,
     plt.savefig(IMG_FILE)
     plt.close()
 
-def plot_data(TRUE : pd.DataFrame, PRED : pd.DataFrame,
-              args : argparse.Namespace, phase = PWAVE) -> None:
-  """
-  input  :
-    - TRUE          (pd.DataFrame)
-    - PRED          (pd.DataFrame)
-    - args          (argparse.Namespace)
-    - phase         (str)
-
-  output :
-    - None
-
-  errors :
-    - AttributeError
-
-  notes  :
-    The data is plotted for each model and weight. The plots are saved in the
-    img directory.
-  """
-  global DATES
-  MSG = f"Cumulative number of {phase} picks"
-  if args.verbose: print(MSG)
-  start, end = args.dates
-  PRED = PRED[(PRED[PHASE_STR] == phase) &
-              (PRED[TIMESTAMP_STR] >= start.datetime)]
-  TRUE = TRUE[(TRUE[PHASE_STR] == phase)].reset_index(drop=True)
-  if DATES is None:
-    DATES = [start.datetime]
-    while DATES[-1] <= end.datetime: DATES.append(DATES[-1] + ONE_DAY)
-
-  y_true = [len(TRUE[TRUE[TIMESTAMP_STR] <= d].index) for d in DATES]
-  if args.verbose:
-    # Plot a 2x2 grid for each model, network and station
-    for (model, network, station), dtfrm in \
-      PRED.groupby([MODEL_STR, NETWORK_STR, STATION_STR]):
-      _, _axs = plt.subplots(2, 2, figsize=(10, 10))
-      axs = _axs.flatten()
-      plt.suptitle(SPACE_STR.join([model, network, station]), fontsize=16)
-      axs[0].set(xticklabels=[], xlabel=None, ylabel=MSG)
-      axs[1].set(xticklabels=[], xlabel=None, yticklabels=[], ylabel=None)
-      axs[2].set(xlabel="Date", ylabel=MSG)
-      axs[3].set(xlabel="Date", yticklabels=[], ylabel=None)
-      y_max = 0
-      for i, (weight, data) in enumerate(dtfrm.groupby(WEIGHT_STR)):
-        axs[i].set_title(weight)
-        for threshold in THRESHOLDS:
-          y = [len(data[(data[PROBABILITY_STR] >= threshold) &
-                        (data[TIMESTAMP_STR] <= d)].index) for d in DATES]
-          axs[i].plot([np.datetime64(t) for t in DATES], y,
-                      label=rf"$\geq$ {threshold}")
-          y_max = max(y_max, max(y))
-      for ax in axs:
-        ax.set_ylim(0, y_max)
-        ax.grid()
-        ax.legend()
-      axs[2].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-      for label in axs[2].get_xticklabels():
-        label.set(rotation=30, horizontalalignment='right')
-      axs[3].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-      for label in axs[3].get_xticklabels():
-        label.set(rotation=30, horizontalalignment='right')
-      IMG_FILE = \
-        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-            UNDERSCORE_STR.join([CMTV_PICKS_STR, model, network,
-                                  station, phase]) + PNG_EXT)
-      plt.tight_layout()
-      plt.savefig(IMG_FILE)
-      plt.close()
-      print(f"Saving {IMG_FILE}")
-
 def dist_balanced(T : pd.Series, P : pd.Series) -> float:
   return (dist_time(T, P) + 9. * dist_phase(T, P)) / 10.
 
@@ -232,10 +158,6 @@ class myBPGraph():
                [{}, {i : {} for i in range(self.M)}]
     self.C : dict[str, any] = config
     for _, t in T.iterrows(): self.incNode(t, 0)
-
-  def int2bool(self, i : int) -> bool: return i == 1
-  def bool2int(self, b : bool) -> int: return 1 if b else 0
-  def intflip(self, i : int) -> int: return 1 - i
 
   def addNode(self, u : int, bipartite : int, neighbours = dict())  -> None:
     if u not in self.G[bipartite]: self.G[bipartite][u] = neighbours
@@ -321,22 +243,18 @@ class myBPGraph():
                      None, None, None, None, None, None, None, None])
         continue
       assert len(x) == 1
-      P = nodesP.iloc[x[0]].to_dict()
-      P[ID_STR] = str(P[ID_STR])
-      P[TIMESTAMP_STR] = str(P[TIMESTAMP_STR])
+      P = nodesP.iloc[x[0]]
       if self.C[METHOD_STR] in [CLSSFD_STR, DETECT_STR]:
-        P[THRESHOLD_STR] = float("{:0.1f}".format(
-          int(P[PROBABILITY_STR] * 10) / 10.))
         CFN_MTX.loc[T[PHASE_STR], P[PHASE_STR]] += 1
         if T[PHASE_STR] == P[PHASE_STR]:
-          TP.add((P[THRESHOLD_STR], (T[ID_STR], P[ID_STR]),
-                  (str(T[TIMESTAMP_STR]), P[TIMESTAMP_STR]),
+          TP.add((P[THRESHOLD_STR], (T[ID_STR], str(P[ID_STR])),
+                  (str(T[TIMESTAMP_STR]), str(P[TIMESTAMP_STR])),
                   (T[PROBABILITY_STR], P[PROBABILITY_STR]), T[PHASE_STR],
                   P[NETWORK_STR], T[STATION_STR]))
       else:
         CFN_MTX.loc[EVENT_STR, EVENT_STR] += 1
-        TP.add((P[THRESHOLD_STR], (T[ID_STR], P[ID_STR]),
-                (str(T[TIMESTAMP_STR]), P[TIMESTAMP_STR]),
+        TP.add((P[THRESHOLD_STR], (T[ID_STR], str(P[ID_STR])),
+                (str(T[TIMESTAMP_STR]), str(P[TIMESTAMP_STR])),
                 (T[LATITUDE_STR], P[LATITUDE_STR]),
                 (T[LONGITUDE_STR], P[LONGITUDE_STR]),
                 (T[LOCAL_DEPTH_STR], P[LOCAL_DEPTH_STR]),
@@ -345,16 +263,14 @@ class myBPGraph():
     result = []
     for p, val in self.G[1].items():
       if len(list(val.items())) == 0:
-        P = nodesP.iloc[p].to_dict()
-        P[ID_STR] = str(P[ID_STR])
-        P[TIMESTAMP_STR] = str(P[TIMESTAMP_STR])
+        P = nodesP.iloc[p]
         if self.C[METHOD_STR] in [CLSSFD_STR, DETECT_STR]:
           CFN_MTX.loc[NONE_STR, P[PHASE_STR]] += 1
-          result.append((P[ID_STR], P[TIMESTAMP_STR], P[PROBABILITY_STR],
+          result.append((P[ID_STR], str(P[TIMESTAMP_STR]), P[PROBABILITY_STR],
                          P[PHASE_STR], P[NETWORK_STR], P[STATION_STR]))
         else:
           CFN_MTX.loc[NONE_STR, EVENT_STR] += 1
-          result.append((P[ID_STR], P[TIMESTAMP_STR], P[LATITUDE_STR],
+          result.append((P[ID_STR], str(P[TIMESTAMP_STR]), P[LATITUDE_STR],
                          P[LONGITUDE_STR], P[LOCAL_DEPTH_STR],
                          P[MAGNITUDE_STR], None, None, None, None, None, None,
                          None, str(P[NOTES_STR]).rstrip()))
@@ -418,10 +334,6 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   start, end = args.dates
   N_seconds = int((end + ONE_DAY - start) / \
                   (2 * MATCH_CNFG[method][TIME_DSPLCMT_STR].total_seconds()))
-  global DATES
-  if DATES is None:
-    DATES = [start.datetime]
-    while DATES[-1] <= end.datetime: DATES.append(DATES[-1] + ONE_DAY)
   TP, FN, FP = set(), [], set()
   if method in [CLSSFD_STR, DETECT_STR]:
     PRED = PRED[((PRED[PHASE_STR] == PWAVE) &
@@ -720,63 +632,13 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       UNDERSCORE_STR.join([method, "TPFN", model, THRESHOLDER_STR.format(
         p=args.pwave, s=args.swave)]) + PNG_EXT)
     plt.tight_layout()
-    plt.savefig(IMG_FILE)
+    plt.savefig(IMG_FILE, bbox_inches='tight')
     plt.close()
   return TP
   # TODO: Redo the plots for the True Positives, False Negatives and False
   #       Positives
   # Plot the True Positives, False Negatives histogram and the Recall as a
   # function of the threshold for each model and weight
-  m = max(m, FP.groupby(groups)[THRESHOLD_STR].value_counts().max())
-  m = (m + 9) // 10 * 10
-  for model, phase in itertools.product(args.models, [PWAVE, SWAVE]):
-    _, _axs = plt.subplots(2, 2, figsize=(15, 10))
-    axs = _axs.flatten()
-    for ax1, weight in zip(axs, args.weights):
-      ax2 = ax1.twinx()
-      ax1.set_title(weight, fontsize=16)
-      tp = TP[(TP[PHASE_STR] == phase) & (TP[WEIGHT_STR] == weight)]
-      tp = tp[THRESHOLD_STR].value_counts().sort_index()
-      fn = FN[(FN[PHASE_STR] == phase) & (FN[WEIGHT_STR] == weight)]
-      fn = fn[THRESHOLD_STR].value_counts().sort_index()
-      fp = FP[(FP[PHASE_STR] == phase) & (FP[WEIGHT_STR] == weight)]
-      fp = fp[THRESHOLD_STR].value_counts().sort_index()
-      PRECISION = tp / (tp + fp)
-      RECALL = tp / (tp + fn)
-      F1 = 2 * (PRECISION * RECALL) / (PRECISION + RECALL)
-      RECALL.plot(ax=ax2, label=RECALL_STR, use_index=False, color="b")
-      F1.plot(ax=ax2, label=F1_STR, use_index=False, color="r")
-      TPFNFP = pd.DataFrame({
-        TP_STR: tp,
-        FN_STR: fn,
-        FP_STR: fp
-      })
-      TPFNFP.plot(kind='bar', ax=ax1, width=0.7)
-      ax1.set(ylabel="Number of Picks", ylim=(1, m), yscale="log")
-      ax2.set(ylim=(0, 1))
-      yticks, yticklabels = ax2.get_yticks(), ax2.get_yticklabels()
-      ax2.set(yticks=[], yticklabels=[])
-      ax1.grid()
-      ax1.get_legend().remove()
-    axs[0].set(xlabel=None, xticklabels=[])
-    axs[0].legend()
-    axs[1].set(xlabel=None, xticklabels=[], ylabel=None, yticklabels=[])
-    ax1 = axs[1].twinx()
-    ax1.set_ylabel("Score")
-    ax1.set_yticks(yticks)
-    ax1.set_yticklabels(yticklabels)
-    axs[2].set()
-    axs[3].set(xlabel=THRESHOLD_STR, ylabel=None, yticklabels=[])
-    ax2.set_ylabel("Score")
-    ax2.set_yticks(yticks)
-    ax2.set_yticklabels(yticklabels)
-    ax2.legend()
-    IMG_FILE = \
-      Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-           UNDERSCORE_STR.join(["TPFNFP", model, phase]) + PNG_EXT)
-    plt.tight_layout()
-    plt.savefig(IMG_FILE)
-  return TP
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
                       method : str = CLSSFD_STR) -> None:
@@ -857,7 +719,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
               UNDERSCORE_STR.join([method, TIME_DSPLCMT_STR, model, phase,
                 THRESHOLDER_STR.format(p=args.pwave, s=args.swave)]) + PNG_EXT)
         plt.tight_layout()
-        plt.savefig(IMG_FILE)
+        plt.savefig(IMG_FILE, bbox_inches='tight')
         plt.close()
   else:
     for model, df_m in DATA.groupby(MODEL_STR):
@@ -895,7 +757,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
             UNDERSCORE_STR.join([method, TIME_DSPLCMT_STR, model,
               THRESHOLDER_STR.format(p=args.pwave, s=args.swave)]) + PNG_EXT)
       plt.tight_layout()
-      plt.savefig(IMG_FILE)
+      plt.savefig(IMG_FILE, bbox_inches='tight')
       plt.close()
 
 def _Analysis(args : argparse.Namespace,
@@ -934,10 +796,10 @@ def _Analysis(args : argparse.Namespace,
     max_h = 0
     for ax, (weight, df_w) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
       ax.set_title(weight)
-      for threshold in THRESHOLDS:
-        h = [len(df_w[(df_w[PROBABILITY_STR] >= threshold) &
+      for th in THRESHOLDS:
+        h = [len(df_w[(df_w[THRESHOLD_STR] == th) &
                       (df_w[TIMESTAMP_STR] <= d)].index) for d in DATES]
-        ax.plot(dates, h, label=rf"$\geq$ {threshold}")
+        ax.plot(dates, h, label=rf"$\geq$ {th}")
         max_h = max(max_h, max(h))
       ax.set(xlabel=None, yscale="log", ylabel="Number of Picks")
       ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
@@ -956,7 +818,7 @@ def _Analysis(args : argparse.Namespace,
       Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
            UNDERSCORE_STR.join([CMTV_PICKS_STR, method, model, phase]) + \
              PNG_EXT)
-    plt.savefig(IMG_FILE)
+    plt.savefig(IMG_FILE, bbox_inches='tight')
     plt.close()
   return DF
 
@@ -970,16 +832,17 @@ def main(args : argparse.Namespace):
     time_displacement(stat_test(dcpy(TRUE_D), dcpy(PRED), args, CLSSFD_STR),
                       args, CLSSFD_STR)
     pass
-  if args.option in [CLSSFD_STR, DETECT_STR, ALL_WILDCHAR_STR]:
-    print(DETECT_STR)
-    PRED_D = _Analysis(args, DETECT_STR)
-    time_displacement(stat_test(dcpy(TRUE_D), dcpy(PRED_D), args, DETECT_STR),
-                      args, DETECT_STR)
-    pass
-  if args.option == ALL_WILDCHAR_STR:
-    plot_cluster(PRED, PRED_D, args)
-    #plot_cluster(TRUE_D, PRED_D, args)
-    del PRED, PRED_D
+  #if args.option in [DETECT_STR, ALL_WILDCHAR_STR]:
+  #  print(DETECT_STR)
+  #  PRED_D = _Analysis(args, DETECT_STR)
+  #  time_displacement(stat_test(dcpy(TRUE_D), dcpy(PRED_D), args, DETECT_STR),
+  #                    args, DETECT_STR)
+  #  pass
+  #if args.option == ALL_WILDCHAR_STR:
+  #  plot_cluster(PRED, PRED_D, args)
+  #  #plot_cluster(TRUE_D, PRED_D, args)
+  del PRED
+  # del PRED_D
   if args.option in [SOURCE_STR, ALL_WILDCHAR_STR]:
     print(SOURCE_STR)
     PRED_S = ini.data_loader(Path(

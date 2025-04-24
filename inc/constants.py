@@ -17,7 +17,7 @@ MPI_COMM = None
 GPU_SIZE = 0
 GPU_RANK = -1
 
-THRESHOLDS : list[float] = [round(t, 2) for t in np.linspace(0.2, 0.9, 8)]
+THRESHOLDS : list[str] = ["{:.1f}".format(t) for t in np.linspace(0.1, 0.9, 9)]
 DATES = None
 
 NORM = "std" # "peak" or "std"
@@ -43,6 +43,7 @@ ASSOCIATE_DIST_OFFSET = 5.
 # Strings
 EMPTY_STR = ''
 ALL_WILDCHAR_STR = '*'
+ONE_MORECHAR_STR = '+'
 PERIOD_STR = '.'
 UNDERSCORE_STR = '_'
 DASH_STR = '-'
@@ -230,6 +231,7 @@ COLOR_ENCODING = {
 }
 
 OGS_PROJECTION = "+proj=sterea +lon_0={lon} +lat_0={lat} +units=km"
+OGS_MAX_MAGNITUDE = 3.5
 
 # Data components
 ID_STR = "id"

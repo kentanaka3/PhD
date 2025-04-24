@@ -1,9 +1,7 @@
 import re
 import pandas as pd
 from pathlib import Path
-from numpy import nan as NaN
 from obspy import UTCDateTime
-from numpy import isnan as isNaN
 from datetime import timedelta as td
 from obspy.core.event import read_events as obspy_read_events
 from concurrent.futures import ThreadPoolExecutor
@@ -88,7 +86,7 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
     verb="parse", type="{type}", post="from line: {line}")
   # TODO: Attemp restoration before SHUTDOWN
   if not filename.exists(): raise FileNotFoundError(filename)
-  DATA = list()
+  DETECT = list()
   with open(filename, 'r') as fr: lines = fr.readlines()
   for line in [l.strip() for l in lines]:
     if EVENT_EXTRACTOR_DAT.match(line): continue
@@ -156,8 +154,8 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
         print(unble_msg.format(type=P_WEIGHT_STR, line=line))
         print(e)
         continue
-      DATA.append([result[EVENT_STR], result[P_TIME_STR], result[P_WEIGHT_STR],
-                   PWAVE, None, result[STATION_STR]])
+      DETECT.append([result[EVENT_STR], result[P_TIME_STR],
+                     result[P_WEIGHT_STR], PWAVE, None, result[STATION_STR]])
       # S Type
       if result[S_TYPE_STR]:
         # S Weight
@@ -188,8 +186,8 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
           print(unble_msg.format(type=S_TIME_STR, line=line))
           print(e)
           continue
-        DATA.append([result[EVENT_STR], result[S_TIME_STR],
-                     result[S_WEIGHT_STR], SWAVE, None, result[STATION_STR]])
+        DETECT.append([result[EVENT_STR], result[S_TIME_STR],
+                       result[S_WEIGHT_STR], SWAVE, None, result[STATION_STR]])
       # TODO: Add debug method
       # if verbose:
       #   print(line)
@@ -204,8 +202,8 @@ def event_parser_dat(filename : Path, start : UTCDateTime = None,
       continue
     if line == EMPTY_STR: continue
     print(unble_msg.format(type=EMPTY_STR, line=line))
-  return pd.DataFrame(columns=HEADER_SRC), \
-         pd.DataFrame(DATA, columns=HEADER_MANL)
+  return (pd.DataFrame(columns=HEADER_SRC),
+          pd.DataFrame(DETECT, columns=HEADER_MANL).astype({ID_STR: int}, errors='ignore'))
 
 RECORD_EXTRACTOR_PUN = re.compile(
   fr"^1(?P<{DATE_STR}>\d{{6}}[\s\d]\d[\s\d]\d)\s"                 # Date
@@ -272,14 +270,24 @@ def event_parser_pun(filename : Path, start : UTCDateTime = None,
       # We only consider the picks from the date range (if specified)
       if start is not None and result[DATE_STR] < start: continue
       if end is not None and result[DATE_STR] >= end + ONE_DAY: break
-      result[LATITUDE_STR] = result[LATITUDE_STR].replace(SPACE_STR, ZERO_STR)
+      result[LATITUDE_STR] = result[LATITUDE_STR].replace(SPACE_STR,
+                                                          ZERO_STR)\
+                               if result[LATITUDE_STR] else NONE_STR
+      if result[LATITUDE_STR] != NONE_STR:
+        splt = result[LATITUDE_STR].split(DASH_STR)
+        result[LATITUDE_STR] = float(splt[0]) + float(splt[1]) / 60.
       result[LONGITUDE_STR] = result[LONGITUDE_STR].replace(SPACE_STR,
-                                                            ZERO_STR)
-      result[LOCAL_DEPTH_STR] = \
-        float(result[LOCAL_DEPTH_STR].replace(SPACE_STR, ZERO_STR))
+                                                            ZERO_STR) \
+                                if result[LONGITUDE_STR] else NONE_STR
+      if result[LONGITUDE_STR] != NONE_STR:
+        splt = result[LONGITUDE_STR].split(DASH_STR)
+        result[LONGITUDE_STR] = float(splt[0]) + float(splt[1]) / 60.
+      result[LOCAL_DEPTH_STR] = float(result[LOCAL_DEPTH_STR]) \
+                                    if result[LOCAL_DEPTH_STR] else NONE_STR
       result[MAGNITUDE_STR] = float(result[MAGNITUDE_STR].replace(SPACE_STR,
                                                                   ZERO_STR))
-      result[NO_STR] = int(result[NO_STR].replace(SPACE_STR, ZERO_STR))
+      result[NO_STR] = int(result[NO_STR].replace(SPACE_STR, ZERO_STR)) \
+                         if result[NO_STR] else NONE_STR
       result[GAP_STR] = int(result[GAP_STR].replace(SPACE_STR, ZERO_STR))
       result[DMIN_STR] = float(result[DMIN_STR].replace(SPACE_STR, ZERO_STR))
       result[RMS_STR] = float(result[RMS_STR].replace(SPACE_STR, ZERO_STR))
@@ -293,7 +301,7 @@ def event_parser_pun(filename : Path, start : UTCDateTime = None,
       event += 1
       continue
     print(unble_msg.format(type=EMPTY_STR, line=line))
-  return (pd.DataFrame(SOURCE, columns=HEADER_SRC),
+  return (pd.DataFrame(SOURCE, columns=HEADER_SRC).astype({ID_STR: int}, errors='ignore'),
           pd.DataFrame(columns=HEADER_MANL))
 
 RECORD_EXTRACTOR_HPC = re.compile(
@@ -310,7 +318,7 @@ def event_parser_hpc(filename : Path, start : UTCDateTime = None,
                      stations : dict[str, set[str]] = None) \
     -> tuple[pd.DataFrame, pd.DataFrame]:
   if not filename.exists(): raise FileNotFoundError(filename)
-  DATA = list()
+  DETECT = list()
   event = 0
   with open(filename, 'r') as fr: lines = fr.readlines()
   for line in [l.strip() for l in lines]:
@@ -318,9 +326,11 @@ def event_parser_hpc(filename : Path, start : UTCDateTime = None,
     if match:
       result : dict[str] = match.groupdict()
       result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
-      if stations is not None and result[STATION_STR] not in stations: pass
       result[DATE_STR] = UTCDateTime.strptime(result[DATE_STR],
                                               DATETIME_FMT[:-2])
+      date = result[DATE_STR].strftime(DATE_FMT)
+      if (stations is not None and date in stations and
+          result[STATION_STR] not in stations[date]): continue
       if start is not None and result[DATE_STR] < start: continue
       if end is not None and result[DATE_STR] >= end + ONE_DAY: break
       result[P_TIME_STR] = result[DATE_STR] + td(seconds=float(
@@ -330,15 +340,15 @@ def event_parser_hpc(filename : Path, start : UTCDateTime = None,
         result[S_TIME_STR].replace(SPACE_STR, ZERO_STR)))
       result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
       result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
-      DATA.append([event, result[P_TIME_STR], result[P_WEIGHT_STR], PWAVE,
-                   None, result[STATION_STR]])
-      DATA.append([event, result[S_TIME_STR], result[S_WEIGHT_STR], SWAVE,
-                   None, result[STATION_STR]])
+      DETECT.append([event, result[P_TIME_STR], result[P_WEIGHT_STR], PWAVE,
+                     None, result[STATION_STR]])
+      DETECT.append([event, result[S_TIME_STR], result[S_WEIGHT_STR], SWAVE,
+                     None, result[STATION_STR]])
       event += 1
       continue
     print("WARNING: (HPC) Unable to parse line:", line)
   return (pd.DataFrame(columns=HEADER_SRC),
-          pd.DataFrame(DATA, columns=HEADER_MANL))
+          pd.DataFrame(DETECT, columns=HEADER_MANL).astype({ID_STR: int}, errors='ignore'))
 
 RECORD_EXTRACTOR_HPL = re.compile(
   fr"^(?P<{EVENT_STR}>[\d\s]{{6}})\s"                         # Event
@@ -465,10 +475,19 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
         result : dict[str] = match.groupdict()
         date = UTCDateTime(event_spacetime[0].date)
         result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
-        if (stations and date.strftime(DATE_FMT) in stations and
+        if (stations is not None and date.strftime(DATE_FMT) in stations and
             result[STATION_STR] not in stations[date.strftime(DATE_FMT)]):
           continue
-        result[EVENT_STR] = int(result[EVENT_STR]) + date.year * MAX_PICKS_YEAR
+        # Event
+        if result[EVENT_STR]:
+          try:
+            result[EVENT_STR] = \
+              int(result[EVENT_STR].replace(SPACE_STR, ZERO_STR)) + \
+              date.year * MAX_PICKS_YEAR
+          except ValueError as e:
+            result[EVENT_STR] = None
+            print(unble_msg.format(type=EVENT_STR, line=line))
+            print(e)
         result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
         if result[SECONDS_STR] == SPACE_STR*5:
           result[SECONDS_STR] = td(0)
@@ -487,7 +506,7 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
         if hrs >= td(hours=24):
           print(notbl_msg.format(value=">= 24", key=P_TIME_STR,
                                  line=line.strip()))
-        result[P_TIME_STR] = UTCDateTime(date) + hrs + min
+        result[P_TIME_STR] = date + hrs + min
         DETECT.append([result[EVENT_STR],
                        result[P_TIME_STR] + result[SECONDS_STR],
                        result[P_WEIGHT_STR], PWAVE, None, result[STATION_STR]])
@@ -503,43 +522,52 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
       match = EVENT_EXTRACTOR_HPL.match(line)
       if match:
         result : dict[str] = match.groupdict()
-        result[EVENT_STR] = int(result[EVENT_STR])
         result[SECONDS_STR] = td(seconds=float(result[SECONDS_STR])) \
                                 if result[SECONDS_STR] else td(0)
         result[DATE_STR] = UTCDateTime.strptime(
           result[DATE_STR].replace(SPACE_STR, ZERO_STR), "%y%m%d0%H%M") + \
           result[SECONDS_STR]
-        event_id = result[EVENT_STR] + result[DATE_STR].year * MAX_PICKS_YEAR
+        # Event
+        if result[EVENT_STR]:
+          try:
+            result[EVENT_STR] = \
+              int(result[EVENT_STR].replace(SPACE_STR, ZERO_STR)) + \
+              result[DATE_STR].year * MAX_PICKS_YEAR
+          except ValueError as e:
+            result[EVENT_STR] = None
+            print(unble_msg.format(type=EVENT_STR, line=line))
+            print(e)
         if start is not None and result[DATE_STR] < start:
           event_detect = -1
           continue
         if end is not None and result[DATE_STR] >= end + ONE_DAY: break
         result[LATITUDE_STR] = result[LATITUDE_STR].replace(SPACE_STR,
                                                             ZERO_STR)\
-                                 if result[LATITUDE_STR] else None
-        if result[LATITUDE_STR]:
+                                 if result[LATITUDE_STR] else NONE_STR
+        if result[LATITUDE_STR] != NONE_STR:
           splt = result[LATITUDE_STR].split(DASH_STR)
           result[LATITUDE_STR] = float(splt[0]) + float(splt[1]) / 60.
         result[LONGITUDE_STR] = result[LONGITUDE_STR].replace(SPACE_STR,
                                                               ZERO_STR) \
-                                  if result[LONGITUDE_STR] else None
-        if result[LONGITUDE_STR]:
+                                  if result[LONGITUDE_STR] else NONE_STR
+        if result[LONGITUDE_STR] != NONE_STR:
           splt = result[LONGITUDE_STR].split(DASH_STR)
           result[LONGITUDE_STR] = float(splt[0]) + float(splt[1]) / 60.
         result[LOCAL_DEPTH_STR] = float(result[LOCAL_DEPTH_STR]) \
-                                    if result[LOCAL_DEPTH_STR] else NaN
+                                    if result[LOCAL_DEPTH_STR] else NONE_STR
         event_spacetime = (result[DATE_STR], result[LATITUDE_STR],
                           result[LONGITUDE_STR], result[LOCAL_DEPTH_STR])
         result[MAGNITUDE_STR] = float(result[MAGNITUDE_STR]) \
-                                  if result[MAGNITUDE_STR] else NaN
-        if result[NO_STR]: result[NO_STR] = int(result[NO_STR])
+                                  if result[MAGNITUDE_STR] else NONE_STR
+        result[NO_STR] = int(result[NO_STR].replace(SPACE_STR, ZERO_STR)) \
+                         if result[NO_STR] else NONE_STR
         event_detect = int(result[NOTES_STR])
         event_metadata = {
           MAGNITUDE_STR : result[MAGNITUDE_STR],
           NO_STR        : result[NO_STR]
         }
-        SOURCE.append([event_id, *event_spacetime, result[MAGNITUDE_STR],
-                      result[NO_STR], *([None] * 7)])
+        SOURCE.append([result[EVENT_STR], *event_spacetime,
+                       result[MAGNITUDE_STR], result[NO_STR], *([None] * 7)])
         continue
       match = LOCATION_EXTRACTOR_HPL.match(line)
       if match:
@@ -550,13 +578,13 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
         match = NOTES_EXTRACTOR_HPL.match(line)
         if match:
           result : dict[str] = match.groupdict()
-          event_notes = result[NOTES_STR]
+          event_notes = result[NOTES_STR].rstrip(SPACE_STR)
           SOURCE[-1][-1] = event_notes
           continue
       if re.match(r"^\s*$", line): continue
     if event_detect >= 0: print(unble_msg.format(type=EMPTY_STR, line=line))
-  SOURCE = pd.DataFrame(SOURCE, columns=HEADER_SRC)
-  DETECT = pd.DataFrame(DETECT, columns=HEADER_MANL)
+  SOURCE = pd.DataFrame(SOURCE, columns=HEADER_SRC).astype({ID_STR: int}, errors='ignore')
+  DETECT = pd.DataFrame(DETECT, columns=HEADER_MANL).astype({ID_STR: int}, errors='ignore')
   return SOURCE, DETECT
 
 # TODO: Implement ObsPy Catalog for OGS files
@@ -580,9 +608,8 @@ def event_parser_qml(filename : Path, start : UTCDateTime = None,
     SOURCE.append([None, e_time, e_origin.latitude, e_origin.longitude,
                    e_origin.depth, None, len(event.picks), *([None] * 6),
                    event.event_type])
-  DETECT = pd.DataFrame(DETECT, columns=HEADER_MANL)
-  DETECT = DETECT[DETECT[STATION_STR].isin(stations)] if stations else DETECT
-  SOURCE = pd.DataFrame(SOURCE, columns=HEADER_SRC)
+  SOURCE = pd.DataFrame(SOURCE, columns=HEADER_SRC).astype({ID_STR: int}, errors='ignore')
+  DETECT = pd.DataFrame(DETECT, columns=HEADER_MANL).astype({ID_STR: int}, errors='ignore')
   return SOURCE, DETECT
 
 STATION_EXTRACTOR_MOD = re.compile(
@@ -595,8 +622,6 @@ STATION_EXTRACTOR_MOD = re.compile(
 def event_parser_mod(filename : Path,
                      stations : dict[str, set[str]] = None) -> dict[str, str]:
   if not filename.exists(): raise FileNotFoundError(filename)
-  STATIONS = {station : station for station in stations} \
-             if stations is not None else dict()
   DATA = list()
   with open(filename, 'r') as fr: lines = fr.readlines()
   for line in [l.strip() for l in lines]:
@@ -605,7 +630,9 @@ def event_parser_mod(filename : Path,
       result = match.groupdict()
       result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
       # TODO: Review MOD file
-      if stations is not None and result[STATION_STR] not in STATIONS: pass
+      date = result[DATE_STR].strftime(DATE_FMT)
+      if (stations is not None and date in stations and
+          result[STATION_STR] not in stations[date]): continue
       if len(result[TIMESTAMP_STR]) <= 4:
         result[TIMESTAMP_STR] = result[STATION_STR]
       result[LONGITUDE_STR] = \
@@ -614,17 +641,13 @@ def event_parser_mod(filename : Path,
       result[LATITUDE_STR] = result[LATITUDE_STR][:2] + DASH_STR + \
                              result[LATITUDE_STR][2:-1].replace(SPACE_STR,
                                                                 ZERO_STR)
+      result[LOCAL_DEPTH_STR] = float(result[LOCAL_DEPTH_STR]) \
+                                    if result[LOCAL_DEPTH_STR] else NONE_STR
       DATA.append([
         result[STATION_STR], result[LONGITUDE_STR], result[LATITUDE_STR],
-        int(result[LOCAL_DEPTH_STR].replace(SPACE_STR, ZERO_STR)), None])
-      STATIONS[result[STATION_STR]] = result[TIMESTAMP_STR]
+        result[LOCAL_DEPTH_STR], None])
       continue
     print("WARNING: (MOD) Unable to parse line:", line)
-  DATA = pd.DataFrame(DATA, columns=HEADER_SNSR)
-  DATA = DATA[DATA[STATION_STR].isin(STATIONS.keys())]
-  for code, name in STATIONS.items():
-    DATA.loc[DATA[STATION_STR] == code][TIMESTAMP_STR] = name
-  return STATIONS
 
 def event_parser_(filename : Path, start : UTCDateTime = None,
                   end : UTCDateTime = None,
@@ -677,4 +700,5 @@ def event_parser(filename : Path, start : UTCDateTime = None,
     #except Exception as e:
     #  print(f"WARNING: Unable to parse file: {filename}")
     #  print(e)
+  DETECT = DETECT[DETECT[ID_STR].isin(SOURCE[ID_STR].unique())]
   return SOURCE, DETECT

@@ -29,14 +29,15 @@ class TestArgparse(unittest.TestCase):
     args = ini.parse_arguments()
     self.assertEqual(args.batch, 4096)
     self.assertEqual(args.channel, None)
-    self.assertEqual(args.client, [OGS_CLIENT_STR])
+    self.assertEqual(args.client,
+                     [OGS_CLIENT_STR, INGV_CLIENT_STR, GFZ_CLIENT_STR,
+                      IRIS_CLIENT_STR, ETH_CLIENT_STR, ORFEUS_CLIENT_STR])
     self.assertEqual(args.circdomain, [46.3583, 12.808, 0., 0.3])
     self.assertEqual(args.config, None)
     self.assertEqual(args.dates, [UTCDateTime(year=2023, month=6, day=1),
                                   UTCDateTime(year=2023, month=7, day=31)])
     self.assertEqual(args.denoiser, False)
     self.assertEqual(args.directory, Path(PRJ_PATH, "data", WAVEFORMS_STR))
-    self.assertEqual(args.rectdomain, None)
     self.assertEqual(args.download, False)
     self.assertEqual(args.file, list())
     self.assertEqual(args.force, False)
@@ -44,11 +45,11 @@ class TestArgparse(unittest.TestCase):
     self.assertEqual(args.julian, None)
     self.assertEqual(args.key, None)
     self.assertEqual(args.models, [PHASENET_STR, EQTRANSFORMER_STR])
-    self.assertEqual(args.network, None)
+    self.assertEqual(args.network, [ALL_WILDCHAR_STR])
     self.assertEqual(args.pwave, PWAVE_THRESHOLD)
     self.assertEqual(args.pyrocko, False)
     self.assertEqual(args.rectdomain, None)
-    self.assertEqual(args.station, None)
+    self.assertEqual(args.station, [ALL_WILDCHAR_STR])
     self.assertEqual(args.swave, SWAVE_THRESHOLD)
     self.assertEqual(args.timing, False)
     self.assertEqual(args.train, False)
@@ -164,10 +165,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -184,10 +183,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -204,10 +201,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -225,10 +220,8 @@ class TestArguments(unittest.TestCase):
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
       NETWORK_STR   : ["OX"],
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        STATION_STR   : [ALL_WILDCHAR_STR],
+        WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -245,9 +238,7 @@ class TestArguments(unittest.TestCase):
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
       NETWORK_STR   : ["OX", "ST"],
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -264,10 +255,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
       STATION_STR   : ["BAD"],
-      SWAVE         : SWAVE_THRESHOLD,
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -284,10 +273,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
       STATION_STR   : ["BAD", "VARA"],
-      SWAVE         : SWAVE_THRESHOLD,
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -305,10 +292,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -326,10 +311,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", "test").__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -346,10 +329,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -367,10 +348,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -388,10 +367,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -408,11 +385,9 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
+            STATION_STR   : [ALL_WILDCHAR_STR],
+            WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -429,10 +404,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -449,10 +422,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -470,10 +441,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -490,10 +459,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : 0.5,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -510,10 +477,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : 0.5,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -531,10 +496,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -552,10 +515,8 @@ class TestArguments(unittest.TestCase):
       DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : None,
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      NETWORK_STR   : [ALL_WILDCHAR_STR],
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -574,9 +535,7 @@ class TestArguments(unittest.TestCase):
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
       NETWORK_STR   : [ALL_WILDCHAR_STR],
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
@@ -595,9 +554,7 @@ class TestArguments(unittest.TestCase):
       GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
       MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
       NETWORK_STR   : ["OX", "ST"],
-      PWAVE         : PWAVE_THRESHOLD,
-      STATION_STR   : None,
-      SWAVE         : SWAVE_THRESHOLD,
+      STATION_STR   : [ALL_WILDCHAR_STR],
       WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)

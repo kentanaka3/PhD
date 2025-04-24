@@ -174,7 +174,8 @@ def interactive_plot(stream : obspy.Stream, picks : sbu.PickList,
   fig.tight_layout()
   plt.show()
 
-def classify_stream(clf_files : tuple[list], model : sbm.base.SeisBenchModel,
+def classify_stream(clf_files : list[tuple[tuple[str], pd.DataFrame]],
+                    model : sbm.base.SeisBenchModel,
                     key : tuple[str], args : argparse.Namespace) -> None:
   """
   Classify waveform streams using a given model and store the picks.
@@ -217,7 +218,9 @@ def get_model(model_name : str, dataset_name : str, silent : bool = False) \
                          f"found for model '{model_name}'")
     return None
   # Enable GPU calls if available
-  if GPU_RANK >= 0: model.cuda()
+  if torch.cuda.is_available() and GPU_RANK >= 0: model.cuda()
+  elif torch.backends.mps.is_available() and GPU_RANK >= 0:
+    model.to(torch.device("mps"))
   if not silent: print(model_name, model.weights_docstring)
   return model
 
