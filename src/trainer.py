@@ -1,3 +1,4 @@
+# python src/trainer.py --file ./data/manual/ -v -D 230601 230609 -W OGS
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 from pathlib import Path
