@@ -39,6 +39,11 @@ testAssociator:
 testParser:
 	python test/testparser.py
 
+trainer:
+	python src/trainer.py --file ./data/manual/ -v -D 230601 231231 -W OGS
+	python src/trainer.py --file ./data/manual/ -v -D 230101 231231 -W OGS23
+	python src/trainer.py --file ./data/manual/ -v -D 200101 201231 -W OGS20
+
 picker:
 	python src/picker.py -v -D 230601 231231
 
