@@ -120,6 +120,8 @@ CMTV_PICKS_STR = "CP"
 CLSTR_PLOT_STR = "CT"
 TIME_DSPLCMT_STR = "TD"
 
+MEX_PINK = "#E4007C"
+
 # TODO: Add Tabular data for relational databases for future development
 
 # Extensions
@@ -363,3 +365,17 @@ MATCH_CNFG = {
 
 # SPECULATIVE
 MAX_PICKS_YEAR = 1e6
+NUM_BINS = 41
+OGS_POLY_REGION = [
+  (10.0, 45.5),
+  (10.0, 46.5),
+  (11.5, 47.0),
+  (12.5, 47.0),
+  (14.5, 46.5),
+  (14.5, 45.5),
+  (12.5, 44.5),
+  (11.5, 44.5)]
+OGS_STUDY_REGION = [44.5, 47, 10, 14.5] # [10.0, 14.5, 44.5, 47.0]
+OGS_ITALY_STR = "Italy"
+OGS_STUDY_STR = "Study"
+DESCRIPTION_STR = "Description"

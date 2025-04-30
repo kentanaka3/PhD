@@ -11,9 +11,11 @@ if INC_PATH not in sys.path: sys.path.append(INC_PATH)
 import argparse
 import numpy as np
 import pandas as pd
+import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from copy import deepcopy as dcpy
+import cartopy.feature as cfeature
 from datetime import timedelta as td
 from obspy.geodetics import gps2dist_azimuth
 from obspy.core.utcdatetime import UTCDateTime
@@ -111,7 +113,8 @@ def plot_cluster(PICK : pd.DataFrame, GMMA : pd.DataFrame,
            UNDERSCORE_STR.join([
              CLSTR_PLOT_STR, model, THRESHOLDER_STR.format(
                p=args.pwave, s=args.swave)]) + PNG_EXT)
-    plt.savefig(IMG_FILE)
+    plt.tight_layout()
+    plt.savefig(IMG_FILE, bbox_inches='tight')
     plt.close()
 
 def dist_balanced(T : pd.Series, P : pd.Series) -> float:
@@ -340,6 +343,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
                  (PRED[PROBABILITY_STR] >= args.pwave)) |
                 ((PRED[PHASE_STR] == SWAVE) &
                  (PRED[PROBABILITY_STR] >= args.swave))].reset_index(drop=True)
+  categories = MATCH_CNFG[method][CATEGORY_STR]
   Ws : int = len(args.weights)
   x : int = int(np.sqrt(Ws))
   y : int = Ws // x + int((Ws % x) != 0)
@@ -351,17 +355,14 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     fig.suptitle(model)
     for ax, (weight, PRED_W) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
       ax.set_title(weight)
-      CFN_MTX = pd.DataFrame(0, index=MATCH_CNFG[method][CATEGORY_STR],
-                             columns=MATCH_CNFG[method][CATEGORY_STR],
+      CFN_MTX = pd.DataFrame(0, index=categories, columns=categories,
                              dtype=int)
-      cfn_mtx = pd.DataFrame(0, index=MATCH_CNFG[method][CATEGORY_STR],
-                             columns=MATCH_CNFG[method][CATEGORY_STR],
+      cfn_mtx = pd.DataFrame(0, index=categories, columns=categories,
                              dtype=int)
       tp, fn, fp = set(), [], set()
       print(f"Processing {model} {weight}...")
       if method in [CLSSFD_STR, DETECT_STR]:
-        tmp_cfn_mtx = pd.DataFrame(0, index=MATCH_CNFG[method][CATEGORY_STR],
-                                   columns=MATCH_CNFG[method][CATEGORY_STR],
+        tmp_cfn_mtx = pd.DataFrame(0, index=categories, columns=categories,
                                    dtype=int)
         tmp_tp, tmp_fn, tmp_fp = set(), [], set()
         for station, PRED_S in PRED_W.groupby(STATION_STR):
@@ -388,7 +389,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       disp.plot(ax=ax, colorbar=False)
       disp.im_.set(clim=(1, N_seconds), cmap="Blues", norm="log")
       for labels in disp.text_.ravel():
-        labels.set(color="#E4007C", fontsize=12, fontweight="bold")
+        labels.set(color=MEX_PINK, fontsize=12, fontweight="bold")
     # TODO: Implement the properties of the plot as a function of the number of
     #       weights and coordinates
     axs[0].set()
@@ -410,7 +411,8 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
            UNDERSCORE_STR.join([
              method, CFN_MTX_STR, model, THRESHOLDER_STR.format(
                p=args.pwave, s=args.swave)]) + PNG_EXT)
-    plt.savefig(IMG_FILE)
+    plt.tight_layout()
+    plt.savefig(IMG_FILE, bbox_inches='tight')
     plt.close()
 
   HEADER = HEADER_MODL + MATCH_CNFG[method][HEADER_STR]
@@ -457,6 +459,166 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
                  UNDERSCORE_STR.join([method, FP_STR]) + CSV_EXT)
   if args.verbose: FP.to_csv(FP_FILE, index=False)
 
+  # True Positive Probability distribution plot
+  if method in [CLSSFD_STR, DETECT_STR]:
+    for model, tp_m in TP.groupby(MODEL_STR):
+      fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
+                                              int(x * Ws - 1) * 1.5))
+      axs = _axs.flatten()
+      plt.rcParams.update({'font.size': 12})
+      fig.suptitle(model)
+      for ax, (weight, tp_w) in zip(axs, tp_m.groupby(WEIGHT_STR)):
+        ax.set_title(weight)
+        for phase in [PWAVE, SWAVE]:
+          tp = zip(*tp_w[tp_w[PHASE_STR] == phase][PROBABILITY_STR].to_list())
+          if len(tp) == 0: continue
+          print(tp)
+          exit()
+          ax.scatter(*reversed(list(zip(*tp))), label=phase, marker="o",
+                     c=COLOR_ENCODING[TP_STR][phase])
+          ax.set(xlabel="Prediction Probability", ylabel="Operator Weight",
+                 xscale="log", xlim=(0.1, 1.))
+          ax.legend()
+          ax.grid()
+      axs[0].set()
+      axs[1].set(ylabel=None, yticklabels=[])
+      if len(args.weights) > 2:
+        axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
+        axs[2].set(title=None)
+        axs[2].xaxis.tick_top()
+        axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
+        axs[3].set(ylabel=None, yticklabels=[], title=None)
+        axs[3].xaxis.tick_top()
+      IMG_FILE = \
+        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+              UNDERSCORE_STR.join([
+                method, TP_STR, model, THRESHOLDER_STR.format(
+                  p=args.pwave, s=args.swave)]) + PNG_EXT)
+      plt.tight_layout()
+      plt.savefig(IMG_FILE, bbox_inches='tight')
+      plt.close()
+
+  # False Negative Pie plot
+  if method in [CLSSFD_STR, DETECT_STR]:
+    print("Plotting FN Pie")
+    for (model, weight), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
+      fig, _ax = plt.subplots(1, 2, figsize=(10, 5))
+      plt.suptitle(SPACE_STR.join([model, weight]), fontsize=16)
+      for ax, phase in zip(_ax, [PWAVE, SWAVE]):
+        ax.set_title(phase)
+        df[df[PHASE_STR] == phase][PROBABILITY_STR].value_counts()\
+          .plot(kind='pie', ax=ax, autopct='%1.1f%%')
+      IMG_FILE = \
+        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+            UNDERSCORE_STR.join([
+              method, FN_STR, model, weight, THRESHOLDER_STR.format(
+                p=args.pwave, s=args.swave)]) + PNG_EXT)
+      plt.tight_layout()
+      plt.savefig(IMG_FILE, bbox_inches='tight')
+      plt.close()
+  else:
+    print("Plotting FN Pie")
+    pass
+
+  if method in [CLSSFD_STR, DETECT_STR]:
+    # TP FN
+    groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
+    max_threshold = max(TP.groupby(groups)[THRESHOLD_STR].value_counts().max(),
+                        FN.groupby(groups)[THRESHOLD_STR].value_counts().max())
+    max_threshold = (max_threshold + 9) // 10 * 10
+    for model in args.models:
+      TP_M = TP[TP[MODEL_STR] == model]
+      FN_M = FN[FN[MODEL_STR] == model]
+      fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
+                                              int(x * Ws - 1) * 1.5))
+      axs = _axs.flatten()
+      fig.suptitle(model)
+      plt.rcParams.update({'font.size': 12})
+      for ax1, w in zip(axs, args.weights):
+        TP_W = TP_M[TP_M[WEIGHT_STR] == w]
+        FN_W = FN_M[FN_M[WEIGHT_STR] == w]
+        ax1.set_title(w, fontsize=16)
+        ax2 = ax1.twinx()
+        ax1.set(ylabel="Number of Picks", ylim=(0, max_threshold))
+        RECALL = {
+          PWAVE : (0., 0.),
+          SWAVE : (0., 0.),
+          RECALL_STR : 0.
+        }
+        for p in [PWAVE, SWAVE]:
+          tp = TP_W.loc[TP_W[PHASE_STR] == p, THRESHOLD_STR].value_counts() \
+                  .sort_index()
+          fn = FN_W.loc[FN_W[PHASE_STR] == p, THRESHOLD_STR].value_counts() \
+                  .sort_index()
+          RECALL[p] = (tp, fn)
+        RECALL[RECALL_STR] = (RECALL[PWAVE][0] + RECALL[SWAVE][0]) / \
+                            (RECALL[PWAVE][0] + RECALL[PWAVE][1] + \
+                              RECALL[SWAVE][0] + RECALL[SWAVE][1])
+        RECALL[RECALL_STR].plot(ax=ax2, label=f"{PWAVE} + {SWAVE}", color="k")
+        for p in [PWAVE, SWAVE]:
+          (RECALL[p][0] / (RECALL[p][0] + RECALL[p][1])).plot(
+            ax=ax2, label=p, color="r" if p == PWAVE else "b")
+        TPFN = pd.DataFrame({
+          SPACE_STR.join([PWAVE, TP_STR]): RECALL[PWAVE][0],
+          SPACE_STR.join([SWAVE, TP_STR]): RECALL[SWAVE][0],
+          SPACE_STR.join([PWAVE, FN_STR]): RECALL[PWAVE][1],
+          SPACE_STR.join([SWAVE, FN_STR]): RECALL[SWAVE][1]
+        })
+        TPFN.plot(kind='bar', ax=ax1, width=0.7, legend=True)
+        ax1.set(ylabel="Number of Picks", ylim=(0, max_threshold))
+        ax2.set(ylim=(0, 1))
+        yticks, yticklabels = ax2.get_yticks(), ax2.get_yticklabels()
+        ax2.set(yticks=[], yticklabels=[])
+        ax1.grid()
+      axs[0].set()
+      axs[1].set(ylabel=None, yticklabels=[])
+      if len(args.weights) > 2:
+        axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
+        axs[2].set(title=None)
+        axs[2].xaxis.tick_top()
+        axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
+        axs[3].set(ylabel=None, yticklabels=[], title=None)
+        axs[3].xaxis.tick_top()
+      fig.subplots_adjust(left=0.08, right=1.08, top=.95, bottom=0.05,
+                          wspace=0.1, hspace=0.2)
+      IMG_FILE = Path(
+        IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+        UNDERSCORE_STR.join([method, "TPFN", model, THRESHOLDER_STR.format(
+          p=args.pwave, s=args.swave)]) + PNG_EXT)
+      plt.tight_layout()
+      plt.savefig(IMG_FILE, bbox_inches='tight')
+      plt.close()
+  else:
+    # True Positive Spatial distribution plot
+    if args.rectdomain:
+      extent = [args.rectdomain[2] - 1, args.rectdomain[3] + 1,
+                args.rectdomain[0] - 1, args.rectdomain[1] + 1]
+    if args.circdomain:
+      raise NotImplementedError
+      extent = [args.circdomain[1] - args.circdomain[3],
+                args.circdomain[1] + args.circdomain[3],
+                args.circdomain[0] - args.circdomain[3],
+                args.circdomain[0] + args.circdomain[3]]
+    for model, tp_m in TP.groupby(MODEL_STR):
+      fig = plt.figure(figsize=(int(y * Ws) * 1.5, int(x * Ws - 1) * 1.5))
+      plt.rcParams.update({'font.size': 12})
+      fig.suptitle(model)
+      for i, (weight, tp_w) in enumerate(tp_m.groupby(WEIGHT_STR)):
+        if len(tp_w.index) == 0: continue
+        ax = fig.add_subplot(x, y, i, projection=ccrs.PlateCarree())
+        ax.set_title(weight)
+        ax.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
+        ax.set_extent(extent, crs=ccrs.PlateCarree())
+        gl = ax.gridlines()
+        gl.left_labels = True
+        gl.top_labels = True
+        ax.set_title("Events")
+      IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + UNDERSCORE_STR.join([
+               method, TP_STR, model, THRESHOLDER_STR.format(
+                 p=args.pwave, s=args.swave)]) + PNG_EXT)
+      plt.tight_layout()
+      plt.savefig(IMG_FILE, bbox_inches='tight')
+      plt.close()
 
   # File all the results for the date range
   STAT = list()
@@ -471,15 +633,15 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   STAT = pd.DataFrame(STAT, columns=HEADER_STAT)
   STAT_FILEPATH = Path(
     DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + UNDERSCORE_STR.join([
-      method, STAT_STR, start.strftime(DATE_FMT), end.strftime(DATE_FMT)]) + 
+      method, STAT_STR, start.strftime(DATE_FMT), end.strftime(DATE_FMT)]) +
     CSV_EXT)
-  if STAT_FILEPATH.exists(): 
+  if STAT_FILEPATH.exists():
     stat = pd.read_csv(STAT_FILEPATH)
     head = [MODEL_STR, WEIGHT_STR, STAT_STR]
     for _, row in stat.iterrows():
       r = STAT.loc[(STAT[head] == row[head]).all(axis=1)]
       # If the row is not in the dataframe, add it, update it, otherwise
-      if r.empty: STAT.loc[len(STAT)] = row.tolist()
+      if r.empty: STAT.loc[len(STAT.index)] = row.tolist()
       else: STAT.loc[(STAT[head] == row[head]).all(axis=1)] = row.tolist()
   if method in [CLSSFD_STR, DETECT_STR]:
     groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
@@ -508,137 +670,12 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     for (model, weight), df in FP.groupby([MODEL_STR, WEIGHT_STR]):
       STAT.loc[(STAT[MODEL_STR] == model) & (STAT[WEIGHT_STR] == weight) &
                (STAT[STAT_STR] == FP_STR), args.pwave] = len(df.index)
-  print(STAT)
   STAT.to_csv(STAT_FILEPATH, index=False)
-
-  # True Positive Probability distribution plot
-  if method in [CLSSFD_STR, DETECT_STR]:
-    for model, tp_m in TP.groupby(MODEL_STR):
-      fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
-                                              int(x * Ws - 1) * 1.5))
-      axs = _axs.flatten()
-      plt.rcParams.update({'font.size': 12})
-      fig.suptitle(model)
-      for ax, (weight, tp_w) in zip(axs, tp_m.groupby(WEIGHT_STR)):
-        ax.set_title(weight)
-        for phase in [PWAVE, SWAVE]:
-          tp = zip(*tp_w[tp_w[PHASE_STR] == phase][PROBABILITY_STR].to_list())
-          ax.scatter(*list(tp).reverse(), label=phase, marker="o",
-                     c=COLOR_ENCODING[TP_STR][phase])
-          ax.set(xlabel="Operator Weight", ylabel="Prediction Probability",
-                 yscale="log", ylim=(0.1, 1.))
-          ax.legend()
-          ax.grid()
-      axs[0].set()
-      axs[1].set(ylabel=None, yticklabels=[])
-      if len(args.weights) > 2:
-        axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
-        axs[2].set(title=None)
-        axs[2].xaxis.tick_top()
-        axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
-        axs[3].set(ylabel=None, yticklabels=[], title=None)
-        axs[3].xaxis.tick_top()
-      IMG_FILE = \
-        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-              UNDERSCORE_STR.join([
-                method, TP_STR, model, THRESHOLDER_STR.format(
-                  p=args.pwave, s=args.swave)]) + PNG_EXT)
-      plt.savefig(IMG_FILE)
-      plt.close()
-
-  # False Negative Pie plot
-  if method in [CLSSFD_STR, DETECT_STR]:
-    for (model, weight), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
-      fig, _ax = plt.subplots(1, 2, figsize=(10, 5))
-      plt.suptitle(SPACE_STR.join([model, weight]), fontsize=16)
-      for ax, phase in zip(_ax, [PWAVE, SWAVE]):
-        ax.set_title(phase)
-        df[df[PHASE_STR] == phase][PROBABILITY_STR].value_counts()\
-          .plot(kind='pie', ax=ax, autopct='%1.1f%%')
-      IMG_FILE = \
-        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-            UNDERSCORE_STR.join([
-              method, FN_STR, model, weight, THRESHOLDER_STR.format(
-                p=args.pwave, s=args.swave)]) + PNG_EXT)
-      plt.savefig(IMG_FILE)
-      plt.close()
-
-  # TP FN
-  if method not in [CLSSFD_STR, DETECT_STR]: return TP
-  groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
-  max_threshold = max(TP.groupby(groups)[THRESHOLD_STR].value_counts().max(),
-                      FN.groupby(groups)[THRESHOLD_STR].value_counts().max())
-  max_threshold = (max_threshold + 9) // 10 * 10
-  Ws : int = len(args.weights)
-  x : int = int(np.sqrt(Ws))
-  y : int = Ws // x + int((Ws % x) != 0)
-  for model in args.models:
-    TP_M = TP[TP[MODEL_STR] == model]
-    FN_M = FN[FN[MODEL_STR] == model]
-    fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
-                                            int(x * Ws - 1) * 1.5))
-    axs = _axs.flatten()
-    fig.suptitle(model)
-    plt.rcParams.update({'font.size': 12})
-    for ax1, w in zip(axs, args.weights):
-      TP_W = TP_M[TP_M[WEIGHT_STR] == w]
-      FN_W = FN_M[FN_M[WEIGHT_STR] == w]
-      ax1.set_title(w, fontsize=16)
-      ax2 = ax1.twinx()
-      ax1.set(ylabel="Number of Picks", ylim=(0, max_threshold))
-      RECALL = {
-        PWAVE : (0., 0.),
-        SWAVE : (0., 0.),
-        RECALL_STR : 0.
-      }
-      for p in [PWAVE, SWAVE]:
-        tp = TP_W.loc[TP_W[PHASE_STR] == p, THRESHOLD_STR].value_counts() \
-                 .sort_index()
-        fn = FN_W.loc[FN_W[PHASE_STR] == p, THRESHOLD_STR].value_counts() \
-                 .sort_index()
-        RECALL[p] = (tp, fn)
-      RECALL[RECALL_STR] = (RECALL[PWAVE][0] + RECALL[SWAVE][0]) / \
-                           (RECALL[PWAVE][0] + RECALL[PWAVE][1] + \
-                            RECALL[SWAVE][0] + RECALL[SWAVE][1])
-      RECALL[RECALL_STR].plot(ax=ax2, label=f"{PWAVE} + {SWAVE}", color="k")
-      for p in [PWAVE, SWAVE]:
-        (RECALL[p][0] / (RECALL[p][0] + RECALL[p][1])).plot(
-          ax=ax2, label=p, color="r" if p == PWAVE else "b")
-      TPFN = pd.DataFrame({
-        SPACE_STR.join([PWAVE, TP_STR]): RECALL[PWAVE][0],
-        SPACE_STR.join([SWAVE, TP_STR]): RECALL[SWAVE][0],
-        SPACE_STR.join([PWAVE, FN_STR]): RECALL[PWAVE][1],
-        SPACE_STR.join([SWAVE, FN_STR]): RECALL[SWAVE][1]
-      })
-      TPFN.plot(kind='bar', ax=ax1, width=0.7, legend=True)
-      ax1.set(ylabel="Number of Picks", ylim=(0, max_threshold))
-      ax2.set(ylim=(0, 1))
-      yticks, yticklabels = ax2.get_yticks(), ax2.get_yticklabels()
-      ax2.set(yticks=[], yticklabels=[])
-      ax1.grid()
-    axs[0].set()
-    axs[1].set(ylabel=None, yticklabels=[])
-    if len(args.weights) > 2:
-      axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
-      axs[2].set(title=None)
-      axs[2].xaxis.tick_top()
-      axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
-      axs[3].set(ylabel=None, yticklabels=[], title=None)
-      axs[3].xaxis.tick_top()
-    fig.subplots_adjust(left=0.08, right=1.08, top=.95, bottom=0.05,
-                        wspace=0.1, hspace=0.2)
-    IMG_FILE = Path(
-      IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-      UNDERSCORE_STR.join([method, "TPFN", model, THRESHOLDER_STR.format(
-        p=args.pwave, s=args.swave)]) + PNG_EXT)
-    plt.tight_layout()
-    plt.savefig(IMG_FILE, bbox_inches='tight')
-    plt.close()
-  return TP
   # TODO: Redo the plots for the True Positives, False Negatives and False
   #       Positives
   # Plot the True Positives, False Negatives histogram and the Recall as a
   # function of the threshold for each model and weight
+  return TP
 
 def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
                       method : str = CLSSFD_STR) -> None:
@@ -663,7 +700,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
   DATA[TIMESTAMP_STR] = \
     DATA[TIMESTAMP_STR].map(lambda x: UTCDateTime(x[0]) - UTCDateTime(x[1]))
   sec = MATCH_CNFG[method][TIME_DSPLCMT_STR].total_seconds()
-  bins = np.linspace(-sec, sec, 41, endpoint=True)
+  bins = np.linspace(-sec, sec, NUM_BINS, endpoint=True)
   width = bins[1] - bins[0]
   groups = [MODEL_STR, WEIGHT_STR]
   if method in [CLSSFD_STR, DETECT_STR]: groups.append(PHASE_STR)

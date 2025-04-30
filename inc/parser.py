@@ -301,7 +301,7 @@ def event_parser_pun(filename : Path, start : UTCDateTime = None,
       event += 1
       continue
     print(unble_msg.format(type=EMPTY_STR, line=line))
-  return (pd.DataFrame(SOURCE, columns=HEADER_SRC).astype({ID_STR: int}, errors='ignore'),
+  return (pd.DataFrame(SOURCE, columns=HEADER_SRC),
           pd.DataFrame(columns=HEADER_MANL))
 
 RECORD_EXTRACTOR_HPC = re.compile(
@@ -348,7 +348,7 @@ def event_parser_hpc(filename : Path, start : UTCDateTime = None,
       continue
     print("WARNING: (HPC) Unable to parse line:", line)
   return (pd.DataFrame(columns=HEADER_SRC),
-          pd.DataFrame(DETECT, columns=HEADER_MANL).astype({ID_STR: int}, errors='ignore'))
+          pd.DataFrame(DETECT, columns=HEADER_MANL))
 
 RECORD_EXTRACTOR_HPL = re.compile(
   fr"^(?P<{EVENT_STR}>[\d\s]{{6}})\s"                         # Event
@@ -460,11 +460,8 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
   if not filename.exists(): raise FileNotFoundError(filename)
   SOURCE = list()
   DETECT = list()
-  event_id: int = 0
-  event_name: str = ""
   event_notes: str = ""
   event_detect: int = 0
-  event_metadata = dict()
   event_spacetime = (UTCDateTime(0), 0, 0, 0)
   with open(filename, 'r') as fr: lines = fr.readlines()
   for line in [l.strip("\n") for l in lines]:
@@ -572,7 +569,6 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
       match = LOCATION_EXTRACTOR_HPL.match(line)
       if match:
         result : dict[str] = match.groupdict()
-        event_name = result[LOC_NAME_STR]
         continue
       if event_detect == 0:
         match = NOTES_EXTRACTOR_HPL.match(line)
@@ -583,8 +579,8 @@ def event_parser_hpl(filename : Path, start : UTCDateTime = None,
           continue
       if re.match(r"^\s*$", line): continue
     if event_detect >= 0: print(unble_msg.format(type=EMPTY_STR, line=line))
-  SOURCE = pd.DataFrame(SOURCE, columns=HEADER_SRC).astype({ID_STR: int}, errors='ignore')
-  DETECT = pd.DataFrame(DETECT, columns=HEADER_MANL).astype({ID_STR: int}, errors='ignore')
+  SOURCE = pd.DataFrame(SOURCE, columns=HEADER_SRC)
+  DETECT = pd.DataFrame(DETECT, columns=HEADER_MANL)
   return SOURCE, DETECT
 
 # TODO: Implement ObsPy Catalog for OGS files
@@ -608,8 +604,8 @@ def event_parser_qml(filename : Path, start : UTCDateTime = None,
     SOURCE.append([None, e_time, e_origin.latitude, e_origin.longitude,
                    e_origin.depth, None, len(event.picks), *([None] * 6),
                    event.event_type])
-  SOURCE = pd.DataFrame(SOURCE, columns=HEADER_SRC).astype({ID_STR: int}, errors='ignore')
-  DETECT = pd.DataFrame(DETECT, columns=HEADER_MANL).astype({ID_STR: int}, errors='ignore')
+  SOURCE = pd.DataFrame(SOURCE, columns=HEADER_SRC)
+  DETECT = pd.DataFrame(DETECT, columns=HEADER_MANL)
   return SOURCE, DETECT
 
 STATION_EXTRACTOR_MOD = re.compile(

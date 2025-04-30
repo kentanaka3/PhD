@@ -20,6 +20,9 @@ class CMfig():
       self.dates = dates
     else:
       pass
+    Ws : int = len(weights)
+    x : int = int(np.sqrt(Ws))
+    y : int = Ws // x + int(Ws % x != 0)
     self.fig, _ax = plt.subplots(1, len(weights), figsize=(10, 5))
     self.fig.suptitle("Confusion Matrix")
     self.fig.tight_layout()

@@ -11,8 +11,12 @@ import argparse
 import numpy as np
 import obspy as op
 import pandas as pd
+import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import cartopy.feature as cfeature
+import matplotlib.patches as mpatches
+import matplotlib.gridspec as gridspec
 from obspy.core.utcdatetime import UTCDateTime
 from concurrent.futures import ThreadPoolExecutor
 
@@ -174,15 +178,14 @@ def parse_arguments():
                           help="Specify the beginning and ending (inclusive) "
                                "Julian date (YYMMDD) range to work with.")
   domain_group = parser.add_mutually_exclusive_group(required=False)
-  domain_group.add_argument("--rectdomain", default=None, type=float, nargs=4,
-                            metavar=("min_lat", "max_lat", "min_lon",
-                                     "max_lon"),
-                            # default=[44.5, 47, 10, 14.5],
+  domain_group.add_argument("--rectdomain", type=float, nargs=4,
+                            metavar=["lonW", "lonE", "latS", "latN"],
+                            default=OGS_STUDY_REGION,
                             help="Rectangular domain to download the data: "
-                                 "[minimum latitude] [maximum latitude] "
-                                 "[minimum longitude] [maximum longitude]")
+                                 "[longitude West] [longitude East] "
+                                 "[latitude South] [latitude North]")
   domain_group.add_argument("--circdomain", nargs=4, type=float,
-                            default=[46.3583, 12.808, 0., 0.3],
+                            #default=[46.3583, 12.808, 0., 0.3],
                             metavar=("lat", "lon", "min_rad", "max_rad"),
                             help="Circular domain to download the data: "
                                  "[center latitude] [center longitude] "
@@ -356,22 +359,33 @@ def _loader(args : argparse.Namespace, folder : str) -> pd.DataFrame:
     return waveform_table(args)
 
 def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
-                stations : dict[str, set[str]] = None) \
+                STATIONS : dict[str, set[str]] = None) \
       -> tuple[pd.DataFrame, pd.DataFrame]:
   assert len(args.file) == 1
   global DATA_PATH
   DATA_PATH = args.directory.parent
-  if stations is None: stations = station_loader(args, WAVEFORMS)
-  SOURCE, DETECT = prs.event_parser(args.file[0], *args.dates, stations)
-  if args.verbose:
-    SOURCE.to_csv(Path(DATA_PATH,
-                       UNDERSCORE_STR.join([TRUE_STR, SOURCE_STR]) + CSV_EXT),
-                       index=False)
-    DETECT.to_csv(Path(DATA_PATH,
-                       UNDERSCORE_STR.join([TRUE_STR, DETECT_STR]) + CSV_EXT),
-                       index=False)
-  SOURCE = SOURCE[SOURCE[NOTES_STR].isnull() &
-                  SOURCE[LATITUDE_STR].notna()].reset_index(drop=True)
+  if STATIONS is None: STATIONS = station_loader(args, WAVEFORMS)
+  stations = set()
+  for st in STATIONS.values(): stations.update(st)
+  start, end = [x.strftime(DATE_FMT) for x in args.dates]
+  SRC_FILE = Path(DATA_PATH, UNDERSCORE_STR.join([
+    TRUE_STR, SOURCE_STR, start, end]) + CSV_EXT)
+  DTC_FILE = Path(DATA_PATH, UNDERSCORE_STR.join([
+    TRUE_STR, DETECT_STR, start, end]) + CSV_EXT)
+  if SRC_FILE.exists() and not args.force:
+    SOURCE = data_loader(SRC_FILE)
+    SOURCE[TIMESTAMP_STR] = SOURCE[TIMESTAMP_STR].apply(
+      lambda x: UTCDateTime(x))
+    DETECT = data_loader(DTC_FILE)
+    DETECT[TIMESTAMP_STR] = DETECT[TIMESTAMP_STR].apply(
+      lambda x: UTCDateTime(x))
+  else:
+    SOURCE, DETECT = prs.event_parser(args.file[0], *args.dates, STATIONS)
+    if args.verbose:
+      SOURCE.to_csv(SRC_FILE, index=False)
+      DETECT.to_csv(Path(DATA_PATH, UNDERSCORE_STR.join([
+        TRUE_STR, DETECT_STR, start, end])+ CSV_EXT), index=False)
+  SOURCE = SOURCE[SOURCE[LATITUDE_STR] != NONE_STR].reset_index(drop=True)
   DETECT = DETECT[DETECT[ID_STR].isin(SOURCE[ID_STR])].reset_index(drop=True)
   print("Picks Detections")
   for phase in [PWAVE, SWAVE]:
@@ -379,8 +393,118 @@ def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
   print(f"True: {len(DETECT.index)}")
   print("Events Sources")
   print(f"True: {len(SOURCE.index)}")
+  det_st = set(DETECT[STATION_STR].unique().tolist())
+  n_det_st = list()
+  for st in stations:
+    if st not in det_st:
+      if args.force and args.verbose:
+        print(f"WARNING: Station {st} not found in the detected events")
+      n_det_st.append(st)
   if args.verbose:
-    pass
+    # SOURCE
+    def plot_spatial_dist():
+      FIG = plt.figure(figsize=(20, 10))
+      GS = gridspec.GridSpec(1, 2, figure=FIG, wspace=0, width_ratios=[1, 7])
+      FIG.suptitle("Events")
+      plt.rcParams.update({'font.size': 12})
+      if args.rectdomain:
+        plusminus = 0.5
+        xy = [args.rectdomain[2], args.rectdomain[0]]
+        w = args.rectdomain[3] - args.rectdomain[2]
+        h = args.rectdomain[1] - args.rectdomain[0]
+        extent = [args.rectdomain[2] - plusminus, args.rectdomain[3] + plusminus,
+                  args.rectdomain[0] - plusminus, args.rectdomain[1] + plusminus]
+      if args.circdomain:
+        raise NotImplementedError
+        extent = [args.circdomain[1] - args.circdomain[3],
+                  args.circdomain[1] + args.circdomain[3],
+                  args.circdomain[0] - args.circdomain[3],
+                  args.circdomain[0] + args.circdomain[3]]
+      proj = ccrs.PlateCarree()
+      stAx = FIG.add_subplot(GS[1], projection=proj,)
+      stAx.add_patch(mpatches.Polygon(
+        OGS_POLY_REGION, closed=True, linewidth=1, color='red', fill=False,
+        label="Control"))
+      stAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
+                                        fill=False, label="Domain"))
+      norm = plt.Normalize(vmin=-1, vmax=10)
+      mask = SOURCE[MAGNITUDE_STR] >= OGS_MAX_MAGNITUDE
+      EQ = SOURCE[~mask]
+      stAx.scatter(EQ[LONGITUDE_STR], EQ[LATITUDE_STR], c=EQ[LOCAL_DEPTH_STR],
+                   marker='o', cmap="autumn_r", transform=proj,
+                   alpha=0.2, s=10*(3.5**EQ[MAGNITUDE_STR]), norm=norm,
+                   label=fr"$<$ {OGS_MAX_MAGNITUDE}")
+      EQ = SOURCE[mask]
+      stAx.scatter(EQ[LONGITUDE_STR], EQ[LATITUDE_STR], c=EQ[LOCAL_DEPTH_STR],
+                  marker='*', cmap="autumn_r", norm=norm, alpha=0.6,
+                  transform=proj, s=100*(1.5**EQ[MAGNITUDE_STR]),
+                  label=fr"$\geq$ {OGS_MAX_MAGNITUDE}")
+      stAx.legend(fontsize=16)
+      stAx.set_aspect("auto")
+      stAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
+      stAx.add_feature(cfeature.BORDERS, linewidth=0.5, edgecolor=MEX_PINK)
+      stAx.set_extent(extent, crs=proj)
+      gl = stAx.gridlines()
+      gl.left_labels = True
+      gl.top_labels = True
+      # Region
+      rgAx = FIG.add_axes([.65,.02, 0.2, 0.3], projection=proj)
+      rgAx.set_title(OGS_ITALY_STR)
+      rgAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
+                                        fill=False))
+      rgAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
+      rgAx.add_feature(cfeature.BORDERS, linewidth=0.5, edgecolor=MEX_PINK)
+      rgAx.set_extent([6, 21, 35, 50], crs=proj)
+      gl = rgAx.gridlines()
+      gl.left_labels = True
+      gl.top_labels = True
+      # Depth
+      dpAx = FIG.add_axes([-.065, .06, 0.15, 0.5])
+      dpAx.set_title("Magnitude Distribution")
+      SOURCE[LOCAL_DEPTH_STR].hist(bins=NUM_BINS, color='grey', alpha=0.5,
+                                   ax=dpAx, orientation='horizontal')
+      dpAx.set(xlabel="Number of Events", ylabel="Depth (km)", yscale='log')
+      # Table
+      tbAx = FIG.add_axes([-.06, .62, 0.15, 0.3])
+      tbAx.set_title("Picks")
+      MTX = pd.DataFrame(0, index=DETECT[PROBABILITY_STR].unique(),
+                         columns=DETECT[PHASE_STR].unique())
+      for id, val in DETECT[[PROBABILITY_STR, PHASE_STR]].value_counts().items():
+        MTX.loc[id[0], id[1]] = val
+      tbAx.imshow(MTX, cmap="Blues", aspect="auto")
+      tbAx.set_xticks(range(len(MTX.columns)))
+      tbAx.set_xticklabels(MTX.columns)
+      for i in MTX.index:
+        for j, val in enumerate(MTX.loc[i]):
+          tbAx.text(j, i, val, ha="center", va="center", color=MEX_PINK,
+                    fontweight="bold")
+      tbAx.set(ylabel="Operator Weight",)
+      """
+      for i in range(len(MTX.index)):
+        for j in range(len(MTX.columns)):
+          tbAx.text(j, i, MTX.loc[i, j],
+                    ha="center", va="center", color="w")
+      """
+      FIG.colorbar(stAx.collections[0], ax=stAx, shrink=0.8, aspect=50,
+                   orientation='vertical', label=MAGNITUDE_STR)
+      plt.tight_layout()
+      IMG_FILE = Path(IMG_PATH, UNDERSCORE_STR.join([
+        TRUE_STR, SOURCE_STR, start, end]) + PNG_EXT)
+      plt.savefig(IMG_FILE, bbox_inches='tight')
+      plt.close()
+    plot_spatial_dist()
+    def plot_depth_dist():
+      _, ax = plt.subplots(figsize=(10, 5))
+      plt.rcParams.update({'font.size': 12})
+      SOURCE[LOCAL_DEPTH_STR].hist(bins=NUM_BINS, color='grey', alpha=0.5)
+      ax.set_title("Depth Distribution")
+      ax.set(xlabel="Depth (km)", ylabel="Number of Events", xscale='log')
+      IMG_FILE = Path(IMG_PATH, (UNDERSCORE_STR.join([
+        TRUE_STR, LOCAL_DEPTH_STR, start, end]) + PNG_EXT))
+      plt.tight_layout()
+      plt.savefig(IMG_FILE, bbox_inches='tight')
+      plt.close()
+    plot_depth_dist()
   return SOURCE, DETECT
 
 def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
@@ -406,7 +530,7 @@ def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
   DATA_PATH  = Path(args.directory).parent
   CLF_PATH = Path(DATA_PATH, CLF_STR)
   if not CLF_PATH.exists(): raise FileNotFoundError
-  DATA = []
+  DATA = list()
   for (model, weight, date), dataframe in \
     data_header(args, CLF_STR).groupby([MODEL_STR, WEIGHT_STR, TIMESTAMP_STR]):
     if args.force and args.verbose: HIST = list()
@@ -581,47 +705,110 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
   if args.force: WAVEFORMS_DATA.to_csv(WAVEFORMS_FILE)
   return WAVEFORMS_DATA
 
-def station_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None)\
-      -> dict[str, set[str]]:
+def station_loader(args : argparse.Namespace,
+                   WAVEFORMS : pd.DataFrame = None) -> dict[str, set[str]]:
   if WAVEFORMS is None: WAVEFORMS = waveform_table(args)
   start, end = args.dates
   DATES = [start.datetime]
   while DATES[-1] < end.datetime: DATES.append(DATES[-1] + ONE_DAY)
   DATES = [d.strftime(DATE_FMT) for d in DATES]
+  dates = [np.datetime64(UTCDateTime.strptime(d, DATE_FMT)) for d in DATES]
   min_s, max_s = np.inf, 0
   stations = set()
   STATIONS = dict()
-  for d in DATES:
-    ST = WAVEFORMS.loc[WAVEFORMS[DATE_STR] == d, [NETWORK_STR, STATION_STR]]
+  for d, ST in WAVEFORMS.groupby(DATE_STR):
     if ST.empty: continue
     STATIONS[d] = set(ST[STATION_STR].unique())
     ST = (ST[NETWORK_STR] + PERIOD_STR + ST[STATION_STR]).unique()
     min_s = min(min_s, len(ST))
     max_s = max(max_s, len(ST))
     stations.update(ST)
-    if args.verbose: print(f"Stations {d}: {len(ST)}")
   print(f"Min Stations: {min_s}, Max Stations: {max_s}")
   print(f"Total Stations: {len(stations)}")
   if args.verbose:
-    dates = [np.datetime64(UTCDateTime.strptime(d, DATE_FMT)) for d in DATES]
     # Plot the stations
     INVENTORY = op.Inventory()
     for st in stations:
       STATION_PATH = Path(DATA_PATH, STATION_STR, st + XML_EXT)
-      if not STATION_PATH.exists():
-        print(f"WARNING: Station file {STATION_PATH} does not exist.")
+      try:
+        S = op.read_inventory(STATION_PATH)
+      except Exception as e:
+        print(f"WARNING: Unable to read {STATION_PATH}")
+        print(e)
         continue
-      INVENTORY.extend(op.read_inventory(STATION_PATH))
-    INVENTORY.plot(projection="local", show=False, method="cartopy", size=25,
-                   water_fill_color="lightblue", color_per_network=True,
-                   resolution="h", label=False,
-                   outfile=Path(IMG_PATH, STATION_STR + PNG_EXT))
+      s = S[0][0]
+      if s.latitude < args.rectdomain[0] or \
+         s.latitude > args.rectdomain[1] or \
+         s.longitude < args.rectdomain[2] or \
+         s.longitude > args.rectdomain[3]:
+        print(f"WARNING: Station {st} is outside the specified domain")
+        continue
+      INVENTORY.extend(S)
+    POSITIONS = list()
+    for net in INVENTORY:
+      for st in net:
+        if PERIOD_STR.join([net.code, st.code]) in stations:
+          POSITIONS.append([net.code, st.code, st.latitude, st.longitude])
+    POSITIONS = pd.DataFrame(POSITIONS, columns=[
+      NETWORK_STR, STATION_STR, LATITUDE_STR, LONGITUDE_STR])
+    FIG = plt.figure(figsize=(20, 10))
+    GS = gridspec.GridSpec(1, 2, figure=FIG, wspace=0, width_ratios=[1, 7])
+    FIG.suptitle("Stations")
+    plt.rcParams.update({'font.size': 12})
+    if args.rectdomain:
+      plusminus = 0.5
+      xy = [args.rectdomain[2], args.rectdomain[0]]
+      w = args.rectdomain[3] - args.rectdomain[2]
+      h = args.rectdomain[1] - args.rectdomain[0]
+      extent = [args.rectdomain[2] - plusminus, args.rectdomain[3] + plusminus,
+                args.rectdomain[0] - plusminus, args.rectdomain[1] + plusminus]
+    if args.circdomain:
+      raise NotImplementedError
+      extent = [args.circdomain[1] - args.circdomain[3],
+                args.circdomain[1] + args.circdomain[3],
+                args.circdomain[0] - args.circdomain[3],
+                args.circdomain[0] + args.circdomain[3]]
+    proj = ccrs.PlateCarree()
+    stAx = FIG.add_subplot(GS[1], projection=proj,)
+    stAx.add_patch(mpatches.Polygon(OGS_POLY_REGION, closed=True, linewidth=1,
+                                    color='red', fill=False, label="Control"))
+    stAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
+                                      fill=False, label="Domain"))
+    stAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
+    stAx.add_feature(cfeature.BORDERS, linewidth=0.5, edgecolor=MEX_PINK)
+    stAx.set_extent(extent, crs=proj)
+    gl = stAx.gridlines()
+    gl.left_labels = True
+    gl.top_labels = True
+    cmap = plt.get_cmap("turbo")
+    colors = cmap(np.linspace(0, 1, POSITIONS[NETWORK_STR].nunique()))
+    for i, (net, df) in enumerate(POSITIONS.groupby(NETWORK_STR)):
+      stAx.scatter(df[LONGITUDE_STR], df[LATITUDE_STR], s=20, marker='^',
+                   transform=proj, label=net, c=colors[i],)
+    stAx.legend(loc='lower left', fontsize=16)
+    # Plot the Region
+    rgAx = FIG.add_axes([.74,.02, 0.2, 0.3], projection=proj)
+    rgAx.set_title(OGS_ITALY_STR)
+    rgAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
+                                      fill=False))
+    rgAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
+    rgAx.add_feature(cfeature.BORDERS, linewidth=0.5, edgecolor=MEX_PINK)
+    rgAx.set_extent([6, 21, 35, 50], crs=proj)
+    gl = rgAx.gridlines()
+    gl.left_labels = True
+    gl.top_labels = True
+    IMG_FILE = Path(IMG_PATH, UNDERSCORE_STR.join([
+      STATION_STR, "distribution"]) + PNG_EXT)
+    plt.tight_layout()
+    plt.savefig(IMG_FILE, bbox_inches='tight')
+    plt.close()
     # Plot the Number of station in time
     _, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(dates[:-1], [len(STATIONS[d]) for d in DATES[:-1]])
+    plt.rcParams.update({'font.size': 12})
+    ax.plot(dates, [len(STATIONS[d]) for d in DATES])
     ax.set_title("Active number of stations per day")
-    # TODO: Add a base 10 multiplier for max_s
-    ax.set(xlabel="Date", ylabel="Number of stations", ylim=(0, max_s))
+    ax.set(xlabel="Date", ylabel="Number of stations",
+           ylim=(0, (max_s + 9) // 10 * 10))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
     for label in ax.get_xticklabels():
       label.set(rotation=30, horizontalalignment='right')
@@ -631,4 +818,37 @@ def station_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None)\
                                          end.strftime(DATE_FMT)]) + PNG_EXT)
     plt.savefig(IMG_FILE, bbox_inches='tight')
     plt.close()
+    # Plot the availability of stations
+    def plot_availability():
+      IMG_FILE = Path(IMG_PATH, UNDERSCORE_STR.join([
+        STATION_STR, "availability"]) + PNG_EXT)
+      _, ax = plt.subplots(figsize=(20, 20))
+      ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+      ax.set_title("Available Stations")
+      ax.set(xlabel=None, ylabel="Station")
+      plt.rcParams.update({'font.size': 10})
+      tmp = list()
+      for st in stations:
+        s = st.split(PERIOD_STR)
+        tmp.append([*s] + [int(s[1] in STATIONS[d]) for d in DATES])
+      tmp = pd.DataFrame(
+        tmp, columns=[NETWORK_STR, STATION_STR] + DATES).sort_values(
+          [NETWORK_STR, STATION_STR])
+      for i, (net, df) in enumerate(tmp.groupby(NETWORK_STR)):
+        tmp.loc[tmp[NETWORK_STR] == net, DATES] = df.loc[:, DATES].apply(
+          lambda x: x * (i + 1), axis=1)
+      tmp.drop(columns=NETWORK_STR, inplace=True)
+      tmp.set_index(STATION_STR, inplace=True)
+      ax.imshow(tmp, cmap='turbo', aspect='auto')
+      # Assigning labels of y-axis
+      xlabels = ax.get_xticklabels()
+      print(xlabels)
+      # according to dataframe
+      plt.yticks(range(len(tmp.index)), tmp.index)
+      for label in ax.get_xticklabels():
+        label.set(rotation=30, horizontalalignment='right')
+      plt.tight_layout()
+      plt.savefig(IMG_FILE, bbox_inches='tight')
+      plt.close()
+    plot_availability()
   return STATIONS
