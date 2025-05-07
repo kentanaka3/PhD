@@ -60,7 +60,7 @@ def data_downloader(args : argparse.Namespace) -> None:
                                 reject_channels_with_gaps=False,
                                 minimum_length=0.0,
                                 minimum_interstation_distance_in_m=100.0,
-                                location_priorities=["", "00", "10"],
+                                location_priorities=["", "00", "01", "02", "10"],
                                 chunklength_in_sec=86400)
     from obspy.clients.fdsn import Client
     CLIENTS = dict()

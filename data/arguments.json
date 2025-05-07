@@ -28,9 +28,9 @@
   "DIRECTORY": "data/waveforms",
   "DENOISER": false,
   "DOMAIN": [
-    46.3583,
-    12.808,
-    0.0,
-    0.3
+    44,
+    47.5,
+    9.5,
+    15
   ]
 }

@@ -54,9 +54,9 @@ def plot_cluster(PICK : pd.DataFrame, GMMA : pd.DataFrame,
   Ws : int = len(args.weights)
   x : int = int(np.sqrt(Ws))
   y : int = Ws // x + int((Ws % x) != 0)
+  figsize = (int(y * Ws) * 1.5, int(x * Ws - 1) * 1.5)
   for model, dataframe_m in PICK.groupby(MODEL_STR):
-    fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
-                                            int(x * Ws - 1.5) * 1.5))
+    fig, _axs = plt.subplots(x, y, figsize=figsize, layout='constrained')
     axs = _axs.flatten()
     fig.suptitle(model)
     plt.rcParams.update({'font.size': 12})
@@ -337,7 +337,6 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   start, end = args.dates
   N_seconds = int((end + ONE_DAY - start) / \
                   (2 * MATCH_CNFG[method][TIME_DSPLCMT_STR].total_seconds()))
-  TP, FN, FP = set(), [], set()
   if method in [CLSSFD_STR, DETECT_STR]:
     PRED = PRED[((PRED[PHASE_STR] == PWAVE) &
                  (PRED[PROBABILITY_STR] >= args.pwave)) |
@@ -347,139 +346,158 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
   Ws : int = len(args.weights)
   x : int = int(np.sqrt(Ws))
   y : int = Ws // x + int((Ws % x) != 0)
-  for model, dataframe_m in PRED.groupby(MODEL_STR):
-    fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
-                                            int(x * Ws - 1) * 1.5))
-    axs = _axs.flatten()
-    plt.rcParams.update({'font.size': 12})
-    fig.suptitle(model)
-    for ax, (weight, PRED_W) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
-      ax.set_title(weight)
-      CFN_MTX = pd.DataFrame(0, index=categories, columns=categories,
-                             dtype=int)
-      cfn_mtx = pd.DataFrame(0, index=categories, columns=categories,
-                             dtype=int)
-      tp, fn, fp = set(), [], set()
-      print(f"Processing {model} {weight}...")
-      if method in [CLSSFD_STR, DETECT_STR]:
-        tmp_cfn_mtx = pd.DataFrame(0, index=categories, columns=categories,
-                                   dtype=int)
-        tmp_tp, tmp_fn, tmp_fp = set(), [], set()
-        for station, PRED_S in PRED_W.groupby(STATION_STR):
-          tmp_cfn_mtx, tmp_tp, tmp_fn, tmp_fp = conf_mtx(
-            TRUE[(TRUE[STATION_STR] == station)].reset_index(drop=True),
-            PRED_S.reset_index(drop=True), model, weight, args, method)
-          cfn_mtx += tmp_cfn_mtx
-          tp = tp.union(tmp_tp)
-          fn.extend(tmp_fn)
-          fp = fp.union(tmp_fp)
-      else:
-        cfn_mtx, tp, fn, fp = conf_mtx(
-          TRUE.reset_index(drop=True), PRED_W.reset_index(drop=True), model,
-          weight, args, method)
-      CFN_MTX += cfn_mtx
-      CFN_MTX.loc[NONE_STR, NONE_STR] = N_seconds - CFN_MTX.sum().sum()
-      TP = TP.union(tp)
-      print(f"{model} {weight} {TP_STR}: {len(tp)}")
-      FN.extend(fn)
-      print(f"{model} {weight} {FN_STR}: {len(fn)}")
-      FP = FP.union(fp)
-      print(f"{model} {weight} {FP_STR}: {len(fp)}")
-      disp = ConfMtxDisp(CFN_MTX.values, display_labels=CFN_MTX.columns)
-      disp.plot(ax=ax, colorbar=False)
-      disp.im_.set(clim=(1, N_seconds), cmap="Blues", norm="log")
-      for labels in disp.text_.ravel():
-        labels.set(color=MEX_PINK, fontsize=12, fontweight="bold")
-    # TODO: Implement the properties of the plot as a function of the number of
-    #       weights and coordinates
-    axs[0].set()
-    axs[1].set(ylabel=None, yticklabels=[])
-    if len(args.weights) > 2:
-      axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
-      axs[2].set(title=None)
-      axs[2].xaxis.tick_top()
-      axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
-      axs[3].set(ylabel=None, yticklabels=[], title=None)
-      axs[3].xaxis.tick_top()
-    fig.subplots_adjust(left=0.08, right=1.08, top=.95, bottom=0.05,
-                        wspace=0.1, hspace=0.2)
-    fig.colorbar(disp.im_, ax=axs, orientation='vertical',
-                 label="Number of Picks", aspect=50, shrink=0.8)
-    disp.im_.set_clim(1, N_seconds)
-    IMG_FILE = \
-      Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-           UNDERSCORE_STR.join([
-             method, CFN_MTX_STR, model, THRESHOLDER_STR.format(
-               p=args.pwave, s=args.swave)]) + PNG_EXT)
-    plt.tight_layout()
-    plt.savefig(IMG_FILE, bbox_inches='tight')
-    plt.close()
-
-  HEADER = HEADER_MODL + MATCH_CNFG[method][HEADER_STR]
-  # True Positives
-  TP = pd.DataFrame(TP, columns=HEADER).sort_values(
-         SORT_HIERARCHY_PRED).reset_index(drop=True)
-  if method in [CLSSFD_STR, DETECT_STR]:
-    for (m, w), df in TP.groupby([MODEL_STR, WEIGHT_STR]):
-      print(m, w)
-      if df.empty: continue
-      tp = len(df.index)
-      tp_s = len(df[df[PHASE_STR] == SWAVE].index)
-      print(f"cTP ({PWAVE}): {tp - tp_s}")
-      print(f"cTP ({SWAVE}): {tp_s}")
+  figsize = (int(y * Ws) * 1.5, int(x * Ws - 1) * 1.5)
   TP_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  UNDERSCORE_STR.join([method, TP_STR]) + CSV_EXT)
-  if args.verbose: TP.to_csv(TP_FILE, index=False)
-
-  # False Negatives
-  FN = pd.DataFrame(FN, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)
-  if method in [CLSSFD_STR, DETECT_STR]:
-    for (m, w), df in FN.groupby([MODEL_STR, WEIGHT_STR]):
-      print(m, w)
-      if df.empty: continue
-      fn = len(df.index)
-      fn_s = len(df[df[PHASE_STR] == SWAVE].index)
-      print(f"{FN_STR} ({PWAVE}): {fn - fn_s}")
-      print(f"{FN_STR} ({SWAVE}): {fn_s}")
   FN_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  UNDERSCORE_STR.join([method, FN_STR]) + CSV_EXT)
-  if args.verbose: FN.to_csv(FN_FILE, index=False)
-
-  # False Positives
-  FP = pd.DataFrame(FP, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)
-  if method in [CLSSFD_STR, DETECT_STR]:
-    for (m, w), df in FP.groupby([MODEL_STR, WEIGHT_STR]):
-      print(m, w)
-      if df.empty: continue
-      fp = len(df.index)
-      fp_s = len(df[df[PHASE_STR] == SWAVE].index)
-      print(f"{FP_STR} ({PWAVE}): {fp - fp_s}")
-      print(f"{FP_STR} ({SWAVE}): {fp_s}")
   FP_FILE = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
                  UNDERSCORE_STR.join([method, FP_STR]) + CSV_EXT)
-  if args.verbose: FP.to_csv(FP_FILE, index=False)
+  if TP_FILE.exists() and FN_FILE.exists() and FP_FILE.exists() and \
+     not args.force:
+    if args.verbose: print(f"Loading {TP_FILE}")
+    TP = pd.read_csv(TP_FILE)
+    if args.verbose: print(f"Loading {FN_FILE}")
+    FN = pd.read_csv(FN_FILE)
+    if args.verbose: print(f"Loading {FP_FILE}")
+    FP = pd.read_csv(FP_FILE)
+  else:
+    TP, FN, FP = set(), [], set()
+    for model, dataframe_m in PRED.groupby(MODEL_STR):
+      fig, _axs = plt.subplots(x, y, figsize=figsize, layout='constrained')
+      axs = _axs.flatten()
+      plt.rcParams.update({'font.size': 12})
+      fig.suptitle(model)
+      for ax, (weight, PRED_W) in zip(axs, dataframe_m.groupby(WEIGHT_STR)):
+        ax.set_title(weight)
+        CFN_MTX = pd.DataFrame(0, index=categories, columns=categories,
+                              dtype=int)
+        cfn_mtx = pd.DataFrame(0, index=categories, columns=categories,
+                              dtype=int)
+        tp, fn, fp = set(), [], set()
+        print(f"Processing {model} {weight}...")
+        if method in [CLSSFD_STR, DETECT_STR]:
+          tmp_cfn_mtx = pd.DataFrame(0, index=categories, columns=categories,
+                                    dtype=int)
+          tmp_tp, tmp_fn, tmp_fp = set(), [], set()
+          for station, PRED_S in PRED_W.groupby(STATION_STR):
+            tmp_cfn_mtx, tmp_tp, tmp_fn, tmp_fp = conf_mtx(
+              TRUE[(TRUE[STATION_STR] == station)].reset_index(drop=True),
+              PRED_S.reset_index(drop=True), model, weight, args, method)
+            cfn_mtx += tmp_cfn_mtx
+            tp = tp.union(tmp_tp)
+            fn.extend(tmp_fn)
+            fp = fp.union(tmp_fp)
+        else:
+          cfn_mtx, tp, fn, fp = conf_mtx(
+            TRUE.reset_index(drop=True), PRED_W.reset_index(drop=True), model,
+            weight, args, method)
+        CFN_MTX += cfn_mtx
+        CFN_MTX.loc[NONE_STR, NONE_STR] = N_seconds - CFN_MTX.sum().sum()
+        TP = TP.union(tp)
+        FN.extend(fn)
+        FP = FP.union(fp)
+        disp = ConfMtxDisp(CFN_MTX.values, display_labels=CFN_MTX.columns)
+        disp.plot(ax=ax, colorbar=False)
+        disp.im_.set(clim=(1, N_seconds), cmap="Blues", norm="log")
+        for labels in disp.text_.ravel():
+          labels.set(color=MEX_PINK, fontsize=12, fontweight="bold")
+      # TODO: Implement the properties of the plot as a function of the number
+      #       of weights and coordinates
+      axs[0].set()
+      axs[1].set(ylabel=None, yticklabels=[])
+      if len(args.weights) > 2:
+        axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
+        axs[2].set(title=None)
+        axs[2].xaxis.tick_top()
+        axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
+        axs[3].set(ylabel=None, yticklabels=[], title=None)
+        axs[3].xaxis.tick_top()
+      fig.subplots_adjust(left=0.08, right=1.08, top=.95, bottom=0.05,
+                          wspace=0.1, hspace=0.2)
+      fig.colorbar(disp.im_, ax=axs, orientation='vertical',
+                  label="Number of Picks", aspect=50, shrink=0.8)
+      disp.im_.set_clim(1, N_seconds)
+      IMG_FILE = \
+        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
+            UNDERSCORE_STR.join([
+              method, CFN_MTX_STR, model, THRESHOLDER_STR.format(
+                p=args.pwave, s=args.swave)]) + PNG_EXT)
+      plt.savefig(IMG_FILE, bbox_inches='tight')
+      plt.close()
+    HEADER = HEADER_MODL + MATCH_CNFG[method][HEADER_STR]
+    # True Positives
+    TP = pd.DataFrame(TP, columns=HEADER).sort_values(
+          SORT_HIERARCHY_PRED).reset_index(drop=True)
+    # False Negatives
+    FN = pd.DataFrame(FN, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)
+    # False Positives
+    FP = pd.DataFrame(FP, columns=HEADER).sort_values(SORT_HIERARCHY_PRED)
+  if args.verbose:
+    TP.to_csv(TP_FILE, index=False)
+    FN.to_csv(FN_FILE, index=False)
+    FP.to_csv(FP_FILE, index=False)    
+
+  if method in [CLSSFD_STR, DETECT_STR]:
+    print("True Positives")
+    tp = pd.DataFrame([*zip(
+      TP[[MODEL_STR, WEIGHT_STR]].agg(SPACE_STR.join, axis=1),
+      TP[PHASE_STR].astype(str))], columns=[ID_STR, PHASE_STR])
+    MTX = pd.DataFrame(0, index=tp[ID_STR].unique(),
+                       columns=tp[PHASE_STR].unique(), dtype=int)
+    for id, val in tp[[ID_STR, PHASE_STR]].value_counts().items():
+      MTX.loc[id[0], id[1]] = val
+    MTX["Total"] = MTX.sum(axis=1)
+    MTX.sort_index(inplace=True)
+    print(MTX.to_string(), end="\n\n")
+    print("False Negatives")
+    fn = pd.DataFrame([*zip(
+      FN[[MODEL_STR, WEIGHT_STR]].agg(SPACE_STR.join, axis=1),
+      FN[PHASE_STR].astype(str))], columns=[ID_STR, PHASE_STR])
+    MTX = pd.DataFrame(0, index=fn[ID_STR].unique(),
+                       columns=fn[PHASE_STR].unique(), dtype=int)
+    for id, val in fn[[ID_STR, PHASE_STR]].value_counts().items():
+      MTX.loc[id[0], id[1]] = val
+    MTX["Total"] = MTX.sum(axis=1)
+    MTX.sort_index(inplace=True)
+    print(MTX.to_string(), end="\n\n")
+    print("False Positives")
+    fp = pd.DataFrame([*zip(
+      FP[[MODEL_STR, WEIGHT_STR]].agg(SPACE_STR.join, axis=1),
+      FP[PHASE_STR].astype(str))], columns=[ID_STR, PHASE_STR])
+    MTX = pd.DataFrame(0, index=fp[ID_STR].unique(),
+                       columns=fp[PHASE_STR].unique(), dtype=int)
+    for id, val in fp[[ID_STR, PHASE_STR]].value_counts().items():
+      MTX.loc[id[0], id[1]] = val
+    MTX["Total"] = MTX.sum(axis=1)
+    MTX.sort_index(inplace=True)
+    print(MTX.to_string(), end="\n\n")
 
   # True Positive Probability distribution plot
   if method in [CLSSFD_STR, DETECT_STR]:
     for model, tp_m in TP.groupby(MODEL_STR):
-      fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
-                                              int(x * Ws - 1) * 1.5))
+      fig, _axs = plt.subplots(x, y, figsize=figsize, layout='constrained')
       axs = _axs.flatten()
       plt.rcParams.update({'font.size': 12})
       fig.suptitle(model)
       for ax, (weight, tp_w) in zip(axs, tp_m.groupby(WEIGHT_STR)):
         ax.set_title(weight)
-        for phase in [PWAVE, SWAVE]:
-          tp = zip(*tp_w[tp_w[PHASE_STR] == phase][PROBABILITY_STR].to_list())
-          if len(tp) == 0: continue
-          print(tp)
-          exit()
-          ax.scatter(*reversed(list(zip(*tp))), label=phase, marker="o",
-                     c=COLOR_ENCODING[TP_STR][phase])
-          ax.set(xlabel="Prediction Probability", ylabel="Operator Weight",
-                 xscale="log", xlim=(0.1, 1.))
-          ax.legend()
-          ax.grid()
+        tp_w[[0, 1]] = tp_w[PROBABILITY_STR].str.split(COMMA_STR, expand=True)
+        tp_w[0] = tp_w[0].apply(lambda x: int(x[1:]))
+        tp_w[1] = tp_w[1].apply(lambda x: float(x[:-1]))
+        tmp = dict()
+        for (phase, prob), tp in tp_w.groupby([PHASE_STR, 0]):
+          key = PERIOD_STR.join([phase, str(prob)])
+          tmp.setdefault(key, list())
+          hist, bins = np.histogram(tp[1], bins=NUM_BINS, range=(0.1, 1.))
+          tmp[key].append(hist)
+        tmp = pd.DataFrame([list(*hist) for hist in tmp.values()],
+                           index=tmp.keys(), columns=bins[:-1], dtype=int) \
+                .T.sort_index(ascending=False)
+        ax.imshow(tmp, cmap="Blues", aspect="auto",
+                   extent=(0, len(tmp.columns), 0, len(tmp.index)) d)
+        yticks, yticklabels = ax.get_yticks(), ax.get_yticklabels()
+        ax.set(xlabel="Operator Weight", ylabel="Prediction Probability")
       axs[0].set()
       axs[1].set(ylabel=None, yticklabels=[])
       if len(args.weights) > 2:
@@ -529,8 +547,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
     for model in args.models:
       TP_M = TP[TP[MODEL_STR] == model]
       FN_M = FN[FN[MODEL_STR] == model]
-      fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
-                                              int(x * Ws - 1) * 1.5))
+      fig, _axs = plt.subplots(x, y, figsize=figsize, layout='constrained')
       axs = _axs.flatten()
       fig.suptitle(model)
       plt.rcParams.update({'font.size': 12})
@@ -552,7 +569,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
                   .sort_index()
           RECALL[p] = (tp, fn)
         RECALL[RECALL_STR] = (RECALL[PWAVE][0] + RECALL[SWAVE][0]) / \
-                            (RECALL[PWAVE][0] + RECALL[PWAVE][1] + \
+                             (RECALL[PWAVE][0] + RECALL[PWAVE][1] + \
                               RECALL[SWAVE][0] + RECALL[SWAVE][1])
         RECALL[RECALL_STR].plot(ax=ax2, label=f"{PWAVE} + {SWAVE}", color="k")
         for p in [PWAVE, SWAVE]:
@@ -600,7 +617,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
                 args.circdomain[0] - args.circdomain[3],
                 args.circdomain[0] + args.circdomain[3]]
     for model, tp_m in TP.groupby(MODEL_STR):
-      fig = plt.figure(figsize=(int(y * Ws) * 1.5, int(x * Ws - 1) * 1.5))
+      fig = plt.figure(figsize=figsize, layout='constrained')
       plt.rcParams.update({'font.size': 12})
       fig.suptitle(model)
       for i, (weight, tp_w) in enumerate(tp_m.groupby(WEIGHT_STR)):
@@ -613,9 +630,10 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
         gl.left_labels = True
         gl.top_labels = True
         ax.set_title("Events")
-      IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + UNDERSCORE_STR.join([
-               method, TP_STR, model, THRESHOLDER_STR.format(
-                 p=args.pwave, s=args.swave)]) + PNG_EXT)
+      IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) +
+                      UNDERSCORE_STR.join([
+                        method, TP_STR, model, THRESHOLDER_STR.format(
+                          p=args.pwave, s=args.swave)]) + PNG_EXT)
       plt.tight_layout()
       plt.savefig(IMG_FILE, bbox_inches='tight')
       plt.close()
@@ -645,6 +663,7 @@ def stat_test(TRUE : pd.DataFrame, PRED : pd.DataFrame,
       else: STAT.loc[(STAT[head] == row[head]).all(axis=1)] = row.tolist()
   if method in [CLSSFD_STR, DETECT_STR]:
     groups = [MODEL_STR, WEIGHT_STR, PHASE_STR]
+    print(TP.groupby(groups).keys())
     for (model, weight, phase), df in TP.groupby(groups):
       tp = len(df[df[PHASE_STR] == phase].index)
       STAT.loc[(STAT[MODEL_STR] == model) & (STAT[WEIGHT_STR] == weight) &
@@ -712,12 +731,12 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
   Ws : int = len(args.weights)
   x : int = int(np.sqrt(Ws))
   y : int = Ws // x + int((Ws % x) != 0)
+  figsize = (int(y * Ws) * 1.5, int(x * Ws - 1) * 1.5)
   if method in [CLSSFD_STR, DETECT_STR]:
     DATA[PROBABILITY_STR] = DATA[PROBABILITY_STR].map(lambda x: x[1])
     for phase, df_p in DATA.groupby(PHASE_STR):
       for model, df_m in df_p.groupby(MODEL_STR):
-        fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
-                                                int(x * Ws - 1) * 1.5))
+        fig, _axs = plt.subplots(x, y, figsize=figsize, layout='constrained')
         axs = _axs.flatten()
         plt.rcParams.update({'font.size': 12})
         fig.suptitle(model)
@@ -760,8 +779,7 @@ def time_displacement(DATA : pd.DataFrame, args : argparse.Namespace,
         plt.close()
   else:
     for model, df_m in DATA.groupby(MODEL_STR):
-      fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
-                                              int(x * Ws - 1) * 1.5))
+      fig, _axs = plt.subplots(x, y, figsize=figsize, layout='constrained')
       axs = _axs.flatten()
       plt.rcParams.update({'font.size': 12})
       fig.suptitle(model)
@@ -805,7 +823,7 @@ def _Analysis(args : argparse.Namespace,
                   CSV_EXT)
   if (not args.force and FILEPATH.exists() and
       ini.read_args(args, False) == ini.dump_args(args, True)):
-    print(f"Loading {FILEPATH}...")
+    print(f"Loading {FILEPATH}")
     DF = ini.data_loader(FILEPATH)
   else:
     DF = ini.classified_loader(args) if method == CLSSFD_STR else \
@@ -824,9 +842,9 @@ def _Analysis(args : argparse.Namespace,
   Ws : int = len(args.weights)
   x : int = int(np.sqrt(Ws))
   y : int = Ws // x + int((Ws % x) != 0)
+  figsize = (int(y * Ws) * 1.5, int(x * Ws - 1) * 1.5)
   for (model, phase), dataframe_m in DF.groupby([MODEL_STR, PHASE_STR]):
-    fig, _axs = plt.subplots(x, y, figsize=(int(y * Ws) * 1.5,
-                                            int(x * Ws - 1) * 1.5))
+    fig, _axs = plt.subplots(x, y, figsize=figsize, layout='constrained')
     axs = _axs.flatten()
     plt.rcParams.update({'font.size': 12})
     fig.suptitle(model)

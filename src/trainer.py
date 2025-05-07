@@ -63,6 +63,7 @@ def dataset_builder(args : argparse.Namespace, SOURCE : pd.DataFrame = None,
   METADATA_PATH = Path(DATASET_PATH, METADATA_STR + CSV_EXT)
   WAVEFORM_PATH = Path(DATASET_PATH, WAVEFORMS_STR + HDF5_EXT)
   with sbd.WaveformDataWriter(METADATA_PATH, WAVEFORM_PATH) as WFW:
+    print(f"Creating dataset for {WEIGHT}")
     WFW.data_format = {
       "dimension_order": "CW",
       "component_order": "ZNE",
@@ -127,7 +128,9 @@ def dataset_builder(args : argparse.Namespace, SOURCE : pd.DataFrame = None,
           sample = int((pick[TIMESTAMP_STR].iloc[0] - actual_t_start) * SAMPLING_RATE)
           trace_params[f"trace_{phase}_status"] = "manual"
           trace_params[f"trace_{phase}_arrival_sample"] = int(sample)
+          trace_params[f"trace_{phase}_quality"] = float(pick[PROBABILITY_STR].iloc[0])
         WFW.add_trace({**event_params, **trace_params}, data)
+        print("Adding trace", trace_params)
 
 def main(args : argparse.Namespace):
   dataset_loader(args)

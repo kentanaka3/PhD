@@ -24,7 +24,7 @@ class TestParser(unittest.TestCase):
                                     "230604"])
   def test_event_parser_dat(self):
     args = ini.parse_arguments()
-    stations = ini.station_loader(args)
+    _, stations = ini.station_loader(args)
     _, data = event_parser_dat(args.file[0], *args.dates, stations=stations)
     data = data.values.tolist()
     EXPECTED = [
@@ -97,7 +97,7 @@ class TestParser(unittest.TestCase):
                                     "230604"])
   def test_event_parser_hpl(self):
     args = ini.parse_arguments()
-    stations = ini.station_loader(args)
+    _, stations = ini.station_loader(args)
     source, detect = event_parser_hpl(args.file[0], *args.dates,
                                       stations=stations)
     source = source.values.tolist()
@@ -205,7 +205,7 @@ class TestParser(unittest.TestCase):
                                     "230604"])
   def test_event_parser_folder(self):
     args = ini.parse_arguments()
-    STATIONS = ini.station_loader(args)
+    _, STATIONS = ini.station_loader(args)
     source, detect = event_parser(args.file[0], *args.dates,
                                   stations=STATIONS)
     source = source.values.tolist()
