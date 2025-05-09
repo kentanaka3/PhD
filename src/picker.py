@@ -1,36 +1,40 @@
-import os
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+import initializer as ini
+from constants import *
+import seisbench.models as sbm
+import seisbench.util as sbu
+from obspy.core.utcdatetime import UTCDateTime
+import obspy
+import matplotlib.pyplot as plt
+from threading import Thread
+from mpi4py import MPI
+import pandas as pd
+import numba as nb
+import numpy as np
+import itertools
+import argparse
+import pickle
+import torch
+import sys
 from pathlib import Path
+import os
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
+
 # Set the project folder
 PRJ_PATH = Path(os.path.dirname(__file__)).parent
 INC_PATH = os.path.join(PRJ_PATH, "inc")
 IMG_PATH = os.path.join(PRJ_PATH, "img")
 DATA_PATH = os.path.join(PRJ_PATH, "data")
-import sys
+
 # Add to path
-if INC_PATH not in sys.path: sys.path.append(INC_PATH)
-import torch
-import pickle
-import argparse
-import itertools
-import numpy as np
-import numba as nb
-import pandas as pd
-from mpi4py import MPI
-from threading import Thread
-import matplotlib.pyplot as plt
+if INC_PATH not in sys.path:
+  sys.path.append(INC_PATH)
 
 # ObsPy
-import obspy
-from obspy.core.utcdatetime import UTCDateTime
 
 # SeisBench
 PROGRAM_NAME = "SeisBench"
-import seisbench.util as sbu
-import seisbench.models as sbm
 
-from constants import *
-import initializer as ini
 
 # TODO: Colab PyOcto associator to be tested with GaMMA
 # TODO: Discuss constants.NORM = "peak"
@@ -48,8 +52,9 @@ DENOISER = None
 
 DATES = None
 
+
 @nb.njit(nogil=True)
-def filter_data_(data : np.array) -> bool:
+def filter_data_(data: np.array) -> bool:
   """
   Check if the array contains NaN or Inf values. This function uses Numba
   for JIT-compilation and is run without the Global Interpreter Lock (GIL)
@@ -60,19 +65,23 @@ def filter_data_(data : np.array) -> bool:
   optimization: Numba's @njit with nogil enables parallel filtering in threads.
   """
   for d in data:
-    if np.isnan(d) or np.isinf(d): return True
+    if np.isnan(d) or np.isinf(d):
+      return True
   return False
 
+
 @nb.jit()
-def filter_data(data : np.array) -> bool:
+def filter_data(data: np.array) -> bool:
   # if np.isnan(trc.data).any() or np.isinf(trc.data).any(): return True
   """
   Wrapper for filter_data_ using JIT to further optimize execution.
   """
   return filter_data_(data)
 
-def clean_stream(stream : obspy.Stream, FMT_DICT : dict[str, str],
-                 args : argparse.Namespace) -> obspy.Stream:
+
+def clean_stream(
+    stream: obspy.Stream, FMT_DICT: dict[str, str], args: argparse.Namespace
+) -> obspy.Stream:
   """
   Process seismic waveform streams by:
   1. Resampling to a standard rate
@@ -88,33 +97,43 @@ def clean_stream(stream : obspy.Stream, FMT_DICT : dict[str, str],
   input: stream (obspy.Stream), FMT_DICT (dict), args (argparse.Namespace)
   output: cleaned and optionally denoised obspy.Stream
   """
-  ## TODO: Model parameter for HIGHPASS filtering MODEL.FILTER_ARGS (present in
+  # TODO: Model parameter for HIGHPASS filtering MODEL.FILTER_ARGS (present in
   #        SeisBench) Recommended for thesis
   global DATA_PATH
   DATA_PATH = args.directory.parent
-  if args.verbose: print("Cleaning the Stream")
+  if args.verbose:
+    print("Cleaning the Stream")
   # Sample has to be 100 Hz
   stream.resample(SAMPLING_RATE)
-  stream.merge(method=1, fill_value='interpolate')
+  stream.merge(method=1, fill_value="interpolate")
   # TODO: Consider using the Stream.detrend() method
   for trc in stream:
     # Remove Stream.Trace if it contains NaN or Inf
-    if filter_data(trc.data): stream.remove(trc)
+    if filter_data(trc.data):
+      stream.remove(trc)
   start = UTCDateTime.strptime(FMT_DICT[DATE_STR], DATE_FMT)
   # TODO: Padding might add artifacts that may give bad results.
-  stream.trim(starttime=start, endtime=start + ONE_DAY, pad=True, fill_value=0,
-              nearest_sample=False)
+  stream.trim(
+      starttime=start,
+      endtime=start + ONE_DAY,
+      pad=True,
+      fill_value=0,
+      nearest_sample=False,
+  )
   if args.denoiser:
-    if args.verbose: print("Denoising the Stream")
+    if args.verbose:
+      print("Denoising the Stream")
     # TODO: Denoiser model doesnt seem to work properly
-    stream = sbm.DeepDenoiser(sampling_rate=SAMPLING_RATE).annotate(stream,
-                                                                    copy=False)
+    stream = sbm.DeepDenoiser(sampling_rate=SAMPLING_RATE).annotate(
+        stream, copy=False
+    )
   # TODO: Implement interactive plot
-  if args.interactive: pass
+  if args.interactive:
+    pass
   return stream
 
-def read_traces(trace_files : pd.DataFrame, args : argparse.Namespace) \
-    -> obspy.Stream:
+
+def read_traces(trace_files: pd.DataFrame, args: argparse.Namespace) -> obspy.Stream:
   """
   Read waveform traces listed in a DataFrame, then clean the stream.
 
@@ -126,23 +145,28 @@ def read_traces(trace_files : pd.DataFrame, args : argparse.Namespace) \
   global DATA_PATH
   DATA_PATH = args.directory.parent
   stream = obspy.Stream()
-  FMT_DICT : dict[str, str] = {category : EMPTY_STR
-                               for category in [NETWORK_STR, STATION_STR,
-                                                CHANNEL_STR, DATE_STR]}
+  FMT_DICT: dict[str, str] = {
+      category: EMPTY_STR
+      for category in [NETWORK_STR, STATION_STR, CHANNEL_STR, DATE_STR]
+  }
   for category in args.groups:
     FMT_DICT[category] = trace_files[category].unique()[0]
   for _, row in trace_files.iterrows():
-    if args.verbose: print("Attempting to read from raw file:", row.name)
+    if args.verbose:
+      print("Attempting to read from raw file:", row.name)
     if not Path(row.name).exists() and not args.silent:
       # TODO: Download the file
       print("CRITICAL: File not found:", row.name)
       continue
-    else: stream += obspy.read(row.name)
+    else:
+      stream += obspy.read(row.name)
   # Clean the stream
   return clean_stream(stream, FMT_DICT, args)
 
-def interactive_plot(stream : obspy.Stream, picks : sbu.PickList,
-                     model_name : str, dataset_name : str) -> None:
+
+def interactive_plot(
+    stream: obspy.Stream, picks: sbu.PickList, model_name: str, dataset_name: str
+) -> None:
   """
   Plot the Stream with the picks on the Stream.
 
@@ -160,23 +184,38 @@ def interactive_plot(stream : obspy.Stream, picks : sbu.PickList,
   notes:
 
   """
-  events = [(np.datetime64(pick.peak_time), pick.peak_value,
-             ('b' if pick.phase == PWAVE else 'r')) for pick in picks]
-  fig = stream.plot(handle=True, method='full', size=(3000, 1000),
-                    equal_scale=False)
-  fig.suptitle(SPACE_STR.join([fig.get_suptitle(), model_name, dataset_name]),
-               fontsize=24)
+  events = [
+      (
+          np.datetime64(pick.peak_time),
+          pick.peak_value,
+          ("b" if pick.phase == PWAVE else "r"),
+      )
+      for pick in picks
+  ]
+  fig = stream.plot(handle=True, method="full",
+                    size=(3000, 1000), equal_scale=False)
+  fig.suptitle(
+      SPACE_STR.join([fig.get_suptitle(), model_name, dataset_name]), fontsize=24
+  )
   for ax in fig.get_axes():
-    for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
-                 ax.get_xticklabels() + ax.get_yticklabels()):
+    for item in (
+        [ax.title, ax.xaxis.label, ax.yaxis.label]
+        + ax.get_xticklabels()
+        + ax.get_yticklabels()
+    ):
       item.set_fontsize(18)
-    for p, a, c in events: ax.axvline(p, linestyle='--', color=c, alpha=a)
+    for p, a, c in events:
+      ax.axvline(p, linestyle="--", color=c, alpha=a)
   fig.tight_layout()
   plt.show()
 
-def classify_stream(clf_files : list[tuple[tuple[str], pd.DataFrame]],
-                    model : sbm.base.SeisBenchModel,
-                    key : tuple[str], args : argparse.Namespace) -> None:
+
+def classify_stream(
+    clf_files: list[tuple[tuple[str], pd.DataFrame]],
+    model: sbm.base.SeisBenchModel,
+    key: tuple[str],
+    args: argparse.Namespace,
+) -> None:
   """
   Classify waveform streams using a given model and store the picks.
 
@@ -191,18 +230,29 @@ def classify_stream(clf_files : list[tuple[tuple[str], pd.DataFrame]],
   global DATA_PATH
   DATA_PATH = args.directory.parent
   for categories, trace_files in clf_files:
-    CLF_FILE = Path(DATA_PATH, CLF_STR, *categories,
-                    ("D_" if args.denoiser else EMPTY_STR) +
-                    UNDERSCORE_STR.join([*categories, *key]) + PICKLE_EXT)
+    CLF_FILE = Path(
+        DATA_PATH,
+        CLF_STR,
+        *categories,
+        ("D_" if args.denoiser else EMPTY_STR)
+        + UNDERSCORE_STR.join([*categories, *key])
+        + PICKLE_EXT,
+    )
     CLF_FILE.parent.mkdir(parents=True, exist_ok=True)
     CLF_FILE.touch(exist_ok=True)
-    output = model.classify(read_traces(trace_files, args),
-                            batch_size=args.batch, P_threshold=args.pwave,
-                            S_threshold=args.swave).picks
-    with open(CLF_FILE, 'wb') as fp: pickle.dump(output, fp)
+    output = model.classify(
+        read_traces(trace_files, args),
+        batch_size=args.batch,
+        P_threshold=args.pwave,
+        S_threshold=args.swave,
+    ).picks
+    with open(CLF_FILE, "wb") as fp:
+      pickle.dump(output, fp)
 
-def get_model(model_name : str, dataset_name : str, silent : bool = False) \
-      -> sbm.base.SeisBenchModel:
+
+def get_model(
+    model_name: str, dataset_name: str, silent: bool = False
+) -> sbm.base.SeisBenchModel:
   """
   Retrieve a pretrained model.
 
@@ -214,18 +264,25 @@ def get_model(model_name : str, dataset_name : str, silent : bool = False) \
   try:
     model = MODEL_WEIGHTS_DICT[model_name].from_pretrained(dataset_name)
   except:
-    if not silent: print(f"WARNING: Pretrained weights '{dataset_name}' not "
-                         f"found for model '{model_name}'")
+    if not silent:
+      print(
+          f"WARNING: Pretrained weights '{dataset_name}' not "
+          f"found for model '{model_name}'"
+      )
     return None
   # Enable GPU calls if available
-  if torch.cuda.is_available() and GPU_RANK >= 0: model.cuda()
+  if torch.cuda.is_available() and GPU_RANK >= 0:
+    model.cuda()
   elif torch.backends.mps.is_available() and GPU_RANK >= 0:
     model.to(torch.device("mps"))
-  if not silent: print(model_name, model.weights_docstring)
+  if not silent:
+    print(model_name, model.weights_docstring)
   return model
 
-def set_up(args : argparse.Namespace) \
-    -> list[dict[tuple[str], sbm.base.SeisBenchModel], pd.DataFrame]:
+
+def set_up(
+    args: argparse.Namespace,
+) -> list[dict[tuple[str], sbm.base.SeisBenchModel], pd.DataFrame]:
   """
   Initialize MPI, GPU, and model assignments for parallel execution.
 
@@ -244,17 +301,23 @@ def set_up(args : argparse.Namespace) \
   MPI_RANK = MPI_COMM.Get_rank()
   if torch.cuda.is_available():
     GPU_SIZE = torch.cuda.device_count()
-    if MPI_RANK < GPU_SIZE: GPU_RANK = MPI_RANK % GPU_SIZE
-    if args.verbose: print(f"Setting MPI {MPI_RANK} to " + \
-                           (f"GPU {GPU_RANK}" if GPU_RANK >= 0 else "CPU"))
+    if MPI_RANK < GPU_SIZE:
+      GPU_RANK = MPI_RANK % GPU_SIZE
+    if args.verbose:
+      print(
+          f"Setting MPI {MPI_RANK} to "
+          + (f"GPU {GPU_RANK}" if GPU_RANK >= 0 else "CPU")
+      )
     torch.cuda.set_device(GPU_RANK)
   elif torch.backends.mps.is_available():
     GPU_SIZE = 1
     GPU_RANK = 0
-    if args.verbose: print(f"Setting MPI {MPI_RANK} to GPU {GPU_RANK}")
+    if args.verbose:
+      print(f"Setting MPI {MPI_RANK} to GPU {GPU_RANK}")
     torch.device("mps")
   else:
-    if args.verbose: print(f"Setting MPI {MPI_RANK} to CPU")
+    if args.verbose:
+      print(f"Setting MPI {MPI_RANK} to CPU")
     GPU_RANK = -1
   MODELS = None
   WAVEFORMS = None
@@ -263,11 +326,17 @@ def set_up(args : argparse.Namespace) \
       print("MPI size:", MPI_SIZE)
       print("GPU size:", GPU_SIZE)
     if args.train:
-      MODELS = [(m, w) for m, w in itertools.product(args.models, args.weights)
-                if m in MODEL_WEIGHTS_DICT]
+      MODELS = [
+          (m, w)
+          for m, w in itertools.product(args.models, args.weights)
+          if m in MODEL_WEIGHTS_DICT
+      ]
     else:
-      MODELS = [(m, w) for m, w in itertools.product(args.models, args.weights)
-                if get_model(m, w, True) is not None]
+      MODELS = [
+          (m, w)
+          for m, w in itertools.product(args.models, args.weights)
+          if get_model(m, w, True) is not None
+      ]
     WAVEFORMS = ini.waveform_table(args)
   MODELS = MPI_COMM.bcast(MODELS, root=0)
   WAVEFORMS = MPI_COMM.bcast(WAVEFORMS, root=0)
@@ -282,16 +351,21 @@ def set_up(args : argparse.Namespace) \
 
   # Assign the models to the current process
   MODELS = MODELS[start_idx:end_idx]
-  if args.verbose: print(f"Process {MPI_RANK} handles models {MODELS}")
+  if args.verbose:
+    print(f"Process {MPI_RANK} handles models {MODELS}")
   if args.train:
-    return {(model_name, dataset_name) : MODEL_WEIGHTS_DICT[model_name]
-            for model_name, dataset_name in MODELS}, WAVEFORMS
+    return {
+        (model_name, dataset_name): MODEL_WEIGHTS_DICT[model_name]
+        for model_name, dataset_name in MODELS
+    }, WAVEFORMS
   else:
-    return {(model_name, dataset_name) :
-              get_model(model_name, dataset_name, args.silent)
-            for model_name, dataset_name in MODELS}, WAVEFORMS
+    return {
+        (model_name, dataset_name): get_model(model_name, dataset_name, args.silent)
+        for model_name, dataset_name in MODELS
+    }, WAVEFORMS
 
-def main(args : argparse.Namespace) -> None:
+
+def main(args: argparse.Namespace) -> None:
   """
   Orchestrates the full seismic phase picking pipeline.
 
@@ -313,66 +387,83 @@ def main(args : argparse.Namespace) -> None:
   DATA_PATH = args.directory.parent
   if args.download:
     import downloader as dwn
+
     dwn.data_downloader(args)
     return
   MODELS, WAVEFORMS = set_up(args)
-  if args.timing: TIMING = np.zeros(len(MODELS))
-  if args.train: # Train
-    if args.verbose: print("Training the Model")
+  if args.timing:
+    TIMING = np.zeros(len(MODELS))
+  if args.train:  # Train
+    if args.verbose:
+      print("Training the Model")
     assert len(args.weights) == 1
     args.weights = args.weights[0]
     import seisbench as sb
     import seisbench.data as sbd
     import seisbench.generate as sbg
     from torch.utils.data import DataLoader
+
     for i, (name, model) in enumerate(MODELS.items()):
-      if not args.file: raise FileNotFoundError("Dataset not found")
-      if len(args.file) > 1: raise NotImplementedError("Multiple files")
+      if not args.file:
+        raise FileNotFoundError("Dataset not found")
+      if len(args.file) > 1:
+        raise NotImplementedError("Multiple files")
       if args.file[0]:
         global DATES
         start, end = args.dates
         if DATES is None:
           DATES = [start.datetime]
-          while DATES[-1] < end.datetime: DATES.append(DATES[-1] + ONE_DAY)
+          while DATES[-1] < end.datetime:
+            DATES.append(DATES[-1] + ONE_DAY)
         STATIONS = dict()
         WAVEFORMS[DATE_STR] = WAVEFORMS[DATE_STR].apply(
-          lambda x: UTCDateTime.strptime(x, DATE_FMT))
+            lambda x: UTCDateTime.strptime(x, DATE_FMT)
+        )
         for s, e in zip(DATES[:-1], DATES[1:]):
           S = WAVEFORMS.loc[
-                WAVEFORMS[DATE_STR].between(s, e, inclusive='left'),
-                STATION_STR]
-          if S.empty: continue
+              WAVEFORMS[DATE_STR].between(s, e, inclusive="left"), STATION_STR
+          ]
+          if S.empty:
+            continue
           S = S.unique()
           STATIONS[s.strftime(DATE_FMT)] = set(S)
         SOURCE, DETECT = ini.true_loader(args)
       else:
         raise NotImplementedError
-        print("WARNING: obspy.clients.fdsn.header.FDSNNoDataException: "
-              "No data available for request. HTTP Status code: 204")
+        print(
+            "WARNING: obspy.clients.fdsn.header.FDSNNoDataException: "
+            "No data available for request. HTTP Status code: 204"
+        )
         from obspy.clients.fdsn import Client
         from obspy.core.event import Catalog
+
         CATALOG = Catalog()
         for client in args.client:
           if args.rectdomain:
-            CATALOG += Client(client).get_events(*args.dates,
-                          minlatitude=args.rectdomain[0],
-                          maxlatitude=args.rectdomain[1],
-                          minlongitude=args.rectdomain[2],
-                          maxlongitude=args.rectdomain[3],
-                          includearrivals=True)
+            CATALOG += Client(client).get_events(
+                *args.dates,
+                minlatitude=args.rectdomain[0],
+                maxlatitude=args.rectdomain[1],
+                minlongitude=args.rectdomain[2],
+                maxlongitude=args.rectdomain[3],
+                includearrivals=True,
+            )
           elif args.circdomain:
-            CATALOG += Client(client).get_events(*args.dates,
-                          latitude=args.circdomain[0],
-                          longitude=args.circdomain[1],
-                          minradius=args.circdomain[2],
-                          maxradius=args.circdomain[3],
-                          includearrivals=True)
+            CATALOG += Client(client).get_events(
+                *args.dates,
+                latitude=args.circdomain[0],
+                longitude=args.circdomain[1],
+                minradius=args.circdomain[2],
+                maxradius=args.circdomain[3],
+                includearrivals=True,
+            )
         # TODO: Extract the SOURCE and DETECT from the CATALOG
-      SOURCE = SOURCE[SOURCE[NOTES_STR].isnull() &
-                      SOURCE[LATITUDE_STR].notna()].reset_index(drop=True)
-      DETECT = DETECT[
-        DETECT[ID_STR].isin(SOURCE[ID_STR])].reset_index(drop=True)
-      name : list[str] = list(name)
+      SOURCE = SOURCE[
+          SOURCE[NOTES_STR].isnull() & SOURCE[LATITUDE_STR].notna()
+      ].reset_index(drop=True)
+      DETECT = DETECT[DETECT[ID_STR].isin(
+          SOURCE[ID_STR])].reset_index(drop=True)
+      name: list[str] = list(name)
       DATASET_PATH = Path(sb.cache_root, DATASETS_STR, name[-1])
       print(f"Creating {args.weights} dataset path:", DATASET_PATH)
       DATASET_PATH.mkdir(parents=True, exist_ok=True)
@@ -380,10 +471,12 @@ def main(args : argparse.Namespace) -> None:
       exit()
       if METADATA_PATH.exists():
         METADATA = pd.read_csv(METADATA_PATH)
-        if args.verbose: print("Metadata:", METADATA)
+        if args.verbose:
+          print("Metadata:", METADATA)
       else:
-        METADATA = pd.DataFrame(columns=[DATE_STR, NETWORK_STR, STATION_STR,
-                                        CHANNEL_STR])
+        METADATA = pd.DataFrame(
+            columns=[DATE_STR, NETWORK_STR, STATION_STR, CHANNEL_STR]
+        )
       WAVEFORMS_PATH = Path(DATA_PATH, WAVEFORMS_STR + HDF5_EXT)
       DATASET = sbd.WaveformDataset(DATASET_PATH, sampling_rate=SAMPLING_RATE)
       if args.verbose:
@@ -394,28 +487,37 @@ def main(args : argparse.Namespace) -> None:
       # Generate a Dataset
       # Train the model
       # Save the model
-  else: # Test
-    if args.verbose: print("Testing the Model")
+  else:  # Test
+    if args.verbose:
+      print("Testing the Model")
     for i, (name, model) in enumerate(MODELS.items()):
-      name : list[str] = list(name)
+      name: list[str] = list(name)
       if args.verbose:
         print("Testing model: {}, with preloaded weight: {}".format(*name))
-      clf_files : list[tuple[tuple[str], pd.DataFrame]] = list()
-      clf_found : list[tuple[tuple[str], pd.DataFrame]] = list()
-      RERUN : list[tuple[tuple[str], pd.DataFrame]] = list()
+      clf_files: list[tuple[tuple[str], pd.DataFrame]] = list()
+      clf_found: list[tuple[tuple[str], pd.DataFrame]] = list()
+      RERUN: list[tuple[tuple[str], pd.DataFrame]] = list()
       for categories, trace_files in WAVEFORMS.groupby(args.groups):
         categories = [str(c) for c in categories]
-        CLF_FILE = Path(DATA_PATH, CLF_STR, *categories,
-                        ("D_" if args.denoiser else EMPTY_STR) +
-                        UNDERSCORE_STR.join([*categories, *name]) + PICKLE_EXT)
+        CLF_FILE = Path(
+            DATA_PATH,
+            CLF_STR,
+            *categories,
+            ("D_" if args.denoiser else EMPTY_STR)
+            + UNDERSCORE_STR.join([*categories, *name])
+            + PICKLE_EXT,
+        )
         if not args.force and CLF_FILE.exists():
           clf_found.append((categories, trace_files))
-        else: clf_files.append((categories, trace_files))
+        else:
+          clf_files.append((categories, trace_files))
       # P1
       if clf_files:
-        if args.timing: start_time = MPI.Wtime()
+        if args.timing:
+          start_time = MPI.Wtime()
         classify_stream(clf_files, model, name, args)
-        if args.timing: TIMING[i] += MPI.Wtime() - start_time
+        if args.timing:
+          TIMING[i] += MPI.Wtime() - start_time
       """
       # TODO: Spawn two threads and synchronize them
       def classify_and_plot():
@@ -453,14 +555,21 @@ def main(args : argparse.Namespace) -> None:
       # Phase 2: Show cached results
       if args.verbose:
         for categories, trace_files in clf_found:
-          print("Classification results for model: {}, with preloaded weight: "
-                "{} - categories: {}".format(*name, categories))
-          CLF_FILE = Path(DATA_PATH, CLF_STR, *categories,
-                          ("D_" if args.denoiser else EMPTY_STR) +
-                          UNDERSCORE_STR.join([*categories, *name]) +
-                          PICKLE_EXT)
+          print(
+              "Classification results for model: {}, with preloaded weight: "
+              "{} - categories: {}".format(*name, categories)
+          )
+          CLF_FILE = Path(
+              DATA_PATH,
+              CLF_STR,
+              *categories,
+              ("D_" if args.denoiser else EMPTY_STR)
+              + UNDERSCORE_STR.join([*categories, *name])
+              + PICKLE_EXT,
+          )
           try:
-            with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)
+            with open(CLF_FILE, "rb") as fp:
+              output = pickle.load(fp)
           except Exception as e:
             print("WARNING: ", e)
             RERUN.append((categories, trace_files))
@@ -470,18 +579,26 @@ def main(args : argparse.Namespace) -> None:
           if args.interactive:
             interactive_plot(read_traces(trace_files, args), output, *name)
       # Phase 3: Retry failed traces
-      if RERUN: classify_stream(RERUN, model, name, args)
+      if RERUN:
+        classify_stream(RERUN, model, name, args)
       # Final interactive output and sync
       if args.verbose:
         for categories, trace_files in clf_files + RERUN:
-          print("Classification results for model: {}, with preloaded weight: "
-                "{} - categories: {}".format(*name, categories))
-          CLF_FILE = Path(DATA_PATH, CLF_STR, *categories,
-                          ("D_" if args.denoiser else EMPTY_STR) +
-                          UNDERSCORE_STR.join([*categories, *name]) +
-                          PICKLE_EXT)
+          print(
+              "Classification results for model: {}, with preloaded weight: "
+              "{} - categories: {}".format(*name, categories)
+          )
+          CLF_FILE = Path(
+              DATA_PATH,
+              CLF_STR,
+              *categories,
+              ("D_" if args.denoiser else EMPTY_STR)
+              + UNDERSCORE_STR.join([*categories, *name])
+              + PICKLE_EXT,
+          )
           try:
-            with open(CLF_FILE, 'rb') as fp: output = pickle.load(fp)
+            with open(CLF_FILE, "rb") as fp:
+              output = pickle.load(fp)
           except Exception as e:
             print("WARNING: ", e)
             os.remove(CLF_FILE)
@@ -492,9 +609,12 @@ def main(args : argparse.Namespace) -> None:
     if args.timing:
       global MPI_COMM, MPI_RANK, MPI_SIZE
       TOTALS = np.zeros_like(TIMING)
-      if MPI_COMM is None: TOTALS = TIMING
-      else: MPI_COMM.Reduce([TIMING, MPI.DOUBLE], [TOTALS, MPI.DOUBLE],
-                            op=MPI.SUM, root=0)
+      if MPI_COMM is None:
+        TOTALS = TIMING
+      else:
+        MPI_COMM.Reduce(
+            [TIMING, MPI.DOUBLE], [TOTALS, MPI.DOUBLE], op=MPI.SUM, root=0
+        )
       TOTALS = TOTALS / MPI_SIZE
       if MPI_RANK == 0:
         print(f"  Total time: {sum(TOTALS):.2f} s")
@@ -505,4 +625,6 @@ def main(args : argparse.Namespace) -> None:
         print(f" Median time: {np.median(TOTALS):.2f} s")
   return
 
-if __name__ == "__main__": main(ini.parse_arguments())
+
+if __name__ == "__main__":
+  main(ini.parse_arguments())

@@ -1,19 +1,20 @@
 #!/bin/python
+import unittest
+import initializer as ini
+import associator as asc
+from obspy.core.utcdatetime import UTCDateTime
+from mpi4py import MPI
+import copy
+import sys
 import os
 from pathlib import Path
 PRJ_PATH = Path(os.path.dirname(__file__)).parent
 SRC_PATH = os.path.join(PRJ_PATH, "src")
 INC_PATH = os.path.join(PRJ_PATH, "inc")
-import sys
 # Add to path
-if SRC_PATH not in sys.path: sys.path.append(SRC_PATH)
-import unittest
-import copy
-from mpi4py import MPI
-from obspy.core.utcdatetime import UTCDateTime
+if SRC_PATH not in sys.path:
+    sys.path.append(SRC_PATH)
 
-import associator as asc
-import initializer as ini
 
 DATA_PATH = Path(PRJ_PATH, "data", "test")
 TEST_PATH = Path(DATA_PATH, "waveforms")
@@ -87,4 +88,5 @@ if __name__ == "__main__":
 """
 
 
-if __name__ == "__main__": unittest.main()
+if __name__ == "__main__":
+    unittest.main()

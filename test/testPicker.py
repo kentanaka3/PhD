@@ -1,20 +1,22 @@
 #!/bin/python
+import unittest
+import initializer as ini
+from picker import *
+import json
+import shutil
+import sys
 import os
 from pathlib import Path
 PRJ_PATH = Path(os.path.dirname(__file__)).parent
 SRC_PATH = os.path.join(PRJ_PATH, "src")
-import sys
 # Add to path
-if SRC_PATH not in sys.path: sys.path.append(SRC_PATH)
-import unittest
-import shutil
-import json
+if SRC_PATH not in sys.path:
+  sys.path.append(SRC_PATH)
 
-from picker import *
-import initializer as ini
 
 DATA_PATH = Path(PRJ_PATH, "data", "test")
 TEST_PATH = Path(DATA_PATH, "waveforms")
+
 
 class TestReadTraces(unittest.TestCase):
   def tearDown(self) -> None:
@@ -45,6 +47,7 @@ class TestReadTraces(unittest.TestCase):
                                 UTCDateTime(tr.stats.starttime.date))
         self.assertLessEqual(tr.stats.endtime,
                              UTCDateTime(tr.stats.starttime.date) + ONE_DAY)
+
 
 class TestModel(unittest.TestCase):
   @classmethod
@@ -94,21 +97,23 @@ class TestModel(unittest.TestCase):
     args = ini.parse_arguments()
     MODELS, WAVEFORMS_DATA = set_up(args)
     for key, model in MODELS.items():
-      key : list[str] = list(key)
-      if model is None: continue
+      key: list[str] = list(key)
+      if model is None:
+        continue
       if args.verbose:
         print("Testing model: {}, with preloaded weight: {}".format(*key))
       clf_files = []
       clf_found = []
       for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
         categories = [str(c) for c in categories]
-        CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
-                        ("D_" if args.denoiser else EMPTY_STR) + \
+        CLF_FILE = Path(DATA_PATH, CLF_STR, *categories,
+                        ("D_" if args.denoiser else EMPTY_STR) +
                         UNDERSCORE_STR.join([*categories, *key]) + PICKLE_EXT)
         if not args.force and CLF_FILE.exists():
           clf_found.append((categories, trace_files))
         clf_files.append((categories, trace_files))
-      if not clf_files: continue
+      if not clf_files:
+        continue
       classify_stream(clf_files, model, key, args)
 
   @unittest.mock.patch("sys.argv", ["picker.py", "-v", "-d", str(TEST_PATH),
@@ -117,21 +122,25 @@ class TestModel(unittest.TestCase):
     args = ini.parse_arguments()
     MODELS, WAVEFORMS_DATA = set_up(args)
     for key, model in MODELS.items():
-      key : list[str] = list(key)
-      if model is None: continue
+      key: list[str] = list(key)
+      if model is None:
+        continue
       if args.verbose:
         print("Testing model: {}, with preloaded weight: {}".format(*key))
       clf_files = []
       clf_found = []
       for categories, trace_files in WAVEFORMS_DATA.groupby(args.groups):
         categories = [str(c) for c in categories]
-        CLF_FILE = Path(DATA_PATH, CLF_STR, *categories, 
-                        ("D_" if args.denoiser else EMPTY_STR) + \
+        CLF_FILE = Path(DATA_PATH, CLF_STR, *categories,
+                        ("D_" if args.denoiser else EMPTY_STR) +
                         UNDERSCORE_STR.join([*categories, *key]) + PICKLE_EXT)
         if not args.force and CLF_FILE.exists():
           clf_found.append((categories, trace_files))
         clf_files.append((categories, trace_files))
-      if not clf_files: continue
+      if not clf_files:
+        continue
       classify_stream(clf_files, model, key, args)
 
-if __name__ == "__main__": unittest.main()
+
+if __name__ == "__main__":
+  unittest.main()

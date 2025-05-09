@@ -1,38 +1,141 @@
+import seisbench.util as sbu
+import seisbench.data as sbd
+import parser as prs
+from errors import ERRORS
+from constants import *
+from concurrent.futures import ThreadPoolExecutor
+from obspy.core.utcdatetime import UTCDateTime
+import matplotlib.gridspec as gridspec
+import matplotlib.patches as mpatches
+import cartopy.feature as cfeature
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
+import cartopy.crs as ccrs
+import matplotlib as mpl
+import pandas as pd
+import obspy as op
+import numpy as np
+import argparse
+import pickle
+import json
+from pathlib import Path
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-from pathlib import Path
 # Set the project folder
 PRJ_PATH = Path(os.path.dirname(__file__)).parent
 IMG_PATH = Path(PRJ_PATH, "img")
 DATA_PATH = Path(PRJ_PATH, "data")
-import json
-import pickle
-import argparse
-import numpy as np
-import obspy as op
-import pandas as pd
-import matplotlib as mpl
-import cartopy.crs as ccrs
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import cartopy.feature as cfeature
-import matplotlib.patches as mpatches
-import matplotlib.gridspec as gridspec
-from obspy.core.utcdatetime import UTCDateTime
-from concurrent.futures import ThreadPoolExecutor
 
-from constants import *
-from errors import ERRORS
-import parser as prs
 
-def data_loader(filepath : Path) -> any:
-  if not filepath.exists(): raise FileNotFoundError
+# Seisbench
+
+
+def dataset_builder(args: argparse.Namespace, SOURCE: pd.DataFrame = None,
+                    DETECT: pd.DataFrame = None,
+                    WAVEFORMS: pd.DataFrame = None) -> Path:
+  assert len(args.weights) == 1
+  WEIGHT = args.weights[0]
+  global DATA_PATH
+  DATA_PATH = args.directory.parent
+  if WAVEFORMS is None or args.force:
+    WAVEFORMS = waveform_table(args)
+  if SOURCE is None or DETECT is None or args.force:
+    SOURCE, DETECT = true_loader(args, WAVEFORMS=WAVEFORMS)
+  DATASET_PATH = Path(DATA_PATH, MODELS_STR, WEIGHT)
+  DATASET_PATH.mkdir(parents=True, exist_ok=True)
+  METADATA_PATH = Path(DATASET_PATH, METADATA_STR + CSV_EXT)
+  WAVEFORM_PATH = Path(DATASET_PATH, WAVEFORMS_STR + HDF5_EXT)
+  with sbd.WaveformDataWriter(METADATA_PATH, WAVEFORM_PATH) as WFW:
+    print(f"Creating dataset for {WEIGHT}")
+    WFW.data_format = {
+        "dimension_order": "CW",
+        "component_order": "ZNE",
+        "measurement": "velocity",
+        "unit": "counts",
+        "instrument_response": "not restituted",
+    }
+    for _, SRC in SOURCE.iterrows():
+      idx = SRC[ID_STR]
+      date = SRC[TIMESTAMP_STR].date
+      latitude = SRC[LATITUDE_STR]
+      longitude = SRC[LONGITUDE_STR]
+      depth = SRC[LOCAL_DEPTH_STR]
+      magnitude = SRC[MAGNITUDE_STR]
+      event_params = {
+          "source_id": idx,
+          "source_origin_time": SRC[TIMESTAMP_STR],
+          "source_latitude_deg": latitude,
+          "source_longitude_deg": longitude,
+          "source_depth_km": depth,
+          "source_magnitude": magnitude,
+          "split": "train"
+      }
+      waveforms_d = WAVEFORMS[WAVEFORMS[DATE_STR] == date.strftime(DATE_FMT)]
+      if waveforms_d.empty:
+        continue
+      for station, DTC in DETECT[DETECT[ID_STR] == idx].groupby(STATION_STR):
+        waveforms = waveforms_d[waveforms_d[STATION_STR] == station]
+        if waveforms.empty:
+          continue
+        id = waveforms[NETWORK_STR].unique()[0] + PERIOD_STR + station
+        STATION_PATH = Path(DATA_PATH, STATION_STR, id + XML_EXT)
+        STATION = op.read_inventory(STATION_PATH)[0][0]
+        if STATION is None:
+          continue
+        traces = list(waveforms.index)
+        start = DTC[TIMESTAMP_STR].min() - PICK_OFFSET_TRAIN
+        end = DTC[TIMESTAMP_STR].max() + PICK_OFFSET_TRAIN
+        stream = op.Stream()
+        for trace in traces:
+          if not Path(trace).exists():
+            continue
+          # TODO: Warning msg
+          stream += op.read(trace, starttime=start, endtime=end,
+                            nearest_sample=True)
+          stream.resample(SAMPLING_RATE)
+        # TODO: If filtered, consider that for TEST must be filtered as well
+        # stream.detrend(type="linear").filter(type="highpass", freq=1., corners=4,
+        #                                     zerophase=True)
+        # TODO: Warning msg
+        if len(stream) == 0:
+          continue
+        actual_t_start, data, _ = sbu.stream_to_array(
+            stream, component_order=WFW.data_format["component_order"])
+        trace_params = {
+            "station_network_code": stream[-1].stats.network,
+            "station_code": stream[-1].stats.station,
+            "trace_channel": stream[-1].stats.channel,
+            "station_location_code": stream[-1].stats.location,
+            "station_latitude_deg": STATION.latitude,
+            "station_longitude_deg": STATION.longitude,
+            "station_elevation_m": STATION.elevation,
+            "trace_sampling_rate_hz": SAMPLING_RATE,
+            "trace_start_time": str(actual_t_start)
+        }
+        for phase, pick in DTC.groupby(PHASE_STR):
+          sample = int((pick[TIMESTAMP_STR].iloc[0] -
+                       actual_t_start) * SAMPLING_RATE)
+          trace_params[f"trace_{phase}_status"] = "manual"
+          trace_params[f"trace_{phase}_arrival_sample"] = int(sample)
+          trace_params[f"trace_{phase}_quality"] = float(
+              pick[PROBABILITY_STR].iloc[0])
+        WFW.add_trace({**event_params, **trace_params}, data)
+        if args.verbose:
+          print("Adding trace", trace_params)
+
+
+def data_loader(filepath: Path) -> any:
+  if not filepath.exists():
+    raise FileNotFoundError
   data = None
   sfx = filepath.suffix
   if sfx == JSON_EXT:
-    with open(filepath, 'r') as f: data = json.load(f)
-  elif sfx == CSV_EXT: data = pd.read_csv(filepath)
-  elif sfx == HDF5_EXT: data = pd.read_hdf(filepath)
+    with open(filepath, 'r') as f:
+      data = json.load(f)
+  elif sfx == CSV_EXT:
+    data = pd.read_csv(filepath)
+  elif sfx == HDF5_EXT:
+    data = pd.read_hdf(filepath)
   elif sfx == MSEED_EXT:
     try:
       data = op.read(filepath)
@@ -41,47 +144,69 @@ def data_loader(filepath : Path) -> any:
       filepath.unlink()
   elif sfx == PICKLE_EXT:
     try:
-      with open(filepath, 'rb') as f: data = pickle.load(f)
+      with open(filepath, 'rb') as f:
+        data = pickle.load(f)
     except:
       print(filepath)
       filepath.unlink()
-  elif sfx == DAT_EXT: return prs.event_parser_dat(filepath)
-  elif sfx == PUN_EXT: return prs.event_parser_pun(filepath)
-  elif sfx == HPC_EXT: return prs.event_parser_hpc(filepath)
-  elif sfx == HPL_EXT: return prs.event_parser_hpl(filepath)
-  elif sfx == MOD_EXT: return prs.event_parser_mod(filepath)
-  elif sfx == QML_EXT: return prs.event_parser_qml(filepath)
-  else: print(NotImplementedError)
+  elif sfx == DAT_EXT:
+    return prs.event_parser_dat(filepath)
+  elif sfx == PUN_EXT:
+    return prs.event_parser_pun(filepath)
+  elif sfx == HPC_EXT:
+    return prs.event_parser_hpc(filepath)
+  elif sfx == HPL_EXT:
+    return prs.event_parser_hpl(filepath)
+  elif sfx == MOD_EXT:
+    return prs.event_parser_mod(filepath)
+  elif sfx == QML_EXT:
+    return prs.event_parser_qml(filepath)
+  else:
+    print(NotImplementedError)
   return data
 
-def is_date(string : str) -> UTCDateTime:
+
+def is_date(string: str) -> UTCDateTime:
   return UTCDateTime.strptime(string, DATE_FMT)
 
-def is_julian(string : str) -> UTCDateTime:
+
+def is_julian(string: str) -> UTCDateTime:
   # TODO: Define and convert Julian date to Gregorian date
   raise NotImplementedError
   return UTCDateTime.strptime(string, DATE_FMT)._set_julday(string)
 
-def is_file_path(string : str) -> Path:
-  if os.path.isfile(string): return Path(os.path.abspath(string))
-  else: raise FileNotFoundError(string)
 
-def is_dir_path(string : str) -> Path:
-  if os.path.isdir(string): return Path(os.path.abspath(string))
-  else: raise NotADirectoryError(string)
+def is_file_path(string: str) -> Path:
+  if os.path.isfile(string):
+    return Path(os.path.abspath(string))
+  else:
+    raise FileNotFoundError(string)
 
-def is_path(string : str) -> Path:
+
+def is_dir_path(string: str) -> Path:
+  if os.path.isdir(string):
+    return Path(os.path.abspath(string))
+  else:
+    raise NotADirectoryError(string)
+
+
+def is_path(string: str) -> Path:
   if os.path.isfile(string) or os.path.isdir(string):
     return Path(os.path.abspath(string))
-  else: raise FileNotFoundError(string)
+  else:
+    raise FileNotFoundError(string)
+
 
 class SortDatesAction(argparse.Action):
   def __call__(self, parser, namespace, values, option_string=None):
     setattr(namespace, self.dest, sorted(values))
 
+
 class LoadFileAction(argparse.Action):
   def __call__(self, parser, namespace, values, option_string=None):
-    with values as f: setattr(namespace, self.dest, json.load(f))
+    with values as f:
+      setattr(namespace, self.dest, json.load(f))
+
 
 def parse_arguments():
   parser = argparse.ArgumentParser(description="Process AdriaArray Dataset")
@@ -102,7 +227,7 @@ def parse_arguments():
                       type=is_file_path, metavar=EMPTY_STR,
                       help="Key to download the data from server.")
   parser.add_argument('-M', "--models", choices=MODEL_WEIGHTS_DICT.keys(),
-                       default=[PHASENET_STR, EQTRANSFORMER_STR], type=str,
+                      default=[PHASENET_STR, EQTRANSFORMER_STR], type=str,
                       nargs=ONE_MORECHAR_STR, metavar=EMPTY_STR,
                       required=False,
                       help="Specify a set of Machine Learning based models")
@@ -112,7 +237,7 @@ def parse_arguments():
                       help="Specify a set of Networks to analyze. To allow "
                            "downloading data for any channel, set this option "
                            f"to \'{ALL_WILDCHAR_STR}\'.")
-  parser.add_argument('-S', "--station", default=[ALL_WILDCHAR_STR],type=str,
+  parser.add_argument('-S', "--station", default=[ALL_WILDCHAR_STR], type=str,
                       nargs=ONE_MORECHAR_STR, metavar=EMPTY_STR,
                       required=False,
                       help="Specify a set of Stations to analyze. To allow "
@@ -187,7 +312,7 @@ def parse_arguments():
                                  "[longitude West] [longitude East] "
                                  "[latitude South] [latitude North]")
   domain_group.add_argument("--circdomain", nargs=4, type=float,
-                            #default=[46.3583, 12.808, 0., 0.3],
+                            # default=[46.3583, 12.808, 0., 0.3],
                             metavar=("lat", "lon", "min_rad", "max_rad"),
                             help="Circular domain to download the data: "
                                  "[center latitude] [center longitude] "
@@ -205,10 +330,11 @@ def parse_arguments():
       if key in vars(args) and vars(args)[key] is None:
         setattr(args, key, value)
   # TODO: Fix special cases
-  #print(vars(args))
+  # print(vars(args))
   return args
 
-def station_set(STATIONS : dict[str, set[str]]) -> set[str]:
+
+def station_set(STATIONS: dict[str, set[str]]) -> set[str]:
   """
   Return a set of stations from the given dictionary.
 
@@ -225,11 +351,13 @@ def station_set(STATIONS : dict[str, set[str]]) -> set[str]:
 
   """
   stations = set()
-  for st in STATIONS.values(): stations.update(st)
+  for st in STATIONS.values():
+    stations.update(st)
   return stations
 
-def dump_args(args : argparse.Namespace,
-              overwrite : bool = False) -> dict[str, str]:
+
+def dump_args(args: argparse.Namespace,
+              overwrite: bool = False) -> dict[str, str]:
   """
   Return the primary arguments used to execute the program. If the overwrite
   flag is set to True, then the primary arguments will be saved to a JSON file
@@ -251,22 +379,24 @@ def dump_args(args : argparse.Namespace,
   global DATA_PATH
   DATA_PATH = args.directory.parent
   ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
-  arg_dict : dict[str, str] = {
-    MODEL_STR     : args.models,
-    WEIGHT_STR    : args.weights,
-    NETWORK_STR   : args.network,
-    STATION_STR   : args.station,
-    CHANNEL_STR   : args.channel,
-    DATE_STR      : [a.__str__() for a in args.dates] if args.dates else
-                    [a.__str__() for a in args.julian],
-    GROUPS_STR    : args.groups,
-    DIRECTORY_STR : args.directory.relative_to(PRJ_PATH).__str__(),
-    DENOISER_STR  : args.denoiser,
-    DOMAIN_STR    : args.rectdomain if args.rectdomain else args.circdomain
+  arg_dict: dict[str, str] = {
+      MODEL_STR: args.models,
+      WEIGHT_STR: args.weights,
+      NETWORK_STR: args.network,
+      STATION_STR: args.station,
+      CHANNEL_STR: args.channel,
+      DATE_STR: [a.__str__() for a in args.dates] if args.dates else
+      [a.__str__() for a in args.julian],
+      GROUPS_STR: args.groups,
+      DIRECTORY_STR: args.directory.relative_to(PRJ_PATH).__str__(),
+      DENOISER_STR: args.denoiser,
+      DOMAIN_STR: args.rectdomain if args.rectdomain else args.circdomain
   }
   if overwrite:
-    with open(ARGUMENTS_FILE, 'w') as fw: json.dump(arg_dict, fw, indent=2)
+    with open(ARGUMENTS_FILE, 'w') as fw:
+      json.dump(arg_dict, fw, indent=2)
   return arg_dict
+
 
 def read_args(args: argparse.Namespace,
               overwrite: bool = False) -> dict[str, str]:
@@ -292,11 +422,12 @@ def read_args(args: argparse.Namespace,
   ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
   arg_dict = data_loader(ARGUMENTS_FILE) if (not overwrite and
                                              ARGUMENTS_FILE.exists()) else \
-             dump_args(args, overwrite)
+      dump_args(args, overwrite)
   return arg_dict
 
-def data_header(args : argparse.Namespace,
-                folder : str = CLF_STR) -> pd.DataFrame:
+
+def data_header(args: argparse.Namespace,
+                folder: str = CLF_STR) -> pd.DataFrame:
   """
   Construct a table of files based on the specified arguments.
 
@@ -316,22 +447,27 @@ def data_header(args : argparse.Namespace,
   global DATA_PATH
   DATA_PATH = args.directory.parent
   PATH = Path(DATA_PATH, folder)
-  if args.verbose: print("Constructing the Table of", folder)
-  if not PATH.exists(): raise FileNotFoundError
+  if args.verbose:
+    print("Constructing the Table of", folder)
+  if not PATH.exists():
+    raise FileNotFoundError
   RESULTS = list()
   start, end = args.dates
   for date_path in PATH.iterdir():
     if DATE_STR in args.groups and date_path.is_dir():
       c_date = UTCDateTime.strptime(date_path.name, DATE_FMT)
-      if c_date < start or c_date >= end + ONE_DAY: continue
+      if c_date < start or c_date >= end + ONE_DAY:
+        continue
       for network_path in date_path.iterdir():
         if (args.network != [ALL_WILDCHAR_STR] and
-            network_path.stem not in args.network): continue
+                network_path.stem not in args.network):
+          continue
         if (NETWORK_STR in args.groups or STATION_STR in args.groups) and \
            network_path.is_dir():
           for station_path in network_path.iterdir():
             if (args.station != [ALL_WILDCHAR_STR] and
-                station_path.stem not in args.station): continue
+                    station_path.stem not in args.station):
+              continue
             if STATION_STR in args.groups and station_path.is_dir():
               for file_path in station_path.iterdir():
                 # Handle (daily, network, station, model, weight) files
@@ -372,7 +508,8 @@ def data_header(args : argparse.Namespace,
   RESULTS.set_index(FILENAME_STR, inplace=True)
   return RESULTS
 
-def _loader(args : argparse.Namespace, folder : str) -> pd.DataFrame:
+
+def _loader(args: argparse.Namespace, folder: str) -> pd.DataFrame:
   if folder == CLF_STR:
     return classified_loader(args)
   elif folder == AST_STR:
@@ -380,10 +517,11 @@ def _loader(args : argparse.Namespace, folder : str) -> pd.DataFrame:
   else:
     return waveform_table(args)
 
-def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
-                INVENTORY : op.Inventory = None,
-                STATIONS : dict[str, set[str]] = None) \
-      -> tuple[pd.DataFrame, pd.DataFrame]:
+
+def true_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None,
+                INVENTORY: op.Inventory = None,
+                STATIONS: dict[str, set[str]] = None) \
+        -> tuple[pd.DataFrame, pd.DataFrame]:
   assert len(args.file) == 1
   global DATA_PATH
   DATA_PATH = args.directory.parent
@@ -392,26 +530,28 @@ def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
   stations = station_set(STATIONS)
   start, end = [x.strftime(DATE_FMT) for x in args.dates]
   SRC_FILE = Path(DATA_PATH, UNDERSCORE_STR.join([
-    TRUE_STR, SOURCE_STR, start, end]) + CSV_EXT)
+      TRUE_STR, SOURCE_STR, start, end]) + CSV_EXT)
   DTC_FILE = Path(DATA_PATH, UNDERSCORE_STR.join([
-    TRUE_STR, DETECT_STR, start, end]) + CSV_EXT)
+      TRUE_STR, DETECT_STR, start, end]) + CSV_EXT)
   if SRC_FILE.exists() and not args.force:
     SOURCE = data_loader(SRC_FILE)
     SOURCE[TIMESTAMP_STR] = SOURCE[TIMESTAMP_STR].apply(
-      lambda x: UTCDateTime(x))
+        lambda x: UTCDateTime(x))
     DETECT = data_loader(DTC_FILE)
     DETECT[TIMESTAMP_STR] = DETECT[TIMESTAMP_STR].apply(
-      lambda x: UTCDateTime(x))
+        lambda x: UTCDateTime(x))
   else:
     SOURCE, DETECT = prs.event_parser(args.file[0], *args.dates, STATIONS)
+    SOURCE = SOURCE[SOURCE[LATITUDE_STR] != NONE_STR].reset_index(drop=True)
+    SOURCE = SOURCE.astype({LATITUDE_STR: float, LONGITUDE_STR: float,
+                            LOCAL_DEPTH_STR: float, })
+    DETECT = DETECT[DETECT[ID_STR].isin(SOURCE[ID_STR])].reset_index(drop=True)
     if args.verbose:
       SOURCE.to_csv(SRC_FILE, index=False)
       DETECT.to_csv(Path(DATA_PATH, UNDERSCORE_STR.join([
-        TRUE_STR, DETECT_STR, start, end])+ CSV_EXT), index=False)
-  SOURCE = SOURCE[SOURCE[LATITUDE_STR] != NONE_STR].reset_index(drop=True)
-  DETECT = DETECT[DETECT[ID_STR].isin(SOURCE[ID_STR])].reset_index(drop=True)
-  SOURCE = SOURCE.astype({ID_STR : int})
-  DETECT = DETECT.astype({ID_STR : int})
+          TRUE_STR, DETECT_STR, start, end]) + CSV_EXT), index=False)
+  SOURCE = SOURCE.astype({ID_STR: int})
+  DETECT = DETECT.astype({ID_STR: int})
   print("Picks Detections")
   # Table
   MTX = pd.DataFrame(0, index=DETECT[PROBABILITY_STR].unique(),
@@ -424,7 +564,8 @@ def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
   print(MTX.sum(axis=0), end="\n\n")
   PandS = 0
   for (id, st), df in DETECT.groupby([ID_STR, STATION_STR]):
-    if len(df.groupby(PHASE_STR)) == 2: PandS += 1
+    if len(df.groupby(PHASE_STR)) == 2:
+      PandS += 1
     elif len(df.groupby(PHASE_STR)) != len(df.index):
       print(f"WARNING: {id} {st}")
       print(df, end="\n\n")
@@ -437,9 +578,9 @@ def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
   for (id, st), df in DETECT.groupby([ID_STR, STATION_STR]):
     x = df[[PHASE_STR, PROBABILITY_STR]]
     PS_MTX.loc[ABSENT if PWAVE not in set(x[PHASE_STR].to_list())
-                    else x[x[PHASE_STR] == PWAVE][PROBABILITY_STR],
+               else x[x[PHASE_STR] == PWAVE][PROBABILITY_STR],
                ABSENT if df[PHASE_STR].nunique() == 1
-                    else x[x[PHASE_STR] == SWAVE][PROBABILITY_STR]] += 1
+               else x[x[PHASE_STR] == SWAVE][PROBABILITY_STR]] += 1
   print(PS_MTX.to_string(), end="\n\n")
   if args.verbose:
     # SOURCE
@@ -448,12 +589,12 @@ def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
       GS = gridspec.GridSpec(1, 2, figure=FIG, wspace=0, width_ratios=[1, 7])
       plt.rcParams.update({'font.size': 12})
       if args.rectdomain:
-        plusminus = 0.5
+        pm = 0.5
         xy = [args.rectdomain[2], args.rectdomain[0]]
         w = args.rectdomain[3] - args.rectdomain[2]
         h = args.rectdomain[1] - args.rectdomain[0]
-        extent = [args.rectdomain[2] - plusminus, args.rectdomain[3] + plusminus,
-                  args.rectdomain[0] - plusminus, args.rectdomain[1] + plusminus]
+        extent = [args.rectdomain[2] - pm, args.rectdomain[3] + pm,
+                  args.rectdomain[0] - pm, args.rectdomain[1] + pm]
       if args.circdomain:
         raise NotImplementedError
         extent = [args.circdomain[1] - args.circdomain[3],
@@ -463,22 +604,22 @@ def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
       proj = ccrs.PlateCarree()
       stAx = FIG.add_subplot(GS[1], projection=proj,)
       stAx.add_patch(mpatches.Polygon(
-        OGS_POLY_REGION, closed=True, linewidth=1, color='red', fill=False,
-        label="OGS Catalog"))
+          OGS_POLY_REGION, closed=True, linewidth=1, color='red', fill=False,
+          label="OGS Catalog"))
       stAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
                                         fill=False, label=OGS_STUDY_STR))
       norm = plt.Normalize(vmin=0, vmax=SOURCE[LOCAL_DEPTH_STR].max())
       mask = SOURCE[MAGNITUDE_STR] >= OGS_MAX_MAGNITUDE
       EQ = SOURCE[~mask]
       stAx.scatter(EQ[LONGITUDE_STR], EQ[LATITUDE_STR], facecolors="none",
-                   edgecolors=mpl.cm.autumn_r(norm(EQ[LOCAL_DEPTH_STR])),
+                   edgecolors=mpl.cm.plasma(norm(EQ[LOCAL_DEPTH_STR])),
                    transform=proj, alpha=1, s=10*(3.5**EQ[MAGNITUDE_STR]),
                    label=fr"$<$ {OGS_MAX_MAGNITUDE}")
       EQ = SOURCE[mask]
       stAx.scatter(EQ[LONGITUDE_STR], EQ[LATITUDE_STR], c=EQ[LOCAL_DEPTH_STR],
-                  marker='*', edgecolors='black', norm=norm, transform=proj, 
-                  cmap="autumn_r", alpha=0.5, s=100*(1.5**EQ[MAGNITUDE_STR]),
-                  label=fr"$\geq$ {OGS_MAX_MAGNITUDE} $M_{{EQ}}$")
+                   marker='*', edgecolors='black', norm=norm, transform=proj,
+                   cmap="plasma", alpha=0.5, s=100*(1.5**EQ[MAGNITUDE_STR]),
+                   label=fr"$\geq$ {OGS_MAX_MAGNITUDE} $M_{{EQ}}$")
       stAx.legend(fontsize=16)
       stAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
       stAx.add_feature(cfeature.BORDERS, linewidth=0.5, edgecolor=MEX_PINK)
@@ -500,7 +641,8 @@ def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
       rgAx.set_extent([6, 19, 36, 48], crs=proj)
       rgAx.set_aspect('equal', adjustable='box')
       ita = rgAx.annotate("Italy", xy=(0.5, 0.55), xycoords='axes fraction',
-                        ha='center', va='center', fontsize=20, color=MEX_PINK)
+                          ha='center', va='center', fontsize=20,
+                          color=MEX_PINK)
       ita.set(rotation=-30)
       # Depth
       dpAx = FIG.add_axes([-.025, .06, 0.15, 0.5])
@@ -520,11 +662,12 @@ def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
                     ha="center", va="center", color="w")
       """
       IMG_FILE = Path(IMG_PATH, UNDERSCORE_STR.join([
-        TRUE_STR, SOURCE_STR, start, end]) + PNG_EXT)
+          TRUE_STR, SOURCE_STR, start, end]) + PNG_EXT)
       plt.tight_layout()
       plt.savefig(IMG_FILE, bbox_inches='tight')
       plt.close()
     plot_spatial_dist()
+
     def plot_magnitude_dist():
       _, ax = plt.subplots(figsize=(10, 5), layout='tight')
       plt.rcParams.update({'font.size': 12})
@@ -532,11 +675,12 @@ def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
       ax.set_title("Magnitude Distribution")
       ax.set(xlabel="Magnitude", ylabel="Number of Events")
       IMG_FILE = Path(IMG_PATH, (UNDERSCORE_STR.join([
-        TRUE_STR, MAGNITUDE_STR, start, end]) + PNG_EXT))
+          TRUE_STR, MAGNITUDE_STR, start, end]) + PNG_EXT))
       plt.tight_layout()
       plt.savefig(IMG_FILE, bbox_inches='tight')
       plt.close()
     plot_magnitude_dist()
+
     def plot_depth_dist():
       _, ax = plt.subplots(figsize=(10, 5), layout='tight')
       plt.rcParams.update({'font.size': 12})
@@ -544,11 +688,12 @@ def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
       ax.set_title("Depth Distribution")
       ax.set(xlabel="Depth (km)", ylabel="Number of Events", xscale='log')
       IMG_FILE = Path(IMG_PATH, (UNDERSCORE_STR.join([
-        TRUE_STR, LOCAL_DEPTH_STR, start, end]) + PNG_EXT))
+          TRUE_STR, LOCAL_DEPTH_STR, start, end]) + PNG_EXT))
       plt.tight_layout()
       plt.savefig(IMG_FILE, bbox_inches='tight')
       plt.close()
     plot_depth_dist()
+
     def plot_stations():
       FIG = plt.figure(figsize=(20, 10), layout="tight")
       GS = gridspec.GridSpec(1, 2, figure=FIG, wspace=0, width_ratios=[1, 7])
@@ -557,7 +702,8 @@ def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
       print(f"Catalog Stations: {len(st)}/{len(stations)}")
       start, end = args.dates
       DATES = [start.datetime]
-      while DATES[-1] < end.datetime: DATES.append(DATES[-1] + ONE_DAY)
+      while DATES[-1] < end.datetime:
+        DATES.append(DATES[-1] + ONE_DAY)
       DATES = [d.strftime(DATE_FMT) for d in DATES]
       dates = [np.datetime64(UTCDateTime.strptime(d, DATE_FMT)) for d in DATES]
       st = pd.DataFrame([[n.code, s.code, s.latitude, s.longitude, 0]
@@ -567,12 +713,12 @@ def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
       for d, s in STATIONS.items():
         st.loc[st[STATION_STR].isin(list(s)), "Total"] += 1
       if args.rectdomain:
-        plusminus = 0.5
+        pm = 0.5
         xy = [args.rectdomain[2], args.rectdomain[0]]
         w = args.rectdomain[3] - args.rectdomain[2]
         h = args.rectdomain[1] - args.rectdomain[0]
-        extent = [args.rectdomain[2] - plusminus, args.rectdomain[3] + plusminus,
-                  args.rectdomain[0] - plusminus, args.rectdomain[1] + plusminus]
+        extent = [args.rectdomain[2] - pm, args.rectdomain[3] + pm,
+                  args.rectdomain[0] - pm, args.rectdomain[1] + pm]
       if args.circdomain:
         raise NotImplementedError
         extent = [args.circdomain[1] - args.circdomain[3],
@@ -582,22 +728,22 @@ def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
       proj = ccrs.PlateCarree()
       stAx = FIG.add_subplot(GS[1], projection=proj,)
       stAx.add_patch(mpatches.Polygon(
-        OGS_POLY_REGION, closed=True, linewidth=1, color='red', fill=False,
-        label="OGS Catalog"))
+          OGS_POLY_REGION, closed=True, linewidth=1, color='red', fill=False,
+          label="OGS Catalog"))
       stAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
                                         fill=False, label=OGS_STUDY_STR))
       stAx.scatter(st[LONGITUDE_STR], st[LATITUDE_STR], s=50, marker='^',
                    transform=proj, label=STATION_STR, cmap="cool_r",
                    c=st["Total"], edgecolors="black", linewidths=1,
                    alpha=0.5)
-      x = {id : DETECT.loc[DETECT[ID_STR] == id, STATION_STR].nunique()
+      x = {id: DETECT.loc[DETECT[ID_STR] == id, STATION_STR].nunique()
            for id, _ in SOURCE.groupby(ID_STR)}
       norm = plt.Normalize(vmin=0, vmax=max(x.values()))
       stAx.scatter(
-        SOURCE[LONGITUDE_STR], SOURCE[LATITUDE_STR], alpha=1, transform=proj,
-        edgecolors=[mpl.cm.binary(norm(x[st])) for st in SOURCE[ID_STR]],
-        s=10*(3.5**SOURCE[MAGNITUDE_STR]), facecolors="none",
-        label=fr"$<$ {OGS_MAX_MAGNITUDE}")
+          SOURCE[LONGITUDE_STR], SOURCE[LATITUDE_STR], alpha=1, transform=proj,
+          edgecolors=[mpl.cm.binary(norm(x[st])) for st in SOURCE[ID_STR]],
+          s=10*(3.5**SOURCE[MAGNITUDE_STR]), facecolors="none",
+          label=fr"$<$ {OGS_MAX_MAGNITUDE}")
       stAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
       stAx.add_feature(cfeature.BORDERS, linewidth=0.5, edgecolor=MEX_PINK)
       stAx.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
@@ -609,7 +755,7 @@ def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
       gl.left_labels = True
       gl.top_labels = True
       # Region
-      rgAx = FIG.add_axes([.64,.02, 0.2, 0.3], projection=proj)
+      rgAx = FIG.add_axes([.64, .02, 0.2, 0.3], projection=proj)
       rgAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
                                         fill=False))
       rgAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
@@ -642,15 +788,16 @@ def true_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None,
       nsAx.set(xlabel="Number of Stations", ylabel="Number of Events",
                yscale='log')
       IMG_FILE = Path(IMG_PATH, (UNDERSCORE_STR.join([
-        TRUE_STR, STATION_STR, start.strftime(DATE_FMT),
-        end.strftime(DATE_FMT)]) + PNG_EXT))
+          TRUE_STR, STATION_STR, start.strftime(DATE_FMT),
+          end.strftime(DATE_FMT)]) + PNG_EXT))
       plt.tight_layout()
       plt.savefig(IMG_FILE, bbox_inches='tight')
       plt.close()
     plot_stations()
   return SOURCE, DETECT
 
-def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
+
+def classified_loader(args: argparse.Namespace) -> pd.DataFrame:
   """
   input  :
     - args          (argparse.Namespace)
@@ -670,13 +817,16 @@ def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
     then sorted by the timestamp and returned as a pandas DataFrame.
   """
   global DATA_PATH
-  DATA_PATH  = Path(args.directory).parent
+  DATA_PATH = Path(args.directory).parent
   CLF_PATH = Path(DATA_PATH, CLF_STR)
-  if not CLF_PATH.exists(): raise FileNotFoundError
+  if not CLF_PATH.exists():
+    raise FileNotFoundError
   DATA = list()
   for (model, weight, date), dataframe in \
-    data_header(args, CLF_STR).groupby([MODEL_STR, WEIGHT_STR, TIMESTAMP_STR]):
-    if args.force and args.verbose: HIST = list()
+          data_header(args, CLF_STR).groupby([
+              MODEL_STR, WEIGHT_STR, TIMESTAMP_STR]):
+    if args.force and args.verbose:
+      HIST = list()
     for filepath, (_, _, _, network, station) in dataframe.iterrows():
       PICK = [[model, weight, "{:.1f}".format(p.peak_value), np.nan,
                str(p.peak_time), p.peak_value, p.phase, network, station]
@@ -691,8 +841,9 @@ def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
       HIST = pd.DataFrame(HIST, columns=[ID_STR, *THRESHOLDS])\
                .set_index(ID_STR).sort_values(THRESHOLDS, ascending=False)
       IMG_FILE = \
-        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-             UNDERSCORE_STR.join([CLSSFD_STR, model, weight, date]) + PNG_EXT)
+          Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) +
+               UNDERSCORE_STR.join([CLSSFD_STR, model, weight, date]) +
+               PNG_EXT)
       HIST.plot(kind='bar', stacked=True, figsize=(20, 7), layout='tight')
       for leg in plt.legend().get_texts():
         leg.set_text(rf"$\geq$ {leg.get_text()}")
@@ -705,10 +856,11 @@ def classified_loader(args : argparse.Namespace) -> pd.DataFrame:
       plt.close()
   DATA = pd.DataFrame(DATA, columns=HEADER_PRED)\
            .sort_values(SORT_HIERARCHY_PRED).reset_index(drop=True)
-  DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].apply(lambda x : UTCDateTime(x))
+  DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
   return DATA
 
-def associated_loader(args : argparse.Namespace) -> pd.DataFrame:
+
+def associated_loader(args: argparse.Namespace) -> pd.DataFrame:
   """
   input  :
     - args          (argparse.Namespace)
@@ -728,13 +880,16 @@ def associated_loader(args : argparse.Namespace) -> pd.DataFrame:
     then sorted by the timestamp and returned as a pandas DataFrame.
   """
   global DATA_PATH
-  DATA_PATH  = Path(args.directory).parent
+  DATA_PATH = Path(args.directory).parent
   AST_PATH = Path(DATA_PATH, AST_STR)
-  if not AST_PATH.exists(): raise FileNotFoundError
+  if not AST_PATH.exists():
+    raise FileNotFoundError
   DATA = pd.DataFrame(columns=HEADER_PRED)
   for (model, weight, date), dataframe in \
-    data_header(args, AST_STR).groupby([MODEL_STR, WEIGHT_STR, TIMESTAMP_STR]):
-    if args.verbose: HIST = list()
+          data_header(args, AST_STR).groupby([MODEL_STR, WEIGHT_STR,
+                                              TIMESTAMP_STR]):
+    if args.verbose:
+      HIST = list()
     for filepath, (_, _, _, network, station) in dataframe.iterrows():
       PICKS = pd.DataFrame(data_loader(Path(filepath)), columns=HEADER_PRED)
       DATA = pd.concat([DATA, PICKS],
@@ -747,8 +902,9 @@ def associated_loader(args : argparse.Namespace) -> pd.DataFrame:
       HIST = pd.DataFrame(HIST, columns=[ID_STR, *reversed(THRESHOLDS)])\
                .set_index(ID_STR).sort_values(THRESHOLDS, ascending=False)
       IMG_FILE = \
-        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) + \
-             UNDERSCORE_STR.join([DETECT_STR, model, weight, date]) + PNG_EXT)
+          Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) +
+               UNDERSCORE_STR.join([DETECT_STR, model, weight, date]) +
+               PNG_EXT)
       HIST.plot(kind='bar', stacked=True, figsize=(20, 7), layout='tight')
       for leg in plt.legend().get_texts():
         leg.set_text(rf"$\geq$ {leg.get_text()}")
@@ -758,10 +914,11 @@ def associated_loader(args : argparse.Namespace) -> pd.DataFrame:
       plt.savefig(IMG_FILE, bbox_inches='tight')
       plt.close()
   DATA = DATA.sort_values(SORT_HIERARCHY_PRED).reset_index(drop=True)
-  DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].apply(lambda x : UTCDateTime(x))
+  DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
   return DATA
 
-def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
+
+def waveform_table(args: argparse.Namespace) -> pd.DataFrame:
   """
   Construct a table of files based on the specified arguments. A JSON file with
   the arguments will be saved in the data directory to act as a checksum and
@@ -785,31 +942,34 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
   WAVEFORMS_FILE = Path(DATA_PATH, WAVEFORMS_STR + CSV_EXT)
   start, end = args.dates
   if not args.force and WAVEFORMS_FILE.exists() and \
-    (read_args(args, False) == dump_args(args, True)):
+          (read_args(args, False) == dump_args(args, True)):
     # If the table of files already exists, we read the file and return the
     # table of files.
-    if args.verbose: print("Reading the Table of Files")
+    if args.verbose:
+      print("Reading the Table of Files")
     WAVEFORMS_DATA = data_loader(WAVEFORMS_FILE)
     WAVEFORMS_DATA[DATE_STR] = WAVEFORMS_DATA[DATE_STR].apply(
-      lambda x: UTCDateTime.strptime(str(x), DATE_FMT))
+        lambda x: UTCDateTime.strptime(str(x), DATE_FMT))
     WAVEFORMS_DATA = \
-      WAVEFORMS_DATA[(WAVEFORMS_DATA[DATE_STR] >= start) &
-                     (WAVEFORMS_DATA[DATE_STR] < end + ONE_DAY)]
+        WAVEFORMS_DATA[(WAVEFORMS_DATA[DATE_STR] >= start) &
+                       (WAVEFORMS_DATA[DATE_STR] < end + ONE_DAY)]
     WAVEFORMS_DATA[DATE_STR] = WAVEFORMS_DATA[DATE_STR].apply(
-      lambda x: x.strftime(DATE_FMT))
+        lambda x: x.strftime(DATE_FMT))
   else:
     # Construct the table of files based on the specified arguments
     WAVEFORMS_DATA = list()
-    if args.verbose: print("Constructing the Table of Files")
+    if args.verbose:
+      print("Constructing the Table of Files")
 
-    def process_file(trc_file : Path) -> list[str]:
+    def process_file(trc_file: Path) -> list[str]:
       try:
         trc = op.read(trc_file, headonly=True)[0].stats
       except:
         print(f"WARNING: Unable to read {trc_file}")
         return None
       trc_start = UTCDateTime(trc.starttime.date)
-      if trc.starttime.hour == 23: trc_start += ONE_DAY
+      if trc.starttime.hour == 23:
+        trc_start += ONE_DAY
       if start <= trc_start < end + ONE_DAY:
         return [trc_file.__str__(), trc.network, trc.station, trc.channel,
                 trc_start.strftime(DATE_FMT)]
@@ -826,7 +986,7 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
                            (args.channel, CHANNEL_STR)]:
     if argument and argument != [ALL_WILDCHAR_STR]:
       WAVEFORMS_DATA = \
-        WAVEFORMS_DATA[WAVEFORMS_DATA[filter].isin(argument)]
+          WAVEFORMS_DATA[WAVEFORMS_DATA[filter].isin(argument)]
   # If no files were found in the specified directory, return an error message
   # and exit the program.
   if WAVEFORMS_DATA.empty and not args.silent:
@@ -845,22 +1005,27 @@ def waveform_table(args : argparse.Namespace) -> pd.DataFrame:
     raise FileNotFoundError
   WAVEFORMS_DATA.sort_values([DATE_STR, FILENAME_STR], inplace=True)
   WAVEFORMS_DATA.set_index(FILENAME_STR, inplace=True)
-  if args.force: WAVEFORMS_DATA.to_csv(WAVEFORMS_FILE)
+  if args.force:
+    WAVEFORMS_DATA.to_csv(WAVEFORMS_FILE)
   return WAVEFORMS_DATA
 
-def station_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None)\
-    -> tuple[dict[str, set[str]], op.Inventory]:
-  if WAVEFORMS is None: WAVEFORMS = waveform_table(args)
+
+def station_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None)\
+        -> tuple[dict[str, set[str]], op.Inventory]:
+  if WAVEFORMS is None:
+    WAVEFORMS = waveform_table(args)
   start, end = args.dates
   DATES = [start.datetime]
-  while DATES[-1] < end.datetime: DATES.append(DATES[-1] + ONE_DAY)
+  while DATES[-1] < end.datetime:
+    DATES.append(DATES[-1] + ONE_DAY)
   DATES = [d.strftime(DATE_FMT) for d in DATES]
   dates = [np.datetime64(UTCDateTime.strptime(d, DATE_FMT)) for d in DATES]
   min_s, max_s = np.inf, 0
   stations = set()
   STATIONS = dict()
   for d, ST in WAVEFORMS.groupby(DATE_STR):
-    if ST.empty: continue
+    if ST.empty:
+      continue
     STATIONS[d] = set(ST[STATION_STR].unique())
     ST = (ST[NETWORK_STR] + PERIOD_STR + ST[STATION_STR]).unique()
     min_s = min(min_s, len(ST))
@@ -879,9 +1044,9 @@ def station_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None)\
       continue
     s = S[0][0]
     if s.latitude < args.rectdomain[0] or \
-      s.latitude > args.rectdomain[1] or \
-      s.longitude < args.rectdomain[2] or \
-      s.longitude > args.rectdomain[3]:
+        s.latitude > args.rectdomain[1] or \
+        s.longitude < args.rectdomain[2] or \
+            s.longitude > args.rectdomain[3]:
       print(f"WARNING: Station {st} is outside the specified domain")
       continue
     INVENTORY.extend(S)
@@ -894,17 +1059,18 @@ def station_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None)\
           if PERIOD_STR.join([net.code, st.code]) in stations:
             POSITIONS.append([net.code, st.code, st.latitude, st.longitude])
       POSITIONS = pd.DataFrame(POSITIONS, columns=[
-        NETWORK_STR, STATION_STR, LATITUDE_STR, LONGITUDE_STR]).drop_duplicates()
+          NETWORK_STR, STATION_STR, LATITUDE_STR, LONGITUDE_STR]) \
+          .drop_duplicates()
       FIG = plt.figure(figsize=(20, 10), layout='tight')
       GS = gridspec.GridSpec(1, 2, figure=FIG, wspace=0, width_ratios=[1, 7])
       plt.rcParams.update({'font.size': 12})
       if args.rectdomain:
-        plusminus = 0.5
+        pm = 0.5
         xy = [args.rectdomain[2], args.rectdomain[0]]
         w = args.rectdomain[3] - args.rectdomain[2]
         h = args.rectdomain[1] - args.rectdomain[0]
-        extent = [args.rectdomain[2] - plusminus, args.rectdomain[3] + plusminus,
-                  args.rectdomain[0] - plusminus, args.rectdomain[1] + plusminus]
+        extent = [args.rectdomain[2] - pm, args.rectdomain[3] + pm,
+                  args.rectdomain[0] - pm, args.rectdomain[1] + pm]
       if args.circdomain:
         raise NotImplementedError
         extent = [args.circdomain[1] - args.circdomain[3],
@@ -914,8 +1080,8 @@ def station_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None)\
       proj = ccrs.PlateCarree()
       stAx = FIG.add_subplot(GS[1], projection=proj,)
       stAx.add_patch(mpatches.Polygon(
-        OGS_POLY_REGION, closed=True, linewidth=1, color='red', fill=False,
-        label="OGS Catalog"))
+          OGS_POLY_REGION, closed=True, linewidth=1, color='red', fill=False,
+          label="OGS Catalog"))
       stAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
                                         fill=False, label=OGS_STUDY_STR))
       stAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
@@ -930,11 +1096,11 @@ def station_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None)\
       colors = cmap(np.linspace(0, 1, POSITIONS[NETWORK_STR].nunique()))
       for i, (net, df) in enumerate(POSITIONS.groupby(NETWORK_STR)):
         stAx.scatter(df[LONGITUDE_STR], df[LATITUDE_STR], s=50, marker='^',
-                    transform=proj, label=net, facecolors='none',
-                    edgecolors=colors[i], linewidths=2.5)
+                     transform=proj, label=net, facecolors='none',
+                     edgecolors=colors[i], linewidths=2.5)
       stAx.legend(loc='lower left', fontsize=16)
-      # Plot the Region
-      rgAx = FIG.add_axes([.65,.02, 0.2, 0.3], projection=proj)
+      # Region
+      rgAx = FIG.add_axes([.72, .02, 0.2, 0.3], projection=proj)
       rgAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
                                         fill=False))
       rgAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
@@ -943,37 +1109,41 @@ def station_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None)\
       rgAx.set_extent([6, 19, 36, 48], crs=proj)
       rgAx.set_aspect('equal', adjustable='box')
       ita = rgAx.annotate("Italy", xy=(0.5, 0.55), xycoords='axes fraction',
-                          ha='center', va='center', fontsize=20, color=MEX_PINK)
+                          ha='center', va='center', fontsize=20,
+                          color=MEX_PINK)
       ita.set(rotation=-30)
       IMG_FILE = Path(IMG_PATH, UNDERSCORE_STR.join([
-        STATION_STR, "distribution"]) + PNG_EXT)
+          STATION_STR, "distribution"]) + PNG_EXT)
       plt.tight_layout()
       plt.savefig(IMG_FILE, bbox_inches='tight')
       plt.close()
     plot_stations()
-    # Plot the Number of station in time
+    # Number of station in time
+
     def plot_time_stations():
       _, ax = plt.subplots(figsize=(10, 5), layout='tight')
       plt.rcParams.update({'font.size': 12})
       ax.plot(dates, [len(STATIONS[d]) for d in DATES])
       ax.set_title("Active number of stations per day")
       ax.set(xlabel="Date", ylabel="Number of stations",
-            ylim=(0, (max_s + 9) // 10 * 10))
+             ylim=(0, (max_s + 9) // 10 * 10))
       ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
       for label in ax.get_xticklabels():
         label.set(rotation=30, horizontalalignment='right')
       ax.grid()
       IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) +
-                      UNDERSCORE_STR.join([STATION_STR, start.strftime(DATE_FMT),
-                                          end.strftime(DATE_FMT)]) + PNG_EXT)
+                      UNDERSCORE_STR.join([
+                          STATION_STR, start.strftime(DATE_FMT),
+                          end.strftime(DATE_FMT)]) + PNG_EXT)
       plt.tight_layout()
       plt.savefig(IMG_FILE, bbox_inches='tight')
       plt.close()
     plot_time_stations()
     # Plot the availability of stations
+
     def plot_availability():
       IMG_FILE = Path(IMG_PATH, UNDERSCORE_STR.join([
-        STATION_STR, "availability"]) + PNG_EXT)
+          STATION_STR, "availability"]) + PNG_EXT)
       _, ax = plt.subplots(figsize=(20, 20), layout='tight')
       ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
       ax.set_title("Available Stations")
@@ -984,11 +1154,11 @@ def station_loader(args : argparse.Namespace, WAVEFORMS : pd.DataFrame = None)\
         s = st.split(PERIOD_STR)
         tmp.append([*s] + [int(s[1] in STATIONS[d]) for d in DATES])
       tmp = pd.DataFrame(
-        tmp, columns=[NETWORK_STR, STATION_STR] + DATES).sort_values(
+          tmp, columns=[NETWORK_STR, STATION_STR] + DATES).sort_values(
           [NETWORK_STR, STATION_STR])
       for i, (net, df) in enumerate(tmp.groupby(NETWORK_STR)):
         tmp.loc[tmp[NETWORK_STR] == net, DATES] = df.loc[:, DATES].apply(
-          lambda x: x * (i + 1), axis=1)
+            lambda x: x * (i + 1), axis=1)
       tmp.drop(columns=NETWORK_STR, inplace=True)
       tmp.set_index(STATION_STR, inplace=True)
       tmp.columns = dates

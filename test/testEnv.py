@@ -11,7 +11,8 @@ def main():
     MPI_RANK = MPI_COMM.Get_rank()
     MPI_SIZE = MPI_COMM.Get_size()
     print("[MPI] is available with rank:", MPI_RANK, "and size:", MPI_SIZE)
-  except ImportError as e: print("[MPI] is NOT available", e)
+  except ImportError as e:
+    print("[MPI] is NOT available", e)
   # PyTorch
   GPU_DEVICE = "cpu"
   GPU_SIZE = 0
@@ -34,25 +35,31 @@ def main():
       GPU_SIZE = 1
       GPU_RANK = 0
       print("[PyTorch] Number of MPS devices: ", GPU_SIZE)
-  except ImportError as e: print("[PyTorch] is NOT available", e)
+  except ImportError as e:
+    print("[PyTorch] is NOT available", e)
   torch.device(GPU_DEVICE)
   try:
     import obspy
     print("[ObsPy] is available")
-  except ImportError as e: print("[ObsPy] is NOT available", e)
+  except ImportError as e:
+    print("[ObsPy] is NOT available", e)
   try:
     import seisbench
     print("[Seisbench] is available")
-  except: print("[Seisbench] is NOT available")
+  except:
+    print("[Seisbench] is NOT available")
   try:
     import numba
     print(f"[Numba] is available with: {numba.get_num_threads()} threads")
-  except: print("[Numba] is NOT available")
+  except:
+    print("[Numba] is NOT available")
   try:
     import gamma
     print("[GaMMA] is available")
-  except: print("[GaMMA] is NOT available")
+  except:
+    print("[GaMMA] is NOT available")
   return
 
-if __name__ == "__main__": main()
 
+if __name__ == "__main__":
+  main()
