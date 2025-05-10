@@ -1,14 +1,15 @@
 import argparse
-import initializer as ini
-from constants import *
+
 from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 from obspy.core.utcdatetime import UTCDateTime
 from obspy.geodetics import gps2dist_azimuth
 from datetime import timedelta as td
-import cartopy.feature as cfeature
 from copy import deepcopy as dcpy
+import matplotlib.gridspec as gridspec
+import matplotlib.patches as mpatches
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+import cartopy.feature as cfeature
 import cartopy.crs as ccrs
 import pandas as pd
 import numpy as np
@@ -23,6 +24,8 @@ DATA_PATH = os.path.join(PRJ_PATH, "data")
 # Add to path
 if INC_PATH not in sys.path:
   sys.path.append(INC_PATH)
+  import initializer as ini
+  from constants import *
 
 
 THRESHOLDER_STR = PWAVE + "{p:0.2}" + SWAVE + "{s:0.2}"
@@ -402,6 +405,11 @@ def stat_test(TRUE: pd.DataFrame, PRED: pd.DataFrame,
         lambda x: (UTCDateTime(x[0]), UTCDateTime(x[1])))
     if method in [CLSSFD_STR, DETECT_STR]:
       TP[PROBABILITY_STR] = TP[PROBABILITY_STR].apply(lambda x: eval(x))
+    else:
+      TP[LATITUDE_STR] = TP[LATITUDE_STR].apply(lambda x: eval(x))
+      TP[LONGITUDE_STR] = TP[LONGITUDE_STR].apply(lambda x: eval(x))
+      TP[LOCAL_DEPTH_STR] = TP[LOCAL_DEPTH_STR].apply(lambda x: eval(x))
+      TP[MAGNITUDE_STR] = TP[MAGNITUDE_STR].apply(lambda x: eval(x))
     TP = TP.astype({THRESHOLD_STR: str})
   else:
     TP, FN, FP = set(), [], set()
@@ -652,31 +660,149 @@ def stat_test(TRUE: pd.DataFrame, PRED: pd.DataFrame,
       plt.savefig(IMG_FILE, bbox_inches='tight')
       plt.close()
   else:
-    # True Positive Spatial distribution plot
     if args.rectdomain:
-      extent = [args.rectdomain[2] - 1, args.rectdomain[3] + 1,
-                args.rectdomain[0] - 1, args.rectdomain[1] + 1]
+      pm = 0.5
+      xy = [args.rectdomain[2], args.rectdomain[0]]
+      w = args.rectdomain[3] - args.rectdomain[2]
+      h = args.rectdomain[1] - args.rectdomain[0]
+      extent = [args.rectdomain[2] - pm, args.rectdomain[3] + pm,
+                args.rectdomain[0] - pm, args.rectdomain[1] + pm]
     if args.circdomain:
       raise NotImplementedError
-      extent = [args.circdomain[1] - args.circdomain[3],
-                args.circdomain[1] + args.circdomain[3],
-                args.circdomain[0] - args.circdomain[3],
-                args.circdomain[0] + args.circdomain[3]]
+      max_r = args.circdomain[3] + 0.5
+      lat, lon = args.circdomain[:2]
+      extent = [lon - max_r, lon + max_r, lat - max_r, lat + max_r]
+    # True Positive Spatial difference plot
     for model, tp_m in TP.groupby(MODEL_STR):
-      fig = plt.figure(figsize=figsize, layout='constrained')
+      fig, _axs = plt.subplots(x, y, figsize=figsize, layout='constrained',
+                               subplot_kw={'projection': "polar"})
+      axs = _axs.flatten()
       plt.rcParams.update({'font.size': 12})
       fig.suptitle(model)
-      for i, (weight, tp_w) in enumerate(tp_m.groupby(WEIGHT_STR)):
+      for ax, (weight, tp_w) in zip(axs, tp_m.groupby(WEIGHT_STR)):
         if len(tp_w.index) == 0:
           continue
-        ax = fig.add_subplot(x, y, i + 1, projection=ccrs.PlateCarree())
+        tp_w["X"] = tp_w[LONGITUDE_STR].apply(lambda x: x[0] - x[1])
+        tp_w["Y"] = tp_w[LATITUDE_STR].apply(lambda x: x[0] - x[1])
+        ax.plot(np.arctan2(tp_w["Y"], tp_w["X"]),
+                np.sqrt(tp_w["X"]**2 + tp_w["Y"]**2), "o", c="r",
+                markersize=3, alpha=0.5)
         ax.set_title(weight)
+        ax.set_rscale("log")
+        ax.set_rmax(ASSOCIATE_DIST_OFFSET)
+
+      IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) +
+                      UNDERSCORE_STR.join([
+                          method, TRUE_STR, PRED_STR, model,
+                          THRESHOLDER_STR.format(p=args.pwave,
+                                                 s=args.swave)]) + PNG_EXT)
+      plt.tight_layout()
+      plt.savefig(IMG_FILE, bbox_inches='tight')
+      plt.close()
+    # True Positive Radii distribution plot
+    for model, tp_m in TP.groupby(MODEL_STR):
+      fig, _axs = plt.subplots(x, y, figsize=figsize, layout='constrained',)
+      axs = _axs.flatten()
+      plt.rcParams.update({'font.size': 12})
+      fig.suptitle(model)
+      for ax, (weight, tp_w) in zip(axs, tp_m.groupby(WEIGHT_STR)):
+        if len(tp_w.index) == 0:
+          continue
+        tp_w["X"] = tp_w[LONGITUDE_STR].apply(lambda x: x[0] - x[1])
+        tp_w["Y"] = tp_w[LATITUDE_STR].apply(lambda x: x[0] - x[1])
+        r = np.sqrt(tp_w["X"]**2 + tp_w["Y"]**2)
+        r.plot(ax=ax, kind='hist',
+               bins=np.linspace(0., ASSOCIATE_DIST_OFFSET, NUM_BINS))
+        ax.set(title=weight, xlabel="Distance (km)",
+               ylabel="Number of Picks")
+      axs[0].set()
+      axs[1].set(ylabel=None, yticklabels=[])
+      if len(args.weights) > 2:
+        axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
+        axs[2].set(title=None)
+        axs[2].xaxis.tick_top()
+        axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
+        axs[3].set(ylabel=None, yticklabels=[], title=None)
+        axs[3].xaxis.tick_top()
+      IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) +
+                      UNDERSCORE_STR.join([
+                          method, TRUE_STR, "R", PRED_STR, model,
+                          THRESHOLDER_STR.format(p=args.pwave,
+                                                 s=args.swave)]) + PNG_EXT)
+      plt.tight_layout()
+      plt.savefig(IMG_FILE, bbox_inches='tight')
+      plt.close()
+    # True Positive Theta distribution plot
+    for model, tp_m in TP.groupby(MODEL_STR):
+      fig, _axs = plt.subplots(x, y, figsize=figsize, layout='tight')
+      axs = _axs.flatten()
+      plt.rcParams.update({'font.size': 12})
+      fig.suptitle(model)
+      for ax, (weight, tp_w) in zip(axs, tp_m.groupby(WEIGHT_STR)):
+        if len(tp_w.index) == 0:
+          continue
+        tp_w["X"] = tp_w[LONGITUDE_STR].apply(lambda x: x[0] - x[1])
+        tp_w["Y"] = tp_w[LATITUDE_STR].apply(lambda x: x[0] - x[1])
+        theta = np.arctan2(tp_w["Y"], tp_w["X"])
+        theta.plot(ax=ax, kind='hist',
+                   bins=np.linspace(-np.pi, np.pi, NUM_BINS))
+        ax.set(title=weight, xlabel="Theta (rad)", ylabel="Number of Picks")
+      axs[0].set()
+      axs[1].set(ylabel=None, yticklabels=[])
+      if len(args.weights) > 2:
+        axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
+        axs[2].set(title=None)
+        axs[2].xaxis.tick_top()
+        axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
+        axs[3].set(ylabel=None, yticklabels=[], title=None)
+        axs[3].xaxis.tick_top()
+      IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) +
+                      UNDERSCORE_STR.join([
+                          method, TRUE_STR, "T", PRED_STR, model,
+                          THRESHOLDER_STR.format(p=args.pwave,
+                                                 s=args.swave)]) + PNG_EXT)
+      plt.tight_layout()
+      plt.savefig(IMG_FILE, bbox_inches='tight')
+      plt.close()
+
+    # True Positive Spatial plot
+    for model, tp_m in TP.groupby(MODEL_STR):
+      proj = ccrs.PlateCarree()
+      fig, _axs = plt.subplots(x, y, figsize=figsize, layout='constrained',
+                               subplot_kw={'projection': proj})
+      axs = _axs.flatten()
+      plt.rcParams.update({'font.size': 12})
+      fig.suptitle(model)
+      for ax, (weight, tp_w) in zip(axs, tp_m.groupby(WEIGHT_STR)):
+        if len(tp_w.index) == 0:
+          continue
+        ax.add_patch(mpatches.Polygon(
+            OGS_POLY_REGION, closed=True, linewidth=1, color='red', fill=False,
+            label="OGS Catalog"))
+        ax.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
+                                        fill=False, label=OGS_STUDY_STR))
+        ax.plot(tp_w[LONGITUDE_STR].apply(lambda x: x[1]),
+                tp_w[LATITUDE_STR].apply(lambda x: x[1]), "o", markersize=2,
+                color=MEX_PINK, alpha=0.5)
+        ax.legend(fontsize=16)
         ax.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
-        ax.set_extent(extent, crs=ccrs.PlateCarree())
-        gl = ax.gridlines()
+        ax.add_feature(cfeature.BORDERS, linewidth=0.5, edgecolor=MEX_PINK)
+        ax.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
+        ax.set_extent(extent, crs=proj)
+        ax.set_aspect('equal', adjustable='box')
+        ax.set(title=weight)
+        ax.legend()
+      gl = axs[0].gridlines()
+      gl.left_labels = True
+      gl.bottom_labels = True
+      gl = axs[1].gridlines()
+      gl.bottom_labels = True
+      if len(args.weights) > 2:
+        axs[2].set_title(axs[2].get_title(), y=0, pad=-14)
+        gl = axs[2].gridlines()
         gl.left_labels = True
-        gl.top_labels = True
-        ax.set_title("Events")
+        axs[3].set_title(axs[3].get_title(), y=0, pad=-14)
+        gl = axs[3].gridlines()
       IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) +
                       UNDERSCORE_STR.join([
                           method, TP_STR, model, THRESHOLDER_STR.format(
@@ -769,8 +895,8 @@ def time_displacement(DATA: pd.DataFrame, args: argparse.Namespace,
   global THRESHOLDS
   if args.verbose:
     print("Plotting the Time Displacement")
-  DATA[TIMESTAMP_STR] = \
-      DATA[TIMESTAMP_STR].map(lambda x: UTCDateTime(x[0]) - UTCDateTime(x[1]))
+  DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].map(
+      lambda x: UTCDateTime(x[0]) - UTCDateTime(x[1]))
   sec = MATCH_CNFG[method][TIME_DSPLCMT_STR].total_seconds()
   bins = np.linspace(-sec, sec, NUM_BINS, endpoint=True)
   width = bins[1] - bins[0]
@@ -825,12 +951,11 @@ def time_displacement(DATA: pd.DataFrame, args: argparse.Namespace,
           axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
           axs[3].set(ylabel=None, yticklabels=[], title=None)
           axs[3].xaxis.tick_top()
-        IMG_FILE = \
-            Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) +
-                 UNDERSCORE_STR.join([
-                     method, TIME_DSPLCMT_STR, model, phase,
-                     THRESHOLDER_STR.format(p=args.pwave,
-                                            s=args.swave)]) + PNG_EXT)
+        IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) +
+                        UNDERSCORE_STR.join([
+                            method, TIME_DSPLCMT_STR, model, phase,
+                            THRESHOLDER_STR.format(p=args.pwave,
+                                                   s=args.swave)]) + PNG_EXT)
         plt.tight_layout()
         plt.savefig(IMG_FILE, bbox_inches='tight')
         plt.close()
@@ -933,10 +1058,9 @@ def _Analysis(args: argparse.Namespace,
       axs[2].set()
       axs[3].set(ylabel=None, yticklabels=[])
     plt.tight_layout()
-    IMG_FILE = \
-        Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) +
-             UNDERSCORE_STR.join([CMTV_PICKS_STR, method, model, phase]) +
-             PNG_EXT)
+    IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) +
+                    UNDERSCORE_STR.join([
+                        CMTV_PICKS_STR, method, model, phase]) + PNG_EXT)
     plt.savefig(IMG_FILE, bbox_inches='tight')
     plt.close()
   return DF

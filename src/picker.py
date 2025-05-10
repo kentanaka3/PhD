@@ -1,11 +1,8 @@
-import initializer as ini
-from constants import *
 import seisbench.models as sbm
 import seisbench.util as sbu
 from obspy.core.utcdatetime import UTCDateTime
 import obspy
 import matplotlib.pyplot as plt
-from threading import Thread
 from mpi4py import MPI
 import pandas as pd
 import numba as nb
@@ -29,6 +26,8 @@ DATA_PATH = os.path.join(PRJ_PATH, "data")
 # Add to path
 if INC_PATH not in sys.path:
   sys.path.append(INC_PATH)
+  from constants import *
+  import initializer as ini
 
 # ObsPy
 

@@ -5,9 +5,9 @@ from errors import ERRORS
 from constants import *
 from concurrent.futures import ThreadPoolExecutor
 from obspy.core.utcdatetime import UTCDateTime
+import cartopy.feature as cfeature
 import matplotlib.gridspec as gridspec
 import matplotlib.patches as mpatches
-import cartopy.feature as cfeature
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs

@@ -38,7 +38,7 @@ H71_OFFSET = {
     5: td(seconds=25)
 }
 ASSOCIATE_TIME_OFFSET = td(seconds=1.5)
-ASSOCIATE_DIST_OFFSET = 5.
+ASSOCIATE_DIST_OFFSET = .5  # km
 
 # Strings
 EMPTY_STR = ''
@@ -363,7 +363,7 @@ MATCH_CNFG = {
         CATEGORY_STR: [EVENT_STR, NONE_STR],
         METHOD_STR: SOURCE_STR,
         TIME_DSPLCMT_STR: ASSOCIATE_TIME_OFFSET,
-        DISTANCE_STR: None,
+        DISTANCE_STR: 1.5,
         HEADER_STR: HEADER_SRC
     },
 }

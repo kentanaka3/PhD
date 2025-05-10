@@ -1,8 +1,6 @@
 # python src/trainer.py --file ./data/manual/ -v -D 230601 230609 -W OGS
 import argparse
 import seisbench.data as sbd
-import initializer as ini
-from constants import *
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -18,6 +16,8 @@ DATA_PATH = os.path.join(PRJ_PATH, "data")
 # Add to path
 if INC_PATH not in sys.path:
   sys.path.append(INC_PATH)
+  from constants import *
+  import initializer as ini
 
 
 # Seisbench

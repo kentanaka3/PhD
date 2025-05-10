@@ -1,17 +1,11 @@
-import copy
-import initializer as ini
-from constants import *
 from gamma.utils import association, estimate_eps
 from concurrent.futures import ThreadPoolExecutor
 from obspy.core.utcdatetime import UTCDateTime
 from datetime import timedelta as td
 from datetime import datetime as dt
 from copy import deepcopy as dcpy
-import matplotlib.pyplot as plt
 from pyproj import Proj
 import pandas as pd
-import numpy as np
-import scipy as sp
 import argparse
 import obspy
 import sys
@@ -26,7 +20,8 @@ DATA_PATH = os.path.join(PRJ_PATH, "data")
 # Add to path
 if INC_PATH not in sys.path:
   sys.path.append(INC_PATH)
-
+  import initializer as ini
+  from constants import *
 
 MPI_RANK = 0
 MPI_SIZE = 1
