@@ -550,8 +550,8 @@ def true_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None,
       SOURCE.to_csv(SRC_FILE, index=False)
       DETECT.to_csv(Path(DATA_PATH, UNDERSCORE_STR.join([
           TRUE_STR, DETECT_STR, start, end]) + CSV_EXT), index=False)
-  SOURCE = SOURCE.astype({ID_STR: int})
-  DETECT = DETECT.astype({ID_STR: int})
+  SOURCE = SOURCE.astype({ID_STR: int}, errors='ignore')
+  DETECT = DETECT.astype({ID_STR: int}, errors='ignore')
   print("Picks Detections")
   # Table
   MTX = pd.DataFrame(0, index=DETECT[PROBABILITY_STR].unique(),

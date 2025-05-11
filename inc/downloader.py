@@ -2,6 +2,7 @@ import initializer as ini
 from constants import *
 import argparse
 from pathlib import Path
+from obspy.core.utcdatetime import UTCDateTime
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 # Set the project folder
@@ -51,34 +52,42 @@ def data_downloader(args: argparse.Namespace) -> None:
                               maxradius=args.circdomain[3])
     from obspy.clients.fdsn.mass_downloader import Restrictions, MassDownloader
     start, end = args.dates
-    restrictions = Restrictions(starttime=start, endtime=end + ONE_DAY,
-                                network=COMMA_STR.join(args.network),
-                                station=COMMA_STR.join(args.station),
-                                channel_priorities=["HH[ZNE]", "EH[ZNE]",
-                                                    "HN[ZNE]", "HG[ZNE]"],
-                                reject_channels_with_gaps=False,
-                                minimum_length=0.0,
-                                minimum_interstation_distance_in_m=100.0,
-                                location_priorities=[
-                                    "", "00", "01", "02", "10"],
-                                chunklength_in_sec=86400)
-    from obspy.clients.fdsn import Client
-    CLIENTS = dict()
-    for client in args.client:
-      try:
-        CLIENTS[client] = Client(client)
-      except Exception as e:
-        print(f"Error creating client {client}: {e}")
-        continue
-      if args.key and client in [INGV_CLIENT_STR, GFZ_CLIENT_STR]:
-        # NOTE: It is assumed a single token file is applicable for all clients
+    t = np.arange(start.datetime, end.datetime, td(days=31)).tolist()
+    t.append(end.datetime)
+    for s_, e_ in zip(t[:-1], t[1:]):
+      restrictions = Restrictions(starttime=s_, endtime=e_ + ONE_DAY,
+                                  network=COMMA_STR.join(args.network),
+                                  station=COMMA_STR.join(args.station),
+                                  channel_priorities=["HH[ZNE]", "EH[ZNE]",
+                                                      "HN[ZNE]", "HG[ZNE]"],
+                                  reject_channels_with_gaps=False,
+                                  minimum_length=0.0,
+                                  minimum_interstation_distance_in_m=100.0,
+                                  location_priorities=[
+                                      "", "00", "01", "02", "10"],
+                                  chunklength_in_sec=86400)
+      from obspy.clients.fdsn import Client
+      CLIENTS = dict()
+      for client in args.client:
         try:
-          Client(client).set_eida_token(args.key, validate=True)
+          CLIENTS[client] = Client(client)
         except Exception as e:
-          print(f"Error setting token for {client}: {e}")
-    mdl = MassDownloader(providers=CLIENTS.values())
-    mdl.download(domain, restrictions, mseed_storage=args.directory.__str__(),
-                 stationxml_storage=Path(DATA_PATH, STATION_STR).__str__())
+          print(f"Error creating client {client}: {e}")
+          continue
+        if args.key and client in [INGV_CLIENT_STR, GFZ_CLIENT_STR]:
+          # NOTE: It is assumed a single token file is applicable for all
+          #       clients
+          try:
+            Client(client).set_eida_token(args.key, validate=True)
+          except Exception as e:
+            print(f"Error setting token for {client}: {e}")
+      mdl = MassDownloader(providers=CLIENTS.values())
+      try:
+        mdl.download(domain, restrictions,
+                     mseed_storage=args.directory.__str__(),
+                     stationxml_storage=Path(DATA_PATH, STATION_STR).__str__())
+      except Exception as e:
+        print(f"Error downloading data: {e}")
 
 
 def main(args: argparse.Namespace) -> None:
