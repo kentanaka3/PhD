@@ -20,7 +20,6 @@ import pickle
 import json
 from pathlib import Path
 import os
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 # Set the project folder
 PRJ_PATH = Path(os.path.dirname(__file__)).parent
 IMG_PATH = Path(PRJ_PATH, "img")
@@ -32,7 +31,7 @@ DATA_PATH = Path(PRJ_PATH, "data")
 
 def dataset_builder(args: argparse.Namespace, SOURCE: pd.DataFrame = None,
                     DETECT: pd.DataFrame = None,
-                    WAVEFORMS: pd.DataFrame = None) -> Path:
+                    WAVEFORMS: pd.DataFrame = None):
   assert len(args.weights) == 1
   WEIGHT = args.weights[0]
   global DATA_PATH
@@ -124,7 +123,7 @@ def dataset_builder(args: argparse.Namespace, SOURCE: pd.DataFrame = None,
           print("Adding trace", trace_params)
 
 
-def data_loader(filepath: Path) -> any:
+def data_loader(filepath: Path):
   if not filepath.exists():
     raise FileNotFoundError
   data = None
@@ -273,7 +272,7 @@ def parse_arguments():
   parser.add_argument("--client", default=[OGS_CLIENT_STR, INGV_CLIENT_STR,
                                            GFZ_CLIENT_STR, IRIS_CLIENT_STR,
                                            ETH_CLIENT_STR, ORFEUS_CLIENT_STR,
-                                           ED_CLIENT_STR],
+                                           COLLALTO_CLIENT_STR],
                       required=False, type=str, nargs=ONE_MORECHAR_STR,
                       help="Client to download the data")
   parser.add_argument("--denoiser", default=False, action='store_true',
@@ -306,14 +305,14 @@ def parse_arguments():
                                "Julian date (YYMMDD) range to work with.")
   domain_group = parser.add_mutually_exclusive_group(required=False)
   domain_group.add_argument("--rectdomain", type=float, nargs=4,
-                            metavar=["lonW", "lonE", "latS", "latN"],
+                            metavar=("lonW", "lonE", "latS", "latN"),
                             default=OGS_STUDY_REGION,
                             help="Rectangular domain to download the data: "
                                  "[longitude West] [longitude East] "
                                  "[latitude South] [latitude North]")
   domain_group.add_argument("--circdomain", nargs=4, type=float,
                             # default=[46.3583, 12.808, 0., 0.3],
-                            metavar=("lat", "lon", "min_rad", "max_rad"),
+                            metavar=("lat", "lon", "min_r", "max_r"),
                             help="Circular domain to download the data: "
                                  "[center latitude] [center longitude] "
                                  "[minimum radius] [maximum radius]")
@@ -632,7 +631,7 @@ def true_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None,
       gl.left_labels = True
       gl.top_labels = True
       # Region
-      rgAx = FIG.add_axes([.67, .02, 0.15, 0.27], projection=proj)
+      rgAx = FIG.add_axes((.67, .02, 0.15, 0.27), projection=proj)
       rgAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
                                         fill=False))
       rgAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
@@ -645,13 +644,13 @@ def true_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None,
                           color=MEX_PINK)
       ita.set(rotation=-30)
       # Depth
-      dpAx = FIG.add_axes([-.025, .06, 0.15, 0.5])
+      dpAx = FIG.add_axes((-.025, .07, 0.13, 0.48))
       dpAx.set_title("Depth Distribution")
       SOURCE[LOCAL_DEPTH_STR].hist(bins=NUM_BINS, ax=dpAx,
                                    orientation='horizontal')
       dpAx.set(xlabel="Number of Events", ylabel="Depth (km)", yscale='log')
       # Magnitude
-      mgAx = FIG.add_axes([-.025, .65, 0.15, 0.3])
+      mgAx = FIG.add_axes((-.025, .65, 0.13, 0.3))
       mgAx.set_title("Magnitude Distribution")
       SOURCE[MAGNITUDE_STR].hist(bins=NUM_BINS, ax=mgAx)
       mgAx.set(xlabel="Magnitude", ylabel="Number of Events")
@@ -755,7 +754,7 @@ def true_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None,
       gl.left_labels = True
       gl.top_labels = True
       # Region
-      rgAx = FIG.add_axes([.64, .02, 0.2, 0.3], projection=proj)
+      rgAx = FIG.add_axes((.64, .02, 0.2, 0.3), projection=proj)
       rgAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
                                         fill=False))
       rgAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
@@ -768,13 +767,13 @@ def true_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None,
                           color=MEX_PINK)
       ita.set(rotation=-30)
       # Number of Active Days Distribution
-      ndAx = FIG.add_axes([-.025, .06, 0.12, .55])
+      ndAx = FIG.add_axes((-.025, .06, 0.12, .55))
       st["Total"].hist(bins=NUM_BINS, ax=ndAx, orientation='horizontal')
       ndAx.set(xlabel="Number of Stations", ylabel="Number of Active days",
                xscale='log')
       """
       # Operator Weights Distribution
-      owAx = FIG.add_axes([-.025, .65, 0.12, 0.3])
+      owAx = FIG.add_axes((-.025, .65, 0.12, 0.3))
       disp = ConfMtxDisp(PS_MTX.values, display_labels=PS_MTX.columns,)
       disp.plot(ax=owAx, colorbar=False)
       disp.im_.set(cmap="Blues", norm="log")
@@ -783,7 +782,7 @@ def true_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None,
         labels.set(color=MEX_PINK, fontweight="bold")
       """
       # Number of Stations Distribution
-      nsAx = FIG.add_axes([-.025, .68, 0.12, 0.3])
+      nsAx = FIG.add_axes((-.025, .68, 0.12, 0.3))
       nsAx.hist(x.values(), bins=NUM_BINS)
       nsAx.set(xlabel="Number of Stations", ylabel="Number of Events",
                yscale='log')
@@ -1100,7 +1099,7 @@ def station_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None)\
                      edgecolors=colors[i], linewidths=2.5)
       stAx.legend(loc='lower left', fontsize=16)
       # Region
-      rgAx = FIG.add_axes([.72, .02, 0.2, 0.3], projection=proj)
+      rgAx = FIG.add_axes((.72, .02, 0.2, 0.3), projection=proj)
       rgAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
                                         fill=False))
       rgAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))

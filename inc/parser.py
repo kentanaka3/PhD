@@ -29,7 +29,7 @@ def event_merger_l(NEW: pd.DataFrame, OLD: pd.DataFrame, on: list) \
   for idx_l, row in NEW.iterrows():
     if idx_r < rows_o and all([row[col] == OLD.loc[idx_r][col] for col in on]):
       for col in off:
-        row[col] = OLD.loc[idx_r][col] if OLD.loc[idx_r][col] else row[col]
+        row[col] = OLD.loc[idx_r, col] if OLD.loc[idx_r, col] else row[col]
       NEW.loc[idx_l] = row
       idx_r += 1
   return NEW
@@ -39,20 +39,24 @@ def event_merger_l(NEW: pd.DataFrame, OLD: pd.DataFrame, on: list) \
 
 # TODO: Implement polarity
 RECORD_EXTRACTOR_DAT = re.compile(
-    fr"^(?P<{STATION_STR}>[A-Z0-9\s]{{4}})"                         # Station
-    fr"(?P<{P_TYPE_STR}>[aei1\s\?][Pp][cC\+0-4dD\-Up\s])"           # P Type
-    fr"(?P<{P_WEIGHT_STR}>[0-4\s])"                                 # P Weight
-    fr"[1-4\s]"                                                     # Unknown
-    fr"(?P<{DATE_STR}>\d{{10}})\s"                                  # Date
-    fr"(?P<{P_TIME_STR}>[\s\d]{{4}})"                               # P Time
-    fr".{{8}}"                                                      # Unknown
-    fr"(((?P<{S_TIME_STR}>[\s\d]{{4}})"                             # S Time
+    fr"^(?P<{STATION_STR}>[A-Z0-9\s]{{4}})"                        # Station
+    fr"(?P<{P_TYPE_STR}>[aei1\s\?][Pp][cC\+0-4dD\-Up\s])"          # P Type
+    fr"(?P<{P_WEIGHT_STR}>[0-4\s])"                                # P Weight
+    fr"[1-4\s]"                                                    # Unknown
+    fr"(?P<{DATE_STR}>\d{{10}})\s"                                 # Date
+    fr"(?P<{P_TIME_STR}>[\s\d]{{4}})"                              # P Time
+    fr".{{8}}"                                                     # Unknown
+    fr"(((?P<{S_TIME_STR}>[\s\d]{{4}})"                            # S Time
     fr"(?P<{S_TYPE_STR}>[eirsw\?13468\s][Ss][cC\+0-4dD\-Ue\?\s])"  # S Type
-    fr"(?P<{S_WEIGHT_STR}>[0-5\s]))|\s{{8}})"                     # S Weight
-    fr"(.{{35}}"                                                    # Unknown
-    fr"(?P<{EVENT_STR}>[\s\d]{{4}}))*")                            # Event
+    fr"(?P<{S_WEIGHT_STR}>[0-5\s]))|\s{{8}})"                      # S Weight
+    fr"\s{{22}}"                                                   # SPACE
+    fr"(?P<{GEO_ZONE_STR}>[{"".join(OGS_GEO_ZONES.keys())}])"      # Geo Zone
+    fr"(?P<{EVENT_TYPE_STR}>[{"".join(OGS_EVENT_TYPES.keys())}])"  # Event Type
+    fr"(?P<{EVENT_LOCALIZATION_STR}>[D\s])"                        # Event Loc
+    fr".{{10}}"                                                    # Unknown
+    fr"((?P<{EVENT_STR}>[\s\d]{{4}}))*")                           # Event
 # print(RECORD_EXTRACTOR_DAT.pattern)
-EVENT_EXTRACTOR_DAT = re.compile(r"^1.*$")                        # Event
+EVENT_EXTRACTOR_DAT = re.compile(r"^1.*$")                         # Event
 EVENT_CONTRIVER_DAT = \
     "{STATION_STR}" + ALL_WILDCHAR_STR + PWAVE + ALL_WILDCHAR_STR + \
     "{P_WEIGHT_STR}" + ALL_WILDCHAR_STR + "{DATE_STR}" + SPACE_STR + \
@@ -101,7 +105,13 @@ def event_parser_dat(filename: Path, start: UTCDateTime = None,
       continue
     match = RECORD_EXTRACTOR_DAT.match(line)
     if match:
-      result: dict[str] = match.groupdict()
+      result = match.groupdict()
+      if result[EVENT_LOCALIZATION_STR] != "D":
+        print("WARNING: (DAT) Ignoring line:", line)
+        continue
+      if result[EVENT_TYPE_STR] != "L":
+        print("WARNING: (DAT) Ignoring line:", line)
+        continue
       # Date
       try:
         if result[DATE_STR][-2:] == "60":
@@ -392,24 +402,24 @@ RECORD_EXTRACTOR_HPL = re.compile(
     fr"(?P<{P_TIME_STR}>[\s\d]{{4}})\s"                         # P Time [hhmm]
     # Seconds [ss.ss]
     fr"(?P<{SECONDS_STR}>([\s\d]\d\.\d{{2}})|\s{{5}})"
-    fr"(([\s\d]{{2}}\d\.\d{{2}})|[\s\*]{{6}})\s"                # Unknown
-    fr"(([\s\d]\d\.\d{{2}})|\s{{5}})\s"                         # Unknown
-    fr"(([\s\d]\d\.\d{{2}})|\s{{5}})"                           # Unknown
-    fr"(([\s\d\-]{{2}}\d\.\d{{2}})|[\s\*]{{6}})\s"              # Unknown
-    fr"(([\s\-]\d\.\d{{2}})|[\s\*]{{5}})\s"                     # Unknown
-    fr"([\d\s]{{3}})\s"                                         # Unknown
-    fr"([\d\s]{{2}})\s"                                         # Unknown
-    fr"(([\d\s]\d\.\d{{2}})|\s{{5}})\s"                         # Unknown
-    fr"(\d|\s)\s"                                               # Unknown
-    fr"(.{{4}})\s"                                              # Unknown
-    fr"([ACEFGLORSTV\s]"                                        # Unknown
-    fr"[ELTU\s]"                                                # Unknown
-    fr"[DESU\s])"                                               # Unknown
-    fr"([\d\s\*]{{4}})"                                         # Unknown
-    fr"([\s\-](\d\.\d)|\s{{4}})[\*\s]\s"                        # Unknown
-    fr"((?P<{S_TYPE_STR}>[ei\s]{SWAVE})\s"                      # S Type
-    fr"(?P<{S_WEIGHT_STR}>[0-4])?\s"                            # S Weight
-    fr"(?P<{S_TIME_STR}>[\s\d]\d\.\d{{2}}))?"                   # S Time
+    fr"(([\s\d]{{2}}\d\.\d{{2}})|[\s\*]{{6}})\s"                   # Unknown
+    fr"(([\s\d]\d\.\d{{2}})|\s{{5}})\s"                            # Unknown
+    fr"(([\s\d]\d\.\d{{2}})|\s{{5}})"                              # Unknown
+    fr"(([\s\d\-]{{2}}\d\.\d{{2}})|[\s\*]{{6}})\s"                 # Unknown
+    fr"(([\s\-]\d\.\d{{2}})|[\s\*]{{5}})\s"                        # Unknown
+    fr"([\d\s]{{3}})\s"                                            # Unknown
+    fr"([\d\s]{{2}})\s"                                            # Unknown
+    fr"(([\d\s]\d\.\d{{2}})|\s{{5}})\s"                            # Unknown
+    fr"(\d|\s)\s"                                                  # Unknown
+    fr"(.{{4}})\s"                                                 # Unknown
+    fr"(?P<{GEO_ZONE_STR}>[{"".join(OGS_GEO_ZONES.keys())}])"      # Geo Zone
+    fr"(?P<{EVENT_TYPE_STR}>[{"".join(OGS_EVENT_TYPES.keys())}])"  # Event Type
+    fr"(?P<{EVENT_LOCALIZATION_STR}>[D\s])"                        # Event Loc
+    fr"([\d\s\*]{{4}})"                                            # Unknown
+    fr"([\s\-](\d\.\d)|\s{{4}})[\*\s]\s"                           # Unknown
+    fr"((?P<{S_TYPE_STR}>[ei\s]{SWAVE})\s"                         # S Type
+    fr"(?P<{S_WEIGHT_STR}>[0-4])?\s"                               # S Weight
+    fr"(?P<{S_TIME_STR}>[\s\d]\d\.\d{{2}}))?"                      # S Time
 )
 # print(RECORD_EXTRACTOR_HPL.pattern)
 EVENT_EXTRACTOR_HPL = re.compile(
@@ -507,7 +517,10 @@ def event_parser_hpl(filename: Path, start: UTCDateTime = None,
       event_detect -= 1
       match = RECORD_EXTRACTOR_HPL.match(line)
       if match:
-        result: dict[str] = match.groupdict()
+        result = match.groupdict()
+        if result[EVENT_LOCALIZATION_STR] != "D":
+          print("WARNING: (HPL) Ignoring line:", line)
+          continue
         date = UTCDateTime(event_spacetime[0].date)
         result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
         if (stations is not None and date.strftime(DATE_FMT) in stations and
@@ -558,7 +571,7 @@ def event_parser_hpl(filename: Path, start: UTCDateTime = None,
     else:
       match = EVENT_EXTRACTOR_HPL.match(line)
       if match:
-        result: dict[str] = match.groupdict()
+        result = match.groupdict()
         result[SECONDS_STR] = td(seconds=float(result[SECONDS_STR])) \
             if result[SECONDS_STR] else td(0)
         result[DATE_STR] = UTCDateTime.strptime(

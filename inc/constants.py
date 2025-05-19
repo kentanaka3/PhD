@@ -1,5 +1,4 @@
 import numpy as np
-from pathlib import Path
 import seisbench.models as sbm
 from datetime import timedelta as td
 
@@ -38,7 +37,7 @@ H71_OFFSET = {
     5: td(seconds=25)
 }
 ASSOCIATE_TIME_OFFSET = td(seconds=1.5)
-ASSOCIATE_DIST_OFFSET = .5  # km
+ASSOCIATE_DIST_OFFSET = 1.5  # km
 
 # Strings
 EMPTY_STR = ''
@@ -181,40 +180,6 @@ MODEL_WEIGHTS_DICT = {
                                norm=NORM)
 }
 
-
-class DIRSTRUCT():
-  def __init__(self, root_dir: Path, categories: list[str] = None,
-               file: any = None):
-    self.root_dir = root_dir
-    self.categories = categories
-    self.path = Path(root_dir, *categories) if categories is not None \
-        else Path(root_dir)
-    self.path.mkdir(parents=True, exist_ok=True)
-    if type(file) == str:
-      self.file = Path(self.path, file)
-    # elif type(file) == list(str):
-    #  self.file = [Path(self.path, f) for f in file]
-    else:
-      self.file = None
-
-  def __str__(self):
-    return str(self.path) if self.file is None else str(self.file)
-
-  def update(self, file: str): self.file = Path(self.path, file)
-
-  def update(self, categories: list[str]):
-    self.categories = categories
-    self.path = Path(self.root_dir, *categories)
-    self.path.mkdir(parents=True, exist_ok=True)
-    self.file = None
-
-  def update(self, root_dir: Path):
-    self.root_dir = root_dir
-    self.path = Path(root_dir, *self.categories)
-    self.path.mkdir(parents=True, exist_ok=True)
-    self.file = None
-
-
 # Colors
 COLORS = {
     PWAVE: "C0",
@@ -297,6 +262,12 @@ RMS_STR = "RMS"
 ERH_STR = "ERH"
 ERZ_STR = "ERZ"
 QM_STR = "QM"
+GEO_ZONE_STR = "GEOZONE"
+EVENT_TYPE_STR = "E_TYPE"
+EVENT_LOCAL_STR = "LOCAL"
+EVENT_EQ_STR = "Earthquake"
+EVENT_UNKNOWN_STR = UNKNOWN_STR
+EVENT_LOCALIZATION_STR = "E_LOC"
 LOC_NAME_STR = "LOC_NAME"
 NOTES_STR = "NOTES"
 
@@ -322,7 +293,7 @@ ODC_CLIENT_STR = "ODC"
 GEONET_CLIENT_STR = "GEONET"
 OGS_CLIENT_STR = "http://158.110.30.217:8080"
 RASPISHAKE_CLIENT_STR = "RASPISHAKE"
-ED_CLIENT_STR = "http://scp-srv.core03.ogs.it:8080"
+COLLALTO_CLIENT_STR = "http://scp-srv.core03.ogs.it:8080"
 
 # Headers
 CATEGORY_STR = "CATEGORY"
@@ -384,3 +355,23 @@ OGS_STUDY_REGION = [44.5, 47, 10, 14.5]  # [10.0, 14.5, 44.5, 47.0]
 OGS_ITALY_STR = "Italy"
 OGS_STUDY_STR = "Study"
 DESCRIPTION_STR = "Description"
+
+OGS_LABEL_CATEGORY = "{GEO_ZONE_STR}{EVENT_TYPE_STR}{EVENT_LOCALIZATION_STR}"
+OGS_GEO_ZONES = {
+    "A": "Alto Adige",
+    "C": "Croatia",
+    "E": "Emilia",
+    "F": "Friuli",
+    "G": "Venezia Giulia",
+    "L": "Lombardia",
+    "O": "Austria",
+    "R": "Romagna",
+    "S": "Slovenia",
+    "T": "Trentino",
+    "V": "Veneto"
+}
+OGS_EVENT_TYPES = {
+    "L": EVENT_LOCAL_STR,
+    "E": EVENT_EQ_STR,
+    "U": EVENT_UNKNOWN_STR
+}
