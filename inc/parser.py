@@ -50,11 +50,12 @@ RECORD_EXTRACTOR_DAT = re.compile(
     fr"(?P<{S_TYPE_STR}>[eirsw\?13468\s][Ss][cC\+0-4dD\-Ue\?\s])"  # S Type
     fr"(?P<{S_WEIGHT_STR}>[0-5\s]))|\s{{8}})"                      # S Weight
     fr"\s{{22}}"                                                   # SPACE
-    fr"(?P<{GEO_ZONE_STR}>[{"".join(OGS_GEO_ZONES.keys())}])"      # Geo Zone
-    fr"(?P<{EVENT_TYPE_STR}>[{"".join(OGS_EVENT_TYPES.keys())}])"  # Event Type
-    fr"(?P<{EVENT_LOCALIZATION_STR}>[D\s])"                        # Event Loc
+    fr"(?P<{GEO_ZONE_STR}>[{"".join(OGS_GEO_ZONES.keys())}\s])"    # Geo Zone
+    # Event Type
+    fr"(?P<{EVENT_TYPE_STR}>[{"".join(OGS_EVENT_TYPES.keys())}\s])"
+    fr"((?P<{EVENT_LOCALIZATION_STR}>[D\s])"                       # Event Loc
     fr".{{10}}"                                                    # Unknown
-    fr"((?P<{EVENT_STR}>[\s\d]{{4}}))*")                           # Event
+    fr"(?P<{EVENT_STR}>[\s\d]{{4}}))*")                            # Event
 # print(RECORD_EXTRACTOR_DAT.pattern)
 EVENT_EXTRACTOR_DAT = re.compile(r"^1.*$")                         # Event
 EVENT_CONTRIVER_DAT = \
@@ -92,8 +93,14 @@ def event_parser_dat(filename: Path, start: UTCDateTime = None,
     the date of the pick, the time of the pick, the type of the S pick, the 
     weight of the S pick, and the time of the S pick.
   """
-  unble_msg: str = ERRORS[level][UNABLE_STR].format(
-      pre="DAT, ", verb="parse", type="{type}", post="from line: {line}")
+  unble_msg = ERRORS[level][UNABLE_STR].format(
+      pre=f"{str(filename)}, ", verb="parse", type="{type}",
+      post="from line: {line}")
+  notbl_msg = ERRORS[level][NOTABLE_STR].format(
+      pre=f"{str(filename)}, ", value="{value}", key="{key}",
+      post="from line: {line}")
+  assgn_msg = ERRORS[level][ASSIGN_STR].format(
+      pre=f"{str(filename)}, ", value="{value}", key="{key}", post=EMPTY_STR)
   # TODO: Attemp restoration before SHUTDOWN
   if not filename.exists():
     raise FileNotFoundError(filename)
@@ -106,11 +113,9 @@ def event_parser_dat(filename: Path, start: UTCDateTime = None,
     match = RECORD_EXTRACTOR_DAT.match(line)
     if match:
       result = match.groupdict()
-      if result[EVENT_LOCALIZATION_STR] != "D":
-        print("WARNING: (DAT) Ignoring line:", line)
-        continue
-      if result[EVENT_TYPE_STR] != "L":
-        print("WARNING: (DAT) Ignoring line:", line)
+      if (result[EVENT_LOCALIZATION_STR] != "D" and
+              result[EVENT_TYPE_STR] != "L"):
+        # print("WARNING: (DAT) Ignoring line:", line)
         continue
       # Date
       try:
@@ -160,14 +165,8 @@ def event_parser_dat(filename: Path, start: UTCDateTime = None,
       # P Weight
       try:
         if result[P_WEIGHT_STR] == SPACE_STR:
-          print(ERRORS[level][NOTABLE_STR].format(pre="DAT, ",
-                                                  value=SPACE_STR,
-                                                  key=P_WEIGHT_STR,
-                                                  post=f"from line: {line}"))
-          print(ERRORS[level][ASSIGN_STR].format(pre="DAT, ",
-                                                 value=DEFAULT_VALUE,
-                                                 key=P_WEIGHT_STR,
-                                                 post=f"from line: {line}"))
+          print(notbl_msg.format(value=SPACE_STR, key=P_WEIGHT_STR, line=line))
+          print(assgn_msg.format(value=DEFAULT_VALUE, key=P_WEIGHT_STR))
           result[P_WEIGHT_STR] = DEFAULT_VALUE
         else:
           result[P_WEIGHT_STR] = int(result[P_WEIGHT_STR])
@@ -182,14 +181,9 @@ def event_parser_dat(filename: Path, start: UTCDateTime = None,
         # S Weight
         try:
           if result[S_WEIGHT_STR] == SPACE_STR:
-            print(ERRORS[level][NOTABLE_STR].format(pre="DAT, ",
-                                                    value=SPACE_STR,
-                                                    key=S_WEIGHT_STR,
-                                                    post=f"from line: {line}"))
-            print(ERRORS[level][ASSIGN_STR].format(pre="DAT, ",
-                                                   value=DEFAULT_VALUE,
-                                                   key=S_WEIGHT_STR,
-                                                   post=f"from line: {line}"))
+            print(notbl_msg.format(value=SPACE_STR, key=S_WEIGHT_STR,
+                                   line=line))
+            print(assgn_msg.format(value=DEFAULT_VALUE, key=S_WEIGHT_STR))
             result[S_WEIGHT_STR] = DEFAULT_VALUE
           else:
             result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
@@ -346,6 +340,7 @@ RECORD_EXTRACTOR_HPC = re.compile(
     fr"(?P<{S_TIME_STR}>\d{{4}}|\d{{3}})"                           # S Time
     fr"(?P<{S_TYPE_STR}>[ei]{SWAVE}\s)"                             # S Type
     fr"(?P<{S_WEIGHT_STR}>[0-4])")                                  # S Weight
+# print(RECORD_EXTRACTOR_HPC.pattern)
 
 
 def event_parser_hpc(filename: Path, start: UTCDateTime = None,
@@ -404,7 +399,7 @@ RECORD_EXTRACTOR_HPL = re.compile(
     fr"(?P<{SECONDS_STR}>([\s\d]\d\.\d{{2}})|\s{{5}})"
     fr"(([\s\d]{{2}}\d\.\d{{2}})|[\s\*]{{6}})\s"                   # Unknown
     fr"(([\s\d]\d\.\d{{2}})|\s{{5}})\s"                            # Unknown
-    fr"(([\s\d]\d\.\d{{2}})|\s{{5}})"                              # Unknown
+    fr"(([\s\d\-]\d\.\d{{2}})|\s{{5}})"                              # Unknown
     fr"(([\s\d\-]{{2}}\d\.\d{{2}})|[\s\*]{{6}})\s"                 # Unknown
     fr"(([\s\-]\d\.\d{{2}})|[\s\*]{{5}})\s"                        # Unknown
     fr"([\d\s]{{3}})\s"                                            # Unknown
@@ -412,8 +407,9 @@ RECORD_EXTRACTOR_HPL = re.compile(
     fr"(([\d\s]\d\.\d{{2}})|\s{{5}})\s"                            # Unknown
     fr"(\d|\s)\s"                                                  # Unknown
     fr"(.{{4}})\s"                                                 # Unknown
-    fr"(?P<{GEO_ZONE_STR}>[{"".join(OGS_GEO_ZONES.keys())}])"      # Geo Zone
-    fr"(?P<{EVENT_TYPE_STR}>[{"".join(OGS_EVENT_TYPES.keys())}])"  # Event Type
+    fr"(?P<{GEO_ZONE_STR}>[{"".join(OGS_GEO_ZONES.keys())}\s])"    # Geo Zone
+    # Event Type
+    fr"(?P<{EVENT_TYPE_STR}>[{"".join(OGS_EVENT_TYPES.keys())}\s])"
     fr"(?P<{EVENT_LOCALIZATION_STR}>[D\s])"                        # Event Loc
     fr"([\d\s\*]{{4}})"                                            # Unknown
     fr"([\s\-](\d\.\d)|\s{{4}})[\*\s]\s"                           # Unknown
@@ -436,7 +432,7 @@ EVENT_EXTRACTOR_HPL = re.compile(
     fr"\s{{5}})\s{{2}}"
     fr"((?P<{MAGNITUDE_STR}>[\s\-]\d\.\d{{2}})|\s{{5}})\s"      # Magnitude
     fr"((?P<{NO_STR}>[\s\d]\d)|\s{{2}})"                        # NO
-    fr"([\s\d]{{3}})\s"                                         # Unknown
+    fr"((?P<{DMIN_STR}>[\s\d]{{2}}\d)|\s{{3}})\s"               # DMIN
     fr"(?P<{GAP_STR}>[\s\d]{{3}})\s"                            # GAP
     fr"([\d\s])"                                                # Unknown
     fr"((?P<{RMS_STR}>[\s\d]{{2}}\.\d{{2}})|\s{{5}})"           # RMS
@@ -500,9 +496,11 @@ def event_parser_hpl(filename: Path, start: UTCDateTime = None,
     of the S pick, the weight of the S pick, and the time of the S pick.
   """
   unble_msg: str = ERRORS[level][UNABLE_STR].format(
-      pre="HPL, ", verb="parse", type="{type}", post="from line: {line}")
+      pre=f"{filename}, ", verb="parse", type="{type}",
+      post="from line: {line}")
   notbl_msg: str = ERRORS[level][NOTABLE_STR].format(
-      pre="HPL, ", value="{value}", key="{key}", post="from line: {line}")
+      pre=f"{filename}, ", value="{value}", key="{key}",
+      post="from line: {line}")
   if not filename.exists():
     raise FileNotFoundError(filename)
   SOURCE = list()
@@ -518,8 +516,9 @@ def event_parser_hpl(filename: Path, start: UTCDateTime = None,
       match = RECORD_EXTRACTOR_HPL.match(line)
       if match:
         result = match.groupdict()
-        if result[EVENT_LOCALIZATION_STR] != "D":
-          print("WARNING: (HPL) Ignoring line:", line)
+        if (result[EVENT_LOCALIZATION_STR] != "D" and
+                result[EVENT_TYPE_STR] != "L"):
+          # print("WARNING: (HPL) Ignoring line:", line)
           continue
         date = UTCDateTime(event_spacetime[0].date)
         result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
@@ -597,13 +596,15 @@ def event_parser_hpl(filename: Path, start: UTCDateTime = None,
             if result[LATITUDE_STR] else NONE_STR
         if result[LATITUDE_STR] != NONE_STR:
           splt = result[LATITUDE_STR].split(DASH_STR)
-          result[LATITUDE_STR] = float(splt[0]) + float(splt[1]) / 60.
+          result[LATITUDE_STR] = float("{:.4f}".format(
+              float(splt[0]) + float(splt[1]) / 60.))
         result[LONGITUDE_STR] = result[LONGITUDE_STR].replace(SPACE_STR,
                                                               ZERO_STR) \
             if result[LONGITUDE_STR] else NONE_STR
         if result[LONGITUDE_STR] != NONE_STR:
           splt = result[LONGITUDE_STR].split(DASH_STR)
-          result[LONGITUDE_STR] = float(splt[0]) + float(splt[1]) / 60.
+          result[LONGITUDE_STR] = float("{:.4f}".format(
+              float(splt[0]) + float(splt[1]) / 60.))
         result[LOCAL_DEPTH_STR] = float(result[LOCAL_DEPTH_STR]) \
             if result[LOCAL_DEPTH_STR] else NONE_STR
         event_spacetime = (result[DATE_STR], result[LATITUDE_STR],
@@ -612,22 +613,32 @@ def event_parser_hpl(filename: Path, start: UTCDateTime = None,
             if result[MAGNITUDE_STR] else NONE_STR
         result[NO_STR] = int(result[NO_STR].replace(SPACE_STR, ZERO_STR)) \
             if result[NO_STR] else NONE_STR
+        result[GAP_STR] = int(result[GAP_STR].replace(SPACE_STR, ZERO_STR)) \
+            if result[GAP_STR] else NONE_STR
+        result[DMIN_STR] = float(result[DMIN_STR].replace(SPACE_STR, ZERO_STR)) \
+            if result[DMIN_STR] else NONE_STR
+        result[RMS_STR] = float(result[RMS_STR].replace(SPACE_STR, ZERO_STR)) \
+            if result[RMS_STR] else NONE_STR
+        result[ERH_STR] = float(result[ERH_STR].replace(SPACE_STR, ZERO_STR)) \
+            if result[ERH_STR] else NONE_STR
+        result[ERZ_STR] = float(result[ERZ_STR].replace(SPACE_STR, ZERO_STR)) \
+            if result[ERZ_STR] else NONE_STR
+        result[QM_STR] = result[QM_STR].strip(SPACE_STR) \
+            if result[QM_STR] else NONE_STR
         event_detect = int(result[NOTES_STR])
-        event_metadata = {
-            MAGNITUDE_STR: result[MAGNITUDE_STR],
-            NO_STR: result[NO_STR]
-        }
         SOURCE.append([result[EVENT_STR], *event_spacetime,
-                       result[MAGNITUDE_STR], result[NO_STR], *([None] * 7)])
+                       result[MAGNITUDE_STR], result[NO_STR], result[GAP_STR],
+                       result[DMIN_STR], result[RMS_STR], result[ERH_STR],
+                       result[ERZ_STR], result[QM_STR], None])
         continue
       match = LOCATION_EXTRACTOR_HPL.match(line)
       if match:
-        result: dict[str] = match.groupdict()
+        result = match.groupdict()
         continue
       if event_detect == 0:
         match = NOTES_EXTRACTOR_HPL.match(line)
         if match:
-          result: dict[str] = match.groupdict()
+          result = match.groupdict()
           event_notes = result[NOTES_STR].rstrip(SPACE_STR)
           SOURCE[-1][-1] = event_notes
           continue
@@ -636,7 +647,9 @@ def event_parser_hpl(filename: Path, start: UTCDateTime = None,
     if event_detect >= 0:
       print(unble_msg.format(type=EMPTY_STR, line=line))
   SOURCE = pd.DataFrame(SOURCE, columns=HEADER_SRC)
+  SOURCE = SOURCE[SOURCE[LATITUDE_STR] != NONE_STR]
   DETECT = pd.DataFrame(DETECT, columns=HEADER_MANL)
+  DETECT = DETECT[DETECT[ID_STR].isin(SOURCE[ID_STR])]
   return SOURCE, DETECT
 
 # TODO: Implement ObsPy Catalog for OGS files
@@ -738,10 +751,10 @@ def event_parser_(filename: Path, start: UTCDateTime = None,
   elif sfx == PRT_EXT:
     pass
   elif sfx == PUN_EXT:
-    return event_parser_pun(filename, start, end)
+    pass  # return event_parser_pun(filename, start, end)
   elif sfx == QML_EXT:
-    return event_parser_qml(filename, start, end,
-                            stations=stations)
+    pass  # return event_parser_qml(filename, start, end,
+    #                         stations=stations)
   print(ValueError(f"WARNING: Unknown file extension: {sfx}"))
   return pd.DataFrame(columns=HEADER_SRC), pd.DataFrame(columns=HEADER_MANL)
 
@@ -761,7 +774,7 @@ def event_parser(filename: Path, start: UTCDateTime = None,
       results = list(executor.map(process_file, filename.iterdir()))
     FIND_SRC = [TIMESTAMP_STR, LONGITUDE_STR, LATITUDE_STR, LOCAL_DEPTH_STR,
                 MAGNITUDE_STR]
-    FIND_DTC = [ID_STR, TIMESTAMP_STR, PROBABILITY_STR, PHASE_STR, STATION_STR]
+    FIND_DTC = [TIMESTAMP_STR, PROBABILITY_STR, PHASE_STR, STATION_STR]
     for sfx, (source, detect) in results:
       if sfx == PUN_EXT:
         SOURCE = event_merger_l(SOURCE, source, FIND_SRC)
@@ -770,13 +783,12 @@ def event_parser(filename: Path, start: UTCDateTime = None,
       elif sfx == HPL_EXT:
         SOURCE = event_merger_l(SOURCE, source, FIND_SRC)
         DETECT = event_merger_l(DETECT, detect, FIND_DTC)
-    if DETECT is not None and not DETECT.empty:
-      SOURCE = SOURCE[SOURCE[ID_STR].isin(DETECT[ID_STR].unique())]
   else:
     SOURCE, DETECT = event_parser_(filename, start, end, stations)
     # try:
     # except Exception as e:
     #  print(f"WARNING: Unable to parse file: {filename}")
     #  print(e)
-  DETECT = DETECT[DETECT[ID_STR].isin(SOURCE[ID_STR].unique())]
+  SOURCE = SOURCE.astype({ID_STR: int}, errors='ignore')
+  DETECT = DETECT.astype({ID_STR: int}, errors='ignore')
   return SOURCE, DETECT

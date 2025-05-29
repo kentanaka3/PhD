@@ -12,6 +12,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import matplotlib as mpl
+import calendar as cal
 import pandas as pd
 import obspy as op
 import numpy as np
@@ -547,10 +548,7 @@ def true_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None,
     DETECT = DETECT[DETECT[ID_STR].isin(SOURCE[ID_STR])].reset_index(drop=True)
     if args.verbose:
       SOURCE.to_csv(SRC_FILE, index=False)
-      DETECT.to_csv(Path(DATA_PATH, UNDERSCORE_STR.join([
-          TRUE_STR, DETECT_STR, start, end]) + CSV_EXT), index=False)
-  SOURCE = SOURCE.astype({ID_STR: int}, errors='ignore')
-  DETECT = DETECT.astype({ID_STR: int}, errors='ignore')
+      DETECT.to_csv(DTC_FILE, index=False)
   print("Picks Detections")
   # Table
   MTX = pd.DataFrame(0, index=DETECT[PROBABILITY_STR].unique(),
@@ -648,7 +646,7 @@ def true_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None,
       dpAx.set_title("Depth Distribution")
       SOURCE[LOCAL_DEPTH_STR].hist(bins=NUM_BINS, ax=dpAx,
                                    orientation='horizontal')
-      dpAx.set(xlabel="Number of Events", ylabel="Depth (km)", yscale='log')
+      dpAx.set(xlabel="Number of Events", ylabel="Depth (km)")
       # Magnitude
       mgAx = FIG.add_axes((-.025, .65, 0.13, 0.3))
       mgAx.set_title("Magnitude Distribution")
@@ -685,7 +683,7 @@ def true_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None,
       plt.rcParams.update({'font.size': 12})
       SOURCE[LOCAL_DEPTH_STR].hist(bins=NUM_BINS, color='grey', alpha=0.5)
       ax.set_title("Depth Distribution")
-      ax.set(xlabel="Depth (km)", ylabel="Number of Events", xscale='log')
+      ax.set(xlabel="Depth (km)", ylabel="Number of Events")
       IMG_FILE = Path(IMG_PATH, (UNDERSCORE_STR.join([
           TRUE_STR, LOCAL_DEPTH_STR, start, end]) + PNG_EXT))
       plt.tight_layout()
@@ -959,23 +957,38 @@ def waveform_table(args: argparse.Namespace) -> pd.DataFrame:
     WAVEFORMS_DATA = list()
     if args.verbose:
       print("Constructing the Table of Files")
-
-    def process_file(trc_file: Path) -> list[str]:
-      try:
-        trc = op.read(trc_file, headonly=True)[0].stats
-      except:
-        print(f"WARNING: Unable to read {trc_file}")
-        return None
-      trc_start = UTCDateTime(trc.starttime.date)
-      if trc.starttime.hour == 23:
-        trc_start += ONE_DAY
-      if start <= trc_start < end + ONE_DAY:
-        return [trc_file.__str__(), trc.network, trc.station, trc.channel,
-                trc_start.strftime(DATE_FMT)]
-      return None
-    with ThreadPoolExecutor() as executor:
-      results = list(executor.map(process_file, args.directory.iterdir()))
-
+    results = list()
+    for year_path in Path(DATA_PATH, WAVEFORMS_STR).iterdir():
+      year = UTCDateTime(year=int(year_path.name), month=12, day=31)
+      if year < start:
+        continue
+      for month_path in year_path.iterdir():
+        month = UTCDateTime(year=year.year, month=int(month_path.name),
+                            day=cal.monthrange(year.year,
+                                               int(month_path.name))[1])
+        if month < start:
+          continue
+        for day_path in month_path.iterdir():
+          day = UTCDateTime(year=year.year, month=month.month,
+                            day=int(day_path.name))
+          if day < start or day >= end + ONE_DAY:
+            continue
+          for waveform_path in day_path.iterdir():
+            if not waveform_path.is_file():
+              continue
+            # Read the waveform file and extract the necessary information
+            try:
+              stream = op.read(waveform_path)
+            except Exception as e:
+              print(f"WARNING: Unable to read {waveform_path}")
+              print(e)
+              continue
+            # Extract the necessary information from the waveform file
+            result = [str(waveform_path), stream[0].stats.network,
+                      stream[0].stats.station, stream[0].stats.channel,
+                      day.strftime(DATE_FMT)]
+            results.append(result)
+    # If the table of files was constructed, we save it to a CSV file
     WAVEFORMS_DATA = [result for result in results if result is not None]
     HEADER = [FILENAME_STR, NETWORK_STR, STATION_STR, CHANNEL_STR, DATE_STR]
     WAVEFORMS_DATA = pd.DataFrame(WAVEFORMS_DATA, columns=HEADER)

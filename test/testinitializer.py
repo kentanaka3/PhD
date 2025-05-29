@@ -1,20 +1,22 @@
 #!/bin/python
+import unittest
+from obspy.core.utcdatetime import UTCDateTime
+import sys
 import os
 from pathlib import Path
 import unittest.mock
 PRJ_PATH = Path(os.path.dirname(__file__)).parent
 INC_PATH = os.path.join(PRJ_PATH, "inc")
-import sys
 # Add to path
-if INC_PATH not in sys.path: sys.path.append(INC_PATH)
-import unittest
-from obspy.core.utcdatetime import UTCDateTime
+if INC_PATH not in sys.path:
+  sys.path.append(INC_PATH)
+  import initializer as ini
+  from constants import *
 
-from constants import *
-import initializer as ini
 
 DATA_PATH = Path(PRJ_PATH, "data", "test")
 TEST_PATH = Path(DATA_PATH, "waveforms")
+
 
 class TestArgparse(unittest.TestCase):
   def setUp(self):
@@ -31,8 +33,9 @@ class TestArgparse(unittest.TestCase):
     self.assertEqual(args.channel, None)
     self.assertEqual(args.client,
                      [OGS_CLIENT_STR, INGV_CLIENT_STR, GFZ_CLIENT_STR,
-                      IRIS_CLIENT_STR, ETH_CLIENT_STR, ORFEUS_CLIENT_STR])
-    self.assertEqual(args.circdomain, [46.3583, 12.808, 0., 0.3])
+                      IRIS_CLIENT_STR, ETH_CLIENT_STR, ORFEUS_CLIENT_STR,
+                      COLLALTO_CLIENT_STR])
+    self.assertEqual(args.circdomain, None)
     self.assertEqual(args.config, None)
     self.assertEqual(args.dates, [UTCDateTime(year=2023, month=6, day=1),
                                   UTCDateTime(year=2023, month=12, day=31)])
@@ -48,7 +51,7 @@ class TestArgparse(unittest.TestCase):
     self.assertEqual(args.network, [ALL_WILDCHAR_STR])
     self.assertEqual(args.pwave, PWAVE_THRESHOLD)
     self.assertEqual(args.pyrocko, False)
-    self.assertEqual(args.rectdomain, None)
+    self.assertEqual(args.rectdomain, [44.5, 47, 10, 14.5])
     self.assertEqual(args.station, [ALL_WILDCHAR_STR])
     self.assertEqual(args.swave, SWAVE_THRESHOLD)
     self.assertEqual(args.timing, False)
@@ -152,22 +155,23 @@ class TestArgparse(unittest.TestCase):
     args = ini.parse_arguments()
     self.assertEqual(args.weights, [INSTANCE_STR, ORIGINAL_STR])
 
+
 class TestArguments(unittest.TestCase):
   @unittest.mock.patch("sys.argv", ["picker.py", "-v"])
   def test_default(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -175,17 +179,17 @@ class TestArguments(unittest.TestCase):
   def test_channel(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : ["EHZ"],
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: ["EHZ"],
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -193,17 +197,17 @@ class TestArguments(unittest.TestCase):
   def test_channels(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : ["EHZ", "EHN"],
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: ["EHZ", "EHN"],
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -211,17 +215,17 @@ class TestArguments(unittest.TestCase):
   def test_network(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : ["OX"],
-        STATION_STR   : [ALL_WILDCHAR_STR],
-        WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: ["OX"],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -229,17 +233,17 @@ class TestArguments(unittest.TestCase):
   def test_networks(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : ["OX", "ST"],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: ["OX", "ST"],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -247,17 +251,17 @@ class TestArguments(unittest.TestCase):
   def test_station(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : ["BAD"],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: ["BAD"],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -265,17 +269,17 @@ class TestArguments(unittest.TestCase):
   def test_stations(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : ["BAD", "VARA"],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: ["BAD", "VARA"],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -284,17 +288,17 @@ class TestArguments(unittest.TestCase):
   def test_dates(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=6, day=4).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=6, day=4).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -303,17 +307,17 @@ class TestArguments(unittest.TestCase):
   def test_directory(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", "test").__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", "test").__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -321,17 +325,17 @@ class TestArguments(unittest.TestCase):
   def test_denoiser(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : True,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: True,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -340,17 +344,17 @@ class TestArguments(unittest.TestCase):
   def test_rectdomain(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0.1, 0.2],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [46.3583, 12.808, 0.1, 0.2],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -359,17 +363,17 @@ class TestArguments(unittest.TestCase):
   def test_circdomain(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0.1, 0.2],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -377,17 +381,17 @@ class TestArguments(unittest.TestCase):
   def test_group(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-            STATION_STR   : [ALL_WILDCHAR_STR],
-            WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -396,17 +400,17 @@ class TestArguments(unittest.TestCase):
   def test_groups(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -414,17 +418,17 @@ class TestArguments(unittest.TestCase):
   def test_model(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -433,17 +437,17 @@ class TestArguments(unittest.TestCase):
   def test_models(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -451,17 +455,17 @@ class TestArguments(unittest.TestCase):
   def test_pwave(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -469,17 +473,17 @@ class TestArguments(unittest.TestCase):
   def test_swave(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -488,17 +492,17 @@ class TestArguments(unittest.TestCase):
   def test_weight(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -507,17 +511,17 @@ class TestArguments(unittest.TestCase):
   def test_weights(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : None,
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR]
+        CHANNEL_STR: None,
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR]
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -526,17 +530,17 @@ class TestArguments(unittest.TestCase):
   def test_config(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : [ALL_WILDCHAR_STR],
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : [ALL_WILDCHAR_STR],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
+        CHANNEL_STR: [ALL_WILDCHAR_STR],
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: [ALL_WILDCHAR_STR],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
 
@@ -545,19 +549,20 @@ class TestArguments(unittest.TestCase):
   def test_config_update(self):
     args = ini.parse_arguments()
     EXPECTED = {
-      CHANNEL_STR   : [ALL_WILDCHAR_STR],
-      DOMAIN_STR    : [46.3583, 12.808, 0., 0.3],
-      DATE_STR      : [UTCDateTime(year=2023, month=6, day=1).__str__(),
-                       UTCDateTime(year=2023, month=12, day=31).__str__()],
-      DENOISER_STR  : False,
-      DIRECTORY_STR : Path("data", WAVEFORMS_STR).__str__(),
-      GROUPS_STR    : [DATE_STR, NETWORK_STR, STATION_STR],
-      MODEL_STR     : [PHASENET_STR, EQTRANSFORMER_STR],
-      NETWORK_STR   : ["OX", "ST"],
-      STATION_STR   : [ALL_WILDCHAR_STR],
-      WEIGHT_STR    : [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
+        CHANNEL_STR: [ALL_WILDCHAR_STR],
+        DOMAIN_STR: [44.5, 47, 10, 14.5],
+        DATE_STR: [UTCDateTime(year=2023, month=6, day=1).__str__(),
+                   UTCDateTime(year=2023, month=12, day=31).__str__()],
+        DENOISER_STR: False,
+        DIRECTORY_STR: Path("data", WAVEFORMS_STR).__str__(),
+        GROUPS_STR: [DATE_STR, NETWORK_STR, STATION_STR],
+        MODEL_STR: [PHASENET_STR, EQTRANSFORMER_STR],
+        NETWORK_STR: ["OX", "ST"],
+        STATION_STR: [ALL_WILDCHAR_STR],
+        WEIGHT_STR: [INSTANCE_STR, ORIGINAL_STR, STEAD_STR, SCEDC_STR],
     }
     self.assertEqual(ini.dump_args(args, False), EXPECTED)
+
 
 class TestWaveforms(unittest.TestCase):
   @unittest.mock.patch("sys.argv", ["picker.py", "-D", "230601", "230604",
@@ -787,6 +792,7 @@ class TestWaveforms(unittest.TestCase):
                 ["OX", "CAE", "HHN", "230604"],
                 ["OX", "CAE", "HHZ", "230604"]]
     self.assertListEqual(EXPECTED, ini.waveform_table(args).values.tolist())
+
 
 class TestClassifications(unittest.TestCase):
   @unittest.mock.patch("sys.argv", ["picker.py", "-d", TEST_PATH.__str__(),
@@ -1445,4 +1451,6 @@ class TestClassifications(unittest.TestCase):
                 [PHASENET_STR, ORIGINAL_STR, "230604", "ST", "VARA"]]
     self.assertListEqual(EXPECTED, CLASSIFICATIONS_DATA)
 
-if __name__ == "__main__": unittest.main()
+
+if __name__ == "__main__":
+  unittest.main()

@@ -26,6 +26,9 @@ if INC_PATH not in sys.path:
   sys.path.append(INC_PATH)
   import initializer as ini
   from constants import *
+else:
+  from constants import *
+  import initializer as ini
 
 
 THRESHOLDER_STR = PWAVE + "{p:0.2}" + SWAVE + "{s:0.2}"
@@ -170,15 +173,16 @@ MATCH_CNFG[SOURCE_STR].update({DISTANCE_STR: dist_event})
 
 class myBPGraph():
   def __init__(self, T: pd.DataFrame, P: pd.DataFrame,
-               config: dict[str, any] = MATCH_CNFG[CLSSFD_STR]):
+               config=MATCH_CNFG[CLSSFD_STR]):
     self.W: function = config[DISTANCE_STR]
     self.M: int = len(P.index)
     self.N: int = 0
-    self.P: dict[str, dict[int, ]] = P.to_dict()
-    self.T: dict[str, dict[int, ]] = {key: {} for key in T.columns.tolist()}
-    self.G: list[dict[int, dict[int, float]], dict[int, dict[int, float]]] = \
-        [{}, {i: {} for i in range(self.M)}]
-    self.C: dict[str, any] = config
+    self.P = P.to_dict()
+    self.T = {key: dict() for key in T.columns.tolist()}
+    self.G: list[dict[int, dict[int, float]],
+                 dict[int, dict[int, float]]] = [
+        dict(), {i: dict() for i in range(self.M)}]
+    self.C = config
     for _, t in T.iterrows():
       self.incNode(t, 0)
 
@@ -221,7 +225,7 @@ class myBPGraph():
     if u in self.G[bipartite]:
       self.G[bipartite][u].remove(v)
 
-  def getNeighbours(self, u: int, b: int = 0) -> set[int, int, float]:
+  def getNeighbours(self, u: int, b: int = 0):
     return set([(k, u, v) if b else (u, k, v)
                 for k, v in self.G[b][u].items()])
 
@@ -269,7 +273,7 @@ class myBPGraph():
       if len(x) == 0:
         if self.C[METHOD_STR] in [CLSSFD_STR, DETECT_STR]:
           CFN_MTX.loc[T[PHASE_STR], NONE_STR] += 1
-          FN.append([T[ID_STR], T[TIMESTAMP_STR].__str__(), T[PROBABILITY_STR],
+          FN.append([T[ID_STR], str(T[TIMESTAMP_STR]), T[PROBABILITY_STR],
                      T[PHASE_STR], None, T[STATION_STR]])
         else:
           CFN_MTX.loc[EVENT_STR, NONE_STR] += 1
@@ -297,18 +301,21 @@ class myBPGraph():
                 None, None, None, (SOURCE_STR, str(P[NOTES_STR]).rstrip())))
     result = []
     for p, val in self.G[1].items():
-      if len(list(val.items())) == 0:
-        P = nodesP.iloc[p]
+      P = nodesP.iloc[p]
+      x = list(val.keys())
+      if len(x) == 0:
         if self.C[METHOD_STR] in [CLSSFD_STR, DETECT_STR]:
           CFN_MTX.loc[NONE_STR, P[PHASE_STR]] += 1
-          result.append((P[ID_STR], str(P[TIMESTAMP_STR]), P[PROBABILITY_STR],
-                         P[PHASE_STR], P[NETWORK_STR], P[STATION_STR]))
+          result.append((P[THRESHOLD_STR], P[ID_STR], str(P[TIMESTAMP_STR]), P[PROBABILITY_STR],
+                        P[PHASE_STR], P[NETWORK_STR], P[STATION_STR]))
         else:
           CFN_MTX.loc[NONE_STR, EVENT_STR] += 1
-          result.append((P[ID_STR], str(P[TIMESTAMP_STR]), P[LATITUDE_STR],
-                         P[LONGITUDE_STR], P[LOCAL_DEPTH_STR],
-                         P[MAGNITUDE_STR], None, None, None, None, None, None,
-                         None, str(P[NOTES_STR]).rstrip()))
+          result.append((P[THRESHOLD_STR], P[ID_STR], str(P[TIMESTAMP_STR]), P[LATITUDE_STR],
+                        P[LONGITUDE_STR], P[LOCAL_DEPTH_STR],
+                        P[MAGNITUDE_STR], None, None, None, None, None, None,
+                        None, str(P[NOTES_STR]).rstrip()))
+        continue
+      assert len(x) == 1
     FP.update(set(result))
     return CFN_MTX, TP, FN, FP
 
@@ -344,7 +351,7 @@ def conf_mtx(TRUE: pd.DataFrame, PRED: pd.DataFrame, model_name: str,
   CFN_MTX, TP, FN, FP = bpg.confMtx()
   TP = set([tuple([model_name, dataset_name, *x]) for x in TP])
   FN = [[model_name, dataset_name, None, *x] for x in FN]
-  FP = set([tuple([model_name, dataset_name, None, *x]) for x in FP])
+  FP = set([tuple([model_name, dataset_name, *x]) for x in FP])
   return CFN_MTX, TP, FN, FP
 
 
@@ -524,8 +531,6 @@ def stat_test(TRUE: pd.DataFrame, PRED: pd.DataFrame,
     MTX.sort_index(inplace=True)
     print(MTX.to_string(), end="\n\n")
     tp = [float(t[1]) for t in TP[ID_STR].unique()]
-    REVIEW = FP[FP[ID_STR].isin(TP[ID_STR].unique())]
-    print(REVIEW)
 
   # True Positive Probability distribution plot
   if method in [CLSSFD_STR, DETECT_STR]:
@@ -608,6 +613,8 @@ def stat_test(TRUE: pd.DataFrame, PRED: pd.DataFrame,
       for ax1, w in zip(axs, args.weights):
         TP_W = TP_M[TP_M[WEIGHT_STR] == w]
         FN_W = FN_M[FN_M[WEIGHT_STR] == w]
+        if len(TP_W.index) == 0 and len(FN_W.index) == 0:
+          continue
         ax1.set_title(w, fontsize=16)
         ax2 = ax1.twinx()
         ax1.set(ylabel="Number of Picks", ylim=(0, max_threshold))
@@ -672,33 +679,6 @@ def stat_test(TRUE: pd.DataFrame, PRED: pd.DataFrame,
       max_r = args.circdomain[3] + 0.5
       lat, lon = args.circdomain[:2]
       extent = [lon - max_r, lon + max_r, lat - max_r, lat + max_r]
-    # True Positive Spatial difference plot
-    for model, tp_m in TP.groupby(MODEL_STR):
-      fig, _axs = plt.subplots(x, y, figsize=figsize, layout='constrained',
-                               subplot_kw={'projection': "polar"})
-      axs = _axs.flatten()
-      plt.rcParams.update({'font.size': 12})
-      fig.suptitle(model)
-      for ax, (weight, tp_w) in zip(axs, tp_m.groupby(WEIGHT_STR)):
-        if len(tp_w.index) == 0:
-          continue
-        tp_w["X"] = tp_w[LONGITUDE_STR].apply(lambda x: x[0] - x[1])
-        tp_w["Y"] = tp_w[LATITUDE_STR].apply(lambda x: x[0] - x[1])
-        ax.plot(np.arctan2(tp_w["Y"], tp_w["X"]),
-                np.sqrt(tp_w["X"]**2 + tp_w["Y"]**2), "o", c="r",
-                markersize=3, alpha=0.5)
-        ax.set_title(weight)
-        ax.set_rscale("log")
-        ax.set_rmax(ASSOCIATE_DIST_OFFSET)
-
-      IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) +
-                      UNDERSCORE_STR.join([
-                          method, TRUE_STR, PRED_STR, model,
-                          THRESHOLDER_STR.format(p=args.pwave,
-                                                 s=args.swave)]) + PNG_EXT)
-      plt.tight_layout()
-      plt.savefig(IMG_FILE, bbox_inches='tight')
-      plt.close()
     # True Positive Radii distribution plot
     for model, tp_m in TP.groupby(MODEL_STR):
       fig, _axs = plt.subplots(x, y, figsize=figsize, layout='constrained',)
@@ -727,38 +707,6 @@ def stat_test(TRUE: pd.DataFrame, PRED: pd.DataFrame,
       IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) +
                       UNDERSCORE_STR.join([
                           method, TRUE_STR, "R", PRED_STR, model,
-                          THRESHOLDER_STR.format(p=args.pwave,
-                                                 s=args.swave)]) + PNG_EXT)
-      plt.tight_layout()
-      plt.savefig(IMG_FILE, bbox_inches='tight')
-      plt.close()
-    # True Positive Theta distribution plot
-    for model, tp_m in TP.groupby(MODEL_STR):
-      fig, _axs = plt.subplots(x, y, figsize=figsize, layout='tight')
-      axs = _axs.flatten()
-      plt.rcParams.update({'font.size': 12})
-      fig.suptitle(model)
-      for ax, (weight, tp_w) in zip(axs, tp_m.groupby(WEIGHT_STR)):
-        if len(tp_w.index) == 0:
-          continue
-        tp_w["X"] = tp_w[LONGITUDE_STR].apply(lambda x: x[0] - x[1])
-        tp_w["Y"] = tp_w[LATITUDE_STR].apply(lambda x: x[0] - x[1])
-        theta = np.arctan2(tp_w["Y"], tp_w["X"])
-        theta.plot(ax=ax, kind='hist',
-                   bins=np.linspace(-np.pi, np.pi, NUM_BINS))
-        ax.set(title=weight, xlabel="Theta (rad)", ylabel="Number of Picks")
-      axs[0].set()
-      axs[1].set(ylabel=None, yticklabels=[])
-      if len(args.weights) > 2:
-        axs[2].set_xlabel(axs[2].get_title(), fontsize=14)
-        axs[2].set(title=None)
-        axs[2].xaxis.tick_top()
-        axs[3].set_xlabel(axs[3].get_title(), fontsize=14)
-        axs[3].set(ylabel=None, yticklabels=[], title=None)
-        axs[3].xaxis.tick_top()
-      IMG_FILE = Path(IMG_PATH, ("D_" if args.denoiser else EMPTY_STR) +
-                      UNDERSCORE_STR.join([
-                          method, TRUE_STR, "T", PRED_STR, model,
                           THRESHOLDER_STR.format(p=args.pwave,
                                                  s=args.swave)]) + PNG_EXT)
       plt.tight_layout()
@@ -1076,17 +1024,17 @@ def main(args: argparse.Namespace):
     time_displacement(stat_test(dcpy(TRUE_D), dcpy(PRED), args, CLSSFD_STR),
                       args, CLSSFD_STR)
     pass
-  # if args.option in [DETECT_STR, ALL_WILDCHAR_STR]:
-  #  print(DETECT_STR)
-  #  PRED_D = _Analysis(args, DETECT_STR)
-  #  time_displacement(stat_test(dcpy(TRUE_D), dcpy(PRED_D), args, DETECT_STR),
-  #                    args, DETECT_STR)
-  #  pass
-  # if args.option == ALL_WILDCHAR_STR:
-  #  plot_cluster(PRED, PRED_D, args)
-  #  #plot_cluster(TRUE_D, PRED_D, args)
+  if args.option in [DETECT_STR, ALL_WILDCHAR_STR]:
+    print(DETECT_STR)
+    PRED_D = _Analysis(args, DETECT_STR)
+    time_displacement(stat_test(dcpy(TRUE_D), dcpy(PRED_D), args, DETECT_STR),
+                      args, DETECT_STR)
+    pass
+  if args.option == ALL_WILDCHAR_STR:
+    plot_cluster(PRED, PRED_D, args)
+    # plot_cluster(TRUE_D, PRED_D, args)
   del PRED
-  # del PRED_D
+  del PRED_D
   if args.option in [SOURCE_STR, ALL_WILDCHAR_STR]:
     print(SOURCE_STR)
     PRED_S = ini.data_loader(Path(

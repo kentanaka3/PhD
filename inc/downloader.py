@@ -71,7 +71,7 @@ def data_downloader(args: argparse.Namespace) -> None:
                                                       "HN[ZNE]", "HG[ZNE]"],
                                   reject_channels_with_gaps=False,
                                   minimum_length=0.0,
-                                  minimum_interstation_distance_in_m=100.0,
+                                  minimum_interstation_distance_in_m=100,
                                   location_priorities=[
                                       "", "00", "01", "02", "10"],
                                   chunklength_in_sec=86400)
@@ -96,19 +96,6 @@ def data_downloader(args: argparse.Namespace) -> None:
                      stationxml_storage=Path(DATA_PATH, STATION_STR).__str__())
       except Exception as e:
         print(f"Error downloading data: {e}")
-    if args.verbose:
-      print("Data downloaded successfully to the directory:", args.directory)
-      print("Data is being revised")
-    for d_ in DAYS[:-1]:
-      D_FILE = Path(args.directory / DIR_FMT["year"].format(d_.year) /
-                    DIR_FMT["month"].format(d_.month) /
-                    DIR_FMT["day"].format(d_.day))
-      for fr in D_FILE.iterdir():
-        if fr.is_dir():
-          continue
-        d_file = D_FILE / op.read(fr, headeronly=True)[0].stats.network
-        d_file.mkdir(exist_ok=True)
-        fr.rename(d_file / fr.name)
 
 
 def main(args: argparse.Namespace) -> None:

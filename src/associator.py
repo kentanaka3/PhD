@@ -31,12 +31,15 @@ DATES = None
 
 
 class AssociateConfig:
-  def __init__(self, INVENTORY: obspy.Inventory, center: tuple = None,
-               x_lim: tuple = None, y_lim: tuple = None,
-               z_lim: tuple = None, t_lim: tuple = None,
+  def __init__(self, INVENTORY: obspy.Inventory, file: Path,
+               center: tuple[float, float] = (12, 46),
+               x_lim: tuple[float, float] = (-300, 400),
+               y_lim: tuple[float, float] = (-350, 250),
+               z_lim: tuple[float, float] = (0, 30),
+               t_lim: tuple[float, float] = (None, None),
                vel: tuple = None, ncpu: int = 32,
                method: str = BAYES_GAUSS_MIX_MODEL_STR,
-               use_amplitude: bool = False, file: Path = None):
+               use_amplitude: bool = False):
     self.dims = [X_COORD_STR, Y_COORD_STR, Z_COORD_STR]
     self.station = pd.DataFrame({(
         PERIOD_STR.join([network.code, station.code]), station.longitude,
@@ -48,42 +51,19 @@ class AssociateConfig:
         raise NotImplementedError("Multiple station files.")
       # TODO: Implement the file reading method
       pass
-    self.x_min = self.station[X_COORD_STR].min()
-    self.x_mid = self.station[X_COORD_STR].median()
-    self.x_max = self.station[X_COORD_STR].max()
-
-    self.y_min = self.station[Y_COORD_STR].min()
-    self.y_mid = self.station[Y_COORD_STR].median()
-    self.y_max = self.station[Y_COORD_STR].max()
-    self.center = (self.x_mid, self.y_mid)
-    if center:
-      self.center = center
-    self.proj = Proj(OGS_PROJECTION.format(lon=self.center[0],
-                                           lat=self.center[1]))
+    # TODO: Hard code center for projection
+    self.x_lim = x_lim
+    self.y_lim = y_lim
+    self.x_mid, self.y_mid = center
+    self.z_lim = z_lim
+    self.t_lim = t_lim
+    self.proj = Proj(OGS_PROJECTION.format(lon=self.x_mid, lat=self.y_mid))
     # from deg to km
     self.station[[X_COORD_STR, Y_COORD_STR]] = \
         self.station.apply(lambda s:
                            pd.Series(self.proj(latitude=s[Y_COORD_STR],
-                                               longitude=s[X_COORD_STR])), axis=1)
-
-    self.x_lim = (2 * self.x_min - self.x_mid, 2 * self.x_max - self.x_mid)
-    self.x_lim = self.proj(latitude=[self.center[1]] * 2,
-                           longitude=self.x_lim)[0]
-    if x_lim:
-      self.x_lim = x_lim
-
-    self.y_lim = (2 * self.y_min - self.y_mid, 2 * self.y_max - self.y_mid)
-    self.y_lim = self.proj(latitude=self.y_lim,
-                           longitude=[self.center[0]] * 2)[1]
-    if y_lim:
-      self.y_lim = y_lim
-
-    self.z_lim = (0, 30)
-    if z_lim:
-      self.z_lim = z_lim
-    self.t_lim = (None, None)
-    if t_lim:
-      self.t_lim = t_lim
+                                               longitude=s[X_COORD_STR])),
+                           axis=1)
 
     self.bfgs_bounds = (
         (self.x_lim[0] - 1, self.x_lim[1] + 1),

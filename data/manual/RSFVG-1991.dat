@@ -1,0 +1,2128 @@
+BOO iPC  9105212252 5105                                      FL        130   1 g
+BUA eP 2 9105212252 5210                                      FL        120   1 g
+CAE eP   9105212252 5300                                      FL        120   1 g
+PLROeP 2 9105212252 5540                                      FL        120   1 g
+                 1                                               
+BOO iPC  9105220834 0845        1020eS                        FLD       400   2 gg
+BAD iPC  9105220834 0890        1130eS                        FLD       300   2 gg
+BUA eP   9105220834 0950                                      FLD       350   2 g
+MPRIeP   9105220834 1010        1360eS                        FLD             2 gg
+PLROeP   9105220834 1040        1440eS                        FLD       300   2 gg
+COLIiPD  9105220834 1060        1430eS                        FLD       310   2 gg
+ZOU eP   9105220834 1140        1620eS                        FLD       300   2 gg
+DRE eP   9105220834 1280                                      FLD       310   2 g
+                 1                                              D
+MPRIeP   9105232130 4190        4400eS                        FLD       220   3 gg
+BOO eP   9105232130 4320        4600eS                        FLD       180   3 gg
+RCL eP+  9105232130 4360        4680eS                        FLD       170   3 gg
+BUA eP   9105232130 4380                                      FLD       170   3 g
+BAD eP   9105232130 4490        4970eS                        FLD       200   3 gg
+UDI eP 2 9105232130 4700                                      FLD       190   3 g
+                 1                                              D
+BOO iPC  9105241711 0190         350eS                        FLD       140   4 gg
+BUA eP   9105241711 0330                                      FLD       140   4 g
+PLROeP   9105241711 0395         730eS                        FLD       130   4 gg
+BAD eP   9105241711 0400         740eS                        FLD       130   4 gg
+COLIeP   9105241711 0635        1210eS                        FLD       130   4 gg
+LSR eP   9105241711 0670                                      FLD       120   4 g
+                 1                                              D
+BAD iPC  9105250028 5030        5200eS                        FLD       120   5 gg
+BOO eP   9105250028 5080        5300eS                        FLD       120   5 gg
+LSR eP   9105250028 5330                                      FLD        80   5 g
+PLROeP   9105250028 5370                                      FLD       120   5 g
+                 1                                              D
+BAD iPC  9105250201 1115        1190eS                        FLD       110   6 gg
+BUA eP   9105250201 1240                                      FLD       100   6 g
+COLIeP+  9105250201 1265        1460eS                        FLD       100   6 gg
+BOO eP   9105250201 1320        1550eS                        FLD       190   6 gg
+                 1                                              D
+COLIeP-  9105252058 0785                                                      7 n
+DRE eP   9105252058 0840                                                      7 n
+BAD eP+  9105252058 0875                                                      7 n
+BUA eP+  9105252058 0885                                                      7 n
+                 1                                               
+BOO iPC  9105280403 4875        5000eS                        FLD       200   8 gg
+BAD eP   9105280403 4975        5230eS                        FLD       160   8 gg
+BUA iPD  9105280403 5000                                      FLD       160   8 g
+MPRIeP+  9105280403 5025        5300eS                        FLD       160   8 gg
+PLROeP   9105280403 5120                                      FLD       170   8 g
+COLIeP+  9105280403 5215        5650eS                        FLD       170   8 gg
+DRE eP 2 9105280403 5400                                      FLD       160   8 g
+                 1                                              D
+BOO iPD  9105280726 4215                                      FLD       180   9 g
+PLROeP   9105280726 4320        4580eS                        FLD       160   9 gg
+BUA eP   9105280726 4360                                      FLD       150   9 g
+BAD eP   9105280726 4380                                      FLD       140   9 g
+MPRIeP   9105280726 4390                                      FLD       120   9 g
+ZOU eP   9105280726 4390                                      FLD       120   9 g
+                 1                                              D
+CSO eP   9105292025 3010                                                     10 n
+CSZ eP   9105292025 3410                                                     10 n
+MPRIeP   9105292025 3580                                                     10 n
+BOO eP   9105292025 3680                                                     10 n
+BAD eP   9105292025 3760                                                     10 n
+COLIeP   9105292025 3860                                                     10 n
+PLROeP   9105292025 3910                                                     10 n
+DRE eP   9105292025 4100                                                     10 n
+LSR eP   9105292025 4245                                                     10 n
+                 1                                               
+DRE eP   9106031415 2880                                       L        450  11 g
+LSR eP-  9106031415 3180                                       L        310  11 g
+COLIeP+  9106031415 3250                                       L        400  11 g
+BAD eP   9106031415 3380                                       L        340  11 g
+BOO eP   9106031415 3550                                       L        340  11 g
+                 1                                               
+BOO iPD  9106051319 1910        2110eS                        FLD       170  12 gg
+ZOU eP   9106051319 1980        2220eS                        FLD       110  12 gg
+MPRIeP   9106051319 2010                                      FLD       110  12 g
+PLROeP   9106051319 2030                                      FLD       160  12 g
+BUA eP   9106051319 2095                                      FLD       150  12 g
+BAD eP   9106051319 2145        2560eS                        FLD       140  12 gg
+                 1                                              D
+BOO iPD  9106060330 0855                                      FLD       180  13 g
+BAD eP   9106060330 0925                                      FLD       150  13 g
+BUA eP   9106060330 0965                                      FLD       180  13 g
+MPRIeP   9106060330 1020                                      FLD       150  13 g
+PLROeP   9106060330 1080                                      FLD       170  13 g
+COLIeP   9106060330 1160                                      FLD       150  13 g
+ZOU eP   9106060330 1200        1620eS                        FLD       110  13 gg
+DRE eP   9106060330 1340                                      FLD       140  13 g
+                 1                                              D
+DRE eP   9106060925 4260        4460eS                         L        300  14 gg
+COLIeP-  9106060925 4430                                       L        200  14 g
+BUA eP-  9106060925 4840                                       L        250  14 g
+LSR eP   9106060925 4870                                       L        150  14 g
+                 1                                               
+MPRIiPD  9106101918 3440                                      FLD       400  15 g
+BUA eP   9106101918 3585                                      FLD       410  15 g
+BOO eP   9106101918 3625        3910eS                        FLD       400  15 gg
+RCL eP+  9106101918 3700                                      FLD       350  15 g
+BAD eP   9106101918 3700        4100eS                        FLD       400  15 gg
+TLI eP   9106101918 3860                                      FLD            15 g
+COLIeP+  9106101918 3890                                      FLD       400  15 g
+ZOU eP   9106101918 3960        4600eS                        FLD       320  15 gg
+CAE eP 2 9106101918 4020                                      FLD       280  15 g
+CSO eP+  9106101918 4040        4730eS                        FLD       300  15 gg
+DRE eP   9106101918 4210        5030eS                        FLD       400  15 gg
+LSR eP   9106101918 4200                                      FLD       300  15 g
+                 1                                              D
+MPRIeP   9106110805 5610                                      FLD      2500  16 g
+BOO eP   9106110805 5740                                      FLD            16 g
+BUA eP   9106110805 5780                                      FLD            16 g
+RCL eP 1 9106110805 5840                                      FLD            16 g
+BAD eP   9106110805 5910                                      FLD            16 g
+CSZ eP 3 9106110805 5970                                      FLD            16 g
+ZOU eP   9106110806 0010                                      FLD            16 g
+COLIeP   9106110806 0130                                      FLD            16 g
+TLI eP   9106110806 0120                                      FLD            16 g
+CSO eP   9106110806 0120                                      FLD            16 g
+CAE eP 2 9106110806 0200                                      FLD            16 g
+LSR eP   9106110806 0310                                      FLD            16 g
+DRE eP   9106110806 0380                                      FLD            16 g
+AFL eP 2 9106110806 0450                                      FLD            16 g
+TRI iPC4 9106110806 0870                                      FLD            16 g
+                 1                                              D
+MPRIiPD  9106110855 0560         680eS 3                      FLD       800  17 gg
+BOO iPC  9106110855 0680         930eS                        FLD       900  17 gg
+BUA iPC  9106110855 0730        1040eS                        FLD            17 gg
+RCL iPD  9106110855 0820        1200eS                        FLD            17 gg
+BAD iPD  9106110855 0850        1270eS                        FLD            17 gg
+CSZ eP   9106110855 0890                                      FLD       750  17 g
+ZOU iPD  9106110855 0940        1420eS                        FLD       700  17 gg
+COLIiPD  9106110855 1080                                      FLD            17 g
+TLI iPD  9106110855 1100                                      FLD            17 g
+LSR eP   9106110855 1300                                      FLD            17 g
+DRE eP   9106110855 1335        2200eS 1                      FLD            17 gg
+                 1                                              D
+BAD iPC  9106110952 3490        3700eS                        FLD       300  18 gg
+BUA iPD  9106110952 3590        3810eS                        FLD       280  18 gg
+BOO iPC  9106110952 3570        3840eS                        FLD       280  18 gg
+LSR eP   9106110952 3700        4160eS                        FLD       240  18 gg
+DRE eP   9106110952 3750        4170eS                        FLD       230  18 gg
+TLI eP   9106110952 4005        4650eS                        FLD            18 gg
+                 1                                              D
+DRE eP   9106111004 1600                                       LD       200  19 g
+COLIeP   9106111004 1740                                       LD       180  19 g
+BAD eP   9106111004 2010                                       LD       160  19 g
+LSR eP 2 9106111004 2230                                       LD       160  19 g
+CAE eP   9106111004 2550                                       LD       160  19 g
+                 1                                              D
+MPRIiPC  9106111138 2850        3000eS                        FLD       350  20 gg
+BOO iPC  9106111138 2965        3220eS                        FLD       220  20 gg
+BUA eP   9106111138 3025                                      FLD       340  20 g
+RCL eP+  9106111138 3125        3470eS                        FLD       320  20 gg
+BAD eP   9106111138 3150        3560eS                        FLD       320  20 gg
+ZOU eP   9106111138 3230        3710eS                        FLD       250  20 gg
+COLIeP   9106111138 3370                                      FLD       320  20 g
+TLI eP+  9106111138 3400                                      FLD       300  20 g
+LSR eP   9106111138 3590                                      FLD       200  20 g
+                 1                                              D
+MPRIiPC  9106111707 0825         970eS                        FLD       320  21 gg
+BOO eP   9106111707 0945        1160eS                        FLD       320  21 gg
+BUA eP   9106111707 0990        1320eS                        FLD       330  21 gg
+BAD eP   9106111707 1120        1530eS                        FLD       300  21 gg
+ZOU eP   9106111707 1205        1670eS                        FLD       240  21 gg
+COLIeP   9106111707 1345        1950eS                        FLD       300  21 gg
+CSO eP-  9106111707 1355                                      FLD       200  21 g
+TLI eP   9106111707 1380        1950eS                        FLD       300  21 gg
+LSR eP+  9106111707 1560        2320eS                        FLD       200  21 gg
+DRE eP 2 9106111707 1690        2500eS                        FLD       250  21 gg
+                 1                                              D
+MPRIiPD  9106112036 4778                                      FLD       300  22 g
+BUA eP+  9106112036 4890        5120eS                        FLD       220  22 gg
+BOO eP+  9106112036 4975        5320eS                        FLD       200  22 gg
+BAD eP   9106112036 5010        5350eS                        FLD       200  22 gg
+TLI eP   9106112036 5215                                      FLD       280  22 g
+COLIeP+  9106112036 5200                                      FLD       300  22 g
+ZOU eP   9106112036 5385                                      FLD       140  22 g
+LSR eP   9106112036 5550        6320eS                        FLD       180  22 gg
+                 1                                              D
+MPRIiPC  9106140252 5530        5650eS                        FLD       330  23 gg
+BOO iPC  9106140252 5655        5900eS                        FLD       350  23 gg
+BUA eP   9106140252 5710                                      FLD       360  23 g
+RCL eP   9106140252 5790                                      FLD       300  23 g
+BAD eP-  9106140252 5830        6260eS                        FLD       330  23 gg
+CSZ eP+  9106140252 5870                                      FLD       320  23 g
+ZOU eP-  9106140252 5910        6380eS                        FLD       300  23 gg
+PLROeP   9106140252 5985                                      FLD       320  23 g
+UDI iPD  9106140252 5985                                      FLD       400  23 g
+COLIiPD  9106140253 0050                                      FLD       400  23 g
+TLI eP+  9106140253 0075                                      FLD       400  23 g
+CSO eP+  9106140253 0040                                      FLD       270  23 g
+AFL eP 4 9106140253 0240                                      FLD       310  23 g
+                 1                                              D
+MPRIiPC  9106140837 1010        1160eS                        FLD       200  24 gg
+BOO eP+  9106140837 1130        1360eS                        FLD       210  24 gg
+BUA eP 2 9106140837 1200                                      FLD       210  24 g
+BAD eP+  9106140837 1305        1730eS                        FLD       180  24 gg
+CSZ eP   9106140837 1340                                      FLD       150  24 g
+ZOU eP   9106140837 1390        1860eS                        FLD       150  24 gg
+PLROeP   9106140837 1470                                      FLD       200  24 g
+TLI eP   9106140837 1500                                      FLD            24 g
+CSO eP   9106140837 1510                                      FLD       150  24 g
+LSR eP   9106140837 1745                                      FLD       130  24 g
+                 1                                              D
+MPRIiPC  9106151544 1670        1780eS                        FLD       180  25 gg
+BOO eP   9106151544 1780        2040eS                        FLD       150  25 gg
+RCL eP-  9106151544 1920        2260eS                        FLD       130  25 gg
+BAD eP+  9106151544 1960        2370eS                        FLD       130  25 gg
+ZOU eP   9106151544 2055        2520eS                        FLD       110  25 gg
+PLROeP 2 9106151544 2140                                      FLD       150  25 g
+COLIeP   9106151544 2190                                      FLD       170  25 g
+                 1                                              D
+MPRIiPC  9106182020 4200        4360eS                        FLD       200  26 gg
+BOO eP+  9106182020 4315        4570eS                        FLD       200  26 gg
+BUA eP   9106182020 4380                                      FLD       200  26 g
+RCL eP   9106182020 4450        4810eS                        FLD       140  26 gg
+BAD eP+  9106182020 4500        4920eS                        FLD       160  26 gg
+CSZ eP 2 9106182020 4590                                      FLD       150  26 g
+ZOU eP   9106182020 4580        5040eS                        FLD       140  26 gg
+PLROeP   9106182020 4660                                      FLD       150  26 g
+COLIeP   9106182020 4715                                      FLD       180  26 g
+TLI eP+  9106182020 4755        5380eS                        FLD       150  26 gg
+CSO eP 3 9106182020 4730                                      FLD       150  26 g
+                 1                                              D
+DRE eP   9106191114 4040        4270eS                         LD       280  27 gg
+VOY eP   9106191114 4130                                       LD            27 g
+COLIeP   9106191114 4210        4630eS                         LD       240  27 gg
+BAD eP 2 9106191114 4500                                       LD       200  27 g
+TRI eP 2 9106191114 4510        5130eS                         LD            27 gg
+LSR eP   9106191114 4650                                       LD       170  27 g
+                 1                                              D
+MPRIiPC  9106200107 5120        5260eS                        FLD       300  28 gg
+BOO eP+  9106200107 5235        5470eS                        FLD       300  28 gg
+BUA eP   9106200107 5300        5620eS                        FLD       300  28 gg
+RCL eP-  9106200107 5370                                      FLD       300  28 g
+BAD eP   9106200107 5415        5850eS                        FLD       300  28 gg
+CSZ eP+  9106200107 5455                                      FLD       170  28 g
+PLROeP   9106200107 5570        6080eS                        FLD       180  28 gg
+COLIeP   9106200107 5635                                      FLD       280  28 g
+CSO eP   9106200107 5625                                      FLD       150  28 g
+TLI eP+  9106200107 5660                                      FLD       300  28 g
+LSR eP   9106200107 5855                                      FLD            28 g
+                 1                                              D
+BOO iPD  9106200602 3125        3260eS                        FLD       180  29 gg
+MPRIeP   9106200602 3190                                      FLD       160  29 g
+BUA iPC  9106200602 3205        3450eS                        FLD       180  29 gg
+BAD eP   9106200602 3250        3500eS                        FLD       140  29 gg
+PLROeP   9106200602 3450                                      FLD       160  29 g
+ZOU eP   9106200602 3470                                      FLD        90  29 g
+COLIeP-  9106200602 3500        3970eS                        FLD       160  29 gg
+LSR eP   9106200602 3620                                      FLD       120  29 g
+                 1                                              D
+LSR iPC  9106202155 5980                                      FLD            30 g
+DRE eP   9106202156 0380         840eS                        FLD       550  30 gg
+PLROeP   9106202156 0465         950eS                        FLD       450  30 gg
+BAD eP   9106202156 0445                                      FLD       550  30 g
+COLIeP   9106202156 0510                                      FLD       500  30 g
+BOO eP   9106202156 0510        1100eS                        FLD       550  30 gg
+BUA eP   9106202156 0600        1270eS                        FLD       550  30 gg
+ZOU eP   9106202156 0690        1360eS                        FLD       350  30 gg
+MPRIeP   9106202156 0720        1460eS                        FLD       500  30 gg
+VOY iP   9106202156 0750                                      FLD            30 g
+UDI iPD  9106202156 0740                                      FLD       500  30 g
+CSZ eP+  9106202156 1155                                      FLD       300  30 g
+RCL eP+  9106202156 1190                                      FLD       500  30 g
+TRI iPD4 9106202156 1200                                      FLD            30 g
+LJU eP   9106202156 1350                                      FLD            30 g
+                 1                                              D
+BOO iPD  9106211845 0500         620eS                        FLD       140  31 gg
+BAD eP   9106211845 0590         880eS                        FLD       140  31 gg
+BUA eP   9106211845 0620                                      FLD       140  31 g
+MPRIeP-  9106211845 0665                                      FLD       120  31 g
+PLROeP   9106211845 0715        1060eS                        FLD       130  31 gg
+ZOU eP   9106211845 0820        1230eS                        FLD       100  31 gg
+COLIeP+  9106211845 0820        1300eS                        FLD       130  31 gg
+LSR eP   9106211845 0840        1300eS                        FLD       100  31 gg
+DRE eP   9106211845 0990        1600eS                        FLD       130  31 gg
+                 1                                              D
+BOO iPD  9106221934 0890        1030eS                        FLD       200  32 gg
+BUA iPC  9106221934 0910        1080eS                        FLD       230  32 gg
+BAD eP   9106221934 0940        1130eS                        FLD       200  32 gg
+COLIeP-  9106221934 1190        1580eS                        FLD       170  32 gg
+PLROeP   9106221934 1280                                      FLD       150  32 g
+LSR eP   9106221934 1390        1940eS                        FLD       140  32 gg
+                 1                                              D
+BOO iPD  9106222238 4180        4310eS                        FLD       350  33 gg
+BAD eP   9106222238 4290        4530eS                        FLD       300  33 gg
+BUA eP   9106222238 4320                                      FLD       330  33 g
+PLROeP   9106222238 4370        4620eS                        FLD       310  33 gg
+MPRIeP   9106222238 4350                                      FLD       160  33 g
+ZOU eP   9106222238 4450                                      FLD       330  33 g
+LSR eP   9106222238 4520        4950eS                        FLD       260  33 gg
+COLIeP   9106222238 4530        5000eS                        FLD       150  33 gg
+DRE eP 2 9106222238 4700        5300eS                        FLD       320  33 gg
+CSZ eP   9106222238 4760                                      FLD       250  33 g
+                 1                                              D
+DRE eP 2 9106230942 4050                                                600  34 g
+BAD eP 3 9106230942 4620        6100eS                                       34 gg
+BUA eP   9106230942 4750                                                     34 g
+LSR eP   9106230942 4800                                                     34 g
+BOO eP 2 9106230942 4840        6440eS                                       34 gg
+RCL eP-2 9106230942 5130                                                     34 g
+PLROeP   9106230942 5170        6800eS                                       34 gg
+CAE eP 1 9106230942 5230                                                     34 g
+                 1                                               
+BAD iPC  9106251050 1650        1710eS                        FLD       350  35 gg
+BUA iPC  9106251050 1735                                      FLD       350  35 g
+BOO iPD  9106251050 1790        2000eS                        FLD       350  35 gg
+COLIiPC  9106251050 1840        2110eS                        FLD       380  35 gg
+MPRIiPC  9106251050 1920        2100eS                        FLD       360  35 gg
+UDI iPD  9106251050 1925                                      FLD       360  35 g
+DRE eP 1 9106251050 2060                                      FLD       340  35 g
+LSR eP   9106251050 2100                                      FLD       300  35 g
+PLROeP+  9106251050 2130        2640eS                        FLD       300  35 gg
+TLI eP+  9106251050 2160                                      FLD       300  35 g
+ZOU eP 2 9106251050 2230                                      FLD       200  35 g
+CSO iPC  9106251050 2690                                      FLD       280  35 g
+                 1                                              D
+MPRIiPC  9106251324 1900        2000eS                        FLD       560  36 gg
+BOO iPC  9106251324 2010        2260eS                        FLD       550  36 gg
+BUA eP   9106251324 2060                                      FLD       540  36 g
+RCL iPC  9106251324 2120                                      FLD       520  36 g
+BAD iPD  9106251324 2190        2600eS                        FLD       530  36 gg
+CSZ eP   9106251324 2200                                      FLD       520  36 g
+ZOU eP   9106251324 2265        2730eS                        FLD       480  36 gg
+PLROeP   9106251324 2340                                      FLD       510  36 g
+COLIiPD  9106251324 2405        3040eS                        FLD       500  36 gg
+CSO eP   9106251324 2380                                      FLD       500  36 g
+TLI iPC  9106251324 2440                                      FLD       480  36 g
+CAE eP   9106251324 2470                                      FLD       480  36 g
+LSR eP   9106251324 2610        3380eS                        FLD       500  36 gg
+DRE eP 2 9106251324 2650                                      FLD       500  36 g
+AFL eP   9106251324 2780                                      FLD       460  36 g
+                 1                                              D
+BAD iPC  9106260826 5765        5880eS                        FLD       150  37 gg
+BUA iPC  9106260826 5890                                      FLD       140  37 g
+COLIeP   9106260826 5910        6150eS                        FLD       140  37 gg
+BOO eP   9106260826 5920        6170eS                        FLD       130  37 gg
+DRE eP   9106260827 0100         520eS                        FLD       130  37 gg
+LSR eP   9106260827 0150                                      FLD       110  37 g
+PLROeP   9106260827 0260                                      FLD       110  37 g
+                 1                                              D
+BOO iPC  9106261738 4880        4920eS                        FLD       200  38 gg
+MPRIeP   9106261738 4970                                      FLD       220  38 g
+BUA iPD  9106261738 5010                                      FLD       200  38 g
+BAD eP   9106261738 5100        5340eS                        FLD       160  38 gg
+PLROeP   9106261738 5320                                      FLD       140  38 g
+COLIeP   9106261738 5370                                      FLD       160  38 g
+RCL eP   9106261738 5460                                      FLD       160  38 g
+                 1                                              D
+TRI eP   9107020107 0630        1610eS                         LD            39 gg
+CEY eP   9107020107 0990        2200eS                         LD            39 gg
+TLI eP   9107020107 1130                                       LD       600  39 g
+VOY eP   9107020107 1170        2530eS                         LD            39 gg
+COLIeP   9107020107 1330                                       LD            39 g
+DRE eP   9107020107 1345        2870eS                         LD            39 gg
+LJU eP   9107020107 1480        3020eS                         LD            39 gg
+BAD eP   9107020107 1490                                       LD            39 g
+BUA eP   9107020107 1535                                       LD            39 g
+CAE eP 1 9107020107 1680                                       LD            39 g
+BOO eP   9107020107 1670                                       LD            39 g
+LSR eP   9107020107 1860                                       LD       600  39 g
+PLROeP   9107020107 1970                                       LD            39 g
+                 1                                              D
+BOO eP   9107020934 3850        4010eS                        FLD       130  40 gg
+BAD eP   9107020934 3910        4140eS                        FLD       110  40 gg
+BUA eP   9107020934 3960                                      FLD       120  40 g
+PLROeP   9107020934 4065                                      FLD       110  40 g
+COLIiPC  9107020934 4130        4560eS                        FLD       120  40 gg
+LSR eP 2 9107020934 4260                                      FLD       110  40 g
+                 1                                              D
+MPRIeP   9107030829 1730        1930eS                        FL             41 gg
+BOO iPD  9107030829 1770        2030eS                        FL             41 gg
+CSZ iPC  9107030829 1830                                      FL             41 g
+ZOU eP-  9107030829 1870                                      FL             41 g
+BUA iPD  9107030829 1880                                      FL             41 g
+RCL eP   9107030829 1920        2280eS                        FL             41 gg
+PLROiPD  9107030829 1990        2400eS                        FL             41 gg
+BAD eP   9107030829 2000        2450eS                        FL             41 gg
+CSO eP   9107030829 2100                                      FL        620  41 g
+COLIeP   9107030829 2265        2960eS                        FL             41 gg
+CAE eP   9107030829 2300        3000eS                        FL             41 gg
+LSR eP   9107030829 2360                                      FL             41 g
+AFL eP 4 9107030829 2460                                      FL             41 g
+DRE eP 2 9107030829 2500                                      FL             41 g
+                 1                                               
+CSZ eP   9107040721 3590        3730eS                        FLD       150  42 gg
+CSO eP   9107040721 3880        4300eS                        FLD       130  42 gg
+BOO eP 2 9107040721 3990        4480eS                        FLD       180  42 gg
+BAD eP 2 9107040721 4240        4960eS                        FLD       170  42 gg
+                 1                                              D
+RCL eP   9107070113 5350        5570eS                        FLD       300  43 gg
+MPRIeP   9107070113 5360        5650eS                        FLD       200  43 gg
+CSZ eP-  9107070113 5380        5680eS                        FLD       240  43 gg
+BOO eP   9107070113 5465                                      FLD       260  43 g
+BUA eP   9107070113 5580                                      FLD       250  43 g
+CSO eP   9107070113 5570        6000eS                        FLD       220  43 gg
+ZOU eP 2 9107070113 5580        6030eS                        FLD       180  43 gg
+BAD eP   9107070113 5670        6260eS                        FLD       200  43 gg
+PLROeP   9107070113 5720                                      FLD       210  43 g
+COLIeP   9107070113 5910                                      FLD       260  43 g
+                 1                                              D
+BOO iPC  9107072123 0010         190eS                        FLD       260  44 gg
+PLROeP-  9107072123 0125         410eS                        FLD       240  44 gg
+MPRIiPC  9107072123 0135         440eS                        FLD       200  44 gg
+ZOU eP   9107072123 0150         450eS                        FLD       200  44 gg
+BUA iPC  9107072123 0165                                      FLD       220  44 g
+BAD iPC  9107072123 0185         550eS                        FLD       220  44 gg
+CSZ eP   9107072123 0410                                      FLD       170  44 g
+LSR eP   9107072123 0420         970eS                        FLD       170  44 gg
+COLIeP   9107072123 0440        1000eS                        FLD       220  44 gg
+UDI eP   9107072123 0515                                      FLD       220  44 g
+DRE eP 2 9107072123 0620        1320eS                        FLD       200  44 gg
+                 1                                              D
+BOO eP-  9107101223 5270        5470eS                        FLD       150  45 gg
+PLROeP   9107101223 5370        5630eS                        FLD       120  45 gg
+BAD eP   9107101223 5400        5720eS                        FLD       110  45 gg
+MPRIeP   9107101223 5450        5820eS                        FLD       110  45 gg
+ZOU eP 2 9107101223 5510                                      FLD       130  45 g
+LSR eP   9107101223 5560                                      FLD       100  45 g
+                 1                                              D
+LSR eP-  9107111241 5700        5910eS                        FLD       130  46 gg
+DRE eP   9107111241 5900                                      FLD       200  46 g
+BAD eP   9107111241 5910                                      FLD       220  46 g
+COLIeP 2 9107111241 5990                                      FLD       180  46 g
+PLROeP+  9107111242 0040                                      FLD       180  46 g
+                 1                                              D
+DRE eP 2 9107120143 4270                                                     47 n
+COLIeP   9107120143 4320                                                     47 n
+TLI eP   9107120143 4440                                                     47 n
+BOO eP   9107120143 4620                                                     47 n
+PLROeP   9107120143 4930                                                     47 n
+ZOU eP 2 9107120143 5000                                                     47 n
+                 1                                               
+COLIeP   9107121043 4400                                                     48 n
+BAD eP   9107121043 4560                                                     48 n
+TLI eP   9107121043 4710                                                     48 n
+BOO eP   9107121043 4730                                                     48 n
+PLROeP   9107121043 4810                                                     48 n
+RCL eP   9107121043 5150                                                     48 n
+CSZ eP   9107121043 5230                                                     48 n
+                 1                                               
+DRE eP   9107151012 0270         520eS                         LD       150  49 gg
+VOY iP   9107151012 0390         680eS                         LD            49 gg
+COLIeP   9107151012 0450         850eS                         LD       180  49 gg
+BAD eP   9107151012 0655                                       LD       250  49 g
+LSR eP   9107151012 0890                                       LD       180  49 g
+BOO eP   9107151012 0860                                       LD       230  49 g
+                 1                                              D
+LSR iPD  9107161306 3560        3830eS                        FLD       170  50 gg
+BAD eP   9107161306 3770        4100eS                        FLD       190  50 gg
+DRE eP   9107161306 3830                                      FLD       160  50 g
+BOO eP   9107161306 3920        4300eS                        FLD       180  50 gg
+PLROeP   9107161306 3920        4300eS                        FLD       200  50 gg
+ZOU eP   9107161306 4170                                      FLD       180  50 g
+                 1                                              D
+ZOU iPC  9107170455 5495                                      FLD       160  51 g
+PLROeP   9107170455 5660        5870eS                        FLD       220  51 gg
+BOO eP-  9107170455 5760        6100eS                        FLD       200  51 gg
+CSZ eP   9107170455 5810                                      FLD       160  51 g
+MPRIeP   9107170455 5860        6300eS                        FLD       170  51 gg
+BAD eP   9107170456 0010         600eS                        FLD       170  51 gg
+                 1                                              D
+DRE eP   9107171156 5550                                      FL        140  52 g
+COLIeP   9107171156 5720                                      FL        160  52 g
+BAD eP   9107171156 5990                                      FL        180  52 g
+                 1                                               
+DRE eP   9107181158 0590                                                     53 n
+LSR eP   9107181158 0910                                                     53 n
+BAD eP   9107181158 1100                                                     53 n
+BOO eP   9107181158 1170                                                     53 n
+TLI eP   9107181158 1230                                                     53 n
+PLROeP   9107181158 1260                                                     53 n
+ZOU eP   9107181158 1480                                                     53 n
+RCL eP   9107181158 1600                                                     53 n
+CAE eP   9107181158 1810                                                     53 n
+                 1                                               
+CSZ eP   9107181326 0770                                                     54 n
+RCL eP   9107181326 1110                                                     54 n
+ZOU eP 1 9107181326 1150                                                     54 n
+BOO eP   9107181326 1430                                                     54 n
+BAD eP   9107181326 1620                                                     54 n
+                 1                                               
+LSR eP   9107190121 1620                                                     55 n
+BAD eP   9107190121 1800                                                     55 n
+TLI eP   9107190121 1900                                                     55 n
+RCL eP   9107190121 2320                                                     55 n
+                 1                                               
+DRE eP   9107190128 5250                                                     56 n
+LSR eP   9107190128 5500                                                     56 n
+UDI eP   9107190128 5690                                                     56 n
+BAD eP   9107190128 5730                                                     56 n
+TLI eP   9107190128 5820                                                     56 n
+BUA eP   9107190128 5850                                                     56 n
+PLROeP   9107190128 5855                                                     56 n
+BOO eP   9107190128 5930                                                     56 n
+MPRIeP   9107190129 0030                                                     56 n
+RCL eP   9107190129 0270                                                     56 n
+                 1                                               
+CSZ eP+  9107190745 1570        1870eS                        FLD            57 gg
+RCL eP   9107190745 1620        1900eS                        FLD            57 gg
+CSO iPD  9107190745 1630                                      FLD       330  57 g
+MPRIeP   9107190745 1790                                      FLD            57 g
+CAE eP   9107190745 1900        2480eS                        FLD            57 gg
+BOO eP+  9107190745 1880                                      FLD            57 g
+ZOU eP 2 9107190745 1950                                      FLD            57 g
+AFL eP   9107190745 2000                                      FLD            57 g
+BUA eP   9107190745 2000                                      FLD            57 g
+PLROeP+  9107190745 2105                                      FLD            57 g
+BAD eP   9107190745 2100        2830eS                        FLD            57 gg
+TRI eP 4 9107190745 3280        4690eS                        FLD            57 gg
+                 1                                              D
+COLIeP   9107230841 4220                                                     58 n
+DRE eP   9107230841 4280                                                     58 n
+BAD eP   9107230841 4365                                                     58 n
+BUA eP   9107230841 4380                                                     58 n
+BOO eP   9107230841 4490                                                     58 n
+PLROeP   9107230841 4830                                                     58 n
+AFL eP   9107230841 4990                                                     58 n
+                 1                                               
+DRE eP   9107232102 4850        5100eS                         LD       120  59 gg
+LSR eP   9107232102 4880        5200eS                         LD       110  59 gg
+COLIeP   9107232102 4920        5280eS                         LD       110  59 gg
+BAD eP   9107232102 4915        5310eS                         LD       110  59 gg
+BUA eP   9107232102 5060                                       LD       120  59 g
+                 1                                              D
+DRE eP   9107251046 3340                                      FL        300  60 g
+COLIeP   9107251046 3485        3880eS                        FL        320  60 gg
+BAD eP   9107251046 3780                                      FL        230  60 g
+LSR eP   9107251046 3920                                      FL        210  60 g
+                 1                                               
+LSR iPC  9107260839 4505        4620eS                        FLD       330  61 gg
+DRE eP   9107260839 4890        5400eS                        FLD       320  61 gg
+PLROiPC  9107260839 5000        5550eS                        FLD       310  61 gg
+BAD eP   9107260839 5035                                      FLD       300  61 g
+COLIeP   9107260839 5080                                      FLD       300  61 g
+BOO eP   9107260839 5080        5720eS                        FLD       300  61 gg
+ZOU eP 1 9107260839 5210                                      FLD       300  61 g
+                 1                                              D
+BAD iPC  9107261917 1940        2250eS                        FLD       330  62 gg
+COLIiPC  9107261917 1965        2300eS                        FLD            62 gg
+DRE eP 2 9107261917 1980        2310eS                        FLD       300  62 gg
+LSR eP   9107261917 2065        2450eS                        FLD       300  62 gg
+BUA eP+  9107261917 2060        2530eS                        FLD            62 gg
+BOO iPC  9107261917 2080                                      FLD       340  62 g
+PLROeP-  9107261917 2265                                      FLD            62 g
+TRI eP   9107261917 2710        3670eS                        FLD            62 gg
+                 1                                              D
+VOY eP   9107262023 1290                                       LD            63 g
+DRE eP 2 9107262023 1470        2000eS                         LD       400  63 gg
+COLIeP-  9107262023 1880        2600eS                         LD       330  63 gg
+LSR eP   9107262023 1860                                       LD       300  63 g
+BAD eP   9107262023 2010                                       LD       320  63 g
+BUA eP 2 9107262023 2160                                       LD       320  63 g
+BOO eP   9107262023 2225        3280eS                         LD       300  63 gg
+PLROeP   9107262023 2360                                       LD       300  63 g
+                 1                                              D
+BAD eP   9107282327 2275        2470eS                        FLD       140  64 gg
+BOO eP   9107282327 2275        2420eS                        FLD       110  64 gg
+BUA eP   9107282327 2340                                      FLD       130  64 g
+COLIeP   9107282327 2450        2800eS                        FLD       130  64 gg
+PLROeP   9107282327 2480                                      FLD       120  64 g
+LSR eP   9107282327 2510                                      FLD       110  64 g
+DRE eP 2 9107282327 2620        3150eS                        FLD       120  64 gg
+                 1                                              D
+DRE iPC  9107302223 0460         600eS                        FL        180  65 gg
+BAD eP   9107302223 0670        1060eS                        FL        180  65 gg
+LSR eP   9107302223 0840                                      FL        150  65 g
+BOO eP   9107302223 0860                                      FL        200  65 g
+MPRIeP   9107302223 0980                                      FL        140  65 g
+PLROeP   9107302223 1140                                      FL        180  65 g
+                 1                                               
+AFL eP   9108011721 5390                                                     66 n
+CSO eP 2 9108011721 5670                                                     66 n
+CSZ eP   9108011721 5950                                                     66 n
+CAE eP   9108011722 0015                                                     66 n
+RCL eP   9108011722 0210                                                     66 n
+ZOU eP   9108011722 0380                                                     66 n
+MPRIeP   9108011722 0540                                                     66 n
+BOO eP   9108011722 0620                                                     66 n
+BUA eP   9108011722 0700                                                     66 n
+BAD eP   9108011722 0810                                                     66 n
+TLI eP   9108011722 0850                                                     66 n
+COLIeP   9108011722 0930                                                     66 n
+LSR eP   9108011722 1060                                                     66 n
+                 1                                               
+BOO eP   9108040329 0260         440eS                        FLD       110  67 gg
+BAD eP   9108040329 0270                                      FLD       120  67 g
+BUA eP   9108040329 0350                                      FLD       110  67 g
+PLROeP   9108040329 0430                                      FLD       180  67 g
+COLIeP   9108040329 0450         880eS                        FLD       110  67 gg
+LSR eP-  9108040329 0515                                      FLD       180  67 g
+DRE eP   9108040329 0610        1150eS                        FLD       140  67 gg
+                 1                                              D
+BOO eP-  9108041728 3950        4020eS                        FLD       100  68 gg
+BUA iPD  9108041728 4030                                      FLD       130  68 g
+BAD eP   9108041728 4040        4200eS                        FLD       140  68 gg
+COLIeP   9108041728 4315                                      FLD       150  68 g
+PLROeP   9108041728 4360                                      FLD       150  68 g
+LSR eP-  9108041728 4475        4950eS                        FLD       150  68 gg
+                 1                                              D
+DRE eP   9108051735 3740        3900eS                        FLD       200  69 gg
+COLIiPD  9108051735 3745                                      FLD       220  69 g
+BAD eP   9108051735 3830        4110eS                        FLD       200  69 gg
+LSR eP+  9108051735 3970                                      FLD       170  69 g
+BUA eP   9108051735 3970                                      FLD       200  69 g
+BOO eP 2 9108051735 4020        4460eS                        FLD       180  69 gg
+PLROeP   9108051735 4275                                      FLD       160  69 g
+                 1                                              D
+DRE iPD  9108062229 4435        4600eS                        FLD       330  70 gg
+COLIiPD  9108062229 4620        4910eS                        FLD       300  70 gg
+VOY iP   9108062229 4650                                      FLD            70 g
+BAD eP   9108062229 4830                                      FLD       250  70 g
+LSR eP   9108062229 4895                                      FLD       200  70 g
+BUA eP   9108062229 4970                                      FLD       250  70 g
+BOO eP   9108062229 5050                                      FLD       200  70 g
+                 1                                              D
+VBY iP   9108070314 3460        4200iS                         LD            71 gg
+CEY iP   9108070314 3590        4480eS                         LD            71 gg
+LJU eP   9108070314 4260        5360eS                         LD            71 gg
+TRI eP   9108070314 4240        5460iS                         LD            71 gg
+ZAG iP   9108070314 4680        6100eS                         LD            71 gg
+PTJ iP   9108070314 4740        6180eS                         LD            71 gg
+DRE eP 2 9108070314 4900        6700eS                         LD            71 gg
+COLIeP   9108070314 5080        6920eS                         LD            71 gg
+TLI eP   9108070314 5140                                       LD            71 g
+BAD eP   9108070314 5315                                       LD            71 g
+LSR eP   9108070314 5410                                       LD            71 g
+BUA eP   9108070314 5410        7500eS                         LD            71 gg
+BOO eP   9108070314 5470                                       LD            71 g
+MPRIeP   9108070314 5550                                       LD            71 g
+PLROeP   9108070314 5750                                       LD            71 g
+RCL eP   9108070314 5770                                       LD            71 g
+ZOU eP 2 9108070314 5880                                       LD            71 g
+                 1                                              D
+DRE eP   9108080705 0900                                                     72 n
+COLIeP   9108080705 1020                                                     72 n
+TLI eP   9108080705 1070                                                     72 n
+BAD eP   9108080705 1280                                                     72 n
+LSR eP   9108080705 1360                                                     72 n
+BOO eP   9108080705 1410                                                     72 n
+PLROeP   9108080705 1600                                                     72 n
+CAE eP 2 9108080705 1670                                                     72 n
+CSZ eP   9108080705 1870                                                     72 n
+                 1                                               
+BOO iPC  9108081428 3300        3420eS                        FLD       170  73 gg
+BUA iPC  9108081428 3320                                      FLD       160  73 g
+MPRIeP   9108081428 3360        3550eS                        FLD       170  73 gg
+BAD iPD  9108081428 3375        3560eS                        FLD       120  73 gg
+COLIeP-  9108081428 3615        4040eS                        FLD       130  73 gg
+PLROeP   9108081428 3710                                      FLD       120  73 g
+ZOU eP 2 9108081428 3690                                      FLD       170  73 g
+                 1                                              D
+MPRIeP   9108081713 2440        2670eS                        FLD            74 gg
+BOO iPD  9108081713 2445        2660eS                        FLD       160  74 gg
+BUA eP   9108081713 2575                                      FLD       140  74 g
+ZOU eP 2 9108081713 2590        2940eS                        FLD       130  74 gg
+CSZ eP+  9108081713 2645                                      FLD       140  74 g
+PLROeP   9108081713 2690                                      FLD       150  74 g
+BAD eP   9108081713 2680        3120eS                        FLD       110  74 gg
+COLIeP   9108081713 2940                                      FLD       150  74 g
+                 1                                              D
+LSR iPC  9108090710 0900                                       LD       730  75 g
+DRE eP   9108090710 1190        1700eS                         LD            75 gg
+PLROiPC  9108090710 1400                                       LD            75 g
+BAD eP   9108090710 1380                                       LD            75 g
+COLIeP+  9108090710 1410                                       LD            75 g
+VOY iP   9108090710 1470        2190eS                         LD            75 gg
+BOO eP   9108090710 1490        2240eS                         LD            75 gg
+BUA eP   9108090710 1540        2400eS                         LD            75 gg
+ZOU eP   9108090710 1650                                       LD            75 g
+MPRIeP   9108090710 1730                                       LD            75 g
+LJU eP   9108090710 1920        2900eS                         LD            75 gg
+CAE eP 4 9108090710 2700                                       LD            75 g
+                 1                                              D
+DRE eP 2 9108120501 0020                                                     76 n
+COLIeP   9108120501 0230                                                     76 n
+LSR eP   9108120501 0250                                                     76 n
+UDI eP   9108120501 0440                                                     76 n
+TLI eP   9108120501 0530                                                     76 n
+PLROeP   9108120501 0560                                                     76 n
+BOO eP   9108120501 0580                                                     76 n
+BUA eP   9108120501 0660                                                     76 n
+CSZ eP   9108120501 1080                                                     76 n
+CAE eP   9108120501 1150                                                     76 n
+CSO eP   9108120501 1290                                                     76 n
+                 1                                               
+LJU iP   9108131746 4930        5010iS                         LD            77 gg
+CEY eP   9108131746 5410        5900eS                         LD            77 gg
+VOY eP   9108131746 5650        6430eS                         LD            77 gg
+TRI eP   9108131747 0010         960iS                         LD            77 gg
+VBY eP   9108131747 0180        1150eS                         LD            77 gg
+COLIeP   9108131747 0360                                       LD            77 g
+LSR eP   9108131747 0410                                       LD            77 g
+BAD eP   9108131747 0510                                       LD            77 g
+BUA eP   9108131747 0730                                       LD            77 g
+BOO eP 2 9108131747 0710                                       LD            77 g
+PLROeP   9108131747 0910                                       LD            77 g
+RCL eP 2 9108131747 1410                                       LD            77 g
+CSZ eP   9108131747 1530                                       LD            77 g
+CSO eP   9108131747 1740                                       LD       500  77 g
+                 1                                              D
+BOO iPC  9108141255 0730         880eS                        FLD       130  78 gg
+BAD iPC  9108141255 0725         870eS                        FLD       130  78 gg
+BUA iPD  9108141255 0735                                      FLD       130  78 g
+COLIeP   9108141255 0980        1320eS                        FLD       110  78 gg
+PLROeP+  9108141255 1100        1500eS                        FLD       110  78 gg
+                 1                                              D
+DRE eP   9108161025 1410        1660eS                        FLD       220  79 gg
+COLIeP   9108161025 1480        1750eS                        FLD       180  79 gg
+BAD eP   9108161025 1685                                      FLD       160  79 g
+BUA eP 2 9108161025 1800                                      FLD       160  79 g
+LSR eP   9108161025 1930                                      FLD       150  79 g
+                 1                                              D
+DRE eP   9108161032 3515        3760eS                         LD       230  80 gg
+COLIeP-  9108161032 3590        3880eS                         LD       200  80 gg
+BAD eP 1 9108161032 3810                                       LD       200  80 g
+BUA eP 1 9108161032 3930                                       LD       200  80 g
+LSR eP 1 9108161032 4025                                       LD       150  80 g
+BOO eP 1 9108161032 4110                                       LD       160  80 g
+                 1                                              D
+DRE eP   9108161157 2410        2630eS                         ED       240  81 gg
+VOY eP   9108161157 2590        2930eS                         ED            81 gg
+COLIeP-  9108161157 2570        3000eS                         ED       220  81 gg
+BAD eP   9108161157 2860                                       ED       170  81 g
+TRI eP   9108161157 2950        3500iS                         ED            81 gg
+LSR eP   9108161157 3060                                       ED       180  81 g
+BOO eP 1 9108161157 3090                                       ED       220  81 g
+                 1                                              D
+AFL eP   9108180120 0390                                       L             82 g
+CSO eP   9108180120 0670                                       L        450  82 g
+CSZ eP-  9108180120 0970                                       L             82 g
+CAE eP 2 9108180120 1060                                       L             82 g
+RCL eP   9108180120 1230                                       L        500  82 g
+ZOU eP   9108180120 1360                                       L             82 g
+PLROeP   9108180120 1550                                       L             82 g
+BOO eP   9108180120 1600                                       L             82 g
+BUA eP   9108180120 1690                                       L             82 g
+BAD eP   9108180120 1800                                       L             82 g
+TLI eP   9108180120 1850                                       L             82 g
+COLIeP   9108180120 1930                                       L             82 g
+LSR eP+  9108180120 2060                                       L             82 g
+                 1                                               
+BAD eP+  9108190639 0980        1270eS                        FLD       170  83 gg
+COLIeP   9108190639 1000        1300eS                        FLD       170  83 gg
+DRE eP 2 9108190639 1015        1320eS                        FLD       190  83 gg
+LSR eP   9108190639 1110        1480eS                        FLD       130  83 gg
+BUA eP   9108190639 1125                                      FLD       180  83 g
+BOO eP   9108190639 1115        1500eS                        FLD       150  83 gg
+                 1                                              D
+AFL eP   9108191123 4660                                                     84 g
+CSO eP   9108191123 4950                                                750  84 g
+CSZ eP   9108191123 5230                                                     84 g
+CAE eP 2 9108191123 5350                                                     84 g
+RCL eP   9108191123 5450                                                     84 g
+ZOU eP   9108191123 5610                                                     84 g
+PLROeP   9108191123 5820                                                     84 g
+BOO eP   9108191123 5880                                                650  84 g
+BUA eP 2 9108191123 5980                                                     84 g
+BAD eP   9108191124 0100                                                     84 g
+COLIeP   9108191124 0210                                                     84 n
+LSR eP   9108191124 0320                                                     84 n
+TRI eP   9108191124 1040        4170eS                                       84 ng
+                 1                                               
+LSR eP   9108191214 2900                                      FLD       180  85 g
+BAD eP   9108191214 3085        3410eS                        FLD       200  85 gg
+DRE eP 1 9108191214 3130        3520eS                        FLD       160  85 gg
+COLIeP   9108191214 3185                                      FLD       170  85 g
+BOO eP   9108191214 3190                                      FLD       180  85 g
+PLROeP   9108191214 3215                                      FLD       170  85 g
+BUA eP   9108191214 3245                                      FLD       190  85 g
+                 1                                              D
+LSR iPC  9108220421 2590        2780eS                        FLD       400  86 gg
+BAD eP   9108220421 2790                                      FLD       330  86 g
+PLROeP   9108220421 2850        3260eS                        FLD       330  86 gg
+BOO eP   9108220421 2840        3210eS                        FLD       340  86 gg
+DRE eP 2 9108220421 2870        3380eS                        FLD       320  86 gg
+COLIeP   9108220421 2900                                      FLD       350  86 g
+BUA eP   9108220421 2930                                      FLD       330  86 g
+ZOU eP 2 9108220421 3010        3650eS                        FLD       270  86 gg
+MPRIeP   9108220421 3110        3670eS                        FLD       280  86 gg
+UDI eP   9108220421 3125                                      FLD       300  86 g
+VOY eP   9108220421 3330        4060eS                        FLD            86 gg
+                 1                                              D
+MPRIeP   9108241258 1520        1800eS                        FLD       150  87 gg
+BOO iPD  9108241258 1515        1770eS                        FLD       190  87 gg
+ZOU eP   9108241258 1590                                      FLD       160  87 g
+PLROeP   9108241258 1730        2100eS                        FLD       160  87 gg
+BAD eP   9108241258 1740        2210eS                        FLD       150  87 gg
+                 1                                              D
+BAD eP   9108271331 0800         930eS                        FLD       220  88 gg
+COLIeP-  9108271331 0890        1090eS                        FLD       240  88 gg
+BUA eP   9108271331 0930                                      FLD       250  88 g
+BOO eP   9108271331 0955        1200eS                        FLD       250  88 gg
+DRE eP 2 9108271331 1070        1450eS                        FLD       220  88 gg
+LSR eP   9108271331 1150                                      FLD       160  88 g
+PLROeP   9108271331 1260        1670eS                        FLD       180  88 gg
+                 1                                              D
+TRI iP 2 9108280004 0630        2920eS                                       89 gg
+DRE eP 2 9108280004 1190                                                     89 n
+COLIeP   9108280004 1280                                                     89 n
+BAD eP 2 9108280004 1430                                                     89 n
+BUA eP 2 9108280004 1520                                                     89 n
+BOO eP   9108280004 1600                                                     89 n
+LSR eP   9108280004 1660                                                     89 n
+RCL eP   9108280004 1800                                                     89 n
+PLROeP   9108280004 1955                                                     89 n
+ZOU eP 2 9108280004 1980                                                     89 n
+CSZ eP   9108280004 2100                                                     89 n
+CSO eP   9108280004 2200                                                     89 n
+                 1                                               
+CSZ eP-  9108300455 4230        4500eS                        FLD       400  90 gg
+RCL eP+  9108300455 4270        4580eS                        FLD       400  90 gg
+CSO iPD  9108300455 4330        4680eS                        FLD       350  90 gg
+MPRIeP-  9108300455 4400        4800eS                        FLD       330  90 gg
+BOO eP-  9108300455 4480        4960eS                        FLD       380  90 gg
+ZOU eP 2 9108300455 4570        5100eS                        FLD       280  90 gg
+CAE eP   9108300455 4600                                      FLD       300  90 g
+PLROeP   9108300455 4730        5300eS                        FLD       400  90 gg
+BAD eP   9108300455 4700                                      FLD       350  90 g
+TLI eP   9108300455 4920                                      FLD       400  90 g
+LSR eP   9108300455 5130                                      FLD       330  90 g
+                 1                                              D
+CAE eP 2 9108301601 5110                                       L             91 g
+RCL eP   9108301601 5320                                       L             91 g
+COLIeP   9108301601 5390                                       L             91 g
+BUA eP   9108301601 5450                                       L             91 g
+BAD eP   9108301601 5480                                       L             91 g
+DRE eP 2 9108301601 5550                                       L             91 g
+BOO eP   9108301601 5550                                       L        600  91 g
+PLROeP   9108301601 5920                                       L             91 g
+                 1                                               
+MPRIeP   9108310038 3180                                      FLD       170  92 g
+CSZ eP   9108310038 3270        3610eS                        FLD       200  92 gg
+BOO eP   9108310038 3270        3590eS                        FLD       200  92 gg
+BUA eP   9108310038 3390                                      FLD       180  92 g
+ZOU eP   9108310038 3420        3880eS                        FLD       160  92 gg
+CSO eP   9108310038 3480        3940eS                        FLD       150  92 gg
+BAD eP   9108310038 3500        4000eS                        FLD       150  92 gg
+PLROeP   9108310038 3540                                      FLD       180  92 g
+COLIeP   9108310038 3735                                      FLD       180  92 g
+                 1                                              D
+PLROiPC  9109010443 5090        5200eS                        FLD       260  93 gg
+ZOU eP 2 9109010443 5235        5480eS                        FLD       180  93 gg
+BOO eP   9109010443 5260        5530eS                        FLD       220  93 gg
+BAD eP-  9109010443 5440        5860eS                        FLD       230  93 gg
+LSR eP   9109010443 5465                                      FLD       230  93 g
+BUA eP 2 9109010443 5460                                      FLD       230  93 g
+COLIeP+  9109010443 5710        6320eS                        FLD       170  93 gg
+DRE eP   9109010443 5840        6550eS                        FLD       210  93 gg
+                 1                                              D
+TRI iP   9109030553 0000        1200iS                         L             94 gg
+BAD eP   9109030553 1170                                       L             94 g
+LSR eP   9109030553 1200        3500eS                         L        600  94 gg
+BUA eP   9109030553 1220                                       L             94 g
+BOO eP   9109030553 1300                                       L        600  94 g
+MPRIeP 2 9109030553 1350                                       L             94 g
+RCL eP   9109030553 1590                                       L             94 g
+PLROeP   9109030553 1630                                       L             94 g
+ZOU eP 1 9109030553 1700                                       L             94 g
+CSZ eP   9109030553 1820                                       L             94 g
+                 1                                               
+CSZ iPD  9109032131 5340                                      FLD       300  95 g
+ZOU eP 1 9109032131 5580        5900eS                        FLD       280  95 gg
+MPRIeP   9109032131 5750                                      FLD       260  95 g
+BOO eP 2 9109032131 5760        6200eS                        FLD       280  95 gg
+PLROeP   9109032131 5780        6300eS                        FLD       250  95 gg
+CSO eP   9109032131 5810        6350eS                        FLD       200  95 gg
+BUA eP 2 9109032131 5980                                      FLD       280  95 g
+BAD eP 2 9109032132 0000         730eS                        FLD       240  95 gg
+                 1                                              D
+BOO iPC  9109050706 5355        5540eS                        FLD       200  96 gg
+BAD eP   9109050706 5375        5590eS                        FLD       200  96 gg
+BUA eP-  9109050706 5460                                      FLD       200  96 g
+PLROeP   9109050706 5555                                      FLD       160  96 g
+COLIeP   9109050706 5630        6010eS                        FLD       160  96 gg
+LSR iPD  9109050706 5600        5980eS                        FLD       150  96 gg
+ZOU eP 2 9109050706 5685        6130eS                        FLD       130  96 gg
+DRE eP   9109050706 5750        6260eS                        FLD       180  96 gg
+                 1                                              D
+DRE eP 2 9109081946 4680                                                     97 n
+COLIeP   9109081946 4690                                                     97 n
+UDI eP   9109081946 4700                                                     97 n
+TLI eP   9109081946 4720                                                     97 n
+LSR eP   9109081946 5040                                                     97 n
+BOO eP   9109081946 5070                                                     97 n
+RCL eP   9109081946 5230                                                     97 n
+CAE eP   9109081946 5290                                                     97 n
+PLROeP   9109081946 5330                                                     97 n
+ZOU eP   9109081946 5430                                                     97 n
+CSO eP   9109081946 5530                                                     97 n
+CSZ eP   9109081946 5540                                                     97 n
+                 1                                               
+DRE iPD  9109101556 2390        2570eS                        FLD       270  98 gg
+COLIeP-  9109101556 2560        2850eS                        FLD       230  98 gg
+BAD eP   9109101556 2740                                      FLD       170  98 g
+LSR eP   9109101556 2850        3350eS                        FLD       180  98 gg
+PLROeP   9109101556 3230        3950eS                        FLD       170  98 gg
+                 1                                              D
+RCL eP   9109110457 5090        5370eS                        FLD            99 gg
+MPRIeP   9109110457 5220        5530eS                        FLD            99 gg
+CSZ eP   9109110457 5250        5650eS                        FLD            99 gg
+CSO iPD  9109110457 5290        5700eS                        FLD       400  99 gg
+BOO eP   9109110457 5320        5770eS                        FLD            99 gg
+CAE eP   9109110457 5460        6010eS                        FLD            99 gg
+ZOU eP   9109110457 5490                                      FLD            99 g
+BAD eP   9109110457 5530                                      FLD            99 g
+PLROeP   9109110457 5600                                      FLD            99 g
+TLI eP   9109110457 5730                                      FLD            99 g
+                 1                                              D
+DRE eP   9109121945 3580                                                    100 n
+TLI eP   9109121945 3860                                                    100 n
+BAD eP   9109121945 3880                                                    100 n
+BUA eP   9109121945 4010                                                    100 n
+BOO eP   9109121945 4020                                                    100 n
+LSR eP   9109121945 4140                                                    100 n
+PLROeP   9109121945 4320                                                    100 n
+ZOU eP   9109121945 4420                                                    100 n
+CSZ eP   9109121945 4600                                                    100 n
+                 1                                               
+BOO iPC  9109140313 2500        2660eS                        FLD       250 101 gg
+MPRIeP   9109140313 2585        2840eS                        FLD           101 gg
+BUA eP   9109140313 2640                                      FLD       220 101 g
+BAD eP   9109140313 2690        3040eS                        FLD       190 101 gg
+ZOU eP   9109140313 2715        3080eS                        FLD       120 101 gg
+PLROeP   9109140313 2730        3060eS                        FLD       170 101 gg
+CSZ eP 1 9109140313 2890                                      FLD       150 101 g
+LSR eP   9109140313 2990        3570eS                        FLD       130 101 gg
+                 1                                              D
+BOO eP   9109171251 4370        4540eS                        FLD           102 gg
+MPRIeP-  9109171251 4450                                      FLD           102 g
+ZOU eP   9109171251 4460        4740eS                        FLD       170 102 gg
+PLROeP   9109171251 4530        4840eS                        FLD           102 gg
+BAD eP   9109171251 4610                                      FLD           102 g
+COLIeP   9109171251 4890        5440eS                        FLD           102 gg
+LSR eP   9109171251 4870                                      FLD           102 g
+DRE eP 1 9109171251 5120                                      FLD           102 g
+                 1                                              D
+BOO iPD  9109182311 3850        4030eS                        FLD           103 gg
+BAD iPC  9109182311 3855        4050eS                        FLD           103 gg
+BUA iPC  9109182311 3900                                      FLD           103 g
+MPRIiPD  9109182311 4005        4340eS                        FLD           103 gg
+COLIeP   9109182311 4060        4450eS                        FLD           103 gg
+PLROeP   9109182311 4100        4470eS                        FLD           103 gg
+LSR eP   9109182311 4150        4620eS                        FLD           103 gg
+UDI eP 2 9109182311 4160                                      FLD           103 g
+ZOU eP   9109182311 4210        4700eS                        FLD           103 gg
+DRE eP 2 9109182311 4230        4760eS                        FLD           103 gg
+CSZ eP   9109182311 4440                                      FLD       530 103 g
+                 1                                              D
+BAD eP   9109191033 0505                                       L            104 g
+BUA eP   9109191033 0605                                       L            104 g
+LSR eP   9109191033 0820                                       L            104 g
+PLROeP 2 9109191033 1070                                       L            104 g
+CAE eP   9109191033 1250        3000eS                         L            104 gg
+ZOU eP   9109191033 1450                                       L            104 g
+CSZ eP   9109191033 1550                                       L            104 g
+CSO eP   9109191033 1580        3350eS                         L        550 104 gg
+                 1                                               
+BAD eP   9109242249 0180                                                    105 n
+BOO eP   9109242249 0230                                                    105 n
+LSR eP   9109242249 0270                                                    105 n
+PLROeP   9109242249 0420                                                    105 n
+CAE eP   9109242249 0600                                                    105 n
+CSO eP   9109242249 0780                                                    105 n
+CSZ eP   9109242249 0810                                                    105 n
+DRE eP   9109242249 5800                                                    105 n
+TLI eP   9109242249 5900                                                    105 n
+                 1                                               
+FAU eP   9109271141 2970        3380eS                        VLD           106 gg
+MTLOeP   9109271141 3100                                      VLD           106 g
+CSO eP   9109271141 3280                                      VLD       600 106 g
+CAE eP 2 9109271141 3400        4070eS                        VLD           106 gg
+AFL eP   9109271141 3660        4510eS                        VLD           106 gg
+RCL eP   9109271141 3760                                      VLD           106 g
+BUA eP 2 9109271141 4390                                      VLD           106 g
+BOO eP   9109271141 4330                                      VLD           106 g
+ZOU eP   9109271141 4420        5830eS                        VLD           106 gg
+BAD eP   9109271141 4530                                      VLD           106 g
+PLROeP   9109271141 4590                                      VLD           106 g
+COLIeP 2 9109271141 4700                                      VLD           106 g
+LSR eP   9109271141 4950                                      VLD           106 g
+DRE eP 2 9109271141 4930                                      VLD           106 g
+TRI eP 2 9109271141 5090                                      VLD           106 g
+                 1                                              D
+CSO eP-  9109280414 3640        4000eS                         L        230 107 gg
+CSZ eP   9109280414 3770                                       L            107 g
+BOO eP   9109280414 4440        5300eS                         L            107 gg
+PLROeP   9109280414 4490        5420eS                         L            107 gg
+BAD eP   9109280414 4740                                       L            107 g
+                 1                                               
+RCL eP   9110021911 5610                                                    108 g
+BUA eP   9110021911 5890                                                    108 g
+BOO eP   9110021911 5950                                                    108 g
+BAD eP   9110021911 5955                                                    108 g
+COLIeP   9110021911 5980                                                    108 g
+AFL eP   9110021912 0020                                                    108 g
+CAE eP   9110021912 0225                                                    108 g
+DRE eP   9110021912 0240                                                    108 n
+PLROeP   9110021912 0250                                                    108 n
+LSR eP   9110021912 0440                                                    108 n
+                 1                                               
+COLIeP   9110040655 1200        1680eS                        FL        250 109 gg
+DRE eP   9110040655 1200                                      FL        250 109 g
+BAD eP   9110040655 1320                                      FL        250 109 g
+LSR eP   9110040655 1600        2440eS                        FL        250 109 gg
+                 1                                               
+MPRIiPC  9110042329 0080                                      FLD       400 110 g
+BOO iPC  9110042329 0120         320eS                        FLD       400 110 gg
+BUA eP   9110042329 0210                                      FLD       400 110 g
+BAD eP   9110042329 0325         710eS                        FLD       400 110 gg
+ZOU eP   9110042329 0380         760eS                        FLD       400 110 gg
+CSZ eP   9110042329 0390                                      FLD       400 110 g
+PLROeP   9110042329 0430                                      FLD       400 110 g
+UDI eP   9110042329 0550        1120eS                        FLD       400 110 gg
+COLIeP+  9110042329 0560        1180eS                        FLD       400 110 gg
+CSO eP 1 9110042329 0620                                      FLD       400 110 g
+LSR eP   9110042329 0720                                      FLD       400 110 g
+                 1                                              D
+BAD eP-  9110050438 3235        3360eS                        FLD       170 111 gg
+COLIeP-  9110050438 3355        3600eS                        FLD       200 111 gg
+BOO eP 2 9110050438 3380        3650eS                        FLD       140 111 gg
+DRE eP 4 9110050438 3610        3950eS                        FLD       170 111 gg
+LSR eP 2 9110050438 3600                                      FLD       150 111 g
+PLROeP 2 9110050438 3700        4100eS                        FLD       160 111 gg
+                 1                                              D
+BAD iPD  9110050515 0090         390eS                        FLD      2300 112 gg
+COLIeP   9110050515 0230         550eS                        FLD      2600 112 gg
+BOO iPD  9110050515 0240         600eS                        FLD      2600 112 gg
+MPRIePD  9110050515 0345         780eS                        FLD      2600 112 gg
+DRE ePC  9110050515 0375                                      FLD      2600 112 g
+LSR iPD  9110050515 0420         960eS                        FLD      2350 112 gg
+PLROePD1 9110050515 0500                                      FLD           112 g
+TLI ePD1 9110050515 0585                                      FLD      2600 112 g
+ZOU ePD  9110050515 0645        1260eS                        FLD      2800 112 gg
+RCL ePD  9110050515 0775                                      FLD      2100 112 g
+CSZ eP+  9110050515 0840                                      FLD           112 g
+TRI iP 2 9110050515 0970        1980eS                        FLD           112 gg
+CAE eP   9110050515 1090        2150eS                        FLD           112 gg
+CSO eP-  9110050515 1065                                      FLD      2200 112 g
+                 1                                              D
+BAD eP+  9110050531 3120        3270eS                        FLD           113 gg
+BUA eP   9110050531 3240                                      FLD           113 g
+COLIeP+  9110050531 3250                                      FLD           113 g
+BOO eP   9110050531 3280        3530eS                        FLD           113 gg
+LSR eP   9110050531 3470                                      FLD           113 g
+PLROeP   9110050531 3560                                      FLD           113 g
+TLI eP   9110050531 3650                                      FLD           113 g
+                 1                                              D
+BAD eP   9110050531 3880        4020eS                        FLD       720 114 gg
+COLIeP-  9110050531 4000                                      FLD           114 g
+BUA eP   9110050531 4000                                      FLD           114 g
+BOO eP   9110050531 4030        4300eS                        FLD       700 114 gg
+UDI eP   9110050531 4140                                      FLD           114 g
+MPRIeP   9110050531 4140        4530eS                        FLD       680 114 gg
+DRE eP   9110050531 4180        4550eS                        FLD       660 114 gg
+LSR eP   9110050531 4210                                      FLD       580 114 g
+PLROeP   9110050531 4330                                      FLD       690 114 g
+TLI eP+  9110050531 4400                                      FLD           114 g
+ZOU eP   9110050531 4450        5030eS                        FLD           114 gg
+RCL eP   9110050531 4600                                      FLD       580 114 g
+                 1                                              D
+BAD iPD  9110050535 3190        3330eS                        FLD       150 115 gg
+BUA eP 2 9110050535 3320                                      FLD       130 115 g
+COLIeP-  9110050535 3305        3550eS                        FLD       180 115 gg
+BOO eP 4 9110050535 3330                                      FLD       120 115 g
+LSR eP   9110050535 3540                                      FLD       160 115 g
+PLROeP   9110050535 3620        4030eS                        FLD       150 115 gg
+                 1                                              D
+COLIiPD  9110050537 0055         300eS                        FLD       330 116 gg
+BUA eP-  9110050537 0060                                      FLD       320 116 g
+BOO iPC  9110050537 0095                                      FLD       300 116 g
+UDI iPD  9110050537 0200                                      FLD       310 116 g
+DRE eP   9110050537 0230         610eS                        FLD       300 116 gg
+LSR eP+  9110050537 0290                                      FLD       290 116 g
+PLROeP   9110050537 0400         910eS                        FLD       280 116 gg
+ZOU eP 2 9110050537 0500        1100eS                        FLD       140 116 gg
+                 1                                              D
+BAD iPC  9110050542 5615        5760eS                        FLD           117 gg
+COLIiPD  9110050542 5730                                      FLD           117 g
+BUA eP   9110050542 5730                                      FLD           117 g
+BOO eP-  9110050542 5765        6030eS                        FLD           117 gg
+DRE eP 1 9110050542 5890        6250eS                        FLD           117 gg
+LSR eP 3 9110050542 5990                                      FLD       220 117 g
+PLROeP 2 9110050543 0050                                      FLD           117 g
+                 1                                              D
+BAD iPC  9110050552 1485        1630eS                        FLD           118 gg
+COLIiPD  9110050552 1600        1850eS                        FLD           118 gg
+BUA eP   9110050552 1610                                      FLD           118 g
+BOO iPD  9110050552 1625        1880eS                        FLD           118 gg
+DRE eP   9110050552 1770                                      FLD           118 g
+LSR eP   9110050552 1840                                      FLD       250 118 g
+PLROeP   9110050552 1910        2400eS                        FLD           118 gg
+ZOU eP 4 9110050552 2020        2640eS                        FLD           118 gg
+                 1                                              D
+BAD eP   9110050554 0180         340eS                        FLD           119 gg
+COLIeP   9110050554 0300                                      FLD           119 g
+BUA eP   9110050554 0280                                      FLD           119 g
+BOO eP   9110050554 0320         560eS                        FLD           119 gg
+UDI eP   9110050554 0440                                      FLD           119 g
+MPRIeP   9110050554 0445                                      FLD           119 g
+DRE eP   9110050554 0480                                      FLD           119 g
+LSR eP   9110050554 0520                                      FLD       680 119 g
+PLROeP   9110050554 0620        1120eS                        FLD           119 gg
+TLI eP   9110050554 0700                                      FLD           119 g
+ZOU eP   9110050554 0720        1320eS                        FLD           119 gg
+RCL eP   9110050554 0920                                      FLD           119 g
+                 1                                              D
+BAD eP   9110050555 1000        1160eS                        FLD           120 gg
+COLIeP   9110050555 1120                                      FLD           120 g
+BUA eP   9110050555 1115                                      FLD           120 g
+BOO eP   9110050555 1160        1440eS                        FLD           120 gg
+DRE eP   9110050555 1280                                      FLD           120 g
+LSR eP   9110050555 1360                                      FLD       600 120 g
+PLROeP   9110050555 1480                                      FLD           120 g
+                 1                                              D
+BAD eP-  9110050556 0350         460eS                        FLD           121 gg
+COLIeP-  9110050556 0480         720eS                        FLD           121 gg
+BOO eP-  9110050556 0500         750eS                        FLD       550 121 gg
+MPRIeP   9110050556 0610                                      FLD           121 g
+DRE eP   9110050556 0640                                      FLD       550 121 g
+LSR eP   9110050556 0680                                      FLD           121 g
+TLI eP   9110050556 0860                                      FLD           121 g
+RCL eP   9110050556 1060                                      FLD           121 g
+                 1                                              D
+BAD iPD  9110050557 1180        1320eS                        FLD           122 gg
+COLIiPD  9110050557 1290                                      FLD           122 g
+BUA iPD  9110050557 1280                                      FLD           122 g
+BOO eP-  9110050557 1320        1590eS                        FLD           122 gg
+UDI eP   9110050557 1430                                      FLD           122 g
+DRE eP 4 9110050557 1460        1800eS                        FLD           122 gg
+LSR eP   9110050557 1520                                      FLD       250 122 g
+PLROeP   9110050557 1620        2130eS                        FLD           122 gg
+ZOU eP 4 9110050557 1750                                      FLD           122 g
+                 1                                              D
+BAD iPC  9110050602 0870        1000eS                        FLD           123 gg
+BUA iPD  9110050602 0970                                      FLD           123 g
+COLIiPD  9110050602 0980                                      FLD           123 g
+BOO iPD  9110050602 1010        1260eS                        FLD           123 gg
+MPRIeP 2 9110050602 1165                                      FLD           123 g
+DRE eP   9110050602 1150        1570eS                        FLD           123 gg
+LSR eP   9110050602 1200                                      FLD       600 123 g
+PLROeP   9110050602 1300        1720eS                        FLD           123 gg
+TLI eP   9110050602 1380        1950eS                        FLD           123 gg
+ZOU eP   9110050602 1440        2000eS 4                      FLD           123 gg
+RCL eP-  9110050602 1590                                      FLD           123 g
+                 1                                              D
+BAD iPD  9110050724 4545        4670eS                        FLD           124 gg
+BUA eP-  9110050724 4650                                      FLD           124 g
+COLIiPD  9110050724 4670        4910eS                        FLD           124 gg
+BOO eP   9110050724 4680                                      FLD           124 g
+DRE eP 4 9110050724 4840        5250eS                        FLD           124 gg
+PLROeP 2 9110050724 4980                                      FLD       240 124 g
+                 1                                              D
+BAD eP   9110050749 1090                                      FLD           125 g
+COLIeP   9110050749 1200                                      FLD           125 g
+BUA eP   9110050749 1200                                      FLD           125 g
+BOO eP   9110050749 1230                                      FLD           125 g
+DRE eP   9110050749 1390        1780eS                        FLD           125 gg
+LSR eP 3 9110050749 1420                                      FLD       320 125 g
+PLROeP   9110050749 1520                                      FLD           125 g
+RCL eP 4 9110050749 1810                                      FLD           125 g
+                 1                                              D
+BAD iPD  9110050749 4375        4520eS                        FLD           126 gg
+BUA eP   9110050749 4490                                      FLD           126 g
+COLIeP-  9110050749 4480        4720eS                        FLD           126 gg
+BOO eP   9110050749 4535                                      FLD           126 g
+LSR eP   9110050749 4720        5250eS                        FLD       300 126 gg
+PLROeP   9110050749 4830                                      FLD           126 g
+                 1                                              D
+BAD iPC  9110050751 2400        2520eS                        FLD       580 127 gg
+COLIeP   9110050751 2530        2790eS                        FLD           127 gg
+BOO eP   9110050751 2550                                      FLD           127 g
+DRE eP   9110050751 2700        3110eS                        FLD           127 gg
+LSR eP   9110050751 2760                                      FLD       580 127 g
+PLROeP   9110050751 2840        3250eS                        FLD           127 gg
+ZOU eP   9110050751 2960                                      FLD           127 g
+                 1                                              D
+BAD eP   9110050753 0240                                      FLD       200 128 g
+BUA eP   9110050753 0370                                      FLD       140 128 g
+COLIeP   9110050753 0360                                      FLD           128 g
+BOO eP   9110050753 0370                                      FLD       130 128 g
+DRE eP   9110050753 0540         940eS                        FLD           128 gg
+LSR eP   9110050753 0570                                      FLD       130 128 g
+PLROeP   9110050753 0670        1080eS                        FLD       160 128 gg
+                 1                                              D
+BAD eP   9110050844 4240        4390eS                        FLD           129 gg
+BOO eP   9110050844 4380        4650eS                        FLD           129 gg
+MPRIeP   9110050844 4520        4940eS                        FLD       230 129 gg
+DRE eP   9110050844 4520        4970eS                        FLD           129 gg
+LSR eP   9110050844 4600        5000eS                        FLD           129 gg
+PLROeP   9110050844 4680        5120eS                        FLD           129 gg
+                 1                                              D
+BAD eP   9110051053 2870        3000eS                        FLD           130 gg
+BOO eP   9110051053 3020        3280eS                        FLD       120 130 gg
+DRE eP   9110051053 3170        3580eS                        FLD           130 gg
+LSR eP   9110051053 3210                                      FLD           130 g
+PLROeP   9110051053 3320                                      FLD           130 g
+                 1                                              D
+TLI eP 4 9110051248 2190                                                    131 n
+RCL eP   9110051248 2365                                                    131 n
+COLIeP   9110051248 2530                                                    131 n
+BUA eP   9110051248 2540                                                    131 n
+MPRIeP   9110051248 2560                                                    131 n
+CSO eP   9110051248 2570                                                    131 n
+BAD eP   9110051248 2600                                                    131 n
+BOO eP   9110051248 2630                                                    131 n
+DRE eP 3 9110051248 2700                                                    131 n
+CSZ eP 3 9110051248 2740                                                    131 n
+PLROeP   9110051248 3000                                                    131 n
+                 1                                               
+BAD eP   9110051402 2230        2370eS                        FLD           132 gg
+BOO eP   9110051402 2380        2600eS                        FLD           132 gg
+MPRIeP   9110051402 2520                                      FLD           132 g
+LSR eP   9110051402 2620                                      FLD       180 132 g
+DRE eP 2 9110051402 2550                                      FLD           132 g
+PLROeP   9110051402 2680        3070eS                        FLD           132 gg
+                 1                                              D
+BAD iPC  9110051456 3130                                      FLD           133 g
+BUA iPC  9110051456 3240                                      FLD           133 g
+COLIiPD  9110051456 3250        3500eS                        FLD           133 gg
+BOO iPD  9110051456 3270        3540eS                        FLD      1100 133 gg
+MPRIeP   9110051456 3380                                      FLD           133 g
+UDI eP   9110051456 3390                                      FLD           133 g
+DRE eP   9110051456 3420        3800eS                        FLD           133 gg
+LSR iPD  9110051456 3460                                      FLD           133 g
+PLROiPD  9110051456 3540        3900eS                        FLD           133 gg
+TLI eP-  9110051456 3640                                      FLD           133 g
+ZOU eP   9110051456 3670                                      FLD           133 g
+RCL iPC  9110051456 3850                                      FLD           133 g
+CSZ eP   9110051456 3895                                      FLD           133 g
+TRI iP 4 9110051456 4040        5090eS                        FLD           133 gg
+CAE eP   9110051456 4150                                      FLD           133 g
+CSO eP   9110051456 4160                                      FLD      1100 133 g
+AFL eP   9110051456 4550                                      FLD           133 g
+                 1                                              D
+BAD iPC  9110051538 1480        1630eS                        FLD       200 134 gg
+COLIeP   9110051538 1600        1850eS                        FLD       150 134 gg
+BOO eP   9110051538 1620        1900eS                        FLD       140 134 gg
+DRE eP   9110051538 1770        2180eS                        FLD       160 134 gg
+LSR eP   9110051538 1825                                      FLD       110 134 g
+PLROeP   9110051538 1930        2340eS                        FLD       110 134 gg
+                 1                                              D
+BAD eP   9110051724 0220         310eS                        FLD           135 gg
+BOO eP   9110051724 0350         560eS                        FLD       220 135 gg
+MPRIeP   9110051724 0510                                      FLD           135 g
+DRE eP   9110051724 0530                                      FLD       200 135 g
+LSR eP 2 9110051724 0580                                      FLD       190 135 g
+PLROeP   9110051724 0660                                      FLD           135 g
+                 1                                              D
+BAD eP   9110051725 5910        6010eS                        FLD           136 gg
+BOO eP 2 9110051726 0070         280eS                        FLD           136 gg
+DRE eP   9110051726 0240                                      FLD           136 g
+LSR eP   9110051726 0300                                      FLD       120 136 g
+PLROeP   9110051726 0350                                      FLD           136 g
+                 1                                              D
+BAD eP   9110051835 0900                                      FLD           137 g
+BOO eP   9110051835 1050                                      FLD           137 g
+MPRIeP   9110051835 1160        1610eS                        FLD           137 gg
+DRE eP   9110051835 1210        1630eS                        FLD           137 gg
+LSR eP   9110051835 1250        1620eS                        FLD           137 gg
+PLROeP   9110051835 1330                                      FLD           137 g
+TLI eP   9110051835 1430                                      FLD           137 g
+ZOU eP   9110051835 1460        2090eS                        FLD       400 137 gg
+RCL eP   9110051835 1630                                      FLD           137 g
+                 1                                              D
+BAD iPD  9110051837 2710        2850eS                        FLD       330 138 gg
+COLIiPD  9110051837 2840        3070eS                        FLD       330 138 gg
+BUA eP 4 9110051837 2850                                      FLD       310 138 g
+BOO eP   9110051837 2860        3110eS                        FLD       310 138 gg
+UDI eP   9110051837 2980                                      FLD       300 138 g
+DRE eP   9110051837 3010        3400eS                        FLD       300 138 gg
+LSR eP   9110051837 3060                                      FLD       300 138 g
+PLROeP   9110051837 3150                                      FLD       280 138 g
+TLI eP   9110051837 3230                                      FLD       260 138 g
+ZOU eP 2 9110051837 3280        3860eS                        FLD       200 138 gg
+                 1                                              D
+BAD iPC  9110051902 1585        1670eS                        FLD       330 139 gg
+BUA iPC  9110051902 1695                                      FLD       310 139 g
+COLIiPD  9110051902 1710        1930eS                        FLD       330 139 gg
+BOO eP+  9110051902 1725        1900eS                        FLD       300 139 gg
+UDI eP 4 9110051902 1850                                      FLD       300 139 g
+LSR eP 3 9110051902 1970                                      FLD       290 139 g
+PLROeP 2 9110051902 2010                                      FLD       280 139 g
+ZOU eP 4 9110051902 2160        2750eS                        FLD       150 139 gg
+                 1                                              D
+BAD iPC  9110051918 3715        3850eS                        FLD           140 gg
+COLIiPD  9110051918 3845        4090eS                        FLD           140 gg
+BUA iPC  9110051918 3825                                      FLD           140 g
+BOO iPC  9110051918 3860        4120eS                        FLD           140 gg
+UDI eP   9110051918 3980                                      FLD           140 g
+DRE eP   9110051918 4010        4400eS                        FLD           140 gg
+LSR eP   9110051918 4060                                      FLD       450 140 g
+PLROeP   9110051918 4140                                      FLD           140 g
+TLI eP   9110051918 4230                                      FLD           140 g
+ZOU eP   9110051918 4270        4870eS                        FLD           140 gg
+RCL eP   9110051918 4440                                      FLD           140 g
+                 1                                              D
+BAD iPC  9110052006 1935        2060eS                        FLD           141 gg
+BUA iPC  9110052006 2050                                      FLD           141 g
+COLIiPD  9110052006 2050        2290eS                        FLD           141 gg
+BOO iPD  9110052006 2090        2320eS                        FLD           141 gg
+DRE eP   9110052006 2230        2630eS                        FLD           141 gg
+LSR eP   9110052006 2300                                      FLD       300 141 g
+PLROeP   9110052006 2400                                      FLD           141 g
+ZOU eP   9110052006 2500                                      FLD           141 g
+                 1                                              D
+BAD iPC  9110052030 0825         970eS                        FLD       150 142 gg
+COLIeP+  9110052030 0945        1180eS                        FLD       150 142 gg
+BOO eP 2 9110052030 0950        1230eS                        FLD       130 142 gg
+DRE eP 4 9110052030 1110        1520eS                        FLD       140 142 gg
+LSR eP 2 9110052030 1190                                      FLD       130 142 g
+PLROeP 2 9110052030 1260        1680eS                        FLD       130 142 gg
+                 1                                              D
+BAD iPD  9110052233 2380        2530eS                        FLD       200 143 gg
+BUA eP-  9110052233 2490                                      FLD       170 143 g
+COLIeP+  9110052233 2495        2740eS                        FLD       200 143 gg
+BOO eP-  9110052233 2520        2790eS                        FLD       160 143 gg
+LSR eP   9110052233 2720                                      FLD       180 143 g
+PLROeP   9110052233 2820                                      FLD       170 143 g
+                 1                                              D
+BAD iPC  9110052350 0230         380eS                        FLD           144 gg
+COLIiPD  9110052350 0340         590eS                        FLD           144 gg
+BUA eP   9110052350 0345                                      FLD           144 g
+BOO eP   9110052350 0380         600eS                        FLD           144 gg
+UDI iPD  9110052350 0485                                      FLD           144 g
+DRE eP   9110052350 0520         900eS                        FLD           144 gg
+LSR eP   9110052350 0580                                      FLD       500 144 g
+PLROeP   9110052350 0665                                      FLD           144 g
+TLI eP   9110052350 0755                                      FLD           144 g
+ZOU eP   9110052350 0800        1400eS                        FLD           144 gg
+                 1                                              D
+BAD iPD  9110060511 5020        5150eS                        FLD           145 gg
+COLIiPD  9110060511 5130                                      FLD           145 g
+BUA eP-  9110060511 5130                                      FLD           145 g
+BOO eP-  9110060511 5165        5440eS                        FLD           145 gg
+UDI iPD  9110060511 5270                                      FLD           145 g
+DRE eP   9110060511 5315                                      FLD           145 g
+LSR eP   9110060511 5360                                      FLD       560 145 g
+PLROeP   9110060511 5460        5960eS                        FLD           145 gg
+TLI eP   9110060511 5540                                      FLD           145 g
+ZOU eP   9110060511 5590        6180eS                        FLD           145 gg
+RCL eP   9110060511 5755                                      FLD           145 g
+                 1                                              D
+BAD eP   9110062215 5655        5800eS                        FLD       180 146 gg
+BUA eP 2 9110062215 5800                                      FLD       180 146 g
+BOO eP 2 9110062215 5800                                      FLD       150 146 g
+DRE eP 4 9110062215 5960        6350eS                        FLD       150 146 gg
+LSR eP   9110062216 0015                                      FLD       130 146 g
+PLROeP   9110062216 0110         540eS                        FLD       130 146 gg
+                 1                                              D
+BAD iPC  9110070417 3030        3180eS                        FLD           147 gg
+COLIiPD  9110070417 3145                                      FLD           147 g
+BUA eP   9110070417 3150                                      FLD           147 g
+BOO iPD  9110070417 3170        3440eS                        FLD           147 gg
+UDI iPD  9110070417 3290                                      FLD           147 g
+DRE eP   9110070417 3315        3730eS                        FLD           147 gg
+LSR eP   9110070417 3370                                      FLD           147 g
+PLROeP   9110070417 3450        3970eS                        FLD           147 gg
+RCL eP 4 9110070417 3785                                      FLD           147 g
+CSZ eP 2 9110070417 3820                                      FLD       500 147 g
+                 1                                              D
+BAD iPD  9110080507 0805         950eS                        FLD           148 gg
+COLIiPD  9110080507 0925        1180eS                        FLD           148 gg
+BUA iPD  9110080507 0915                                      FLD           148 g
+BOO eP   9110080507 0945                                      FLD           148 g
+UDI iPD  9110080507 1060                                      FLD           148 g
+DRE eP 2 9110080507 1100        1500eS                        FLD           148 gg
+LSR eP 2 9110080507 1125                                      FLD       530 148 g
+TLI eP   9110080507 1325                                      FLD           148 g
+ZOU eP   9110080507 1370        1950eS                        FLD           148 gg
+                 1                                              D
+BAD eP   9110080535 2020        2160eS                        FLD           149 gg
+BOO eP   9110080535 2170        2450eS                        FLD           149 gg
+MPRIeP   9110080535 2290                                      FLD           149 g
+DRE eP   9110080535 2320        2750eS                        FLD           149 gg
+LSR eP   9110080535 2370                                      FLD       220 149 g
+PLROeP   9110080535 2460        2970eS                        FLD           149 gg
+ZOU eP   9110080535 2580                                      FLD           149 g
+                 1                                              D
+BAD eP   9110100341 3370        3480eS                        FLD       270 150 gg
+BOO eP   9110100341 3510        3770eS                        FLD       230 150 gg
+MPRIeP   9110100341 3660        4050eS                        FLD       200 150 gg
+DRE eP   9110100341 3680                                      FLD       220 150 g
+LSR eP 1 9110100341 3710                                      FLD       220 150 g
+PLROePD  9110100341 3800                                      FLD       230 150 g
+ZOU eP   9110100341 3950                                      FLD       230 150 g
+                 1                                              D
+BAD iPC  9110100347 0545                                      FLD           151 g
+BUA iPC  9110100347 0650                                      FLD           151 g
+COLIiPC  9110100347 0670         920eS                        FLD           151 gg
+BOO iPC  9110100347 0685         940eS                        FLD           151 gg
+UDI iPD  9110100347 0810        1180eS                        FLD           151 gg
+DRE eP 4 9110100347 0840                                      FLD           151 g
+LSR eP   9110100347 0880                                      FLD       420 151 g
+PLROeP   9110100347 0975        1360eS                        FLD           151 gg
+ZOU eP 2 9110100347 1120                                      FLD           151 g
+TLI eP   9110100347 1070        1620eS                        FLD           151 gg
+                 1                                              D
+BOO iPC  9110111140 2960        3080eS                        FLD           152 gg
+BAD eP   9110111140 3080        3310eS                        FLD           152 gg
+BUA eP   9110111140 3090                                      FLD           152 g
+MPRIeP+  9110111140 3140        3410eS                        FLD           152 gg
+PLROeP-  9110111140 3210                                      FLD           152 g
+LSR eP   9110111140 3345                                      FLD       190 152 g
+                 1                                              D
+MGRPeP   9110111843 0260         420eS                        VLD           153 gg
+CAE eP   9110111843 1105        1950eS                        VLD           153 gg
+CSO eP 2 9110111843 1230                                      VLD       680 153 g
+RCL eP   9110111843 1550                                      VLD           153 g
+AFL eP   9110111843 1590        2670eS                        VLD           153 gg
+CSZ eP   9110111843 1840                                      VLD           153 g
+TLI eP   9110111843 2020                                      VLD           153 g
+BUA eP 2 9110111843 2150                                      VLD           153 g
+BOO eP 2 9110111843 2170        3750eS                        VLD           153 gg
+UDI eP   9110111843 2220                                      VLD           153 g
+BAD eP   9110111843 2290                                      VLD           153 g
+COLIeP   9110111843 2400                                      VLD           153 g
+PLROeP   9110111843 2470                                      VLD           153 g
+DRE eP 2 9110111843 2680                                      VLD           153 g
+LSR eP   9110111843 2750                                      VLD           153 g
+                 1                                              D
+BAD iPD  9110120001 2115        2250eS                        FLD       250 154 gg
+COLIiPD  9110120001 2230        2480eS                        FLD       240 154 gg
+BUA eP   9110120001 2225                                      FLD       210 154 g
+BOO eP 2 9110120001 2260                                      FLD       200 154 g
+DRE eP 4 9110120001 2410        2800eS                        FLD       200 154 gg
+LSR eP   9110120001 2470                                      FLD       180 154 g
+PLROeP   9110120001 2560                                      FLD       180 154 g
+                 1                                              D
+BAD iPC  9110120147 1740        1880eS                        FLD       220 155 gg
+COLIeP   9110120147 1855        2100eS                        FLD       200 155 gg
+BUA eP   9110120147 1870                                      FLD       220 155 g
+BOO eP-  9110120147 1890        2150eS                        FLD       220 155 gg
+DRE eP   9110120147 2040        2400eS                        FLD       200 155 gg
+LSR eP   9110120147 2120                                      FLD       140 155 g
+PLROeP   9110120147 2200                                      FLD       140 155 g
+                 1                                              D
+DRE eP   9110130801 2910                                                500 156 g
+COLIeP   9110130801 3150                                                510 156 g
+LSR eP   9110130801 3335                                                    156 n
+BAD eP   9110130801 3390                                                    156 n
+BUA eP   9110130801 3460                                                    156 n
+BOO eP   9110130801 3500                                                    156 n
+PLROeP   9110130801 3700                                                    156 n
+RCL eP   9110130801 3750                                                    156 n
+CSZ eP   9110130801 4000                                                    156 n
+                 1                                               
+BOO eP   9110141135 3340        3500eS                        FLD       140 157 gg
+BAD eP   9110141135 3430        3680eS                        FLD       130 157 gg
+MPRIeP   9110141135 3510        3840eS                        FLD       110 157 gg
+PLROeP   9110141135 3600                                      FLD       140 157 g
+ZOU eP   9110141135 3670        4110eS                        FLD        80 157 gg
+LSR eP   9110141135 3700                                      FLD       120 157 g
+                 1                                              D
+BOO eP-  9110151452 5860        6020eS                        FLD       200 158 gg
+BAD eP+  9110151452 5940        6190eS                        FLD       180 158 gg
+BUA eP   9110151452 5975                                      FLD       180 158 g
+PLROeP-  9110151453 0100         450eS                        FLD       180 158 gg
+COLIeP+  9110151453 0180         600eS                        FLD       180 158 gg
+ZOU eP 4 9110151453 0160         600eS                        FLD       100 158 gg
+LSR eP   9110151453 0220         680eS                        FLD       160 158 gg
+DRE eP 2 9110151453 0340                                      FLD       160 158 g
+                 1                                              D
+BAD iPC  9110152314 1705        1850eS                        FLD       170 159 gg
+BUA eP   9110152314 1820                                      FLD       130 159 g
+COLIiPC  9110152314 1825                                      FLD       150 159 g
+BOO eP   9110152314 1845        2070eS                        FLD       120 159 gg
+DRE eP   9110152314 1980        2400eS                        FLD       150 159 gg
+LSR eP 2 9110152314 2080                                      FLD       150 159 g
+PLROeP 2 9110152314 2150        2650eS                        FLD       140 159 gg
+                 1                                              D
+BOO eP+  9110160759 4310        4470eS                        FLD       150 160 gg
+BAD eP   9110160759 4425        4700eS                        FLD       140 160 gg
+PLROeP   9110160759 4510                                      FLD       140 160 g
+ZOU eP   9110160759 4600        4970eS                        FLD       100 160 gg
+LSR eP   9110160759 4660                                      FLD       130 160 g
+COLIeP+  9110160759 4665        5140eS                        FLD       110 160 gg
+DRE eP 2 9110160759 4820                                      FLD       120 160 g
+                 1                                              D
+BOO iPC  9110170632 4335                                      FLD       300 161 g
+MPRIeP   9110170632 4420                                      FLD       200 161 g
+BUA iPC  9110170632 4400                                      FLD       300 161 g
+BAD eP-  9110170632 4480        4700eS                        FLD       220 161 gg
+PLROeP   9110170632 4720                                      FLD       200 161 g
+COLIeP   9110170632 4730        5180eS                        FLD       220 161 gg
+ZOU eP   9110170632 4750        5170eS                        FLD       160 161 gg
+LSR eP   9110170632 4910                                      FLD       140 161 g
+                 1                                              D
+BAD iPC  9110180326 3110                                      FLD       220 162 g
+COLIiPD  9110180326 3220        3480eS                        FLD       220 162 gg
+BOO eP-  9110180326 3270                                      FLD       200 162 g
+DRE eP 4 9110180326 3400        3790eS                        FLD       180 162 gg
+LSR eP 4 9110180326 3480                                      FLD       180 162 g
+PLROeP+  9110180326 3550        4050eS                        FLD       170 162 gg
+                 1                                              D
+DRE eP   9110212258 3250        5450eS                                  600 163 gg
+COLIeP   9110212258 3380                                                550 163 g
+TLI eP   9110212258 3400        5680eS                                      163 gg
+UDI eP   9110212258 3480                                                    163 n
+BAD eP   9110212258 3615                                                    163 n
+BOO eP   9110212258 3710                                                    163 n
+BUA eP   9110212258 3730                                                    163 n
+LSR eP   9110212258 3750                                                    163 n
+                 1                                               
+RCL eP   9110251447 5200                                                    164 n
+CSO eP   9110251447 5320                                                    164 n
+COLIeP   9110251447 5360                                                    164 n
+BUA eP   9110251447 5400                                                    164 n
+BAD eP   9110251447 5440                                                    164 n
+MPRIeP   9110251447 5440                                                    164 n
+BOO eP   9110251447 5500                                                    164 n
+DRE eP   9110251447 5520                                                    164 n
+CSZ eP   9110251447 5640                                                    164 n
+AFL eP   9110251447 5760                                                    164 n
+LSR eP   9110251447 5840                                                    164 n
+PLROeP   9110251447 5880                                                    164 n
+                 1                                               
+COLIiPD  9110260634 5240        5490eS                        FLD       300 165 gg
+DRE eP   9110260634 5350        5710eS                        FLD       320 165 gg
+BAD eP   9110260634 5460        5850eS                        FLD       300 165 gg
+TLI eP   9110260634 5500                                      FLD           165 g
+BUA eP   9110260634 5590                                      FLD       300 165 g
+BOO eP   9110260634 5680        6220eS                        FLD       270 165 gg
+LSR eP   9110260634 5810                                      FLD       210 165 g
+PLROeP   9110260634 5970                                      FLD       220 165 g
+                 1                                              D
+DRE eP   9110280022 5850                                                    166 n
+COLIeP   9110280023 0120                                                    166 n
+LSR eP   9110280023 0200                                                    166 n
+TLI eP 3 9110280023 0360                                                    166 n
+BUA eP   9110280023 0440                                                    166 n
+PLROeP   9110280023 0530                                                    166 n
+BAD eP   9110280023 0550                                                    166 n
+ZOU eP   9110280023 0780                                                    166 n
+RCL eP   9110280023 0830                                                    166 n
+CAE eP   9110280023 0980                                                    166 n
+CSZ eP   9110280023 0990                                                    166 n
+CSO eP   9110280023 1120                                                    166 n
+AFL eP   9110280023 1450                                                    166 n
+                 1                                               
+BAD eP   9110281036 5860                                                    167 n
+CAE eP   9110281037 0010                                                    167 n
+TLI eP   9110281037 0020                                                    167 n
+RCL eP   9110281037 0210                                                    167 n
+CSO eP   9110281037 0330                                                    167 n
+COLIeP   9110281037 0390                                                    167 n
+DRE eP   9110281037 0550                                                    167 n
+CSZ eP   9110281037 0680                                                    167 n
+AFL eP   9110281037 0790                                                    167 n
+ZOU eP   9110281037 0880                                                    167 n
+PLROeP   9110281037 0890                                                    167 n
+LSR eP   9110281037 0950                                                    167 n
+                 1                                               
+BAD eP+  9110290710 1240        1390eS                        FLD       160 168 gg
+COLIeP   9110290710 1350        1610eS                        FLD       150 168 gg
+BOO eP-  9110290710 1380        1610eS                        FLD       150 168 gg
+DRE eP   9110290710 1530                                      FLD       140 168 g
+LSR eP   9110290710 1640                                      FLD       120 168 g
+PLROeP   9110290710 1690        2100eS                        FLD       130 168 gg
+                 1                                              D
+CSO iPD  9110291223 1920                                      VLD       600 169 g
+CAE eP   9110291223 2040        2320eS                        VLD           169 gg
+RCL eP   9110291223 2080        2440eS                        VLD           169 gg
+AFL eP   9110291223 2460                                      VLD           169 g
+MPRIeP   9110291223 2520                                      VLD           169 g
+BUA eP   9110291223 2690                                      VLD           169 g
+BOO eP   9110291223 2660        3480eS                        VLD           169 gg
+PLROeP   9110291223 3000                                      VLD           169 g
+                 1                                              D
+DRE eP   9110291226 2520        4300eS                         L            170 gg
+COLIeP   9110291226 2780                                       L            170 g
+BAD eP   9110291226 2990        5050eS                         L            170 gg
+LSR eP   9110291226 3070                                       L        700 170 g
+BOO eP   9110291226 3160        5360eS                         L            170 gg
+MPRIeP   9110291226 3200                                       L            170 g
+PLROeP   9110291226 3530                                       L            170 g
+                 1                                               
+BOO eP   9110291933 2230                                      FLD       120 171 g
+BAD eP-  9110291933 2280        2520eS                        FLD       130 171 gg
+MPRIeP   9110291933 2390        2720eS                        FLD       100 171 gg
+PLROeP   9110291933 2475        2870eS                        FLD       120 171 gg
+LSR eP   9110291933 2510        2970eS                        FLD       110 171 gg
+                 1                                              D
+CAE eP   9111010617 4330                                                    172 n
+CSO eP   9111010617 4510                                                    172 n
+RCL eP   9111010617 4660                                                    172 n
+AFL eP   9111010617 4740                                                    172 n
+CSZ eP   9111010617 4920                                                    172 n
+BOO eP   9111010617 5090                                                    172 n
+BAD eP   9111010617 5140                                                    172 n
+ZOU eP   9111010617 5300                                                    172 n
+PLROeP   9111010617 5370                                                    172 n
+                 1                                               
+BOO iPC  9111020645 0020                                      FLD       200 173 g
+BAD eP   9111020645 0150         380eS                        FLD       180 173 gg
+MPRIeP   9111020645 0180                                      FLD       140 173 g
+PLROeP   9111020645 0300                                      FLD       140 173 g
+ZOU eP   9111020645 0370                                      FLD       110 173 g
+COLIeP   9111020645 0400         850eS                        FLD       170 173 gg
+LSR eP   9111020645 0450                                      FLD       120 173 g
+DRE eP   9111020645 0600        1200eS                        FLD       200 173 gg
+                 1                                              D
+CAE eP   9111021043 0070                                                    174 n
+RCL eP   9111021043 0380                                                    174 n
+AFL eP   9111021043 0430                                                    174 n
+CSZ eP   9111021043 0610                                                    174 n
+BOO eP   9111021043 0790                                                    174 n
+BAD eP   9111021043 0890                                                    174 n
+ZOU eP   9111021043 0970                                                    174 n
+PLROeP   9111021043 1080                                                    174 n
+DRE eP   9111021043 1170                                                    174 n
+                 1                                               
+LSR eP   9111022045 3310        3600eS                        FLD           175 gg
+DRE eP   9111022045 3360                                      FLD           175 g
+COLIeP   9111022045 3490        3910eS                        FLD           175 gg
+BAD eP   9111022045 3490        3900eS                        FLD           175 gg
+BOO eP   9111022045 3590        4100eS                        FLD           175 gg
+BUA eP   9111022045 3650                                      FLD           175 g
+PLROeP   9111022045 3700                                      FLD           175 g
+VOY iP   9111022045 3740        4350eS                        FLD           175 gg
+ZOU eP   9111022045 3900        4700eS                        FLD           175 gg
+TLI eP   9111022045 4010                                      FLD           175 g
+TRI eP   9111022045 4150        5190eS                        FLD           175 gg
+RCL eP   9111022045 4240                                      FLD           175 g
+CSZ eP   9111022045 4230                                      FLD           175 g
+CAE eP   9111022045 4580                                      FLD           175 g
+CSO eP   9111022045 4550                                      FLD       700 175 g
+AFL eP   9111022045 4900                                      FLD           175 g
+                 1                                              D
+BOO iPD  9111040806 1590        1640eS                        FLD       180 176 gg
+BAD eP   9111040806 1690                                      FLD           176 g
+MPRIeP   9111040806 1740                                      FLD       150 176 g
+PLROeP   9111040806 1990                                      FLD       170 176 g
+LSR eP   9111040806 2100        2660eS                        FLD       130 176 gg
+                 1                                              D
+BAD eP   9111062316 5770        5940eS                        FLD       170 177 gg
+BOO eP   9111062316 5800        6040eS                        FLD       160 177 gg
+LSR eP   9111062316 5900                                      FLD       140 177 g
+COLIeP   9111062316 5910                                      FLD       150 177 g
+PLROeP   9111062317 0010                                      FLD       140 177 g
+DRE eP   9111062317 0000         430eS                        FLD       150 177 gg
+ZOU eP   9111062317 0160                                      FLD       120 177 g
+                 1                                              D
+BAD iPC  9111070051 4260        4410eS                        FLD       240 178 gg
+COLIiPD  9111070051 4370        4630eS                        FLD       220 178 gg
+BOO eP   9111070051 4400                                      FLD       200 178 g
+UDI eP   9111070051 4510                                      FLD       200 178 g
+DRE eP   9111070051 4520                                      FLD       200 178 g
+LSR eP   9111070051 4610                                      FLD       150 178 g
+PLROeP   9111070051 4700                                      FLD       180 178 g
+                 1                                              D
+BAD eP   9111070053 2420        2520eS                        FLD           179 gg
+BUA eP   9111070053 2520                                      FLD           179 g
+COLIeP   9111070053 2540        2760eS                        FLD           179 gg
+BOO eP   9111070053 2560                                      FLD           179 g
+DRE eP   9111070053 2720                                      FLD           179 g
+LSR eP   9111070053 2780                                      FLD       360 179 g
+PLROeP   9111070053 2840                                      FLD           179 g
+                 1                                              D
+BAD iP   9111070229 5670        5810eS                        FLD       220 180 gg
+BOO eP   9111070229 5800        6080eS                        FLD       150 180 gg
+MPRIeP   9111070229 5970                                      FLD       150 180 g
+DRE eP   9111070230 0000                                      FLD       170 180 g
+LSR eP   9111070230 0000                                      FLD       140 180 g
+PLROeP   9111070230 0130                                      FLD       150 180 g
+                 1                                              D
+BAD iPC  9111070405 4940        5080eS                        FLD       320 181 gg
+COLIeP-  9111070405 5040        5300eS                        FLD       300 181 gg
+BUA eP   9111070405 5050                                      FLD       310 181 g
+BOO iPD  9111070405 5080                                      FLD       300 181 g
+DRE eP   9111070405 5220        5630eS                        FLD       300 181 gg
+LSR eP   9111070405 5280                                      FLD       200 181 g
+PLROeP   9111070405 5360        5820eS                        FLD       240 181 gg
+ZOU eP   9111070405 5490        6100eS                        FLD       180 181 gg
+                 1                                              D
+DRE eP   9111071742 4240                                                    182 n
+COLIeP   9111071742 4400                                                    182 n
+BAD eP   9111071742 4520                                                    182 n
+BOO eP   9111071742 4680                                                    182 n
+LSR eP   9111071742 4680                                                    182 n
+CAE eP   9111071742 4880                                                    182 n
+PLROeP   9111071742 5000                                                    182 n
+ZOU eP   9111071742 5040                                                    182 n
+CSZ eP   9111071742 5160                                                    182 n
+AFL eP   9111071742 5580                                                    182 n
+                 1                                               
+DRE eP   9111080646 1620                                                    183 n
+COLIeP   9111080646 1740                                                    183 n
+BAD eP   9111080646 1900                                                    183 n
+LSR eP   9111080646 2050                                                    183 n
+BOO eP   9111080646 2060                                                    183 n
+RCL eP   9111080646 2230                                                    183 n
+CAE eP   9111080646 2280                                                    183 n
+PLROeP   9111080646 2330                                                    183 n
+ZOU eP   9111080646 2430                                                    183 n
+CSZ eP   9111080646 2540                                                    183 n
+                 1                                               
+BAD eP   9111081727 2680        2840eS                        FLD           184 gg
+BUA eP   9111081727 2780                                      FLD           184 g
+BOO eP   9111081727 2760                                      FLD           184 g
+COLIeP   9111081727 2860        3200eS                        FLD           184 gg
+LSR eP   9111081727 3000                                      FLD           184 g
+PLROeP   9111081727 3040        3520eS                        FLD           184 gg
+DRE eP   9111081727 3020        3520eS                        FLD           184 gg
+ZOU eP   9111081727 3160        3720eS                        FLD           184 gg
+CSZ eP   9111081727 3400                                      FLD           184 g
+CSO eP   9111081727 3640                                      FLD       740 184 g
+AFL eP 4 9111081727 4080        5160eS                        FLD           184 gg
+                 1                                              D
+RCL eP   9111081729 3220                                      FLD           185 g
+MPRIeP   9111081729 3270                                      FLD           185 g
+CSZ eP   9111081729 3300                                      FLD       320 185 g
+CSO eP   9111081729 3480        3910eS                        FLD           185 gg
+ZOU eP   9111081729 3480                                      FLD           185 g
+BAD eP   9111081729 3570        4160eS                        FLD           185 gg
+PLROeP   9111081729 3600                                      FLD       280 185 g
+COLIeP   9111081729 3820                                      FLD           185 g
+                 1                                              D
+BAD eP   9111082150 3430        3580eS                        FLD           186 gg
+BUA eP   9111082150 3510                                      FLD           186 g
+BOO eP   9111082150 3500        3730eS                        FLD           186 gg
+COLIeP   9111082150 3600        3940eS                        FLD           186 gg
+LSR eP   9111082150 3730                                      FLD           186 g
+PLROeP   9111082150 3780                                      FLD           186 g
+DRE eP   9111082150 3760        4250eS                        FLD           186 gg
+ZOU eP   9111082150 3900        4440eS                        FLD           186 gg
+TLI eP   9111082150 3950                                      FLD           186 g
+CSZ eP   9111082150 4130                                      FLD           186 g
+CSO eP   9111082150 4390                                      FLD       650 186 g
+                 1                                              D
+RCL eP   9111090001 3740                                      FLD           187 g
+CSZ eP   9111090001 3770        4090eS                        FLD       300 187 gg
+BOO eP   9111090001 3850                                      FLD           187 g
+CSO eP   9111090001 3950        4400eS                        FLD           187 gg
+ZOU eP   9111090001 3960        4400eS                        FLD           187 gg
+BAD eP   9111090001 4070        4640eS                        FLD           187 gg
+PLROeP   9111090001 4110                                      FLD           187 g
+COLIeP   9111090001 4320                                      FLD           187 g
+                 1                                              D
+RCL eP   9111110647 2470        2690eS                        FL        160 188 gg
+CSO eP   9111110647 2500                                      FL        160 188 g
+CSZ eP   9111110647 2570                                      FL        150 188 g
+                 1                                               
+BAD eP+  9111130446 0220         380eS                        FLD       130 189 gg
+COLIeP   9111130446 0340                                      FLD       150 189 g
+BOO eP-  9111130446 0370         600eS                        FLD       120 189 gg
+DRE eP   9111130446 0510         920eS                        FLD       140 189 gg
+PLROeP   9111130446 0670        1090eS                        FLD       120 189 gg
+                 1                                              D
+LJU iP   9111130619 1710        2000eS                         LD           190 gg
+VOY iP   9111130619 2060        2610eS                         LD           190 gg
+CEY eP   9111130619 2180        2750eS                         LD           190 gg
+DRE eP   9111130619 2300        3120eS                         LD           190 gg
+TRI eP   9111130619 2490        3440eS                         LD           190 gg
+COLIeP   9111130619 2640        3750eS                         LD           190 gg
+BAD eP   9111130619 2790        4050eS                         LD           190 gg
+BOO eP   9111130619 2970        4430eS                         LD           190 gg
+PLROeP   9111130619 3150                                       LD       550 190 g
+                 1                                              D
+LJU iP   9111161545 2840        3090eS                         LD           191 gg
+VOY eP   9111161545 3270        3850eS                         LD           191 gg
+CEY eP   9111161545 3300        3940eS                         LD           191 gg
+TRI eP 4 9111161545 3400        4730iS                         LD           191 gg
+COLIeP   9111161545 3710                                       LD           191 g
+BAD eP   9111161545 3840        5200eS                         LD           191 gg
+BOO eP   9111161545 4090        5500eS                         LD           191 gg
+PTJ iP   9111161545 4590        6150iS                         LD           191 gg
+RCL eP   9111161545 4810        6570eS                         LD           191 gg
+CAE eP   9111161545 5030        7100eS                         LD           191 gg
+CSO eP   9111161545 5110                                       LD       750 191 g
+                 1                                              D
+CAE eP   9111170126 3830                                                    192 n
+CSO eP   9111170126 3930                                                    192 n
+RCL eP   9111170126 4120                                                    192 n
+CSZ eP   9111170126 4320                                                    192 n
+BUA eP   9111170126 4580                                                    192 n
+BOO eP   9111170126 4590                                                    192 n
+COLIeP   9111170126 4670                                                    192 n
+                 1                                               
+BAD iPC  9111181932 3480        3630eS                        FLD       150 193 gg
+COLIeP   9111181932 3600        3850eS                        FLD       130 193 gg
+BOO eP   9111181932 3630        3900eS                        FLD       140 193 gg
+DRE eP   9111181932 3770        4180eS                        FLD       150 193 gg
+PLROeP   9111181932 3920        4430eS                        FLD       140 193 gg
+                 1                                              D
+DRE eP   9111182229 4110                                                    194 n
+COLIeP   9111182229 4200                                                    194 n
+TLI eP   9111182229 4220                                                    194 n
+BAD eP   9111182229 4400                                                    194 n
+BOO eP   9111182229 4530                                                    194 n
+RCL eP   9111182229 4720                                                    194 n
+CAE eP   9111182229 4820                                                    194 n
+PLROeP   9111182229 4850                                                    194 n
+ZOU eP   9111182229 4900                                                    194 n
+CSZ eP   9111182229 5050                                                    194 n
+CSO eP   9111182229 5110                                                    194 n
+                 1                                               
+BAD iPC  9111182327 2280        2430eS                        FLD       220 195 gg
+BUA eP   9111182327 2390                                      FLD       180 195 g
+COLIeP-  9111182327 2390                                      FLD       180 195 g
+BOO eP-  9111182327 2420        2690eS                        FLD       190 195 gg
+DRE eP   9111182327 2560        2990eS                        FLD       200 195 gg
+PLROeP   9111182327 2710        3200eS                        FLD       170 195 gg
+                 1                                              D
+BUA iPC  9111202104 1620        1740eS                        FLD       170 196 gg
+BAD eP   9111202104 1650        1780eS                        FLD       160 196 gg
+BOO iPD  9111202104 1660                                      FLD       160 196 g
+COLIeP   9111202104 1900        2250eS                        FLD       140 196 gg
+PLROeP   9111202104 2100        2570eS                        FLD       130 196 gg
+                 1                                              D
+BUA iPC  9111202339 3700        3820eS                        FLD           197 gg
+BAD eP+  9111202339 3730        3870eS                        FLD           197 gg
+BOO iPD  9111202339 3750                                      FLD           197 g
+MPRIeP   9111202339 3820                                      FLD           197 g
+COLIeP+  9111202339 3980        4350eS                        FLD           197 gg
+PLROeP   9111202339 4180                                      FLD       200 197 g
+RCL eP   9111202339 4260                                      FLD           197 g
+DRE eP   9111202339 4230                                      FLD           197 g
+                 1                                              D
+BAD iPC  9111211115 2850        3000eS                        FLD           198 gg
+BUA eP   9111211115 2960                                      FLD           198 g
+COLIiPD  9111211115 2960        3220eS                        FLD           198 gg
+BOO eP   9111211115 3000                                      FLD           198 g
+DRE eP   9111211115 3130        3570eS                        FLD           198 gg
+PLROeP   9111211115 3290        3800eS                        FLD       330 198 gg
+ZOU eP   9111211115 3410        4000eS                        FLD           198 gg
+                 1                                              D
+BAD iPC  9111211315 4130                                      FLD           199 g
+COLIeP-  9111211315 4250                                      FLD           199 g
+BUA eP   9111211315 4240                                      FLD           199 g
+BOO eP   9111211315 4270        4550eS                        FLD           199 gg
+DRE eP   9111211315 4420        4830eS                        FLD           199 gg
+PLROeP   9111211315 4550                                      FLD       350 199 g
+ZOU eP   9111211315 4690        5280eS                        FLD           199 gg
+                 1                                              D
+BAD iPC  9111211511 4190                                      FLD       260 200 g
+COLIiPD  9111211511 4310        4570eS                        FLD       300 200 gg
+BOO eP   9111211511 4330        4610eS                        FLD       240 200 gg
+DRE eP   9111211511 4470        4890eS                        FLD       220 200 gg
+PLROeP   9111211511 4630                                      FLD       200 200 g
+                 1                                              D
+BAD eP   9111211645 1060        1280eS                        FL        190 201 gg
+PLROeP   9111211645 1150                                      FL        180 201 g
+BOO eP   9111211645 1150        1480eS                        FL        190 201 gg
+DRE eP   9111211645 1160                                      FL        160 201 g
+COLIeP   9111211645 1210                                      FL        160 201 g
+                 1                                               
+BOO eP   9111231229 0370         530eS                        FLD       200 202 gg
+BAD eP   9111231229 0400         580eS                        FLD       180 202 gg
+BUA eP   9111231229 0440                                      FLD       200 202 g
+COLIeP   9111231229 0630         960eS                        FLD       170 202 gg
+PLROeP   9111231229 0650                                      FLD       170 202 g
+ZOU eP   9111231229 0750        1200eS                        FLD       110 202 gg
+DRE eP   9111231229 0800                                      FLD       160 202 g
+                 1                                              D
+PLROiPD  9111260229 0250         380eS                        FLD           203 gg
+ZOU eP   9111260229 0500                                      FLD           203 g
+BOO eP   9111260229 0580        1000eS                        FLD           203 gg
+BAD eP   9111260229 0720                                      FLD           203 g
+MPRIeP   9111260229 0830                                      FLD           203 g
+COLIeP   9111260229 0930        1620eS                        FLD           203 gg
+CSZ eP   9111260229 0950                                      FLD       300 203 g
+                 1                                              D
+BAD iPC  9111270330 1320        1480eS                        FLD           204 gg
+COLIiPD  9111270330 1440        1700eS                        FLD           204 gg
+BUA eP   9111270330 1430                                      FLD           204 g
+BOO eP   9111270330 1460        1740eS                        FLD           204 gg
+UDI eP   9111270330 1580        1970eS                        FLD           204 gg
+MPRIeP   9111270330 1630                                      FLD           204 g
+DRE eP   9111270330 1610        2000eS                        FLD           204 gg
+PLROeP   9111270330 1760                                      FLD       280 204 g
+ZOU eP   9111270330 1890        2480eS                        FLD           204 gg
+                 1                                              D
+RCL iPC  9111300829 3790        4030eS                        FLD           205 gg
+CSO iPD  9111300829 3820        4060eS                        FLD       500 205 gg
+CAE eP   9111300829 3930        4250eS                        FLD           205 gg
+CSZ eP   9111300829 4060                                      FLD           205 g
+AFL eP   9111300829 4330                                      FLD           205 g
+BAD eP   9111300829 4500                                      FLD           205 g
+                 1                                              D
+BOO eP   9111302252 0180         340eS                        FLD       180 206 gg
+BAD iPC  9111302252 0130                                      FLD       180 206 g
+COLIeP   9111302252 0380         750eS                        FLD       140 206 gg
+LSR eP   9111302252 0480         940eS                        FLD       160 206 gg
+DRE eP   9111302252 0610        1110eS                        FLD       140 206 gg
+                 1                                              D
+BAD eP   9112010139 0470         620eS                        FLD       170 207 gg
+COLIeP   9112010139 0590         840eS                        FLD       180 207 gg
+BOO eP   9112010139 0620         890eS                        FLD       150 207 gg
+LSR eP   9112010139 0840                                      FLD       140 207 g
+PLROeP   9112010139 0910                                      FLD       150 207 g
+                 1                                              D
+DRE eP   9112020851 0220                                                    208 n
+LSR eP   9112020851 0230                                                    208 n
+COLIeP   9112020851 0280                                                    208 n
+BAD eP   9112020851 0470                                                    208 n
+PLROeP   9112020851 0540                                                    208 n
+BOO eP   9112020851 0720                                                    208 n
+CSZ eP   9112020851 1070                                                    208 n
+CSO eP   9112020851 1340                                                    208 n
+AFL eP   9112020851 1600                                                    208 n
+                 1                                               
+BOO iPC  9112021148 5680        5800eS                        FLD           209 gg
+BAD eP   9112021148 5800        6060eS                        FLD           209 gg
+MPRIeP   9112021148 5810        6100eS                        FLD           209 gg
+PLROeP   9112021148 5980                                      FLD           209 g
+LSR eP   9112021149 0140                                      FLD       130 209 g
+                 1                                              D
+DRE eP   9112041019 4530                                       L            210 g
+COLIeP   9112041019 4570                                       L            210 g
+BAD eP   9112041019 4720                                       L            210 g
+LSR eP   9112041019 5110                                       L            210 g
+CAE eP   9112041019 5550                                       L            210 g
+PLROeP   9112041019 5740                                       L            210 g
+CSZ eP   9112041019 5820                                       L        600 210 g
+AFL eP   9112041020 0310                                       L            210 g
+                 1                                               
+CSO eP   9112051133 3460        3680eS                        VLD       650 211 gg
+CAE eP   9112051133 3500        3750eS                        VLD           211 gg
+RCL eP   9112051133 3530        3850eS                        VLD           211 gg
+FAU eP   9112051133 3770                                      VLD           211 g
+CSZ eP   9112051133 3810                                      VLD           211 g
+AFL eP   9112051133 3970                                      VLD           211 g
+MPRIeP   9112051133 4000                                      VLD           211 g
+MTLOeP   9112051133 4020                                      VLD           211 g
+BUA eP   9112051133 4130                                      VLD           211 g
+BOO eP   9112051133 4110        4900eS                        VLD           211 gg
+TLI eP   9112051133 4200                                      VLD           211 g
+PLROeP   9112051133 4440                                      VLD           211 g
+LSR eP   9112051133 4760                                      VLD           211 g
+DRE eP   9112051133 4800                                      VLD           211 g
+                 1                                              D
+BOO eP   9112070525 5590                                      FLD           212 g
+BAD eP   9112070525 5630        5810eS                        FLD           212 gg
+MPRIeP   9112070525 5790                                      FLD           212 g
+PLROeP   9112070525 5890                                      FLD       440 212 g
+COLIeP   9112070525 5840                                      FLD           212 g
+LSR eP   9112070525 5900                                      FLD           212 g
+ZOU eP   9112070525 5910                                      FLD           212 g
+DRE eP   9112070526 0050         600eS                        FLD           212 gg
+                 1                                              D
+DRE eP   9112070529 2920        3760eS                         L            213 gg
+COLIeP   9112070529 3000                                       L            213 g
+BAD eP   9112070529 3240                                       L            213 g
+LSR eP   9112070529 3480                                       L            213 g
+CAE eP   9112070529 4000        5720eS                         L            213 gg
+CSZ eP   9112070529 4280                                       L        630 213 g
+AFL eP   9112070529 4720                                       L            213 g
+                 1                                               
+BOO iPC  9112070924 1550        1640eS                        FLD       160 214 gg
+BAD eP+  9112070924 1650        1870eS                        FLD       150 214 gg
+MPRIeP+  9112070924 1670                                      FLD       120 214 g
+PLROeP   9112070924 1890        2300eS                        FLD       140 214 gg
+LSR eP   9112070924 1975                                      FLD       120 214 g
+DRE eP   9112070924 2115                                      FLD       120 214 g
+                 1                                              D
+CSZ iPC  9112100321 0250         380eS                        FLD       200 215 gg
+CSO eP   9112100321 0560         900eS                        FLD       150 215 gg
+AFL eP   9112100321 0730        1210eS                        FLD       140 215 gg
+BOO eP   9112100321 0770        1320eS                        FLD       140 215 gg
+PLROeP   9112100321 0890                                      FLD       170 215 g
+                 1                                              D
+BAD iPC  9112100519 1870        2010eS                        FLD           216 gg
+BUA iPC  9112100519 1980                                      FLD           216 g
+COLIiPD  9112100519 1990        2260eS                        FLD           216 gg
+BOO iPC  9112100519 2010        2250eS                        FLD           216 gg
+DRE eP   9112100519 2160        2580eS                        FLD           216 gg
+LSR eP   9112100519 2200                                      FLD       550 216 g
+PLROeP   9112100519 2280        2800eS                        FLD           216 gg
+ZOU eP   9112100519 2410        3010eS                        FLD           216 gg
+RCL eP   9112100519 2590                                      FLD           216 g
+                 1                                              D
+CEY iP   9112120243 4060        4350eS                         LD           217 gg
+TRI eP   9112120243 4350        4850eS                         LD           217 gg
+VOY eP   9112120243 4560        5190eS                         LD           217 gg
+LJU eP   9112120243 4570        5210iS                         LD           217 gg
+DRE eP   9112120243 4900                                       LD           217 g
+COLIeP   9112120243 5100                                       LD           217 g
+BAD eP   9112120243 5440                                       LD           217 g
+LSR eP   9112120243 5450                                       LD           217 g
+BOO eP   9112120243 5680                                       LD           217 g
+PLROeP   9112120243 5910                                       LD           217 g
+RCL eP   9112120244 0020                                       LD           217 g
+ZOU eP   9112120244 0050        1850eS                         LD           217 gg
+PTJ iP   9112120244 0050                                       LD           217 g
+CAE eP   9112120244 0160                                       LD           217 g
+CSZ eP   9112120244 0280                                       LD           217 g
+CSO eP   9112120244 0320                                       LD       550 217 g
+                 1                                              D
+BAD eP   9112122206 1560        1770eS                        FLD           218 gg
+BOO eP   9112122206 1580        1800eS                        FLD           218 gg
+COLIeP   9112122206 1760        2140eS                        FLD           218 gg
+PLROeP   9112122206 1800        2140eS                        FLD           218 gg
+LSR eP   9112122206 1840                                      FLD       160 218 g
+                 1                                              D
+BOO eP   9112130945 2460        2590eS                        FLD       160 219 gg
+BUA eP   9112130945 2580        2840eS                        FLD       140 219 gg
+BAD eP   9112130945 2590        2860eS                        FLD       140 219 gg
+PLROeP   9112130945 2760        3090eS                        FLD       130 219 gg
+ZOU eP   9112130945 2810        3220eS                        FLD           219 gg
+LSR eP   9112130945 2920                                      FLD       110 219 g
+                 1                                              D
+COLIeP   9112152233 2010                                                    220 n
+DRE eP   9112152233 2050                                                    220 n
+BAD eP   9112152233 2170                                                    220 n
+BOO eP   9112152233 2270                                                    220 n
+CSO eP   9112152233 2340                                                    220 n
+LSR eP   9112152233 2560                                                    220 n
+CSZ eP   9112152233 2590                                                    220 n
+PLROeP   9112152233 2610                                                    220 n
+AFL eP   9112152233 2780                                                    220 n
+                 1                                               
+BOO iPC  9112152336 4400        4480eS                        FLD           221 gg
+BAD iPD  9112152336 4490        4690eS                        FLD           221 gg
+MPRIeP   9112152336 4570                                      FLD           221 g
+PLROeP   9112152336 4750                                      FLD           221 g
+COLIiPD  9112152336 4750                                      FLD           221 g
+ZOU eP   9112152336 4810                                      FLD           221 g
+LSR eP   9112152336 4840                                      FLD           221 g
+DRE eP   9112152336 4960        5550eS                        FLD           221 gg
+RCL eP   9112152336 5060        5640eS                        FLD           221 gg
+CSZ eP   9112152336 5020                                      FLD           221 g
+CSO eP   9112152336 5300                                      FLD       600 221 g
+CAE eP   9112152336 5410        6350eS                        FLD           221 gg
+AFL eP   9112152336 5680                                      FLD           221 g
+                 1                                              D
+BAD eP   9112160419 0330         520eS                        FLD       110 222 gg
+BOO eP   9112160419 0490         740eS                        FLD       120 222 gg
+COLIeP   9112160419 0540         820eS                        FLD       120 222 gg
+LSR eP   9112160419 0750                                      FLD       100 222 g
+DRE eP   9112160419 0720        1160eS                        FLD       130 222 gg
+PLROeP   9112160419 0810                                      FLD       110 222 g
+                 1                                              D
+MGRPeP   9112190304 0420                                      VLD           223 g
+MTLOeP   9112190304 0630                                      VLD           223 g
+FAU eP   9112190304 0680                                      VLD           223 g
+CAE eP   9112190304 0950        1570eS                        VLD           223 gg
+AFL eP   9112190304 1400                                      VLD       420 223 g
+CSZ eP   9112190304 1610        2700eS                        VLD       350 223 gg
+BOO eP   9112190304 1970        3350eS                        VLD       350 223 gg
+ZOU eP   9112190304 2120        3470eS                        VLD       350 223 gg
+BAD eP   9112190304 2150                                      VLD       400 223 g
+PLROeP   9112190304 2240                                      VLD       400 223 g
+COLIeP   9112190304 2290        3880eS                        VLD       400 223 gg
+DRE eP   9112190304 2570        4420eS                        VLD       400 223 gg
+LSR eP   9112190304 2600                                      VLD       400 223 g
+                 1                                              D
+CAE eP   9112230740 0725                                                    224 n
+TLI eP   9112230740 0800                                                    224 n
+RCL eP   9112230740 1000                                                    224 n
+CSO eP   9112230740 1040                                                    224 n
+BUA eP   9112230740 1280                                                    224 n
+COLIeP-  9112230740 1290                                                    224 n
+BAD eP   9112230740 1330                                                    224 n
+BOO eP   9112230740 1360                                                    224 n
+CSZ eP   9112230740 1420                                                    224 n
+AFL eP   9112230740 1460                                                    224 n
+DRE eP   9112230740 1480                                                    224 n
+ZOU eP   9112230740 1690                                                    224 n
+PLROeP   9112230740 1740                                                    224 n
+LSR eP   9112230740 1780                                                    224 n
+                 1                                               
+CSO eP-  9112231622 4510                                      VLD       580 225 g
+RCL eP   9112231622 4560        4840eS                        VLD           225 gg
+CAE eP   9112231622 4580        4940eS                        VLD           225 gg
+CSZ eP   9112231622 4810                                      VLD           225 g
+BOO eP   9112231622 5100                                      VLD           225 g
+TLI eP   9112231622 5240                                      VLD           225 g
+BAD eP   9112231622 5260                                      VLD           225 g
+PLROeP   9112231622 5350        6320eS                        VLD           225 gg
+LSR eP   9112231622 5700                                      VLD           225 g
+                 1                                              D
+DRE eP   9112251253 1250        1430eS                        FLD       170 226 gg
+COLIeP   9112251253 1320        1600eS                        FLD       140 226 gg
+BAD eP   9112251253 1400        1740eS                        FLD       130 226 gg
+                 1                                              D
+RCL eP   9112252036 1270                                      FLD       200 227 g
+MPRIeP   9112252036 1480                                      FLD       200 227 g
+CSZ eP   9112252036 1490        1850eS                        FLD       190 227 gg
+CSO eP   9112252036 1535                                      FLD       180 227 g
+BOO eP   9112252036 1600        2020eS                        FLD       200 227 gg
+CAE eP   9112252036 1740        2220eS                        FLD       250 227 gg
+BAD eP   9112252036 1800                                      FLD       190 227 g
+COLIeP   9112252036 2030                                      FLD       250 227 g
+                 1                                              D
+BOO iPC  9112261243 0900        1050eS                        FLD       220 228 gg
+MPRIeP-  9112261243 0900        1050eS                        FLD       190 228 gg
+BUA eP   9112261243 0910                                      FLD       220 228 g
+BAD eP   9112261243 0990                                      FLD       210 228 g
+COLIeP-  9112261243 1240        1710eS                        FLD       170 228 gg
+RCL eP   9112261243 1345        1860eS                        FLD       150 228 gg
+LSR eP   9112261243 1480        2120eS                        FLD       160 228 gg
+DRE eP   9112261243 1510        2200eS                        FLD       200 228 gg
+                 1                                              D
+DRE eP   9112262346 4020                                                    229 n
+COLIeP   9112262346 4170                                                    229 n
+BOO eP   9112262346 4480                                                    229 n
+RCL eP   9112262346 4670                                                    229 n
+CAE eP   9112262346 4730                                                    229 n
+ZOU eP   9112262346 4980                                                    229 n
+CSO eP   9112262346 5010                                                    229 n
+                 1                                               
+CAE eP   9112270043 3960        4160eS                        VLD       300 230 gg
+CSO eP   9112270043 4130                                      VLD       300 230 g
+RCL eP   9112270043 4290        4700eS                        VLD           230 gg
+MPRIeP   9112270043 4750                                      VLD           230 g
+BOO eP   9112270043 4870        5920eS                        VLD           230 gg
+                 1                                              D
+CAE eP   9112270459 5280                                                    231 n
+RCL eP   9112270459 5600                                                    231 n
+CSO eP   9112270459 5760                                                    231 n
+BOO eP   9112270460 0010                                                    231 n
+BAD eP   9112270460 0020                                                    231 n
+COLIeP   9112270460 0050                                                    231 n
+AFL eP   9112270460 0150                                                    231 n
+DRE eP   9112270460 0300                                                    231 n
+                 1                                               
+CAE eP   9112290547 2710                                                    232 g
+CSO eP   9112290547 3070                                                    232 g
+RCL eP   9112290547 3180                                                    232 n
+MPRIeP   9112290547 3420                                                    232 n
+AFL eP   9112290547 3450                                                    232 n
+BOO eP   9112290547 3540                                                    232 n
+BAD eP   9112290547 3550                                                    232 n
+COLIeP   9112290547 3560                                                    232 n
+DRE eP   9112290547 3760                                                    232 n
+                 1                                               
