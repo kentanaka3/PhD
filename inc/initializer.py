@@ -453,45 +453,50 @@ def data_header(args: argparse.Namespace,
     raise FileNotFoundError
   RESULTS = list()
   start, end = args.dates
-  for date_path in PATH.iterdir():
-    if DATE_STR in args.groups and date_path.is_dir():
-      c_date = UTCDateTime.strptime(date_path.name, DATE_FMT)
-      if c_date < start or c_date >= end + ONE_DAY:
+  for year in PATH.iterdir():
+    if not year.is_dir():
+      continue
+    for month in year.iterdir():
+      if not month.is_dir():
         continue
-      for network_path in date_path.iterdir():
-        if (args.network != [ALL_WILDCHAR_STR] and
-                network_path.stem not in args.network):
+      for date_path in month.iterdir():
+        if not date_path.is_dir():
           continue
-        if (NETWORK_STR in args.groups or STATION_STR in args.groups) and \
-           network_path.is_dir():
-          for station_path in network_path.iterdir():
-            if (args.station != [ALL_WILDCHAR_STR] and
-                    station_path.stem not in args.station):
-              continue
-            if STATION_STR in args.groups and station_path.is_dir():
-              for file_path in station_path.iterdir():
-                # Handle (daily, network, station, model, weight) files
-                filename = file_path.stem
+        c_date = UTCDateTime(year=int(year.name), month=int(month.name),
+                             day=int(date_path.name))
+        if c_date < start or c_date >= end + ONE_DAY:
+          continue
+        for network_path in date_path.iterdir():
+          if (args.network != [ALL_WILDCHAR_STR] and
+                  network_path.stem not in args.network):
+            continue
+          if (NETWORK_STR in args.groups or STATION_STR in args.groups) and \
+                  network_path.is_dir():
+            for station_path in network_path.iterdir():
+              if (args.station != [ALL_WILDCHAR_STR] and
+                      station_path.stem not in args.station):
+                continue
+              if STATION_STR in args.groups and station_path.is_dir():
+                for file_path in station_path.iterdir():
+                  # Handle (daily, network, station, model, weight) files
+                  filename = file_path.stem
+                  if args.denoiser == filename.startswith("D"):
+                    vars = filename.split(UNDERSCORE_STR)[int(args.denoiser):]
+                    RESULTS.append([str(file_path), *vars])
+              else:
+                # TODO: Handle (daily, network, model, weight) files
+                filename = station_path.stem
                 if args.denoiser == filename.startswith("D"):
                   vars = filename.split(UNDERSCORE_STR)[int(args.denoiser):]
-                  RESULTS.append([str(file_path), *vars])
-            else:
-              # TODO: Handle (daily, network, model, weight) files
-              filename = station_path.stem
-              if args.denoiser == filename.startswith("D"):
-                vars = filename.split(UNDERSCORE_STR)[int(args.denoiser):]
-                continue
-                RESULTS.append([str(station_path), *vars])
-        else:
-          # TODO: Handle (daily, model, weight) files
-          filename = network_path.stem
-          if args.denoiser == filename.startswith("D"):
-            vars = filename.split(UNDERSCORE_STR)[int(args.denoiser):]
-            continue
-            RESULTS.append([str(network_path), *vars])
-    else:
-      # TODO: Handle (model, weight) files
-      raise NotImplementedError
+                  continue
+                  RESULTS.append([str(station_path), *vars])
+          else:
+            # TODO: Handle (daily, model, weight) files
+            filename = network_path.stem
+            if args.denoiser == filename.startswith("D"):
+              vars = filename.split(UNDERSCORE_STR)[int(args.denoiser):]
+              continue
+              RESULTS.append([str(network_path), *vars])
   # TODO: How unfortunate to not have thought handling a filesystem structure
   #       aligned with the Table structure
   HEADER = [FILENAME_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR, MODEL_STR,
@@ -587,11 +592,11 @@ def true_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None,
       plt.rcParams.update({'font.size': 12})
       if args.rectdomain:
         pm = 0.5
-        xy = [args.rectdomain[2], args.rectdomain[0]]
-        w = args.rectdomain[3] - args.rectdomain[2]
-        h = args.rectdomain[1] - args.rectdomain[0]
-        extent = [args.rectdomain[2] - pm, args.rectdomain[3] + pm,
-                  args.rectdomain[0] - pm, args.rectdomain[1] + pm]
+        xy = [args.rectdomain[0], args.rectdomain[2]]
+        w = args.rectdomain[1] - args.rectdomain[0]
+        h = args.rectdomain[3] - args.rectdomain[2]
+        extent = [args.rectdomain[0] - pm, args.rectdomain[1] + pm,
+                  args.rectdomain[2] - pm, args.rectdomain[3] + pm]
       if args.circdomain:
         raise NotImplementedError
         extent = [args.circdomain[1] - args.circdomain[3],
@@ -711,11 +716,11 @@ def true_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None,
         st.loc[st[STATION_STR].isin(list(s)), "Total"] += 1
       if args.rectdomain:
         pm = 0.5
-        xy = [args.rectdomain[2], args.rectdomain[0]]
-        w = args.rectdomain[3] - args.rectdomain[2]
-        h = args.rectdomain[1] - args.rectdomain[0]
-        extent = [args.rectdomain[2] - pm, args.rectdomain[3] + pm,
-                  args.rectdomain[0] - pm, args.rectdomain[1] + pm]
+        xy = [args.rectdomain[0], args.rectdomain[2]]
+        w = args.rectdomain[1] - args.rectdomain[0]
+        h = args.rectdomain[3] - args.rectdomain[2]
+        extent = [args.rectdomain[0] - pm, args.rectdomain[1] + pm,
+                  args.rectdomain[2] - pm, args.rectdomain[3] + pm]
       if args.circdomain:
         raise NotImplementedError
         extent = [args.circdomain[1] - args.circdomain[3],
@@ -1055,10 +1060,8 @@ def station_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None)\
       print(e)
       continue
     s = S[0][0]
-    if s.latitude < args.rectdomain[0] or \
-        s.latitude > args.rectdomain[1] or \
-        s.longitude < args.rectdomain[2] or \
-            s.longitude > args.rectdomain[3]:
+    if s.longitude < args.rectdomain[0] or s.longitude > args.rectdomain[1] or\
+       s.latitude < args.rectdomain[2] or s.latitude > args.rectdomain[3]:
       print(f"WARNING: Station {st} is outside the specified domain")
       continue
     INVENTORY.extend(S)
@@ -1078,11 +1081,11 @@ def station_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None)\
       plt.rcParams.update({'font.size': 12})
       if args.rectdomain:
         pm = 0.5
-        xy = [args.rectdomain[2], args.rectdomain[0]]
-        w = args.rectdomain[3] - args.rectdomain[2]
-        h = args.rectdomain[1] - args.rectdomain[0]
-        extent = [args.rectdomain[2] - pm, args.rectdomain[3] + pm,
-                  args.rectdomain[0] - pm, args.rectdomain[1] + pm]
+        xy = [args.rectdomain[0], args.rectdomain[2]]
+        w = args.rectdomain[1] - args.rectdomain[0]
+        h = args.rectdomain[3] - args.rectdomain[2]
+        extent = [args.rectdomain[0] - pm, args.rectdomain[1] + pm,
+                  args.rectdomain[2] - pm, args.rectdomain[3] + pm]
       if args.circdomain:
         raise NotImplementedError
         extent = [args.circdomain[1] - args.circdomain[3],

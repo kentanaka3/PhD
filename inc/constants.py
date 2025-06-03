@@ -143,6 +143,7 @@ PUN_STR = "pun"
 QML_STR = "qml"
 TORCH_STR = "pt"
 XML_STR = "xml"
+PARQUET_STR = "parquet"
 
 BLT_EXT = PERIOD_STR + BLT_STR
 CSV_EXT = PERIOD_STR + CSV_STR
@@ -163,6 +164,7 @@ PUN_EXT = PERIOD_STR + PUN_STR
 QML_EXT = PERIOD_STR + QML_STR
 TORCH_EXT = PERIOD_STR + TORCH_STR
 XML_EXT = PERIOD_STR + XML_STR
+PARQUET_EXT = PERIOD_STR + PARQUET_STR
 
 PRC_FMT = SEED_ID_FMT + ".{BEGDT}.{EXT}"
 
@@ -218,6 +220,7 @@ X_COORD_STR = "x(km)"           # X coordinate in kilometers
 Y_COORD_STR = "y(km)"           # Y coordinate in kilometers
 Z_COORD_STR = "z(km)"           # Z coordinate in kilometers
 MAGNITUDE_STR = "magnitude"
+AMPLITUDE_STR = "amplitude"
 VELOCITY_STR = "vel"
 METHOD_STR = "method"
 DIMENSIONS_STR = "dims"
@@ -351,7 +354,7 @@ OGS_POLY_REGION = [
     (14.5, 45.5),
     (12.5, 44.5),
     (11.5, 44.5)]
-OGS_STUDY_REGION = [44.3, 47.5, 10, 14.5]  # [10.0, 14.5, 44.5, 47.0]
+OGS_STUDY_REGION = [9.5, 15.0, 44.3, 47.5]
 OGS_ITALY_STR = "Italy"
 OGS_STUDY_STR = "Study"
 DESCRIPTION_STR = "Description"

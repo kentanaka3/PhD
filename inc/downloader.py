@@ -51,10 +51,10 @@ def data_downloader(args: argparse.Namespace) -> None:
   else:
     if args.rectdomain:
       from obspy.clients.fdsn.mass_downloader.domain import RectangularDomain
-      domain = RectangularDomain(minlatitude=args.rectdomain[0],
-                                 maxlatitude=args.rectdomain[1],
-                                 minlongitude=args.rectdomain[2],
-                                 maxlongitude=args.rectdomain[3])
+      domain = RectangularDomain(minlatitude=args.rectdomain[2],
+                                 maxlatitude=args.rectdomain[3],
+                                 minlongitude=args.rectdomain[0],
+                                 maxlongitude=args.rectdomain[1])
     else:
       from obspy.clients.fdsn.mass_downloader.domain import CircularDomain
       domain = CircularDomain(latitude=args.circdomain[0],
