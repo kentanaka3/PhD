@@ -1,5 +1,5 @@
 downloader:
-	python inc/downloader.py -D 230601 231231 -v -N "*" -S "*" --rectdomain 44.5 47 10 14.5
+	python inc/downloader.py -D 230101 231231 -v -N "*" -S "*"
 
 results:
 	cp img/CP_EQTransformer_P.png doc/img/

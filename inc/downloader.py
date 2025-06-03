@@ -10,6 +10,19 @@ PRJ_PATH = Path(os.path.dirname(__file__)).parent
 DATA_PATH = Path(PRJ_PATH, "data")
 
 
+class style():
+  BLACK = '\033[30m'
+  RED = '\033[31m'
+  GREEN = '\033[32m'
+  YELLOW = '\033[33m'
+  BLUE = '\033[34m'
+  MAGENTA = '\033[35m'
+  CYAN = '\033[36m'
+  WHITE = '\033[37m'
+  UNDERLINE = '\033[4m'
+  RESET = '\033[0m'
+
+
 def data_downloader(args: argparse.Namespace) -> None:
   """
   Download the data from the server based on the specified arguments. If the
@@ -63,7 +76,8 @@ def data_downloader(args: argparse.Namespace) -> None:
                     DIR_FMT["day"].format(d_.day))
       D_FILE.mkdir(parents=True, exist_ok=True)
       if args.verbose:
-        print("Downloading the data in the directory:", D_FILE)
+        print("Downloading the data in the directory:" + style.RED,
+              str(D_FILE) + style.RESET)
       restrictions = Restrictions(starttime=d_, endtime=d_ + ONE_DAY,
                                   network=COMMA_STR.join(args.network),
                                   station=COMMA_STR.join(args.station),

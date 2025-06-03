@@ -34,8 +34,6 @@ def event_merger_l(NEW: pd.DataFrame, OLD: pd.DataFrame, on: list) \
       idx_r += 1
   return NEW
 
-# TODO: Parse HPC and QML files
-
 
 # TODO: Implement polarity
 RECORD_EXTRACTOR_DAT = re.compile(
@@ -50,9 +48,10 @@ RECORD_EXTRACTOR_DAT = re.compile(
     fr"(?P<{S_TYPE_STR}>[eirsw\?13468\s][Ss][cC\+0-4dD\-Ue\?\s])"  # S Type
     fr"(?P<{S_WEIGHT_STR}>[0-5\s]))|\s{{8}})"                      # S Weight
     fr"\s{{22}}"                                                   # SPACE
-    fr"(?P<{GEO_ZONE_STR}>[{"".join(OGS_GEO_ZONES.keys())}\s])"    # Geo Zone
+    # Geo Zone
+    fr"(?P<{GEO_ZONE_STR}>[{EMPTY_STR.join(OGS_GEO_ZONES.keys())}\s])"
     # Event Type
-    fr"(?P<{EVENT_TYPE_STR}>[{"".join(OGS_EVENT_TYPES.keys())}\s])"
+    fr"(?P<{EVENT_TYPE_STR}>[{EMPTY_STR.join(OGS_EVENT_TYPES.keys())}\s])"
     fr"((?P<{EVENT_LOCALIZATION_STR}>[D\s])"                       # Event Loc
     fr".{{10}}"                                                    # Unknown
     fr"(?P<{EVENT_STR}>[\s\d]{{4}}))*")                            # Event
@@ -387,19 +386,20 @@ def event_parser_hpc(filename: Path, start: UTCDateTime = None,
 
 
 RECORD_EXTRACTOR_HPL = re.compile(
-    fr"^(?P<{EVENT_STR}>[\d\s]{{6}})\s"                         # Event
-    fr"(?P<{STATION_STR}>[A-Z0-9\s]{{4}})\s"                    # Station
-    fr"(([\d\s]{{3}}\.\d)|\s{{5}})\s"                           # Unknown
-    fr"([\d\s]{{3}})\s"                                         # Unknown
-    fr"([\d\s]{{3}})\s"                                         # Unknown
-    fr"(?P<{P_TYPE_STR}>[ei?\s]{PWAVE}[cC\+dD0\-\s])"           # P Type
-    fr"(?P<{P_WEIGHT_STR}>[0-4])\s"                             # P Weight
-    fr"(?P<{P_TIME_STR}>[\s\d]{{4}})\s"                         # P Time [hhmm]
+    fr"^(?P<{EVENT_STR}>[\d\s]{{6}})\s"                            # Event
+    fr"(?P<{STATION_STR}>[A-Z0-9\s]{{4}})\s"                       # Station
+    fr"(([\d\s]{{3}}\.\d)|\s{{5}})\s"                              # Unknown
+    fr"([\d\s]{{3}})\s"                                            # Unknown
+    fr"([\d\s]{{3}})\s"                                            # Unknown
+    fr"(?P<{P_TYPE_STR}>[ei?\s]{PWAVE}[cC\+dD0\-\s])"              # P Type
+    fr"(?P<{P_WEIGHT_STR}>[0-4])\s"                                # P Weight
+    # P Time [hhmm]
+    fr"(?P<{P_TIME_STR}>[\s\d]{{4}})\s"
     # Seconds [ss.ss]
     fr"(?P<{SECONDS_STR}>([\s\d]\d\.\d{{2}})|\s{{5}})"
     fr"(([\s\d]{{2}}\d\.\d{{2}})|[\s\*]{{6}})\s"                   # Unknown
     fr"(([\s\d]\d\.\d{{2}})|\s{{5}})\s"                            # Unknown
-    fr"(([\s\d\-]\d\.\d{{2}})|\s{{5}})"                              # Unknown
+    fr"(([\s\d\-]\d\.\d{{2}})|\s{{5}})"                            # Unknown
     fr"(([\s\d\-]{{2}}\d\.\d{{2}})|[\s\*]{{6}})\s"                 # Unknown
     fr"(([\s\-]\d\.\d{{2}})|[\s\*]{{5}})\s"                        # Unknown
     fr"([\d\s]{{3}})\s"                                            # Unknown
@@ -407,9 +407,10 @@ RECORD_EXTRACTOR_HPL = re.compile(
     fr"(([\d\s]\d\.\d{{2}})|\s{{5}})\s"                            # Unknown
     fr"(\d|\s)\s"                                                  # Unknown
     fr"(.{{4}})\s"                                                 # Unknown
-    fr"(?P<{GEO_ZONE_STR}>[{"".join(OGS_GEO_ZONES.keys())}\s])"    # Geo Zone
+    # Geo Zone
+    fr"(?P<{GEO_ZONE_STR}>[{EMPTY_STR.join(OGS_GEO_ZONES.keys())}\s])"
     # Event Type
-    fr"(?P<{EVENT_TYPE_STR}>[{"".join(OGS_EVENT_TYPES.keys())}\s])"
+    fr"(?P<{EVENT_TYPE_STR}>[{EMPTY_STR.join(OGS_EVENT_TYPES.keys())}\s])"
     fr"(?P<{EVENT_LOCALIZATION_STR}>[D\s])"                        # Event Loc
     fr"([\d\s\*]{{4}})"                                            # Unknown
     fr"([\s\-](\d\.\d)|\s{{4}})[\*\s]\s"                           # Unknown
