@@ -669,11 +669,11 @@ def stat_test(TRUE: pd.DataFrame, PRED: pd.DataFrame,
   else:
     if args.rectdomain:
       pm = 0.5
-      xy = [args.rectdomain[2], args.rectdomain[0]]
-      w = args.rectdomain[3] - args.rectdomain[2]
-      h = args.rectdomain[1] - args.rectdomain[0]
-      extent = [args.rectdomain[2] - pm, args.rectdomain[3] + pm,
-                args.rectdomain[0] - pm, args.rectdomain[1] + pm]
+      xy = [args.rectdomain[0], args.rectdomain[2]]
+      w = args.rectdomain[1] - args.rectdomain[0]
+      h = args.rectdomain[3] - args.rectdomain[2]
+      extent = [args.rectdomain[0] - pm, args.rectdomain[1] + pm,
+                args.rectdomain[2] - pm, args.rectdomain[3] + pm]
     if args.circdomain:
       raise NotImplementedError
       max_r = args.circdomain[3] + 0.5

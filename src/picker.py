@@ -45,8 +45,6 @@ MPI_COMM = None
 GPU_RANK = -1
 GPU_SIZE = 0
 
-WORKFOLDER = DIRSTRUCT(Path(DATA_PATH, CLF_STR))
-
 DENOISER = None
 
 DATES = None
@@ -441,10 +439,10 @@ def main(args: argparse.Namespace) -> None:
           if args.rectdomain:
             CATALOG += Client(client).get_events(
                 *args.dates,
-                minlatitude=args.rectdomain[0],
-                maxlatitude=args.rectdomain[1],
-                minlongitude=args.rectdomain[2],
-                maxlongitude=args.rectdomain[3],
+                minlongitude=args.rectdomain[0],
+                maxlongitude=args.rectdomain[1],
+                minlatitude=args.rectdomain[2],
+                maxlatitude=args.rectdomain[3],
                 includearrivals=True,
             )
           elif args.circdomain:

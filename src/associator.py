@@ -22,6 +22,9 @@ if INC_PATH not in sys.path:
   sys.path.append(INC_PATH)
   import initializer as ini
   from constants import *
+else:
+  from inc import initializer as ini
+  from inc.constants import *
 
 MPI_RANK = 0
 MPI_SIZE = 1
@@ -171,7 +174,9 @@ def associate_events(PRED: pd.DataFrame, config: AssociateConfig,
   args.force = True
   for start, end in zip(DATES[:-1], DATES[1:]):
     print(f"Processing {start.strftime(DATE_FMT)}...")
-    FOLDER = Path(DATA_PATH, AST_STR, start.strftime(DATE_FMT))
+    FOLDER = Path(DATA_PATH, AST_STR, str(start.year),
+                  "{:02d}".format(start.month),
+                  "{:02d}".format(start.day))
     FOLDER.mkdir(parents=True, exist_ok=True)
     for (model, weight), PRE in PRED[PRED[TIMESTAMP_STR].between(
             start, end, inclusive='left')]\
@@ -193,8 +198,8 @@ def associate_events(PRED: pd.DataFrame, config: AssociateConfig,
                                 "D" if args.denoiser else EMPTY_STR +
                                 UNDERSCORE_STR.join([start.strftime(DATE_FMT),
                                                      filepath_network.name,
-                                                     filepath_station.name, model,
-                                                     weight]) + CSV_EXT)
+                                                     filepath_station.name,
+                                                     model, weight]) + CSV_EXT)
                 if filepath.exists():
                   if args.verbose:
                     print(f"Loading {filepath}...")
@@ -259,7 +264,9 @@ def associate_events(PRED: pd.DataFrame, config: AssociateConfig,
 
       def fp(x) -> None:
         (network, station), dtfrm = x
-        FILEPATH = Path(DATA_PATH, AST_STR, sdate, network, station,
+        FILEPATH = Path(DATA_PATH, AST_STR, str(sdate.year),
+                        "{:02d}".format(sdate.month),
+                        "{:02d}".format(sdate.day), network, station,
                         ("D" if args.denoiser else EMPTY_STR) +
                         UNDERSCORE_STR.join([sdate, network, station, model,
                                              weight]) + CSV_EXT)
