@@ -611,7 +611,7 @@ def event_parser_hpl(filename: Path, start: UTCDateTime = None,
         event_spacetime = (result[DATE_STR], result[LATITUDE_STR],
                            result[LONGITUDE_STR], result[LOCAL_DEPTH_STR])
         result[MAGNITUDE_STR] = float(result[MAGNITUDE_STR]) \
-            if result[MAGNITUDE_STR] else NONE_STR
+            if result[MAGNITUDE_STR] else float("NaN")
         result[NO_STR] = int(result[NO_STR].replace(SPACE_STR, ZERO_STR)) \
             if result[NO_STR] else NONE_STR
         result[GAP_STR] = int(result[GAP_STR].replace(SPACE_STR, ZERO_STR)) \
@@ -621,9 +621,9 @@ def event_parser_hpl(filename: Path, start: UTCDateTime = None,
         result[RMS_STR] = float(result[RMS_STR].replace(SPACE_STR, ZERO_STR)) \
             if result[RMS_STR] else NONE_STR
         result[ERH_STR] = float(result[ERH_STR].replace(SPACE_STR, ZERO_STR)) \
-            if result[ERH_STR] else NONE_STR
+            if result[ERH_STR] else float("NaN")
         result[ERZ_STR] = float(result[ERZ_STR].replace(SPACE_STR, ZERO_STR)) \
-            if result[ERZ_STR] else NONE_STR
+            if result[ERZ_STR] else float("NaN")
         result[QM_STR] = result[QM_STR].strip(SPACE_STR) \
             if result[QM_STR] else NONE_STR
         event_detect = int(result[NOTES_STR])

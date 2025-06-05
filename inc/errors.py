@@ -13,15 +13,20 @@ ERRORS = {
 
     },
     WARNING_STR: {
-        ASSIGN_STR: ERR_MSG.format(
-            LEVEL=WARNING_STR, pre="{pre}" + ASSIGN_STR,
-            type="value ({value}) to ({key})", post="{post}"),
-        NOTABLE_STR: ERR_MSG.format(LEVEL=WARNING_STR, pre="{pre}" + NOTABLE_STR,
+        ASSIGN_STR: ERR_MSG.format(LEVEL=WARNING_STR,
+                                   pre="{pre}" + ASSIGN_STR,
+                                   type="value ({value}) to ({key})",
+                                   post="{post}"),
+        NOTABLE_STR: ERR_MSG.format(LEVEL=WARNING_STR,
+                                    pre="{pre}" + NOTABLE_STR,
                                     type="value ({value}) in ({key})",
                                     post="{post}"),
-        UNABLE_STR: ERR_MSG.format(LEVEL=WARNING_STR, pre="{pre}" + UNABLE_STR,
-                                   type="to {verb} {type}", post="{post}"),
-        UNKNOWN_STR: ERR_MSG.format(LEVEL=WARNING_STR, pre="{pre}" + UNKNOWN_STR,
+        UNABLE_STR: ERR_MSG.format(LEVEL=WARNING_STR,
+                                   pre="{pre}" + UNABLE_STR,
+                                   type="to {verb} {type}",
+                                   post="{post}"),
+        UNKNOWN_STR: ERR_MSG.format(LEVEL=WARNING_STR,
+                                    pre="{pre}" + UNKNOWN_STR,
                                     type="value ({value}) in ({key})",
                                     post="{post}"),
     }

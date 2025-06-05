@@ -185,8 +185,6 @@ doc/Doc/*
 !doc/img/*.pdf
 doc/img/*
 doc/Post/*
-!data/classified/*/*/*/*/*/*.pkl
-data/associated/*
 env/*
 *.out
 *.err
@@ -200,7 +198,7 @@ env/*
 etna_data/*
 *.nsys-rep
 data/arguments.json
-*HIST_*_*_*.png
+TRUE*
 *EVNT_*_*_*.png
 *CP_*_*_*.png
 *FN_*_*.png

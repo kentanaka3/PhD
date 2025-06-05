@@ -28,6 +28,9 @@ if INC_PATH not in sys.path:
   sys.path.append(INC_PATH)
   from constants import *
   import initializer as ini
+else:
+  from inc.constants import *
+  import inc.initializer as ini
 
 # ObsPy
 
@@ -110,13 +113,8 @@ def clean_stream(
       stream.remove(trc)
   start = UTCDateTime.strptime(FMT_DICT[DATE_STR], DATE_FMT)
   # TODO: Padding might add artifacts that may give bad results.
-  stream.trim(
-      starttime=start,
-      endtime=start + ONE_DAY,
-      pad=True,
-      fill_value=0,
-      nearest_sample=False,
-  )
+  stream.trim(starttime=start, endtime=start + ONE_DAY, pad=True, fill_value=0,
+              nearest_sample=False)
   if args.denoiser:
     if args.verbose:
       print("Denoising the Stream")
@@ -142,21 +140,17 @@ def read_traces(trace_files: pd.DataFrame, args: argparse.Namespace) -> obspy.St
   global DATA_PATH
   DATA_PATH = args.directory.parent
   stream = obspy.Stream()
-  FMT_DICT: dict[str, str] = {
-      category: EMPTY_STR
-      for category in [NETWORK_STR, STATION_STR, CHANNEL_STR, DATE_STR]
+  FMT_DICT: dict[str, str] = {category: EMPTY_STR for category in [
+      NETWORK_STR, STATION_STR, CHANNEL_STR, DATE_STR]
   }
-  for category in args.groups:
+  for category in [DATE_STR, NETWORK_STR, STATION_STR]:
     FMT_DICT[category] = trace_files[category].unique()[0]
   for _, row in trace_files.iterrows():
-    if args.verbose:
-      print("Attempting to read from raw file:", row.name)
-    if not Path(row.name).exists() and not args.silent:
-      # TODO: Download the file
-      print("CRITICAL: File not found:", row.name)
+    tmp = ini.data_loader(Path(row.name))
+    if tmp is None:
+      print(f"WARNING: No data found for {row.name}")
       continue
-    else:
-      stream += obspy.read(row.name)
+    stream += tmp
   # Clean the stream
   return clean_stream(stream, FMT_DICT, args)
 
@@ -181,25 +175,15 @@ def interactive_plot(
   notes:
 
   """
-  events = [
-      (
-          np.datetime64(pick.peak_time),
-          pick.peak_value,
-          ("b" if pick.phase == PWAVE else "r"),
-      )
-      for pick in picks
-  ]
-  fig = stream.plot(handle=True, method="full",
-                    size=(3000, 1000), equal_scale=False)
-  fig.suptitle(
-      SPACE_STR.join([fig.get_suptitle(), model_name, dataset_name]), fontsize=24
-  )
+  events = [(np.datetime64(pick.peak_time), pick.peak_value,
+             ("b" if pick.phase == PWAVE else "r")) for pick in picks]
+  fig = stream.plot(handle=True, method="full", size=(3000, 1000),
+                    equal_scale=False)
+  fig.suptitle(SPACE_STR.join([fig.get_suptitle(), model_name, dataset_name]),
+               fontsize=24)
   for ax in fig.get_axes():
-    for item in (
-        [ax.title, ax.xaxis.label, ax.yaxis.label]
-        + ax.get_xticklabels()
-        + ax.get_yticklabels()
-    ):
+    for item in ([ax.title, ax.xaxis.label, ax.yaxis.label]
+                 + ax.get_xticklabels() + ax.get_yticklabels()):
       item.set_fontsize(18)
     for p, a, c in events:
       ax.axvline(p, linestyle="--", color=c, alpha=a)
@@ -207,12 +191,9 @@ def interactive_plot(
   plt.show()
 
 
-def classify_stream(
-    clf_files: list[tuple[tuple[str], pd.DataFrame]],
-    model: sbm.base.SeisBenchModel,
-    key: tuple[str],
-    args: argparse.Namespace,
-) -> None:
+def classify_stream(clf_files: list[tuple[tuple[str], pd.DataFrame]],
+                    model: sbm.base.SeisBenchModel, key: tuple[str],
+                    args: argparse.Namespace) -> None:
   """
   Classify waveform streams using a given model and store the picks.
 
@@ -226,30 +207,23 @@ def classify_stream(
   """
   global DATA_PATH
   DATA_PATH = args.directory.parent
-  for categories, trace_files in clf_files:
+  for (date, network, station), trace_files in clf_files:
+    fname = UNDERSCORE_STR.join([date, network, station, *key])
     CLF_FILE = Path(
-        DATA_PATH,
-        CLF_STR,
-        *categories,
-        ("D_" if args.denoiser else EMPTY_STR)
-        + UNDERSCORE_STR.join([*categories, *key])
-        + PICKLE_EXT,
-    )
+        DATA_PATH, CLF_STR, *date.split(DASH_STR), network, station,
+        ("D_" if args.denoiser else EMPTY_STR) + fname + PICKLE_EXT)
     CLF_FILE.parent.mkdir(parents=True, exist_ok=True)
     CLF_FILE.touch(exist_ok=True)
-    output = model.classify(
-        read_traces(trace_files, args),
-        batch_size=args.batch,
-        P_threshold=args.pwave,
-        S_threshold=args.swave,
-    ).picks
+    output = model.classify(read_traces(trace_files, args),
+                            batch_size=args.batch, P_threshold=args.pwave,
+                            S_threshold=args.swave).picks
     with open(CLF_FILE, "wb") as fp:
       pickle.dump(output, fp)
+    print(CLF_FILE)
 
 
-def get_model(
-    model_name: str, dataset_name: str, silent: bool = False
-) -> sbm.base.SeisBenchModel:
+def get_model(model_name: str, dataset_name: str,
+              silent: bool = False) -> sbm.base.SeisBenchModel:
   """
   Retrieve a pretrained model.
 
@@ -262,10 +236,8 @@ def get_model(
     model = MODEL_WEIGHTS_DICT[model_name].from_pretrained(dataset_name)
   except:
     if not silent:
-      print(
-          f"WARNING: Pretrained weights '{dataset_name}' not "
-          f"found for model '{model_name}'"
-      )
+      print(f"WARNING: Pretrained weights '{dataset_name}' not "
+            f"found for model '{model_name}'")
     return None
   # Enable GPU calls if available
   if torch.cuda.is_available() and GPU_RANK >= 0:
@@ -277,9 +249,8 @@ def get_model(
   return model
 
 
-def set_up(
-    args: argparse.Namespace,
-) -> list[dict[tuple[str], sbm.base.SeisBenchModel], pd.DataFrame]:
+def set_up(args: argparse.Namespace) \
+        -> list[dict[tuple[str], sbm.base.SeisBenchModel], pd.DataFrame]:
   """
   Initialize MPI, GPU, and model assignments for parallel execution.
 
@@ -301,10 +272,8 @@ def set_up(
     if MPI_RANK < GPU_SIZE:
       GPU_RANK = MPI_RANK % GPU_SIZE
     if args.verbose:
-      print(
-          f"Setting MPI {MPI_RANK} to "
-          + (f"GPU {GPU_RANK}" if GPU_RANK >= 0 else "CPU")
-      )
+      print(f"Setting MPI {MPI_RANK} to " +
+            (f"GPU {GPU_RANK}" if GPU_RANK >= 0 else "CPU"))
     torch.cuda.set_device(GPU_RANK)
   elif torch.backends.mps.is_available():
     GPU_SIZE = 1
@@ -318,23 +287,13 @@ def set_up(
     GPU_RANK = -1
   MODELS = None
   WAVEFORMS = None
-  if MPI_RANK == 0:
-    if args.verbose:
-      print("MPI size:", MPI_SIZE)
-      print("GPU size:", GPU_SIZE)
-    if args.train:
-      MODELS = [
-          (m, w)
-          for m, w in itertools.product(args.models, args.weights)
-          if m in MODEL_WEIGHTS_DICT
-      ]
-    else:
-      MODELS = [
-          (m, w)
-          for m, w in itertools.product(args.models, args.weights)
-          if get_model(m, w, True) is not None
-      ]
-    WAVEFORMS = ini.waveform_table(args)
+  if MPI_RANK == 0 and args.verbose:
+    print("MPI size:", MPI_SIZE)
+    print("GPU size:", GPU_SIZE)
+  MODELS = [(m, w) for m, w in itertools.product(args.models, args.weights)
+            if (m in MODEL_WEIGHTS_DICT if args.train else
+                get_model(m, w, True)) is not None]
+  WAVEFORMS = ini.waveform_table(args)
   MODELS = MPI_COMM.bcast(MODELS, root=0)
   WAVEFORMS = MPI_COMM.bcast(WAVEFORMS, root=0)
   # Split the MODELS among the MPI processes
@@ -350,16 +309,10 @@ def set_up(
   MODELS = MODELS[start_idx:end_idx]
   if args.verbose:
     print(f"Process {MPI_RANK} handles models {MODELS}")
-  if args.train:
-    return {
-        (model_name, dataset_name): MODEL_WEIGHTS_DICT[model_name]
-        for model_name, dataset_name in MODELS
-    }, WAVEFORMS
-  else:
-    return {
-        (model_name, dataset_name): get_model(model_name, dataset_name, args.silent)
-        for model_name, dataset_name in MODELS
-    }, WAVEFORMS
+  return {
+      (model_name, dataset_name): MODEL_WEIGHTS_DICT[model_name] if args.train
+      else get_model(model_name, dataset_name, args.silent)
+      for model_name, dataset_name in MODELS}, WAVEFORMS
 
 
 def main(args: argparse.Namespace) -> None:
@@ -384,7 +337,6 @@ def main(args: argparse.Namespace) -> None:
   DATA_PATH = args.directory.parent
   if args.download:
     import downloader as dwn
-
     dwn.data_downloader(args)
     return
   MODELS, WAVEFORMS = set_up(args)
@@ -399,7 +351,6 @@ def main(args: argparse.Namespace) -> None:
     import seisbench.data as sbd
     import seisbench.generate as sbg
     from torch.utils.data import DataLoader
-
     for i, (name, model) in enumerate(MODELS.items()):
       if not args.file:
         raise FileNotFoundError("Dataset not found")
@@ -418,11 +369,10 @@ def main(args: argparse.Namespace) -> None:
         )
         for s, e in zip(DATES[:-1], DATES[1:]):
           S = WAVEFORMS.loc[
-              WAVEFORMS[DATE_STR].between(s, e, inclusive="left"), STATION_STR
-          ]
+              WAVEFORMS[DATE_STR].between(s, e, inclusive="left"),
+              STATION_STR].unique()
           if S.empty:
             continue
-          S = S.unique()
           STATIONS[s.strftime(DATE_FMT)] = set(S)
         SOURCE, DETECT = ini.true_loader(args)
       else:
@@ -474,7 +424,6 @@ def main(args: argparse.Namespace) -> None:
         METADATA = pd.DataFrame(
             columns=[DATE_STR, NETWORK_STR, STATION_STR, CHANNEL_STR]
         )
-      WAVEFORMS_PATH = Path(DATA_PATH, WAVEFORMS_STR + HDF5_EXT)
       DATASET = sbd.WaveformDataset(DATASET_PATH, sampling_rate=SAMPLING_RATE)
       if args.verbose:
         print("Dataset Metadata:")
@@ -493,21 +442,17 @@ def main(args: argparse.Namespace) -> None:
         print("Testing model: {}, with preloaded weight: {}".format(*name))
       clf_files: list[tuple[tuple[str], pd.DataFrame]] = list()
       clf_found: list[tuple[tuple[str], pd.DataFrame]] = list()
-      RERUN: list[tuple[tuple[str], pd.DataFrame]] = list()
-      for categories, trace_files in WAVEFORMS.groupby(args.groups):
-        categories = [str(c) for c in categories]
+      RERUN = list()
+      for (date, network, station), trace_files in \
+              WAVEFORMS.groupby([DATE_STR, NETWORK_STR, STATION_STR]):
+        fname = UNDERSCORE_STR.join([date, network, station, *name])
         CLF_FILE = Path(
-            DATA_PATH,
-            CLF_STR,
-            *categories,
-            ("D_" if args.denoiser else EMPTY_STR)
-            + UNDERSCORE_STR.join([*categories, *name])
-            + PICKLE_EXT,
-        )
+            DATA_PATH, CLF_STR, *date.split(DASH_STR), network, station,
+            ("D_" if args.denoiser else EMPTY_STR) + fname + PICKLE_EXT)
         if not args.force and CLF_FILE.exists():
-          clf_found.append((categories, trace_files))
+          clf_found.append(((date, network, station), trace_files))
         else:
-          clf_files.append((categories, trace_files))
+          clf_files.append(((date, network, station), trace_files))
       # P1
       if clf_files:
         if args.timing:
@@ -551,25 +496,19 @@ def main(args: argparse.Namespace) -> None:
 
       # Phase 2: Show cached results
       if args.verbose:
-        for categories, trace_files in clf_found:
-          print(
-              "Classification results for model: {}, with preloaded weight: "
-              "{} - categories: {}".format(*name, categories)
-          )
+        for (date, network, station), trace_files in clf_found:
+          print("Classification results for model: {}, with preloaded weight: "
+                "{}".format(*name))
+          fname = UNDERSCORE_STR.join([date, network, station, *name])
           CLF_FILE = Path(
-              DATA_PATH,
-              CLF_STR,
-              *categories,
-              ("D_" if args.denoiser else EMPTY_STR)
-              + UNDERSCORE_STR.join([*categories, *name])
-              + PICKLE_EXT,
-          )
+              DATA_PATH, CLF_STR, *date.split(DASH_STR), network, station,
+              ("D_" if args.denoiser else EMPTY_STR) + fname + PICKLE_EXT)
           try:
             with open(CLF_FILE, "rb") as fp:
               output = pickle.load(fp)
           except Exception as e:
             print("WARNING: ", e)
-            RERUN.append((categories, trace_files))
+            RERUN.append(((date, network, station), trace_files))
             CLF_FILE.unlink()
             continue
           print(output)
@@ -580,19 +519,14 @@ def main(args: argparse.Namespace) -> None:
         classify_stream(RERUN, model, name, args)
       # Final interactive output and sync
       if args.verbose:
-        for categories, trace_files in clf_files + RERUN:
-          print(
-              "Classification results for model: {}, with preloaded weight: "
-              "{} - categories: {}".format(*name, categories)
-          )
+        for (date, network, station), trace_files in clf_files + RERUN:
+          print("Classification results for model: {}, with preloaded weight: "
+                "{}".format(*name))
           CLF_FILE = Path(
-              DATA_PATH,
-              CLF_STR,
-              *categories,
+              DATA_PATH, CLF_STR, *date.split(DASH_STR), network, station,
               ("D_" if args.denoiser else EMPTY_STR)
-              + UNDERSCORE_STR.join([*categories, *name])
-              + PICKLE_EXT,
-          )
+              + UNDERSCORE_STR.join([date, network, station, *name])
+              + PICKLE_EXT)
           try:
             with open(CLF_FILE, "rb") as fp:
               output = pickle.load(fp)

@@ -22,7 +22,7 @@ DATES = None
 NORM = "std"  # "peak" or "std"
 
 # DateTime, TimeDelta and Format constants
-DATE_FMT = "%y%m%d"
+DATE_FMT = "%Y-%m-%d"
 TIME_FMT = "%H%M%S"
 DATETIME_FMT = DATE_FMT + TIME_FMT
 ONE_DAY = td(days=1)
@@ -143,7 +143,6 @@ PUN_STR = "pun"
 QML_STR = "qml"
 TORCH_STR = "pt"
 XML_STR = "xml"
-PARQUET_STR = "parquet"
 
 BLT_EXT = PERIOD_STR + BLT_STR
 CSV_EXT = PERIOD_STR + CSV_STR
@@ -164,7 +163,6 @@ PUN_EXT = PERIOD_STR + PUN_STR
 QML_EXT = PERIOD_STR + QML_STR
 TORCH_EXT = PERIOD_STR + TORCH_STR
 XML_EXT = PERIOD_STR + XML_STR
-PARQUET_EXT = PERIOD_STR + PARQUET_STR
 
 PRC_FMT = SEED_ID_FMT + ".{BEGDT}.{EXT}"
 
@@ -207,10 +205,10 @@ OGS_PROJECTION = "+proj=sterea +lon_0={lon} +lat_0={lat} +units=km"
 OGS_MAX_MAGNITUDE = 3.5
 
 # Data components
-ID_STR = "id"
-TIMESTAMP_STR = "timestamp"
+ID_STR = "index"
+TIMESTAMP_STR = "time"
 METADATA_STR = "metadata"
-PROBABILITY_STR = "prob"
+PROBABILITY_STR = "probability"
 TYPE_STR = "type"
 LONGITUDE_STR = "longitude"
 LATITUDE_STR = "latitude"
@@ -232,7 +230,7 @@ WAVEFORMS_STR = "waveforms"
 DATASETS_STR = "datasets"
 MODELS_STR = "models"
 
-PHASE_STR = "PHASE"
+PHASE_STR = "phase"
 EVENT_STR = "EVENT"
 MODEL_STR = "MODEL"
 WEIGHT_STR = "WEIGHT"

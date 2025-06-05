@@ -219,10 +219,6 @@ def parse_arguments():
   parser.add_argument('-F', "--file", default=list(), required=False,
                       type=is_path, nargs=ALL_WILDCHAR_STR, metavar=EMPTY_STR,
                       help="Supporting file path")
-  parser.add_argument('-G', "--groups", nargs=ONE_MORECHAR_STR, required=False,
-                      metavar=EMPTY_STR,
-                      default=[DATE_STR, NETWORK_STR, STATION_STR],
-                      help="Analize the data based on a specified list")
   parser.add_argument('-K', "--key", default=None, required=False,
                       type=is_file_path, metavar=EMPTY_STR,
                       help="Key to download the data from server.")
@@ -295,8 +291,9 @@ def parse_arguments():
   date_group = parser.add_mutually_exclusive_group(required=False)
   date_group.add_argument('-D', "--dates", required=False, metavar="YYMMDD",
                           type=is_date, nargs=2, action=SortDatesAction,
-                          default=[UTCDateTime.strptime("230601", DATE_FMT),
-                                   UTCDateTime.strptime("231231", DATE_FMT)],
+                          default=[
+                              UTCDateTime.strptime("2023-06-01", DATE_FMT),
+                              UTCDateTime.strptime("2023-12-31", DATE_FMT)],
                           help="Specify the beginning and ending (inclusive) "
                                "Gregorian date (YYMMDD) range to work with.")
   date_group.add_argument('-J', "--julian", required=False, metavar="YYMMDD",
@@ -379,15 +376,14 @@ def dump_args(args: argparse.Namespace,
   global DATA_PATH
   DATA_PATH = args.directory.parent
   ARGUMENTS_FILE = Path(DATA_PATH, ARGUMENTS_STR + JSON_EXT)
-  arg_dict: dict[str, str] = {
+  arg_dict = {
       MODEL_STR: args.models,
       WEIGHT_STR: args.weights,
       NETWORK_STR: args.network,
       STATION_STR: args.station,
       CHANNEL_STR: args.channel,
       DATE_STR: [a.__str__() for a in args.dates] if args.dates else
-      [a.__str__() for a in args.julian],
-      GROUPS_STR: args.groups,
+                [a.__str__() for a in args.julian],
       DIRECTORY_STR: args.directory.relative_to(PRJ_PATH).__str__(),
       DENOISER_STR: args.denoiser,
       DOMAIN_STR: args.rectdomain if args.rectdomain else args.circdomain
@@ -459,44 +455,31 @@ def data_header(args: argparse.Namespace,
     for month in year.iterdir():
       if not month.is_dir():
         continue
-      for date_path in month.iterdir():
-        if not date_path.is_dir():
+      for day in month.iterdir():
+        if not day.is_dir():
           continue
         c_date = UTCDateTime(year=int(year.name), month=int(month.name),
-                             day=int(date_path.name))
+                             day=int(day.name))
         if c_date < start or c_date >= end + ONE_DAY:
           continue
-        for network_path in date_path.iterdir():
+        for network_path in day.iterdir():
           if (args.network != [ALL_WILDCHAR_STR] and
                   network_path.stem not in args.network):
             continue
-          if (NETWORK_STR in args.groups or STATION_STR in args.groups) and \
-                  network_path.is_dir():
-            for station_path in network_path.iterdir():
-              if (args.station != [ALL_WILDCHAR_STR] and
-                      station_path.stem not in args.station):
-                continue
-              if STATION_STR in args.groups and station_path.is_dir():
-                for file_path in station_path.iterdir():
-                  # Handle (daily, network, station, model, weight) files
-                  filename = file_path.stem
-                  if args.denoiser == filename.startswith("D"):
-                    vars = filename.split(UNDERSCORE_STR)[int(args.denoiser):]
-                    RESULTS.append([str(file_path), *vars])
-              else:
-                # TODO: Handle (daily, network, model, weight) files
-                filename = station_path.stem
-                if args.denoiser == filename.startswith("D"):
-                  vars = filename.split(UNDERSCORE_STR)[int(args.denoiser):]
-                  continue
-                  RESULTS.append([str(station_path), *vars])
-          else:
-            # TODO: Handle (daily, model, weight) files
-            filename = network_path.stem
-            if args.denoiser == filename.startswith("D"):
-              vars = filename.split(UNDERSCORE_STR)[int(args.denoiser):]
+          if not network_path.is_dir():
+            continue
+          for station_path in network_path.iterdir():
+            if (args.station != [ALL_WILDCHAR_STR] and
+                    station_path.stem not in args.station):
               continue
-              RESULTS.append([str(network_path), *vars])
+            if not station_path.is_dir():
+              continue
+            for file_path in station_path.iterdir():
+              # Handle (daily, network, station, model, weight) files
+              filename = file_path.stem
+              if args.denoiser == filename.startswith("D"):
+                vars = filename.split(UNDERSCORE_STR)[int(args.denoiser):]
+                RESULTS.append([str(file_path), *vars])
   # TODO: How unfortunate to not have thought handling a filesystem structure
   #       aligned with the Table structure
   HEADER = [FILENAME_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR, MODEL_STR,
@@ -1022,8 +1005,7 @@ def waveform_table(args: argparse.Namespace) -> pd.DataFrame:
     raise FileNotFoundError
   WAVEFORMS_DATA.sort_values([DATE_STR, FILENAME_STR], inplace=True)
   WAVEFORMS_DATA.set_index(FILENAME_STR, inplace=True)
-  if args.force:
-    WAVEFORMS_DATA.to_csv(WAVEFORMS_FILE)
+  WAVEFORMS_DATA.to_csv(WAVEFORMS_FILE)
   return WAVEFORMS_DATA
 
 
