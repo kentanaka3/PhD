@@ -11,6 +11,8 @@ import obspy
 import sys
 from pathlib import Path
 import os
+import numpy as np
+
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 # Set the project folder
 PRJ_PATH = Path(os.path.dirname(__file__)).parent
@@ -18,19 +20,23 @@ INC_PATH = os.path.join(PRJ_PATH, "inc")
 IMG_PATH = os.path.join(PRJ_PATH, "img")
 DATA_PATH = os.path.join(PRJ_PATH, "data")
 # Add to path
-if INC_PATH not in sys.path:
-  sys.path.append(INC_PATH)
+if INC_PATH in sys.path:
   import initializer as ini
   from constants import *
 else:
-  from inc import initializer as ini
-  from inc.constants import *
+  sys.path.append(INC_PATH)
+  import initializer as ini
+  from constants import *
 
 MPI_RANK = 0
 MPI_SIZE = 1
 MPI_COMM = None
 
 DATES = None
+
+id_str = "id"
+prob_str = "prob"
+timestamp_str = "timestamp"
 
 
 class AssociateConfig:
@@ -48,7 +54,7 @@ class AssociateConfig:
         PERIOD_STR.join([network.code, station.code]), station.longitude,
         station.latitude, station.elevation * (-1e-3))
         for network in INVENTORY for station in network},
-        columns=[ID_STR] + self.dims)
+        columns=[id_str] + self.dims)
     if file is not None:
       if len(file) > 1:
         raise NotImplementedError("Multiple station files.")
@@ -63,10 +69,8 @@ class AssociateConfig:
     self.proj = Proj(OGS_PROJECTION.format(lon=self.x_mid, lat=self.y_mid))
     # from deg to km
     self.station[[X_COORD_STR, Y_COORD_STR]] = \
-        self.station.apply(lambda s:
-                           pd.Series(self.proj(latitude=s[Y_COORD_STR],
-                                               longitude=s[X_COORD_STR])),
-                           axis=1)
+        self.station.apply(lambda s: pd.Series(self.proj(
+            latitude=s[Y_COORD_STR], longitude=s[X_COORD_STR])), axis=1)
 
     self.bfgs_bounds = (
         (self.x_lim[0] - 1, self.x_lim[1] + 1),
@@ -158,128 +162,115 @@ def associate_events(PRED: pd.DataFrame, config: AssociateConfig,
                      args: argparse.Namespace) -> None:
   global DATES
   if args.verbose:
-    print("Associating events...")
-  PRED[ID_STR] = PRED[NETWORK_STR] + PERIOD_STR + PRED[STATION_STR]
-  PRED.rename(columns={PHASE_STR: TYPE_STR}, inplace=True)
-  PRED[TIMESTAMP_STR] = PRED[TIMESTAMP_STR].apply(lambda x: x.datetime)
-  start, end = dates2associate(args)
-  if DATES is None:
-    DATES = [start.datetime]
-    while DATES[-1] <= end.datetime:
-      DATES.append(DATES[-1] + ONE_DAY)
+    print("Associating events")
+  PRED[id_str] = PRED[NETWORK_STR] + PERIOD_STR + PRED[STATION_STR]
+  PRED[TIME_STR] = PRED[TIME_STR].apply(lambda x: x.datetime)
+  PRED.rename(columns={
+      PHASE_STR: TYPE_STR,
+      TIME_STR: timestamp_str,
+      PROBABILITY_STR: prob_str}, inplace=True)
   SOURCE = pd.DataFrame(columns=HEADER_ASCT)
   DETECT = pd.DataFrame(columns=HEADER_PRED)
   ids = {model: {weight: 0 for weight in args.weights}
          for model in args.models}
-  args.force = True
-  for start, end in zip(DATES[:-1], DATES[1:]):
-    print(f"Processing {start.strftime(DATE_FMT)}...")
-    FOLDER = Path(DATA_PATH, AST_STR, str(start.year),
-                  "{:02d}".format(start.month),
-                  "{:02d}".format(start.day))
-    FOLDER.mkdir(parents=True, exist_ok=True)
-    for (model, weight), PRE in PRED[PRED[TIMESTAMP_STR].between(
-            start, end, inclusive='left')]\
-            .groupby([MODEL_STR, WEIGHT_STR]):
-      if not ((model in args.models) and (weight in args.weights)):
-        continue
-      FILEPATH = Path(FOLDER, "D" if args.denoiser else EMPTY_STR +
-                      UNDERSCORE_STR.join([start.strftime(DATE_FMT), model,
-                                           weight]) + CSV_EXT)
-      if not args.force and FILEPATH.exists():
-        SOURCE = pd.concat([SOURCE, pd.read_csv(FILEPATH)], ignore_index=True)\
-            if not SOURCE.empty else pd.read_csv(FILEPATH)
+  for (model, weight, date), PRE in PRED.groupby([
+          MODEL_STR, WEIGHT_STR, ID_STR]):
+    if not ((model in args.models) and (weight in args.weights)) or PRE.empty:
+      continue
+    print(f"Processing {date}")
+    SOURCE_FOLDER = Path(DATA_PATH, AST_STR, "events", *date.split(DASH_STR))
+    DETECT_FOLDER = Path(DATA_PATH, AST_STR, "assignments",
+                         *date.split(DASH_STR))
+    SOURCE_FOLDER.mkdir(parents=True, exist_ok=True)
+    DETECT_FOLDER.mkdir(parents=True, exist_ok=True)
+    FILEPATH = Path(SOURCE_FOLDER, "D_" if args.denoiser else EMPTY_STR +
+                    UNDERSCORE_STR.join([model, weight]))
+    if not args.force and FILEPATH.exists():
+      SOURCE = pd.concat([SOURCE, pd.read_csv(FILEPATH)], ignore_index=True)\
+          if not SOURCE.empty else pd.read_csv(FILEPATH)
+      for network_path in DETECT_FOLDER.iterdir():
+        if not network_path.is_dir():
+          continue
+        for station_path in network_path.iterdir():
+          if not station_path.is_dir():
+            continue
+          fr = Path(station_path, "D_" if args.denoiser else EMPTY_STR +
+                    UNDERSCORE_STR.join([
+                        date, network_path.name, station_path.name, model,
+                        weight]) + CSV_EXT)
+          if fr.exists():
+            print(f"Loading {fr}")
+            DETECT = pd.concat([DETECT, pd.read_csv(fr)], ignore_index=True)\
+                if not DETECT.empty else pd.read_csv(fr)
+      continue
+    # For each day in the dataset we will associate the events
+    if args.force:
+      PRE = PRE[
+          ((PRE[TYPE_STR] == PWAVE) & (PRE[prob_str] >= args.pwave)) |
+          ((PRE[TYPE_STR] == SWAVE) & (PRE[prob_str] >= args.swave))]
+    if PRE.empty:
+      continue
+    if args.verbose:
+      print(f"Saving {FILEPATH}")
+    FILEPATH.touch()
+    catalog, assignment = association(PRE, config.station,
+                                      config=config.__repr__(),
+                                      method=config.method)
+    if not (len(catalog) or len(assignment)):
+      FILEPATH.unlink()  # Remove empty file
+      continue
+    SRC = list()
+    PKS = pd.DataFrame(columns=HEADER_PRED)
+    for event in catalog:
+      PICKS = pd.DataFrame([
+          PRE.loc[row] for row, idx, _ in assignment
+          if idx == event["event_index"]]).reset_index(drop=True)
+      PICKS[MODEL_STR] = model
+      PICKS[WEIGHT_STR] = weight
+      th = float("{:0.1}".format(PICKS[prob_str].mean()))
+      PICKS[THRESHOLD_STR] = th
+      PICKS["index"] = ids[model][weight]
+      PICKS.rename(columns={TYPE_STR: PHASE_STR}, inplace=True)
+      PICKS.sort_values(timestamp_str, inplace=True)
+      PKS = pd.concat([PKS, PICKS], ignore_index=True) if not PKS.empty \
+          else PICKS
+      SRC.append([model, weight, th, ids[model][weight],
+                  dt.fromisoformat(event[TIME_STR]), *reversed(config.proj(
+                      event[X_COORD_STR], event[Y_COORD_STR], inverse=True)),
+                  event[Z_COORD_STR], event[MAGNITUDE_STR], len(PICKS.index),
+                  *([None] * 6), GMMA_STR])
+      ids[model][weight] += 1
+    SRC = pd.DataFrame(SRC, columns=HEADER_ASCT).sort_values(
+        TIME_STR).reset_index(drop=True)
+    L = len(SOURCE)
+    rpl = {int(a): int(b) for a, b in zip(dcpy(SRC["index"].to_list()),
+                                          range(L, L + len(SRC)))}.get
+    SRC["index"] = SRC["index"].apply(rpl)
+    PKS["index"] = PKS["index"].apply(rpl)
+    SRC.to_parquet(FILEPATH, index=False)
+    SOURCE = pd.concat([SOURCE, SRC], ignore_index=True) \
+        if not SOURCE.empty else SRC
+    DETECT = pd.concat([DETECT, PKS], ignore_index=True) \
+        if not DETECT.empty else PKS
+    if PKS.empty:
+      continue
 
-        def fp(filepath_network: Path) -> None:
-          if filepath_network.is_dir():
-            for filepath_station in filepath_network.iterdir():
-              if filepath_station.is_dir():
-                filepath = Path(filepath_station,
-                                "D" if args.denoiser else EMPTY_STR +
-                                UNDERSCORE_STR.join([start.strftime(DATE_FMT),
-                                                     filepath_network.name,
-                                                     filepath_station.name,
-                                                     model, weight]) + CSV_EXT)
-                if filepath.exists():
-                  if args.verbose:
-                    print(f"Loading {filepath}...")
-                  DETECT = pd.concat(
-                      [DETECT, pd.read_csv(filepath)], ignore_index=True) \
-                      if not DETECT.empty else pd.read_csv(filepath)
-        with ThreadPoolExecutor() as executor:
-          executor.map(fp, FOLDER.iterdir())
-        continue
-      if args.verbose:
-        print(f"Saving {FILEPATH}...")
-      FILEPATH.touch()
-      # For each day in the dataset we will associate the events
-      if args.force:
-        PRE = PRE[
-            ((PRE[TYPE_STR] == PWAVE) & (PRE[PROBABILITY_STR] >= args.pwave)) |
-            ((PRE[TYPE_STR] == SWAVE) & (PRE[PROBABILITY_STR] >= args.swave))]
-      if PRE.empty:
-        continue
-      catalog, assignment = association(PRE, config.station,
-                                        config=config.__repr__(),
-                                        method=config.method)
-      if not (len(catalog) or len(assignment)):
-        continue
-      SRC = list()
-      PKS = pd.DataFrame(columns=HEADER_PRED)
-      for event in catalog:
-        PICKS = pd.DataFrame(
-            [PRE.loc[row] for row, idx, _ in assignment
-             if idx == event["event_index"]]).reset_index(drop=True)
-        PICKS[MODEL_STR] = model
-        PICKS[WEIGHT_STR] = weight
-        th = float("{:0.1}".format(PICKS[PROBABILITY_STR].mean()))
-        PICKS[THRESHOLD_STR] = th
-        PICKS[ID_STR] = ids[model][weight]
-        PICKS.rename(columns={TYPE_STR: PHASE_STR}, inplace=True)
-        PICKS.sort_values(TIMESTAMP_STR, inplace=True)
-        PKS = pd.concat([PKS, PICKS], ignore_index=True) if not PKS.empty \
-            else PICKS
-        SRC.append([model, weight, th, ids[model][weight],
-                    dt.fromisoformat(event['time']),
-                    *reversed(config.proj(
-                        event[X_COORD_STR], event[Y_COORD_STR], inverse=True)),
-                    event[Z_COORD_STR], event[MAGNITUDE_STR], len(PICKS.index),
-                    *([None] * 6), GMMA_STR])
-        ids[model][weight] += 1
-      SRC = pd.DataFrame(SRC, columns=HEADER_ASCT).sort_values(TIMESTAMP_STR)
-      SRC = SRC.reset_index(drop=True)
-      L = len(SOURCE)
-      rpl = {int(a): int(b) for a, b in zip(dcpy(SRC[ID_STR].to_list()),
-                                            range(L, L + len(SRC)))}.get
-      SRC[ID_STR] = SRC[ID_STR].apply(rpl)
-      PKS[ID_STR] = PKS[ID_STR].apply(rpl)
-      SRC.to_csv(FILEPATH, index=False)
-      SOURCE = pd.concat([SOURCE, SRC], ignore_index=True) \
-          if not SOURCE.empty else SRC
-      DETECT = pd.concat([DETECT, PKS], ignore_index=True) \
-          if not DETECT.empty else PKS
-      if PKS.empty:
-        continue
-      sdate = start.strftime("%y%m%d")
-
-      def fp(x) -> None:
-        (network, station), dtfrm = x
-        FILEPATH = Path(DATA_PATH, AST_STR, str(sdate.year),
-                        "{:02d}".format(sdate.month),
-                        "{:02d}".format(sdate.day), network, station,
-                        ("D" if args.denoiser else EMPTY_STR) +
-                        UNDERSCORE_STR.join([sdate, network, station, model,
-                                             weight]) + CSV_EXT)
-        FILEPATH.parent.mkdir(parents=True, exist_ok=True)
-        dtfrm.to_csv(FILEPATH, index=False)
-      with ThreadPoolExecutor() as executor:
-        executor.map(fp, PKS.groupby([NETWORK_STR, STATION_STR]))
-  FILEPATH = Path(DATA_PATH, ("D" if args.denoiser else EMPTY_STR) +
+    def fp(x) -> None:
+      keys, dtfrm = x
+      FILEPATH = Path(DETECT_FOLDER, *keys,
+                      ("D_" if args.denoiser else EMPTY_STR) +
+                      UNDERSCORE_STR.join([*keys, model, weight]) + CSV_EXT)
+      FILEPATH.parent.mkdir(parents=True, exist_ok=True)
+      dtfrm.to_csv(FILEPATH, index=False)
+    with ThreadPoolExecutor() as executor:
+      executor.map(fp, PKS.groupby([NETWORK_STR, STATION_STR]))
+  FILEPATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) +
                   SOURCE_STR + CSV_EXT)
   SOURCE.sort_values(SORT_HIERARCHY_PRED, inplace=True)
   SOURCE.to_csv(FILEPATH, index=False)
-  FILEPATH = Path(DATA_PATH, ("D" if args.denoiser else EMPTY_STR) +
+  FILEPATH = Path(DATA_PATH, ("D_" if args.denoiser else EMPTY_STR) +
                   DETECT_STR + CSV_EXT)
+  DETECT.rename(columns={timestamp_str: TIME_STR}, inplace=True)
   DETECT.sort_values(SORT_HIERARCHY_PRED, inplace=True)
   DETECT.to_csv(FILEPATH, index=False)
   return SOURCE, DETECT
@@ -336,9 +327,9 @@ def main(args: argparse.Namespace) -> None:
   if (not args.force and FILEPATH.exists() and
           ini.read_args(args, False) == ini.dump_args(args, True)):
     if args.verbose:
-      print(f"Loading {FILEPATH}...")
+      print(f"Loading {FILEPATH}")
     PRED = ini.data_loader(FILEPATH)
-    PRED[TIMESTAMP_STR] = PRED[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
+    PRED[TIME_STR] = PRED[TIME_STR].apply(lambda x: UTCDateTime(x))
   else:
     PRED = ini.classified_loader(args)
   PRED = PRED[

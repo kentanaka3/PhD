@@ -195,11 +195,9 @@ env/*
 *.ld
 *.prt
 .vscode/*
-etna_data/*
 *.nsys-rep
-data/arguments.json
-TRUE*
-*EVNT_*_*_*.png
+data/*
+*TRUE*
 *CP_*_*_*.png
 *FN_*_*.png
 *.hdf5

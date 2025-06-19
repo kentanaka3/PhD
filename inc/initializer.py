@@ -56,14 +56,14 @@ def dataset_builder(args: argparse.Namespace, SOURCE: pd.DataFrame = None,
     }
     for _, SRC in SOURCE.iterrows():
       idx = SRC[ID_STR]
-      date = SRC[TIMESTAMP_STR].date
+      date = SRC[TIME_STR].date
       latitude = SRC[LATITUDE_STR]
       longitude = SRC[LONGITUDE_STR]
       depth = SRC[LOCAL_DEPTH_STR]
       magnitude = SRC[MAGNITUDE_STR]
       event_params = {
           "source_id": idx,
-          "source_origin_time": SRC[TIMESTAMP_STR],
+          "source_origin_time": SRC[TIME_STR],
           "source_latitude_deg": latitude,
           "source_longitude_deg": longitude,
           "source_depth_km": depth,
@@ -83,8 +83,8 @@ def dataset_builder(args: argparse.Namespace, SOURCE: pd.DataFrame = None,
         if STATION is None:
           continue
         traces = list(waveforms.index)
-        start = DTC[TIMESTAMP_STR].min() - PICK_OFFSET_TRAIN
-        end = DTC[TIMESTAMP_STR].max() + PICK_OFFSET_TRAIN
+        start = DTC[TIME_STR].min() - PICK_OFFSET_TRAIN
+        end = DTC[TIME_STR].max() + PICK_OFFSET_TRAIN
         stream = op.Stream()
         for trace in traces:
           if not Path(trace).exists():
@@ -113,7 +113,7 @@ def dataset_builder(args: argparse.Namespace, SOURCE: pd.DataFrame = None,
             "trace_start_time": str(actual_t_start)
         }
         for phase, pick in DTC.groupby(PHASE_STR):
-          sample = int((pick[TIMESTAMP_STR].iloc[0] -
+          sample = int((pick[TIME_STR].iloc[0] -
                        actual_t_start) * SAMPLING_RATE)
           trace_params[f"trace_{phase}_status"] = "manual"
           trace_params[f"trace_{phase}_arrival_sample"] = int(sample)
@@ -126,7 +126,7 @@ def dataset_builder(args: argparse.Namespace, SOURCE: pd.DataFrame = None,
 
 def data_loader(filepath: Path):
   if not filepath.exists():
-    raise FileNotFoundError
+    raise FileNotFoundError(filepath)
   data = None
   sfx = filepath.suffix
   if sfx == JSON_EXT:
@@ -167,13 +167,13 @@ def data_loader(filepath: Path):
 
 
 def is_date(string: str) -> UTCDateTime:
-  return UTCDateTime.strptime(string, DATE_FMT)
+  return UTCDateTime.strptime(string, YYMMDD_FMT)
 
 
 def is_julian(string: str) -> UTCDateTime:
   # TODO: Define and convert Julian date to Gregorian date
   raise NotImplementedError
-  return UTCDateTime.strptime(string, DATE_FMT)._set_julday(string)
+  return UTCDateTime.strptime(string, YYMMDD_FMT)._set_julday(string)
 
 
 def is_file_path(string: str) -> Path:
@@ -291,9 +291,8 @@ def parse_arguments():
   date_group = parser.add_mutually_exclusive_group(required=False)
   date_group.add_argument('-D', "--dates", required=False, metavar="YYMMDD",
                           type=is_date, nargs=2, action=SortDatesAction,
-                          default=[
-                              UTCDateTime.strptime("2023-06-01", DATE_FMT),
-                              UTCDateTime.strptime("2023-12-31", DATE_FMT)],
+                          default=[UTCDateTime.strptime("230601", YYMMDD_FMT),
+                                   UTCDateTime.strptime("231231", YYMMDD_FMT)],
                           help="Specify the beginning and ending (inclusive) "
                                "Gregorian date (YYMMDD) range to work with.")
   date_group.add_argument('-J', "--julian", required=False, metavar="YYMMDD",
@@ -446,7 +445,7 @@ def data_header(args: argparse.Namespace,
   if args.verbose:
     print("Constructing the Table of", folder)
   if not PATH.exists():
-    raise FileNotFoundError
+    raise FileNotFoundError(PATH)
   RESULTS = list()
   start, end = args.dates
   for year in PATH.iterdir():
@@ -482,7 +481,7 @@ def data_header(args: argparse.Namespace,
                 RESULTS.append([str(file_path), *vars])
   # TODO: How unfortunate to not have thought handling a filesystem structure
   #       aligned with the Table structure
-  HEADER = [FILENAME_STR, TIMESTAMP_STR, NETWORK_STR, STATION_STR, MODEL_STR,
+  HEADER = [FILENAME_STR, TIME_STR, NETWORK_STR, STATION_STR, MODEL_STR,
             WEIGHT_STR]
   RESULTS = pd.DataFrame(RESULTS, columns=HEADER)
   RESULTS = RESULTS[HEADER_FSYS]
@@ -523,10 +522,10 @@ def true_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None,
       TRUE_STR, DETECT_STR, start, end]) + CSV_EXT)
   if SRC_FILE.exists() and not args.force:
     SOURCE = data_loader(SRC_FILE)
-    SOURCE[TIMESTAMP_STR] = SOURCE[TIMESTAMP_STR].apply(
+    SOURCE[TIME_STR] = SOURCE[TIME_STR].apply(
         lambda x: UTCDateTime(x))
     DETECT = data_loader(DTC_FILE)
-    DETECT[TIMESTAMP_STR] = DETECT[TIMESTAMP_STR].apply(
+    DETECT[TIME_STR] = DETECT[TIME_STR].apply(
         lambda x: UTCDateTime(x))
   else:
     SOURCE, DETECT = prs.event_parser(args.file[0], *args.dates, STATIONS)
@@ -686,11 +685,8 @@ def true_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None,
       st = set(DETECT[STATION_STR].unique().tolist())
       print(f"Catalog Stations: {len(st)}/{len(stations)}")
       start, end = args.dates
-      DATES = [start.datetime]
-      while DATES[-1] < end.datetime:
-        DATES.append(DATES[-1] + ONE_DAY)
-      DATES = [d.strftime(DATE_FMT) for d in DATES]
-      dates = [np.datetime64(UTCDateTime.strptime(d, DATE_FMT)) for d in DATES]
+      dates = np.arange(start.datetime, end.datetime + ONE_DAY,
+                        ONE_DAY).astype("datetime64[D]")
       st = pd.DataFrame([[n.code, s.code, s.latitude, s.longitude, 0]
                          for n in INVENTORY for s in n],
                         columns=[NETWORK_STR, STATION_STR, LATITUDE_STR,
@@ -805,16 +801,17 @@ def classified_loader(args: argparse.Namespace) -> pd.DataFrame:
   DATA_PATH = Path(args.directory).parent
   CLF_PATH = Path(DATA_PATH, CLF_STR)
   if not CLF_PATH.exists():
-    raise FileNotFoundError
+    raise FileNotFoundError(CLF_PATH)
   DATA = list()
   for (model, weight, date), dataframe in \
           data_header(args, CLF_STR).groupby([
-              MODEL_STR, WEIGHT_STR, TIMESTAMP_STR]):
+              MODEL_STR, WEIGHT_STR, TIME_STR]):
     if args.force and args.verbose:
       HIST = list()
     for filepath, (_, _, _, network, station) in dataframe.iterrows():
-      PICK = [[model, weight, "{:.1f}".format(p.peak_value), np.nan,
-               str(p.peak_time), p.peak_value, p.phase, network, station]
+      PICK = [[model, weight, "{:.1f}".format(p.peak_value),
+               str(p.peak_time.strftime(DATE_FMT)), str(p.peak_time),
+               p.peak_value, p.phase, network, station]
               for p in data_loader(Path(filepath))]
       DATA += PICK
       PICK = pd.DataFrame(PICK, columns=HEADER_PRED)
@@ -841,7 +838,7 @@ def classified_loader(args: argparse.Namespace) -> pd.DataFrame:
       plt.close()
   DATA = pd.DataFrame(DATA, columns=HEADER_PRED)\
            .sort_values(SORT_HIERARCHY_PRED).reset_index(drop=True)
-  DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
+  DATA[TIME_STR] = DATA[TIME_STR].apply(lambda x: UTCDateTime(x))
   return DATA
 
 
@@ -868,11 +865,11 @@ def associated_loader(args: argparse.Namespace) -> pd.DataFrame:
   DATA_PATH = Path(args.directory).parent
   AST_PATH = Path(DATA_PATH, AST_STR)
   if not AST_PATH.exists():
-    raise FileNotFoundError
+    raise FileNotFoundError(AST_PATH)
   DATA = pd.DataFrame(columns=HEADER_PRED)
   for (model, weight, date), dataframe in \
           data_header(args, AST_STR).groupby([MODEL_STR, WEIGHT_STR,
-                                              TIMESTAMP_STR]):
+                                              TIME_STR]):
     if args.verbose:
       HIST = list()
     for filepath, (_, _, _, network, station) in dataframe.iterrows():
@@ -899,7 +896,7 @@ def associated_loader(args: argparse.Namespace) -> pd.DataFrame:
       plt.savefig(IMG_FILE, bbox_inches='tight')
       plt.close()
   DATA = DATA.sort_values(SORT_HIERARCHY_PRED).reset_index(drop=True)
-  DATA[TIMESTAMP_STR] = DATA[TIMESTAMP_STR].apply(lambda x: UTCDateTime(x))
+  DATA[TIME_STR] = DATA[TIME_STR].apply(lambda x: UTCDateTime(x))
   return DATA
 
 
@@ -1009,20 +1006,19 @@ def waveform_table(args: argparse.Namespace) -> pd.DataFrame:
   return WAVEFORMS_DATA
 
 
-def station_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None)\
-        -> tuple[dict[str, set[str]], op.Inventory]:
+def station_loader(args: argparse.Namespace, WAVEFORMS=None) \
+        -> tuple[op.Inventory, dict[str, set[str]]]:
   if WAVEFORMS is None:
     WAVEFORMS = waveform_table(args)
   start, end = args.dates
-  DATES = [start.datetime]
-  while DATES[-1] < end.datetime:
-    DATES.append(DATES[-1] + ONE_DAY)
-  DATES = [d.strftime(DATE_FMT) for d in DATES]
-  dates = [np.datetime64(UTCDateTime.strptime(d, DATE_FMT)) for d in DATES]
+  dates = [str(d) for d in np.arange(start.datetime, end.datetime + ONE_DAY,
+                                     ONE_DAY).astype("datetime64[D]").tolist()]
   min_s, max_s = np.inf, 0
   stations = set()
   STATIONS = dict()
   for d, ST in WAVEFORMS.groupby(DATE_STR):
+    if args.station[0] == ALL_WILDCHAR_STR:
+      ST = ST[ST[STATION_STR] in args.station]
     if ST.empty:
       continue
     STATIONS[d] = set(ST[STATION_STR].unique())
@@ -1120,7 +1116,7 @@ def station_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None)\
     def plot_time_stations():
       _, ax = plt.subplots(figsize=(10, 5), layout='tight')
       plt.rcParams.update({'font.size': 12})
-      ax.plot(dates, [len(STATIONS[d]) for d in DATES])
+      ax.plot(dates, [len(STATIONS[str(d)]) for d in dates])
       ax.set_title("Active number of stations per day")
       ax.set(xlabel="Date", ylabel="Number of stations",
              ylim=(0, (max_s + 9) // 10 * 10))
@@ -1149,12 +1145,12 @@ def station_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None)\
       tmp = list()
       for st in stations:
         s = st.split(PERIOD_STR)
-        tmp.append([*s] + [int(s[1] in STATIONS[d]) for d in DATES])
+        tmp.append([*s] + [int(s[1] in STATIONS[str(d)]) for d in dates])
       tmp = pd.DataFrame(
-          tmp, columns=[NETWORK_STR, STATION_STR] + DATES).sort_values(
+          tmp, columns=[NETWORK_STR, STATION_STR] + dates).sort_values(
           [NETWORK_STR, STATION_STR])
       for i, (net, df) in enumerate(tmp.groupby(NETWORK_STR)):
-        tmp.loc[tmp[NETWORK_STR] == net, DATES] = df.loc[:, DATES].apply(
+        tmp.loc[tmp[NETWORK_STR] == net, dates] = df.loc[:, dates].apply(
             lambda x: x * (i + 1), axis=1)
       tmp.drop(columns=NETWORK_STR, inplace=True)
       tmp.set_index(STATION_STR, inplace=True)

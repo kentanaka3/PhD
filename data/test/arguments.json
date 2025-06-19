@@ -13,24 +13,20 @@
     "*"
   ],
   "station": [
-    "*"
+    "CAE",
+    "BAD"
   ],
   "CHANNEL": null,
   "DATE": [
     "2023-06-01T00:00:00.000000Z",
     "2023-06-04T00:00:00.000000Z"
   ],
-  "GROUPS": [
-    "DATE",
-    "NETWORK",
-    "station"
-  ],
   "DIRECTORY": "data/test/waveforms",
   "DENOISER": false,
   "DOMAIN": [
+    9.5,
+    15.0,
     44.3,
-    47.5,
-    10,
-    14.5
+    47.5
   ]
 }

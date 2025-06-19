@@ -1,8 +1,10 @@
 import re
 import pandas as pd
+import itertools as it
 from pathlib import Path
 from obspy import UTCDateTime
 from datetime import timedelta as td
+from matplotlib.cbook import flatten as flatten_list
 from obspy.core.event import read_events as obspy_read_events
 from concurrent.futures import ThreadPoolExecutor
 
@@ -36,25 +38,34 @@ def event_merger_l(NEW: pd.DataFrame, OLD: pd.DataFrame, on: list) \
 
 
 # TODO: Implement polarity
-RECORD_EXTRACTOR_DAT = re.compile(
-    fr"^(?P<{STATION_STR}>[A-Z0-9\s]{{4}})"                        # Station
-    fr"(?P<{P_TYPE_STR}>[aei1\s\?][Pp][cC\+0-4dD\-Up\s])"          # P Type
-    fr"(?P<{P_WEIGHT_STR}>[0-4\s])"                                # P Weight
-    fr"[1-4\s]"                                                    # Unknown
-    fr"(?P<{DATE_STR}>\d{{10}})\s"                                 # Date
-    fr"(?P<{P_TIME_STR}>[\s\d]{{4}})"                              # P Time
-    fr".{{8}}"                                                     # Unknown
-    fr"(((?P<{S_TIME_STR}>[\s\d]{{4}})"                            # S Time
-    fr"(?P<{S_TYPE_STR}>[eirsw\?13468\s][Ss][cC\+0-4dD\-Ue\?\s])"  # S Type
-    fr"(?P<{S_WEIGHT_STR}>[0-5\s]))|\s{{8}})"                      # S Weight
-    fr"\s{{22}}"                                                   # SPACE
+RECORD_EXTRACTOR_DAT_LIST = [
+    fr"^(?P<{STATION_STR}>[A-Z0-9\s]{{4}})",                       # Station
+    fr"(?P<{P_ONSET_STR}>[ei\s\?]){PWAVE}",                        # P Onset
+    fr"(?P<{P_POLARITY_STR}>[cC\+dD\-\s])",                        # P Polarity
+    fr"(?P<{P_WEIGHT_STR}>[0-4\s])",                               # P Weight
+    fr"1",                                                         # 1
+    fr"(?P<{DATE_STR}>\d{{10}})\s",                                # Date
+    fr"(?P<{P_TIME_STR}>[\s\d]{{4}})",                             # P Time
+    fr".{{8}}",                                                    # Unknown
+    [
+        fr"(((?P<{S_TIME_STR}>[\s\d]{{4}})",                       # S Time
+        fr"(?P<{S_ONSET_STR}>[ei\s\?]){SWAVE}",                    # S Onset
+        fr"(?P<{S_POLARITY_STR}>[cC\+dD\-\s])",                    # S Polarity
+        fr"(?P<{S_WEIGHT_STR}>[0-5\s]))|\s{{8}})"                  # S Weight
+    ],
+    fr"\s{{22}}",                                                  # SPACE
     # Geo Zone
-    fr"(?P<{GEO_ZONE_STR}>[{EMPTY_STR.join(OGS_GEO_ZONES.keys())}\s])"
+    fr"(?P<{GEO_ZONE_STR}>[{EMPTY_STR.join(OGS_GEO_ZONES.keys())}\s])",
     # Event Type
-    fr"(?P<{EVENT_TYPE_STR}>[{EMPTY_STR.join(OGS_EVENT_TYPES.keys())}\s])"
-    fr"((?P<{EVENT_LOCALIZATION_STR}>[D\s])"                       # Event Loc
-    fr".{{10}}"                                                    # Unknown
-    fr"(?P<{EVENT_STR}>[\s\d]{{4}}))*")                            # Event
+    fr"(?P<{EVENT_TYPE_STR}>[{EMPTY_STR.join(OGS_EVENT_TYPES.keys())}\s])",
+    fr"(?P<{EVENT_LOCALIZATION_STR}>[D\s])",                       # Event Loc
+    fr"\s{{5}}",                                                   # SPACE
+    fr"(?P<{DURATION_STR}>[\s\d]{{5}})",                           # Duration
+    fr"(?P<{EVENT_STR}>[\s\d]{{4}})",                              # Event
+    fr""
+]
+RECORD_EXTRACTOR_DAT = re.compile(EMPTY_STR.join(
+    list(flatten_list(RECORD_EXTRACTOR_DAT_LIST))))
 # print(RECORD_EXTRACTOR_DAT.pattern)
 EVENT_EXTRACTOR_DAT = re.compile(r"^1.*$")                         # Event
 EVENT_CONTRIVER_DAT = \
@@ -89,11 +100,11 @@ def event_parser_dat(filename: Path, start: UTCDateTime = None,
   notes:
     The DAT file contains the manual picks of the earthquake events by
     providing the station, the type of the P pick, the weight of the P pick,
-    the date of the pick, the time of the pick, the type of the S pick, the 
+    the date of the pick, the time of the pick, the type of the S pick, the
     weight of the S pick, and the time of the S pick.
   """
   unble_msg = ERRORS[level][UNABLE_STR].format(
-      pre=f"{str(filename)}, ", verb="parse", type="{type}",
+      pre=f"{filename}, ", verb="parse", type="({type})",
       post="from line: {line}")
   notbl_msg = ERRORS[level][NOTABLE_STR].format(
       pre=f"{str(filename)}, ", value="{value}", key="{key}",
@@ -113,13 +124,13 @@ def event_parser_dat(filename: Path, start: UTCDateTime = None,
     if match:
       result = match.groupdict()
       if (result[EVENT_LOCALIZATION_STR] != "D" and
-              result[EVENT_TYPE_STR] != "L"):
+              OGS_EVENT_TYPES[result[EVENT_TYPE_STR]] != EVENT_LOCAL_EQ_STR):
         # print("WARNING: (DAT) Ignoring line:", line)
         continue
       # Date
       try:
-        if result[DATE_STR][-2:] == "60":
-          # TODO: Warn about the 60 minutes
+        if int(result[DATE_STR][-2:]) >= 60:
+          # print(notbl_msg.format(value="60", key=DATE_STR, line=line))
           result[DATE_STR] = \
               UTCDateTime.strptime(result[DATE_STR][:-2],
                                    DATETIME_FMT[:-4]) + td(hours=1)
@@ -137,15 +148,14 @@ def event_parser_dat(filename: Path, start: UTCDateTime = None,
         break
       # Station, We only consider the picks from the stations (if specified)
       result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
-      date = result[DATE_STR].strftime(DATE_FMT)
+      date = result[DATE_STR].strftime(YYMMDD_FMT)
       if (stations is not None and date in stations and
               result[STATION_STR] not in stations[date]):
         continue
       # P Time
       try:
         result[P_TIME_STR] = result[DATE_STR] + td(seconds=float(
-            result[P_TIME_STR][:2].replace(SPACE_STR, ZERO_STR) +
-            PERIOD_STR + result[P_TIME_STR][2:].replace(SPACE_STR, ZERO_STR)))
+            result[P_TIME_STR].replace(SPACE_STR, ZERO_STR)) / 100.)
       except ValueError as e:
         print(unble_msg.format(type=P_TIME_STR, line=line))
         print(e)
@@ -176,7 +186,7 @@ def event_parser_dat(filename: Path, start: UTCDateTime = None,
       DETECT.append([result[EVENT_STR], result[P_TIME_STR],
                      result[P_WEIGHT_STR], PWAVE, None, result[STATION_STR]])
       # S Type
-      if result[S_TYPE_STR]:
+      if result[S_TIME_STR]:
         # S Weight
         try:
           if result[S_WEIGHT_STR] == SPACE_STR:
@@ -193,9 +203,7 @@ def event_parser_dat(filename: Path, start: UTCDateTime = None,
         # S Time
         try:
           result[S_TIME_STR] = result[DATE_STR] + td(seconds=float(
-              result[S_TIME_STR][:2].replace(SPACE_STR, ZERO_STR) +
-              PERIOD_STR +
-              result[S_TIME_STR][2:].replace(SPACE_STR, ZERO_STR)))
+              result[S_TIME_STR].replace(SPACE_STR, ZERO_STR)) / 100.)
         except ValueError as e:
           print(unble_msg.format(type=S_TIME_STR, line=line))
           print(e)
@@ -218,7 +226,20 @@ def event_parser_dat(filename: Path, start: UTCDateTime = None,
       continue
     if line == EMPTY_STR:
       continue
-    print(unble_msg.format(type=EMPTY_STR, line=line))
+    RECORD_EXTRACTOR_DAT_DEBUG = list(reversed(list(it.accumulate(
+        RECORD_EXTRACTOR_DAT_LIST[:-1],
+        lambda x, y: x + (y if isinstance(y, str)
+                          else EMPTY_STR.join(list(flatten_list(y))))))))
+    bug = STATION_STR
+    for i, extractor in enumerate(RECORD_EXTRACTOR_DAT_DEBUG):
+      match_extractor = re.match(extractor, line)
+      if match_extractor:
+        group = re.compile(r"\(\?P<(\w+)>[\[\]\w\d\{\}\-\\\?\+]+\)(\w)*")
+        match_group = group.findall(RECORD_EXTRACTOR_DAT_DEBUG[i - 1])
+        match_compare = group.findall(extractor)
+        bug = match_group[-1][match_group[-1][1] != match_compare[-1][1]]
+        break
+    print(unble_msg.format(type=bug, line=line))
   return (pd.DataFrame(columns=HEADER_SRC),
           pd.DataFrame(DETECT, columns=HEADER_MANL).astype({ID_STR: int},
                                                            errors='ignore'))
@@ -355,11 +376,11 @@ def event_parser_hpc(filename: Path, start: UTCDateTime = None,
   for line in [l.strip() for l in lines]:
     match = RECORD_EXTRACTOR_HPC.match(line)
     if match:
-      result: dict[str] = match.groupdict()
+      result = match.groupdict()
       result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
       result[DATE_STR] = UTCDateTime.strptime(result[DATE_STR],
                                               DATETIME_FMT[:-2])
-      date = result[DATE_STR].strftime(DATE_FMT)
+      date = result[DATE_STR].strftime(YYMMDD_FMT)
       if (stations is not None and date in stations and
               result[STATION_STR] not in stations[date]):
         continue
@@ -391,12 +412,13 @@ RECORD_EXTRACTOR_HPL = re.compile(
     fr"(([\d\s]{{3}}\.\d)|\s{{5}})\s"                              # Unknown
     fr"([\d\s]{{3}})\s"                                            # Unknown
     fr"([\d\s]{{3}})\s"                                            # Unknown
-    fr"(?P<{P_TYPE_STR}>[ei?\s]{PWAVE}[cC\+dD0\-\s])"              # P Type
+    fr"(?P<{P_ONSET_STR}>[ei?\s]){PWAVE}"                          # P Onset
+    fr"(?P<{P_POLARITY_STR}>[cC\+dD\-\s])"                         # P Polarity
     fr"(?P<{P_WEIGHT_STR}>[0-4])\s"                                # P Weight
     # P Time [hhmm]
     fr"(?P<{P_TIME_STR}>[\s\d]{{4}})\s"
     # Seconds [ss.ss]
-    fr"(?P<{SECONDS_STR}>([\s\d]\d\.\d{{2}})|\s{{5}})"
+    fr"(?P<{SECONDS_STR}>([\s\d]\d\.\d{{2}})|[\s\*]{{5}})"
     fr"(([\s\d]{{2}}\d\.\d{{2}})|[\s\*]{{6}})\s"                   # Unknown
     fr"(([\s\d]\d\.\d{{2}})|\s{{5}})\s"                            # Unknown
     fr"(([\s\d\-]\d\.\d{{2}})|\s{{5}})"                            # Unknown
@@ -414,7 +436,7 @@ RECORD_EXTRACTOR_HPL = re.compile(
     fr"(?P<{EVENT_LOCALIZATION_STR}>[D\s])"                        # Event Loc
     fr"([\d\s\*]{{4}})"                                            # Unknown
     fr"([\s\-](\d\.\d)|\s{{4}})[\*\s]\s"                           # Unknown
-    fr"((?P<{S_TYPE_STR}>[ei\s]{SWAVE})\s"                         # S Type
+    fr"((?P<{S_ONSET_STR}>[ei\s]){SWAVE}\s"                        # S Type
     fr"(?P<{S_WEIGHT_STR}>[0-4])?\s"                               # S Weight
     fr"(?P<{S_TIME_STR}>[\s\d]\d\.\d{{2}}))?"                      # S Time
 )
@@ -523,8 +545,8 @@ def event_parser_hpl(filename: Path, start: UTCDateTime = None,
           continue
         date = UTCDateTime(event_spacetime[0].date)
         result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
-        if (stations is not None and date.strftime(DATE_FMT) in stations and
-                result[STATION_STR] not in stations[date.strftime(DATE_FMT)]):
+        if (stations is not None and date.strftime(YYMMDD_FMT) in stations and
+                result[STATION_STR] not in stations[date.strftime(YYMMDD_FMT)]):
           continue
         # Event
         if result[EVENT_STR]:
@@ -560,7 +582,7 @@ def event_parser_hpl(filename: Path, start: UTCDateTime = None,
         DETECT.append([result[EVENT_STR],
                        result[P_TIME_STR] + result[SECONDS_STR],
                        result[P_WEIGHT_STR], PWAVE, None, result[STATION_STR]])
-        if result[S_TYPE_STR]:
+        if result[S_TIME_STR]:
           result[S_WEIGHT_STR] = int(result[S_WEIGHT_STR])
           result[S_TIME_STR] = td(seconds=float(result[S_TIME_STR]))
           DETECT.append([result[EVENT_STR],
@@ -708,7 +730,7 @@ def event_parser_mod(filename: Path,
       result = match.groupdict()
       result[STATION_STR] = result[STATION_STR].strip(SPACE_STR)
       # TODO: Review MOD file
-      date = result[DATE_STR].strftime(DATE_FMT)
+      date = result[DATE_STR].strftime(YYMMDD_FMT)
       if (stations is not None and date in stations and
               result[STATION_STR] not in stations[date]):
         continue
