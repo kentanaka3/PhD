@@ -28,60 +28,62 @@ TIME_SLACK = 10.0  # seconds slack around the pick
 class OGSAmplitudeExtractor(AmplitudeExtractor):
   def __init__(self, **kwargs):
     super().__init__(time_before=TIME_BEFORE, time_after=TIME_AFTER,
-                     components="NE",
-                     slack=TIME_SLACK, response_removal_args={
-                         "water_level": WATER_LEVEL, "pre_filt": FREQ_RANGE},
-                     **kwargs)
+                     components="NE", slack=TIME_SLACK, response_removal_args={
+                         "water_level": WATER_LEVEL}, **kwargs)
 
   def _extract_single_amplitude(self, large_window: obspy.Stream,
                                 pick: sbu.Pick,
                                 sub_inv: obspy.Inventory) -> dict[str, float]:
-    for component in self.components:
-      if any([len(large_window.select(component=f"??{component}")) != 1
-              for component in self.components]):
-        return np.nan
+    output = {"amplitude" : np.nan}
+    if any([len(large_window.select(component=component)) != 1
+            for component in self.components]):
+      return output
     # Normalize window
     large_window.detrend("demean")
     large_window.detrend("linear")
+    print("Removing response...")
     try:
       large_window.remove_response(sub_inv, **self.response_removal_args)
     except ValueError:  # No response information
-      return np.nan
+      return output
 
-    WINDOW = dict()
-    WINDOW["NOISE"] = {
+    # Apply bandpass filter
+    large_window.filter("bandpass", freqmin=FREQ_RANGE[0],
+                        freqmax=FREQ_RANGE[1], corners=2)
+
+    tmp_windows = dict()
+    tmp_windows["noise"] = {
         component:
             large_window.slice(pick.peak_time - self.slack,
                                pick.peak_time - EPSILON_TIMEDELTA).select(
-                component=f"??{component}")[0].data
+                component=component)
         for component in self.components}
-    WINDOW["SIGNAL"] = {
+    tmp_windows["signal"] = {
         component:
             large_window.slice(pick.peak_time,
                                pick.peak_time + self.slack).select(
-                component=f"??{component}")[0].data
+                component=component)
         for component in self.components}
-    print(WINDOW)
     # Check SNR
-    if (all([len(WINDOW[key][component]) for key in WINDOW.keys()
-             for component in self.components])):
-      return np.nan
-    WINDOW["SNR"] = {
-        component:
-            np.linalg.norm(WINDOW["SIGNAL"][component]) /
-            np.linalg.norm(WINDOW["NOISE"][component])
-        for component in self.components}
-
-
+    if not (all([len(tmp_windows[key][component]) for key in tmp_windows.keys()
+                 for component in self.components])):
+      return output
+    for key in tmp_windows.keys():
+      for component in self.components:
+        tmp_windows[key][component] = tmp_windows[key][component][0].data.copy()
 
     # Simulate Wood-Anderson response
     large_window.simulate(paz_simulate=OGS_WOOD_ANDERSON)
 
-    WINDOW["AMPLITUDE"] = {
-        component: np.nanmax(np.abs(
+    for component in self.components:
+      output["snr_" + component] = (
+        np.linalg.norm(tmp_windows["signal"][component]) /
+        np.linalg.norm(tmp_windows["noise"][component]))
+      output["amplitude_" + component] = np.max(np.abs(
             large_window.slice(pick.peak_time - self.time_before,
                                pick.peak_time + self.time_after).select(
-                component=f"??{component}")[0].data))
-        for component in self.components}
-
-    return WINDOW # TODO: Flatten
+                component=component)[0].data))
+    output["amplitude"] = np.exp(np.mean([
+      np.log(output["amplitude_" + component]) for component in self.components
+        if output["snr_" + component] >= SNR_THRESHOLD]))
+    return output
