@@ -1,5 +1,5 @@
 downloader:
-	python inc/downloader.py -D 230101 231231 -v -N "*" -S "*"
+	python inc/downloader.py -v -N "*" -S "*" -D 240606 240620 #240416 240620
 
 results:
 	cp img/CP_EQTransformer_P.png doc/img/
@@ -40,18 +40,18 @@ testParser:
 	python test/testparser.py
 
 trainer:
-	python src/trainer.py --file ./data/manual/ -v -D 230601 231231 -W OGS
-	python src/trainer.py --file ./data/manual/ -v -D 230101 231231 -W OGS23
+	python src/trainer.py --file ./data/manual/ -v -D 230601 230610 -W OGS
+	python src/trainer.py --file ./data/manual/ -v -D 230101 230610 -W OGS23
 	python src/trainer.py --file ./data/manual/ -v -D 200101 201231 -W OGS20
 
 picker:
-	python src/picker.py -v -D 230601 231231
+	python src/picker.py -v -D 230601 230610
 
 analyzer:
-	python src/analyzer.py -v --file ./data/manual -D 230601 231231
+	python src/analyzer.py -v --file ./data/manual -D 230601 230610
 
 associator:
-	python src/associator.py -v -D 230601 231231
+	python src/associator.py -v -D 230601 230610
 
 pipeline: picker associator analyzer
 

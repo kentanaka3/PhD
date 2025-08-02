@@ -22,6 +22,40 @@ class style():
   UNDERLINE = '\033[4m'
   RESET = '\033[0m'
 
+def trace_downloader(start: op.UTCDateTime, end: op.UTCDateTime,
+                     network: str, station: str, channel: str,
+                     location: str = "", client: str = "IRIS") -> op.Stream:
+  """ Download the trace from the server based on the specified arguments.
+  input:
+    - start        (op.UTCDateTime)  : Start time of the trace
+    - end          (op.UTCDateTime)  : End time of the trace
+    - network      (str)             : Network code of the trace
+    - station      (str)             : Station code of the trace
+    - channel      (str)             : Channel code of the trace
+    - location     (str)             : Location code of the trace
+    - client       (str)             : Client to use for the download
+  output:
+    - stream       (op.Stream)       : Stream object containing the trace
+  errors:
+    - None
+  notes:
+    - The function uses the ObsPy module to download the trace from the server.
+    - The function returns a Stream object containing the trace.
+  """
+  from obspy.clients.fdsn import Client
+  try:
+    client = Client(client)
+  except Exception as e:
+    print(f"Error creating client {client}: {e}")
+    return op.Stream()
+  client.get_waveforms(
+            network=trace_params["station_network_code"],
+            station=trace_params["station_code"],
+            location="*",
+            channel=f"{trace_params['trace_channel']}*",
+            starttime=t_start,
+            endtime=t_end,
+        )
 
 def data_downloader(args: argparse.Namespace) -> None:
   """
@@ -90,7 +124,7 @@ def data_downloader(args: argparse.Namespace) -> None:
                                       "", "00", "01", "02", "10"],
                                   chunklength_in_sec=86400)
       from obspy.clients.fdsn import Client
-      CLIENTS = dict()
+      CLIENTS: dict[str, Client] = dict()
       for client in args.client:
         try:
           CLIENTS[client] = Client(client)
@@ -101,7 +135,7 @@ def data_downloader(args: argparse.Namespace) -> None:
           # NOTE: It is assumed a single token file is applicable for all
           #       clients
           try:
-            Client(client).set_eida_token(args.key, validate=True)
+            CLIENTS[client].set_eida_token(args.key, validate=True)
           except Exception as e:
             print(f"Error setting token for {client}: {e}")
       mdl = MassDownloader(providers=CLIENTS.values())

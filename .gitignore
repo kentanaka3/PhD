@@ -180,8 +180,11 @@ doc/References/*
 doc/Reports/*
 doc/Pres/*
 doc/Doc/*
+doc/MICAI/*
 !doc/Doc/doc.pdf
 !doc/Doc/doc.tex
+!doc/MICAI/DocCon.pdf
+!doc/MICAI/DocCon.tex
 !doc/img/*.pdf
 doc/img/*
 doc/Post/*

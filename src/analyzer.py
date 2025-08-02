@@ -213,6 +213,11 @@ class myBPGraph():
     v = pd.DataFrame(self.T if bipartite == 1 else self.P)
     v = v[(v[TIMESTAMP_STR] - u[TIMESTAMP_STR])
           .apply(lambda x: td(seconds=abs(x))) <= self.C[TIME_DSPLCMT_STR]]
+    if self.C[METHOD_STR] == SOURCE_STR:
+      v[DISTANCE_STR] = 0.0
+      for i, row in v.iterrows():
+        v.loc[i, DISTANCE_STR] = diff_space(u, row) / 1000.
+      v = v[v[DISTANCE_STR] <= ASSOCIATE_DIST_OFFSET]
     if v.empty:
       return dict()
     return {i: self.W(u, v.loc[i]) for i in v.index}
@@ -286,13 +291,13 @@ class myBPGraph():
       if self.C[METHOD_STR] in [CLSSFD_STR, DETECT_STR]:
         CFN_MTX.loc[T[PHASE_STR], P[PHASE_STR]] += 1
         if T[PHASE_STR] == P[PHASE_STR]:
-          TP.add((P[THRESHOLD_STR], (T[ID_STR], str(P[ID_STR])),
+          TP.add((None, (T[ID_STR], str(P[ID_STR])),
                   (str(T[TIMESTAMP_STR]), str(P[TIMESTAMP_STR])),
                   (T[PROBABILITY_STR], P[PROBABILITY_STR]), T[PHASE_STR],
                   P[NETWORK_STR], T[STATION_STR]))
       else:
         CFN_MTX.loc[EVENT_STR, EVENT_STR] += 1
-        TP.add((P[THRESHOLD_STR], (T[ID_STR], str(P[ID_STR])),
+        TP.add((None, (T[ID_STR], str(P[ID_STR])),
                 (str(T[TIMESTAMP_STR]), str(P[TIMESTAMP_STR])),
                 (T[LATITUDE_STR], P[LATITUDE_STR]),
                 (T[LONGITUDE_STR], P[LONGITUDE_STR]),
@@ -306,14 +311,15 @@ class myBPGraph():
       if len(x) == 0:
         if self.C[METHOD_STR] in [CLSSFD_STR, DETECT_STR]:
           CFN_MTX.loc[NONE_STR, P[PHASE_STR]] += 1
-          result.append((P[THRESHOLD_STR], P[ID_STR], str(P[TIMESTAMP_STR]), P[PROBABILITY_STR],
-                        P[PHASE_STR], P[NETWORK_STR], P[STATION_STR]))
+          result.append((None, P[ID_STR], str(P[TIMESTAMP_STR]),
+                         P[PROBABILITY_STR], P[PHASE_STR], P[NETWORK_STR],
+                         P[STATION_STR]))
         else:
           CFN_MTX.loc[NONE_STR, EVENT_STR] += 1
-          result.append((P[THRESHOLD_STR], P[ID_STR], str(P[TIMESTAMP_STR]), P[LATITUDE_STR],
-                        P[LONGITUDE_STR], P[LOCAL_DEPTH_STR],
-                        P[MAGNITUDE_STR], None, None, None, None, None, None,
-                        None, str(P[NOTES_STR]).rstrip()))
+          result.append((None, P[ID_STR], str(P[TIMESTAMP_STR]),
+                         P[LATITUDE_STR], P[LONGITUDE_STR], P[LOCAL_DEPTH_STR],
+                         P[MAGNITUDE_STR], None, None, None, None, None, None,
+                         None, str(P[NOTES_STR]).rstrip()))
         continue
       assert len(x) == 1
     FP.update(set(result))
@@ -322,8 +328,7 @@ class myBPGraph():
 
 def conf_mtx(TRUE: pd.DataFrame, PRED: pd.DataFrame, model_name: str,
              dataset_name: str, args: argparse.Namespace,
-             method: str = CLSSFD_STR) \
-        -> list[pd.DataFrame, list, list, list]:
+             method: str = CLSSFD_STR) -> list[pd.DataFrame, list, list, list]:
   """
   input  :
     - TRUE          (pd.DataFrame)

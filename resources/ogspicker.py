@@ -35,6 +35,9 @@ class OGSAmplitudeExtractor(AmplitudeExtractor):
                                 pick: sbu.Pick,
                                 sub_inv: obspy.Inventory) -> dict[str, float]:
     output = {"amplitude" : np.nan}
+    if pick.peak_time is None:
+      print(f"No peak time found in {pick}, skipping amplitude extraction.")
+      return output
     if any([len(large_window.select(component=component)) != 1
             for component in self.components]):
       return output
@@ -82,8 +85,5 @@ class OGSAmplitudeExtractor(AmplitudeExtractor):
       output["amplitude_" + component] = np.max(np.abs(
             large_window.slice(pick.peak_time - self.time_before,
                                pick.peak_time + self.time_after).select(
-                component=component)[0].data))
-    output["amplitude"] = np.exp(np.mean([
-      np.log(output["amplitude_" + component]) for component in self.components
-        if output["snr_" + component] >= SNR_THRESHOLD]))
+                component=component)[0].data)) * 1000  # Convert to mm
     return output

@@ -9,7 +9,9 @@ class OGSMagnitude(LocalMagnitude):
   This magnitude scale use has been calibrated for ...
   """
 
-  def __init__(self, station_corrections: pd.DataFrame):
+  def __init__(self, station_corrections: pd.DataFrame,
+               components: str = "NE") -> None:
+    self.components = components
     self.station_corrections = station_corrections
     super().__init__(hypocentral_range=(10, 700))
 
@@ -26,15 +28,61 @@ class OGSMagnitude(LocalMagnitude):
     c2 = 147.111
     c3 = 4.015e-5
     c4 = 1.33885
-    c5 = pd.DataFrame([[station, 0.] for station in stations],
-                      columns=["station", "c5"])
+    c5 = stations.to_frame()
+    c5["c5"] = 0.0
+    c5["station"] = c5["station"].str.split(".").str[1]
     for _, row in self.station_corrections.iterrows():
-      if row["station"] in [s.split(".")[1] for s in stations.values]:
+      if row["station"] in c5["station"].values:
         c5.loc[c5["station"] == row["station"], "c5"] = float(row["c5"])
-    c5 = np.nanmean(c5["c5"])
-    return c0 + c1 * np.log10(r) + c2 * np.log10(r * c3 + c4) + c5
+    return c0 + c1 * np.log10(r) + c2 * np.log10(r * c3 + c4) + c5["c5"]
+
+  def _calc_station_amplitude(self, assignments: pd.DataFrame) -> None:
+    """
+    Calculate the amplitude for each station and event_idx in the assignments
+    DataFrame. The amplitude is calculated as the geometric mean of the
+    amplitudes of the P and S picks, if available.
+    """
+    SNR_THRESHOLD = 1.3
+    # Remove amplitude column to avoid confusion
+    assignments.drop(columns="amplitude", inplace=True)
+    # Step 1
+    mask_ = assignments["phase"] == self.phase
+    # We merge all P picks with S picks based on event_idx and station.
+    # This should return (merged) a single row for each event detected from a
+    # station containing the SNR of P and the maximum amplitude registered of S
+    # pick if found, once again in the same row.
+    # NOTE: This assumes that there will be always 1 P pick and optionally 1 S
+    #       pick for each event_idx and station.
+    # NOTE: If there is no S pick, the amplitude will be NaN for that station
+    #       for that event_idx.
+    merged = pd.merge(assignments[mask_], assignments[~mask_], how="inner",
+                      on=["event_idx", "station"], suffixes=[
+                        f"_{self.phase}",
+                        f"_{"S" if self.phase == "P" else "P"}"])
+    # Step 2
+    # Compute the amplitude of the S pick for each component if the SNR of the
+    # P pick is above the threshold
+    for component in self.components:
+      mask_ = merged[f"snr_{component}_P"] >= SNR_THRESHOLD
+      merged.loc[mask_, f"amplitude_{component}"] = merged.loc[
+        mask_, f"amplitude_{component}_S"]
+      if merged[~mask_].empty:
+        continue
+      merged.loc[~mask_, f"amplitude_{component}"] = np.nan
+    # Compute the geometric mean of the valid amplitudes
+    merged["amplitude"] = np.exp(np.nanmean(np.log(
+      merged[[f"amplitude_{component}" for component in self.components]]),
+      axis=1))
+    # Step 3
+    # We have determined the amplitude for each event_idx and station, now we
+    # merge it back to the assignments DataFrame. This will add the amplitude
+    # column to the assignments DataFrame.
+    assignments["amplitude"] = pd.merge(
+      assignments, merged[["event_idx", "station", "amplitude"]], how="left",
+      on=["event_idx", "station"])["amplitude"]
 
   def _calc_station_magnitude(self, assignments: pd.DataFrame) -> None:
+    self._calc_station_amplitude(assignments)
     assignments["station_ML"] = np.log10(
         assignments["amplitude"]
     ) + self.get_log_amp_0(

@@ -1,10 +1,24 @@
+import os
+import sys
 import copy
 import obspy
+import argparse
 import numpy as np
 import scipy as sp
+import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
 from pathlib import Path
+# Set the project folder
+PRJ_PATH = Path(os.path.dirname(__file__)).parent
+INC_PATH = os.path.join(PRJ_PATH, "inc")
+if INC_PATH not in sys.path:
+  sys.path.append(INC_PATH)
+  import initializer as ini
+  from constants import *
+else:
+  from constants import *
+  import initializer as ini
 
 
 def circumcenter(P: np.ndarray) -> np.ndarray:
@@ -110,7 +124,7 @@ class StationHierarchy:
     elif len(positions) == 2:
       self.graph.add_edge(0, 1)
 
-  def draw(self, c='k', a=1):
+  def draw(self, c='k', a=1.):
     nx.draw(self.graph, nx.get_node_attributes(self.graph, 'pos'),
             node_size=50, node_color=c, alpha=a)
     frac = 2 / 3
@@ -165,20 +179,32 @@ def station_graph(inventory: obspy.Inventory) -> None:
   plt.show()
   return
 
+def clustering(filepath: Path) -> None:
+  df = pd.read_csv(filepath)
+  x = df['x'].values
+  y = df['y'].values
+  P = np.c_[x, y]
+  SH = StationHierarchy(P)
+  SH.draw()
+  SH.tail()
+  print(SH)
+  plt.show()
+  return
 
-def main():
-  DATA_DIR = Path(__file__).parent.parent
+def main(args: argparse.Namespace):
+  global DATA_PATH
+  DATA_PATH = args.directory.parent
   INVENTORY = obspy.Inventory()
-  DATA_PATH = Path(DATA_DIR, "data", "station")
-  for station in DATA_PATH.iterdir():
+  for station in Path(DATA_PATH, "station").iterdir():
     try:
       S = obspy.read_inventory(station)
     except:
       continue
     INVENTORY.extend(S)
-  station_graph(INVENTORY)
+  #station_graph(INVENTORY)
+  clustering(Path("/Users/admin/Downloads/3MC.csv"))
   return
 
 
 if __name__ == "__main__":
-  main()
+  main(ini.parse_arguments())

@@ -3,7 +3,6 @@ import seisbench.data as sbd
 import parser as prs
 from errors import ERRORS
 from constants import *
-from concurrent.futures import ThreadPoolExecutor
 from obspy.core.utcdatetime import UTCDateTime
 import cartopy.feature as cfeature
 import matplotlib.gridspec as gridspec
@@ -651,130 +650,6 @@ def true_loader(args: argparse.Namespace, WAVEFORMS: pd.DataFrame = None,
       plt.savefig(IMG_FILE, bbox_inches='tight')
       plt.close()
     plot_spatial_dist()
-
-    def plot_magnitude_dist():
-      _, ax = plt.subplots(figsize=(10, 5), layout='tight')
-      plt.rcParams.update({'font.size': 12})
-      SOURCE[MAGNITUDE_STR].hist(bins=NUM_BINS, color='grey', alpha=0.5, ax=ax)
-      ax.set_title("Magnitude Distribution")
-      ax.set(xlabel="Magnitude", ylabel="Number of Events")
-      IMG_FILE = Path(IMG_PATH, (UNDERSCORE_STR.join([
-          TRUE_STR, MAGNITUDE_STR, start, end]) + PNG_EXT))
-      plt.tight_layout()
-      plt.savefig(IMG_FILE, bbox_inches='tight')
-      plt.close()
-    plot_magnitude_dist()
-
-    def plot_depth_dist():
-      _, ax = plt.subplots(figsize=(10, 5), layout='tight')
-      plt.rcParams.update({'font.size': 12})
-      SOURCE[LOCAL_DEPTH_STR].hist(bins=NUM_BINS, color='grey', alpha=0.5)
-      ax.set_title("Depth Distribution")
-      ax.set(xlabel="Depth (km)", ylabel="Number of Events")
-      IMG_FILE = Path(IMG_PATH, (UNDERSCORE_STR.join([
-          TRUE_STR, LOCAL_DEPTH_STR, start, end]) + PNG_EXT))
-      plt.tight_layout()
-      plt.savefig(IMG_FILE, bbox_inches='tight')
-      plt.close()
-    plot_depth_dist()
-
-    def plot_stations():
-      FIG = plt.figure(figsize=(20, 10), layout="tight")
-      GS = gridspec.GridSpec(1, 2, figure=FIG, wspace=0, width_ratios=[1, 7])
-      plt.rcParams.update({'font.size': 12})
-      st = set(DETECT[STATION_STR].unique().tolist())
-      print(f"Catalog Stations: {len(st)}/{len(stations)}")
-      start, end = args.dates
-      dates = np.arange(start.datetime, end.datetime + ONE_DAY,
-                        ONE_DAY).astype("datetime64[D]")
-      st = pd.DataFrame([[n.code, s.code, s.latitude, s.longitude, 0]
-                         for n in INVENTORY for s in n],
-                        columns=[NETWORK_STR, STATION_STR, LATITUDE_STR,
-                                 LONGITUDE_STR, "Total"]).drop_duplicates()
-      for d, s in STATIONS.items():
-        st.loc[st[STATION_STR].isin(list(s)), "Total"] += 1
-      if args.rectdomain:
-        pm = 0.5
-        xy = [args.rectdomain[0], args.rectdomain[2]]
-        w = args.rectdomain[1] - args.rectdomain[0]
-        h = args.rectdomain[3] - args.rectdomain[2]
-        extent = [args.rectdomain[0] - pm, args.rectdomain[1] + pm,
-                  args.rectdomain[2] - pm, args.rectdomain[3] + pm]
-      if args.circdomain:
-        raise NotImplementedError
-        extent = [args.circdomain[1] - args.circdomain[3],
-                  args.circdomain[1] + args.circdomain[3],
-                  args.circdomain[0] - args.circdomain[3],
-                  args.circdomain[0] + args.circdomain[3]]
-      proj = ccrs.PlateCarree()
-      stAx = FIG.add_subplot(GS[1], projection=proj,)
-      stAx.add_patch(mpatches.Polygon(
-          OGS_POLY_REGION, closed=True, linewidth=1, color='red', fill=False,
-          label="OGS Catalog"))
-      stAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
-                                        fill=False, label=OGS_STUDY_STR))
-      stAx.scatter(st[LONGITUDE_STR], st[LATITUDE_STR], s=50, marker='^',
-                   transform=proj, label=STATION_STR, cmap="cool_r",
-                   c=st["Total"], edgecolors="black", linewidths=1,
-                   alpha=0.5)
-      x = {id: DETECT.loc[DETECT[ID_STR] == id, STATION_STR].nunique()
-           for id, _ in SOURCE.groupby(ID_STR)}
-      norm = plt.Normalize(vmin=0, vmax=max(x.values()))
-      stAx.scatter(
-          SOURCE[LONGITUDE_STR], SOURCE[LATITUDE_STR], alpha=1, transform=proj,
-          edgecolors=[mpl.cm.binary(norm(x[st])) for st in SOURCE[ID_STR]],
-          s=10*(3.5**SOURCE[MAGNITUDE_STR]), facecolors="none",
-          label=fr"$<$ {OGS_MAX_MAGNITUDE}")
-      stAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
-      stAx.add_feature(cfeature.BORDERS, linewidth=0.5, edgecolor=MEX_PINK)
-      stAx.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
-      stAx.set_extent(extent, crs=proj)
-      stAx.set_aspect('equal', adjustable='box')
-      FIG.colorbar(stAx.collections[0], ax=stAx, shrink=0.8, aspect=50,
-                   orientation='vertical', label="Number of Days")
-      gl = stAx.gridlines()
-      gl.left_labels = True
-      gl.top_labels = True
-      # Region
-      rgAx = FIG.add_axes((.64, .02, 0.2, 0.3), projection=proj)
-      rgAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
-                                        fill=False))
-      rgAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
-      rgAx.add_feature(cfeature.BORDERS, linewidth=0.5, edgecolor=MEX_PINK)
-      rgAx.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
-      rgAx.set_extent([6, 19, 36, 48], crs=proj)
-      rgAx.set_aspect('equal', adjustable='box')
-      ita = rgAx.annotate("Italy", xy=(0.5, 0.55), xycoords='axes fraction',
-                          ha='center', va='center', fontsize=20,
-                          color=MEX_PINK)
-      ita.set(rotation=-30)
-      # Number of Active Days Distribution
-      ndAx = FIG.add_axes((-.025, .06, 0.12, .55))
-      st["Total"].hist(bins=NUM_BINS, ax=ndAx, orientation='horizontal')
-      ndAx.set(xlabel="Number of Stations", ylabel="Number of Active days",
-               xscale='log')
-      """
-      # Operator Weights Distribution
-      owAx = FIG.add_axes((-.025, .65, 0.12, 0.3))
-      disp = ConfMtxDisp(PS_MTX.values, display_labels=PS_MTX.columns,)
-      disp.plot(ax=owAx, colorbar=False)
-      disp.im_.set(cmap="Blues", norm="log")
-      owAx.set(xlabel=f"{SWAVE} Weight", ylabel=f"{PWAVE} Weight")
-      for labels in disp.text_.ravel():
-        labels.set(color=MEX_PINK, fontweight="bold")
-      """
-      # Number of Stations Distribution
-      nsAx = FIG.add_axes((-.025, .68, 0.12, 0.3))
-      nsAx.hist(x.values(), bins=NUM_BINS)
-      nsAx.set(xlabel="Number of Stations", ylabel="Number of Events",
-               yscale='log')
-      IMG_FILE = Path(IMG_PATH, (UNDERSCORE_STR.join([
-          TRUE_STR, STATION_STR, start.strftime(DATE_FMT),
-          end.strftime(DATE_FMT)]) + PNG_EXT))
-      plt.tight_layout()
-      plt.savefig(IMG_FILE, bbox_inches='tight')
-      plt.close()
-    plot_stations()
   return SOURCE, DETECT
 
 
@@ -1014,14 +889,14 @@ def station_loader(args: argparse.Namespace, WAVEFORMS=None) \
   dates = [str(d) for d in np.arange(start.datetime, end.datetime + ONE_DAY,
                                      ONE_DAY).astype("datetime64[D]").tolist()]
   min_s, max_s = np.inf, 0
-  stations = set()
-  STATIONS = dict()
+  stations: set[str] = set() # Set of all stations, format: <network>.<station>
+  STATIONS: dict[str, set[str]] = dict() # Dictionary of stations per date
   for d, ST in WAVEFORMS.groupby(DATE_STR):
-    if args.station[0] == ALL_WILDCHAR_STR:
+    if args.station[0] != ALL_WILDCHAR_STR:
       ST = ST[ST[STATION_STR] in args.station]
     if ST.empty:
       continue
-    STATIONS[d] = set(ST[STATION_STR].unique())
+    STATIONS[str(d)] = set(ST[STATION_STR].unique())
     ST = (ST[NETWORK_STR] + PERIOD_STR + ST[STATION_STR]).unique()
     min_s = min(min_s, len(ST))
     max_s = max(max_s, len(ST))
@@ -1044,75 +919,7 @@ def station_loader(args: argparse.Namespace, WAVEFORMS=None) \
       continue
     INVENTORY.extend(S)
   if args.verbose:
-    # Plot the stations
-    def plot_stations():
-      POSITIONS = list()
-      for net in INVENTORY:
-        for st in net:
-          if PERIOD_STR.join([net.code, st.code]) in stations:
-            POSITIONS.append([net.code, st.code, st.latitude, st.longitude])
-      POSITIONS = pd.DataFrame(POSITIONS, columns=[
-          NETWORK_STR, STATION_STR, LATITUDE_STR, LONGITUDE_STR]) \
-          .drop_duplicates()
-      FIG = plt.figure(figsize=(20, 10), layout='tight')
-      GS = gridspec.GridSpec(1, 2, figure=FIG, wspace=0, width_ratios=[1, 7])
-      plt.rcParams.update({'font.size': 12})
-      if args.rectdomain:
-        pm = 0.5
-        xy = [args.rectdomain[0], args.rectdomain[2]]
-        w = args.rectdomain[1] - args.rectdomain[0]
-        h = args.rectdomain[3] - args.rectdomain[2]
-        extent = [args.rectdomain[0] - pm, args.rectdomain[1] + pm,
-                  args.rectdomain[2] - pm, args.rectdomain[3] + pm]
-      if args.circdomain:
-        raise NotImplementedError
-        extent = [args.circdomain[1] - args.circdomain[3],
-                  args.circdomain[1] + args.circdomain[3],
-                  args.circdomain[0] - args.circdomain[3],
-                  args.circdomain[0] + args.circdomain[3]]
-      proj = ccrs.PlateCarree()
-      stAx = FIG.add_subplot(GS[1], projection=proj,)
-      stAx.add_patch(mpatches.Polygon(
-          OGS_POLY_REGION, closed=True, linewidth=1, color='red', fill=False,
-          label="OGS Catalog"))
-      stAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
-                                        fill=False, label=OGS_STUDY_STR))
-      stAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
-      stAx.add_feature(cfeature.BORDERS, linewidth=0.5, edgecolor=MEX_PINK)
-      stAx.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
-      stAx.set_extent(extent, crs=proj)
-      stAx.set_aspect('equal', adjustable='box')
-      gl = stAx.gridlines()
-      gl.left_labels = True
-      gl.top_labels = True
-      cmap = plt.get_cmap("turbo")
-      colors = cmap(np.linspace(0, 1, POSITIONS[NETWORK_STR].nunique()))
-      for i, (net, df) in enumerate(POSITIONS.groupby(NETWORK_STR)):
-        stAx.scatter(df[LONGITUDE_STR], df[LATITUDE_STR], s=50, marker='^',
-                     transform=proj, label=net, facecolors='none',
-                     edgecolors=colors[i], linewidths=2.5)
-      stAx.legend(loc='lower left', fontsize=16)
-      # Region
-      rgAx = FIG.add_axes((.72, .02, 0.2, 0.3), projection=proj)
-      rgAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
-                                        fill=False))
-      rgAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
-      rgAx.add_feature(cfeature.BORDERS, linewidth=0.5, edgecolor=MEX_PINK)
-      rgAx.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
-      rgAx.set_extent([6, 19, 36, 48], crs=proj)
-      rgAx.set_aspect('equal', adjustable='box')
-      ita = rgAx.annotate("Italy", xy=(0.5, 0.55), xycoords='axes fraction',
-                          ha='center', va='center', fontsize=20,
-                          color=MEX_PINK)
-      ita.set(rotation=-30)
-      IMG_FILE = Path(IMG_PATH, UNDERSCORE_STR.join([
-          STATION_STR, "distribution"]) + PNG_EXT)
-      plt.tight_layout()
-      plt.savefig(IMG_FILE, bbox_inches='tight')
-      plt.close()
-    plot_stations()
     # Number of station in time
-
     def plot_time_stations():
       _, ax = plt.subplots(figsize=(10, 5), layout='tight')
       plt.rcParams.update({'font.size': 12})
@@ -1132,8 +939,8 @@ def station_loader(args: argparse.Namespace, WAVEFORMS=None) \
       plt.savefig(IMG_FILE, bbox_inches='tight')
       plt.close()
     plot_time_stations()
-    # Plot the availability of stations
 
+    # Plot the availability of stations
     def plot_availability():
       IMG_FILE = Path(IMG_PATH, UNDERSCORE_STR.join([
           STATION_STR, "availability"]) + PNG_EXT)
@@ -1157,8 +964,6 @@ def station_loader(args: argparse.Namespace, WAVEFORMS=None) \
       tmp.columns = dates
       ax.imshow(tmp, cmap='turbo', aspect='auto')
       # Assigning labels of y-axis
-      xlabels = ax.get_xticklabels()
-      print(xlabels)
       # according to dataframe
       plt.yticks(range(len(tmp.index)), tmp.index)
       for label in ax.get_xticklabels():

@@ -124,7 +124,8 @@ def event_parser_dat(filename: Path, start: UTCDateTime = None,
     if match:
       result = match.groupdict()
       if (result[EVENT_LOCALIZATION_STR] != "D" and
-              OGS_EVENT_TYPES[result[EVENT_TYPE_STR]] != EVENT_LOCAL_EQ_STR):
+          result[EVENT_TYPE_STR] != SPACE_STR and
+          OGS_EVENT_TYPES[result[EVENT_TYPE_STR]] != EVENT_LOCAL_EQ_STR):
         # print("WARNING: (DAT) Ignoring line:", line)
         continue
       # Date
@@ -650,7 +651,7 @@ def event_parser_hpl(filename: Path, start: UTCDateTime = None,
             if result[QM_STR] else NONE_STR
         event_detect = int(result[NOTES_STR])
         SOURCE.append([result[EVENT_STR], *event_spacetime,
-                       result[MAGNITUDE_STR], result[NO_STR], result[GAP_STR],
+                       None, result[NO_STR], result[GAP_STR],
                        result[DMIN_STR], result[RMS_STR], result[ERH_STR],
                        result[ERZ_STR], result[QM_STR], None])
         continue
@@ -751,6 +752,13 @@ def event_parser_mod(filename: Path,
     print("WARNING: (MOD) Unable to parse line:", line)
 
 
+def event_parser_txt(filename: Path, start: UTCDateTime = None,
+                     end: UTCDateTime = None,
+                     stations: dict[str, set[str]] = None) -> pd.DataFrame:
+  data = pd.read_csv(filename, sep=r";")
+  print(data)
+
+
 def event_parser_(filename: Path, start: UTCDateTime = None,
                   end: UTCDateTime = None,
                   stations: dict[str, set[str]] = None) -> pd.DataFrame:
@@ -778,6 +786,9 @@ def event_parser_(filename: Path, start: UTCDateTime = None,
   elif sfx == QML_EXT:
     pass  # return event_parser_qml(filename, start, end,
     #                         stations=stations)
+  elif sfx == TXT_EXT:
+    return event_parser_txt(filename, start, end,
+                            stations=stations)
   print(ValueError(f"WARNING: Unknown file extension: {sfx}"))
   return pd.DataFrame(columns=HEADER_SRC), pd.DataFrame(columns=HEADER_MANL)
 
@@ -806,6 +817,8 @@ def event_parser(filename: Path, start: UTCDateTime = None,
       elif sfx == HPL_EXT:
         SOURCE = event_merger_l(SOURCE, source, FIND_SRC)
         DETECT = event_merger_l(DETECT, detect, FIND_DTC)
+      elif sfx == TXT_EXT:
+        SOURCE = event_merger_l(SOURCE, source, FIND_SRC)
   else:
     SOURCE, DETECT = event_parser_(filename, start, end, stations)
     # try:

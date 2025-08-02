@@ -1,0 +1,160 @@
+\documentclass{llncs}
+
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{listings}
+\usepackage[table]{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{color}
+\usepackage{url}
+\graphicspath{ {../img/} }
+\begin{document}
+
+\title{}
+\author{Ken Tanaka Hernández}
+\institute{Universita degli Studi di Trieste}
+
+\maketitle
+
+\begin{abstract}
+In this document, we present a procedural machine learning pipeline designed for
+earthquake pick detection and phase association, leveraging high-performance and
+cloud computing infrastructures. Our pipeline integrates state-of-the-art deep
+learning models with advanced computational frameworks to enhance seismic data
+analysis. We address the challenges of traditional methods in processing
+complex seismic signals and the computational bottlenecks in large-scale seismic
+datasets. Our implementation utilizes Python with GPU acceleration via
+CUDA/PyTorch and multi-core processing with MPI, deployed on the Leonardo HPC
+cluster and Ada Cloud at CINECA. Preliminary results demonstrate significant
+improvements in accuracy and processing speed for P- and S-wave arrival detection
+and event association. The modular design allows us to integrate various
+components while maintaining computational efficiency, which is critical for near
+real-time monitoring applications. Our research contributes to the intersection
+of artificial intelligence and geophysics, offering methodological advances in
+machine learning-based seismic processing and practical implementation strategies
+for operational earthquake monitoring systems. The pipeline's flexibility and
+scalability make it suitable for integration with existing seismic monitoring
+infrastructures, enhancing the capabilities of earthquake monitoring systems in
+seismically active regions.
+\end{abstract}
+
+\section{Introduction}
+Earthquake monitoring systems face increasing demands for accurate, rapid event
+detection and phase association, especially in seismically active regions. In this
+doctoral research, we introduce a novel procedural machine learning pipeline that
+leverages high-performance computing (HPC) and cloud infrastructures to enhance
+seismic data analysis for the seismic monitoring network in North-East Italy.
+
+We address critical challenges in seismic monitoring: (1) the limitations of
+traditional methods like STA/LTA and AIC approaches when processing complex or low
+SNR signals, (2) computational bottlenecks in processing large-scale seismic
+datasets, and (3) the need for adaptable systems that can integrate with existing
+monitoring infrastructure.
+
+Our approach integrates state-of-the-art deep learning models from SeisBench
+(including PhaseNet and EQTransformer) with advanced computational frameworks.
+We implement the pipeline in Python using GPU acceleration via CUDA/PyTorch
+and multi-core processing with MPI. We deploy this system on both Leonardo HPC
+cluster and Ada Cloud at CINECA, demonstrating a hybrid computational approach
+that maximizes performance while maintaining flexibility.
+
+Preliminary results show significant improvements in both accuracy and
+processing speed for P- and S-wave arrival detection and event association. The
+modular design allows us to integrate various components (phase pickers,
+associators, and location refinement tools) while maintaining computational
+efficiency—critical for near real-time monitoring applications.
+
+Our research contributes to the growing intersection of artificial 
+intelligence and geophysics, offering both methodological advances in ML-based 
+seismic processing and practical implementation strategies for operational
+earthquake monitoring systems.
+
+\section{Methodology}
+\section{Data Preprocess}
+\label{sec:data_preprocess}
+Waveforms are resampled to 100 Hz to match pretrained models and standardized to one-day windows. Raw data from OGS servers in MSEED format are processed using ObsPy and stored as NumPy arrays.
+
+\section{Phase Pick}
+\label{sec:phase_pick}
+Deep learning methods using CNNs and RNNs for seismic pick detection outperform traditional approaches with higher accuracy and lower latency. Our implementation leverages SeisBench and ObsPy, designed for modularity and performance optimization.
+
+\subsection{PhaseNet}
+\label{subsec:PhaseNet}
+PhaseNet \cite{PhaseNet} uses a CNN architecture to detect seismic phases in continuous waveforms, outputting probabilities at each time step.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{PhaseNet.jpg}
+  \caption{PhaseNet architecture \protect\cite{PhaseNet}.}
+  \label{fig:PhaseNet}
+\end{figure}
+
+\subsection{EQTransformer}
+\label{subsec:EQTransformer}
+EQTransformer employs CNN architecture for detection and classification of seismic signals in continuous waveforms.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{EQTransformer.png}
+  \caption{EQTransformer architecture \protect\cite{Mousavi2020}}
+\end{figure}
+
+\section{Earthquake Detection}
+\label{sec:Detection}
+For seismic phase association, we utilize the GaMMA algorithm.
+
+\subsection{GaMMA}
+\label{subsec:GaMMA}
+GaMMA treats phase association as unsupervised clustering using Bayesian Gaussian Mixture Models (BGMM). It employs DBSCAN to partition picks into subwindows, reducing computational complexity.
+
+The algorithm assigns seismic picks to specific earthquakes and estimates source parameters through Expectation-Maximization:
+
+\begin{equation}
+  \log p(\mathbf{X}|\phi,\mu,\Lambda,\mathbf{Z}) = \sum_{n=1}^{N}\log\left(
+  w_n\sum_{k=1}^{K}\phi_k\mathcal{N}(\mathbf{x}_n|\mu_k,\Lambda_k^{-1})\right)
+  \label{eq:GaMMA}
+\end{equation}
+
+The algorithm iterates between Expectation and Maximization steps until convergence, computing pick responsibilities and updating earthquake parameters.
+
+\section{Performance}
+\label{sec:performance}
+We evaluate methods using: cumulative detections, time displacement, confusion matrices, and recall metrics.
+
+\subsection{Time Displacement}
+\label{subsec:Time}
+Time displacement ($\Delta t$) measures the difference between actual ($A_t$) and predicted ($P_t$) arrival times:
+\begin{equation}
+  \Delta t [s] = A_t - P_t
+\end{equation}
+
+\subsection{Confusion Matrix}
+\label{subsec:Confusion}
+For multi-class seismic phase classification, we propose an enhanced confusion matrix that distinguishes between complete and partial true positives:
+
+\begin{table}[h!]
+  \centering
+  \begin{tabular}{|c|c|c|c|}
+    \hline
+    & \textbf{P} & \textbf{S} & \textbf{Void}\\\hline
+    \textbf{P} & Complete TP & Partial TP & FN \\\hline
+    \textbf{S} & Partial TP & Complete TP & FN \\\hline
+    \textbf{Void} & FP & FP & TN \\\hline
+  \end{tabular}
+  \caption{Multi-class confusion matrix for seismic phase classification.}
+\end{table}
+
+For time series data with multiple predictions, we compute weights considering time, phase, and confidence parameters, then apply Maximum Weight Matching.
+
+\subsection{Metrics}
+\label{subsec:Metrics}
+Our primary evaluation metric is recall, defined as:
+\begin{equation}
+  Recall = \frac{TP}{TP + FN}
+\end{equation}
+\end{document}

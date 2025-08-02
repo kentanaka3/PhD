@@ -27,7 +27,7 @@ TIME_FMT = "%H%M%S"
 YYMMDD_FMT = "%y%m%d"
 DATETIME_FMT = YYMMDD_FMT + TIME_FMT
 ONE_DAY = td(days=1)
-PICK_OFFSET = td(seconds=0.5)
+PICK_OFFSET = td(seconds=1)
 PICK_OFFSET_TRAIN = td(seconds=60)
 H71_OFFSET = {
     0: td(seconds=0.01),
@@ -124,6 +124,10 @@ CLSTR_PLOT_STR = "CT"
 TIME_DSPLCMT_STR = "TD"
 
 MEX_PINK = "#E4007C"
+OGS_BLUE = "#163771"
+ALN_GREEN = "#00e468"
+LIP_ORANGE = "#FF8C00"
+SUN_YELLOW = "#e4da00"
 
 # TODO: Add Tabular data for relational databases for future development
 
@@ -146,6 +150,7 @@ PRT_STR = "prt"
 PUN_STR = "pun"
 QML_STR = "qml"
 TORCH_STR = "pt"
+TXT_STR = "txt"
 XML_STR = "xml"
 
 BLT_EXT = PERIOD_STR + BLT_STR
@@ -166,6 +171,7 @@ PRT_EXT = PERIOD_STR + PRT_STR
 PUN_EXT = PERIOD_STR + PUN_STR
 QML_EXT = PERIOD_STR + QML_STR
 TORCH_EXT = PERIOD_STR + TORCH_STR
+TXT_EXT = PERIOD_STR + TXT_STR
 XML_EXT = PERIOD_STR + XML_STR
 
 PRC_FMT = SEED_ID_FMT + ".{BEGDT}.{EXT}"
@@ -224,6 +230,7 @@ X_COORD_STR = "x(km)"           # X coordinate in kilometers
 Y_COORD_STR = "y(km)"           # Y coordinate in kilometers
 Z_COORD_STR = "z(km)"           # Z coordinate in kilometers
 MAGNITUDE_STR = "magnitude"
+MAGNITUDE_L_STR = "ML"
 AMPLITUDE_STR = "amplitude"
 VELOCITY_STR = "vel"
 METHOD_STR = "method"

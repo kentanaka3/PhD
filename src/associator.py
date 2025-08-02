@@ -108,25 +108,26 @@ class AssociateConfig:
 
   def __repr__(self) -> str:
     return {
-        "dims": self.dims,
-        "use_dbscan": self.use_dbscan,
-        "use_amplitude": self.use_amplitude,
-        X_COORD_STR: self.x_lim,
-        Y_COORD_STR: self.y_lim,
-        Z_COORD_STR: self.z_lim,
-        "method": self.method,
-        "oversample_factor": self.oversample_factor,
-        "vel": {
-            "p": self.vel[PWAVE],
-            "s": self.vel[SWAVE]
-        },
-        "dbscan_eps": self.dbscan_eps,
-        "dbscan_min_samples": self.dbscan_min_samples,
-        "min_picks_per_eq": self.min_picks_per_eq,
-        "min_p_picks_per_eq": self.min_p_picks_per_eq,
-        "min_s_picks_per_eq": self.min_s_picks_per_eq,
-        "max_sigma11": self.max_sigma11,
-        "bfgs_bounds": self.bfgs_bounds
+      "dims": self.dims,
+      "use_dbscan": self.use_dbscan,
+      "use_amplitude": self.use_amplitude,
+      X_COORD_STR: self.x_lim,
+      Y_COORD_STR: self.y_lim,
+      Z_COORD_STR: self.z_lim,
+      "method": self.method,
+      "oversample_factor": self.oversample_factor,
+      "vel": {
+        "p": self.vel[PWAVE],
+        "s": self.vel[SWAVE]
+      },
+      "dbscan_eps": self.dbscan_eps,
+      "dbscan_min_samples": self.dbscan_min_samples,
+      "min_picks_per_eq": self.min_picks_per_eq,
+      "min_p_picks_per_eq": self.min_p_picks_per_eq,
+      "min_s_picks_per_eq": self.min_s_picks_per_eq,
+      "covariance_prior_pre": [5.0, 5.0],
+      "max_sigma11": self.max_sigma11,
+      "bfgs_bounds": self.bfgs_bounds
     }
 
   def __str__(self) -> str:
