@@ -1,0 +1,11 @@
+defaults:
+  - _self_
+  - data: ogsDB.yaml
+  - group_modules: default.yaml
+  - merge_module: default.yaml
+  - joint_modules: none.yaml
+  - builder: default.yaml
+  - cluster: ktanaka.yaml
+
+log_level: DEBUG
+output_path: catalogs/OGS

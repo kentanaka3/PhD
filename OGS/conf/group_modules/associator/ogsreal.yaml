@@ -1,0 +1,24 @@
+_target_: ml_catalog.modules.REALAssociator
+
+p_picks: 4
+s_picks: 4
+total_picks: 10
+p_and_s_picks: 4
+max_residual_std: 2.0
+min_p_to_s_separation: 0.
+event_separation_sec: 0.1
+
+search_range_horizontal_deg: 1.0
+search_range_vertical_km: 300
+grid_size_horizontal_deg: 0.1
+grid_size_vertical_km: 10
+vp: 7.0
+vs: 4.0
+shallow_vp: 5.3
+shallow_vs: 3.1
+elevation_correction: true
+
+use_model1d: true
+tt_range_horizontal_deg: 6
+tt_grid_size_horizontal_deg: 0.05
+tt_grid_size_vertical_km: 3

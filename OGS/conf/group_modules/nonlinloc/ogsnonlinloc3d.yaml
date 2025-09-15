@@ -1,0 +1,19 @@
+_target_: ml_catalog.modules.NonLinLoc
+_convert_: partial
+mode_3d: true
+CONTROL: [1, 42]
+TRANS: [TRANS_MERC, WGS-84, 45.9,  12.25, 0.0]
+velocity_models_3d:
+  P: "OGS/data/NAC5.P.sim"
+  S: "OGS/data/NAC5.S.sim"
+VGGRID: [441, 363, 63, -220.0, -181.0, -5.0, 1.0, 1.0, 1.0, SLOW_LEN]
+GTMODE: [GRID3D, ANGLES_YES]
+GT_PLFD: [1.0e-3, 0]
+LOCSIG: [ML Catalog]
+LOCHYPOUT: [SAVE_NLLOC_ALL, SAVE_HYPOINV_SUM]
+LOCSEARCH: [OCT, 50, 50, 5, 0.01, 50000, 5000, 1, 1]
+LOCGRID: [439, 361,  50, -220, -181, -5, 1, 1, 1, PROB_DENSITY, SAVE]
+LOCMETH: [EDT, 9999.0, 4, -1, -1, -1, 6, -1.0, 1]
+LOCGAU: [0.20, 0.0]
+LOCGAU2: [0.05, 0.05, 2.0]
+LOCQUAL2ERR: [0.1, 0.5, 1.0, 2.0, 99999.9]

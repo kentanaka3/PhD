@@ -1,0 +1,6 @@
+defaults:
+  - picker: ogspicker.yaml
+  - associator: ogsgamma.yaml
+  - qcpicks: default.yaml
+  - nonlinloc: ogsnonlinloc1d.yaml
+  - magnitude: ogslocalmagnitude.yaml

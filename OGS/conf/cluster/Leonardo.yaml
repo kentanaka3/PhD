@@ -1,0 +1,7 @@
+_target_: dask_jobqueue.SLURMCluster
+
+account: "IscrC_AI2Seism"
+walltime: "23:59:59"
+cores: 1
+memory: "490000MB"
+queue: "boost_usr_prod"

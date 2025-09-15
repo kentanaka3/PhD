@@ -1,0 +1,30 @@
+_target_: ml_catalog.modules.HypoDD
+
+ipha: 3
+dist: 400
+obscc: 4
+obsct: 2
+istart: 2
+isolv: 2
+
+weighting:
+  - NITER: 4
+    WTCCP: 1
+    WTCCS: 0.5
+    WRCC: -9
+    WDCC: -9
+    WTCTP: 0.01
+    WTCTS: -9
+    WRCT: -9
+    WDCT: -9
+    DAMP: 20
+  - NITER: 4
+    WTCCP: 1
+    WTCCS: 0.5
+    WRCC: 5
+    WDCC: 3
+    WTCTP: 0.01
+    WTCTS: -9
+    WRCT: 5
+    WDCT: 10
+    DAMP: 20

@@ -1,0 +1,18 @@
+_target_: ml_catalog.modules.NonLinLoc
+_convert_: partial
+CONTROL: [1, 42]
+TRANS: [TRANS_MERC, WGS-84, 44.3,   9.8, 0.0]
+VGTYPE:
+  - [P]
+  - [S]
+VGGRID: [2, 9000, 550, 0.0, 0.0, -5.0, 0.1, 0.1, 0.1, SLOW_LEN]
+GTMODE: [GRID2D, ANGLES_YES]
+GT_PLFD: [1.0e-3, 0]
+LOCSIG: [ML Catalog]
+LOCHYPOUT: [SAVE_NLLOC_ALL, SAVE_HYPOINV_SUM]
+LOCSEARCH: [OCT, 50, 50, 5, 0.01, 50000, 5000, 1, 1]
+LOCGRID: [600, 450,  50, 0, 0, 0, 1, 1, 1, PROB_DENSITY, SAVE]
+LOCMETH: [EDT, 9999.0, 4, -1, -1, -1, 10, -1.0, 1]
+LOCGAU: [0.15, 1.0]
+#LOCGAU2: [0.01, 0.05, 2.0]
+LOCQUAL2ERR: [0.1, 0.5, 1.0, 2.0, 99999.9]

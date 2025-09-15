@@ -1,0 +1,4 @@
+_target_: OGS.src.ogsmagnitude.OGSLocalMagnitude
+station_corrections:
+  _target_: pandas.read_csv
+  filepath_or_buffer: "OGS/data/Magnitude/LocalMagnitude/mag_correction.csv"

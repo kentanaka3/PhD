@@ -1,0 +1,15 @@
+_target_: ml_catalog.data.SquirrelDataSource
+
+env: ogsDB
+persistent: v1
+check: true
+paths:
+  - /Volumes/Expansion/KEN/waveforms/2024/
+  - /Users/admin/Desktop/OGS_Catalog/station/
+
+starttime: "2024-03-20"
+endtime: "2024-06-20"
+
+velocity_model:
+  _target_: pandas.read_csv
+  filepath_or_buffer: OGS/data/ogs1d.csv

@@ -1,0 +1,1 @@
+_target_: ml_catalog.modules.PickStatQC  # Without further parameters, this will just write statistics

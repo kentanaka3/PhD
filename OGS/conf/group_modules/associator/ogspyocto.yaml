@@ -1,0 +1,26 @@
+_target_: ml_catalog.modules.PyOctoAssociator.from_area
+
+config:
+  lat: [44.3, 47.5]
+  lon: [9.5, 15.0]
+  zlim: [0., 40.]
+
+  time_before: 300.
+
+  n_picks: 6
+  n_p_picks: 3
+  n_s_picks: 3
+  n_p_and_s_picks: 3
+  pick_match_tolerance: 1.5
+
+  location_split_depth: 7
+  location_split_return: 5
+
+  velocity_model:
+    _target_: ml_catalog.modules.DynamicPyOctoVelocityModel1D
+
+    delta: 0.5
+    xdist: 800.
+    zdist: 50.
+
+    tolerance: 1.5
