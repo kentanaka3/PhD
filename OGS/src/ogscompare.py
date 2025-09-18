@@ -32,7 +32,7 @@ def parse_arguments():
     '-D', "--dates", required=False, metavar=OGS_C.DATE_STD, type=is_date,
   nargs=2, action=SortDatesAction,
   default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
-            datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
+           datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
   help="Specify the beginning and ending (inclusive) Gregorian date " \
         "(YYMMDD) range to work with.")
   parser.add_argument('-S', "--station", type=Path, required=False,
@@ -55,6 +55,12 @@ class Catalog:
     self.filepath : Path = filepath
     self.args = args
     self.RESULTS_PATH = list()
+
+  def preload(self): pass # to be optionally defined in subclasses
+
+  def load_(self, filepath: Path): pass # to be defined in subclasses
+
+  def load(self): pass # to be optionally defined in subclasses
 
 class Base(Catalog):
   """Base Catalog Class. Handles OGS: TXT, DAT, HPL, PUN formats.
@@ -311,6 +317,8 @@ class Target(Catalog):
       if "assignments" in self.groups.keys():
         self.groups["assignments"][OGS_C.GROUPS_STR] = pd.to_datetime(
           self.groups["assignments"][OGS_C.TIMESTAMP_STR]).dt.date
+        self.groups["assignments"].drop(columns=[
+          "group__duplicate__drop__"], inplace=True)
       if "events" in self.groups.keys():
         self.groups["events"][OGS_C.MAGNITUDE_L_STR] = float('NaN')
         self.groups["events"][OGS_C.ERZ_STR] = float('NaN')
@@ -497,11 +505,10 @@ class Comparison:
                       OGS_C.NOTES_STR]
             method = OGS_C.SOURCE_STR
             key = "events"
-          df = target.groups[key]
           CFN_MTX = pd.DataFrame(0, index=a, columns=a)
           cfn_mtx = pd.DataFrame(0, index=a, columns=a)
           TP, FN, FP = set(), [], set()
-          for date, TARGET in df.groupby(OGS_C.GROUPS_STR):
+          for date, TARGET in target.groups[key].groupby(OGS_C.GROUPS_STR):
             date = datetime.strptime(str(date), OGS_C.DATE_FMT)
             if date not in base.groups[key].keys() or TARGET.empty: continue
             BASE = base.groups[key][date]
@@ -545,12 +552,12 @@ class Comparison:
           if i == 0:
             trpppk = CFN_MTX.loc[OGS_C.PWAVE, OGS_C.PWAVE]
             trsspk = CFN_MTX.loc[OGS_C.SWAVE, OGS_C.SWAVE]
-            fpppk = CFN_MTX.loc[OGS_C.NONE_STR, OGS_C.PWAVE]
-            fpsspk = CFN_MTX.loc[OGS_C.NONE_STR, OGS_C.SWAVE]
-            plt.title(f"Recall P: {trpppk / (fpppk + trpppk):.4f}, "
-                      f"Recall S: {trsspk / (fpsspk + trsspk):.4f}, "
+            fnppk = CFN_MTX.loc[OGS_C.PWAVE, OGS_C.NONE_STR]
+            fnsspk = CFN_MTX.loc[OGS_C.SWAVE, OGS_C.NONE_STR]
+            plt.title(f"Recall P: {trpppk / (fnppk + trpppk):.4f}, "
+                      f"Recall S: {trsspk / (fnsspk + trsspk):.4f}, "
                       f"Recall: {(trpppk + trsspk) / \
-                                 (fpppk + fpsspk + trpppk + trsspk):.4f}")
+                                 (fnppk + fnsspk + trpppk + trsspk):.4f}")
           else:
             fnev = CFN_MTX.loc[OGS_C.EVENT_STR, OGS_C.NONE_STR]
             trev = CFN_MTX.loc[OGS_C.EVENT_STR, OGS_C.EVENT_STR]
@@ -593,12 +600,13 @@ class Comparison:
               domain=OGS_C.OGS_STUDY_REGION,
               x=TP[OGS_C.LONGITUDE_STR].apply(lambda x: x[0]),
               y=TP[OGS_C.LATITUDE_STR].apply(lambda x: x[0]),
+              facecolors="none", edgecolors=OGS_C.OGS_BLUE, legend=True,
               label="True Positive (OGS)")
             myplot.add_plot(
               TP[OGS_C.LONGITUDE_STR].apply(lambda x: x[1]),
               TP[OGS_C.LATITUDE_STR].apply(lambda x: x[1]), color=None,
                 label="True Positive (SBC)", legend=True, facecolors="none",
-                edgecolors=OGS_C.OGS_BLUE, output=f"{n}{m}True.png")
+                edgecolors=OGS_C.MEX_PINK, output=f"{n}{m}True.png")
             plt.close()
             # False Negative and False Positive Map
             myplot = OGS_P.map_plotter(
@@ -628,7 +636,7 @@ class Comparison:
               output=f"{n}{m}MagnitudeDiff.png",
               legend=True)
             plt.close()
-            # Magnitude Distribution
+            # True Magnitude Distribution
             x = TP[OGS_C.MAGNITUDE_L_STR].apply(lambda x: x[0])
             y = TP[OGS_C.MAGNITUDE_L_STR].apply(lambda x: x[1])
             mx, mn = max(x.max(), y.max()), min(x.min(), y.min())
@@ -638,7 +646,7 @@ class Comparison:
               title="Magnitude Prediction", aspect='equal')
             mag.add_plot([mn, mx], [mn, mx], color=OGS_C.MEX_PINK,
                          aspect='equal', legend=True,
-                         output=f"{n}{m}MagnitudeComparison.png")
+                         output=f"{n}{m}TPDistMagnitude.png")
             plt.close()
             # Depth Difference Histogram
             OGS_P.histogram_plotter(
@@ -662,21 +670,31 @@ class Comparison:
               output=f"{n}{m}HypoDistDiff.png",
               legend=True)
             plt.close()
+      for _, BASE in base.groups.items():
+        BASE = pd.concat(BASE.values(), axis=0)
+        if BASE.empty: continue
+        for n, target in self.TargetCatalog.RESULTS_PATH:
+          try:
+            a = target.groups.keys()
+          except AttributeError:
+            print(f"WARNING: No data found in {n}")
+            print(target.groups)
+            continue
+          res = np.asarray(self.MDL_EQUIV[m]) + np.asarray(self.MDL_EQUIV[n])
+          for i, val in enumerate(res):
+            if val != 2: continue
+            if i == 0:
+              a = [OGS_C.PWAVE, OGS_C.SWAVE, OGS_C.NONE_STR]
+              method = OGS_C.CLSSFD_STR
+              key = "assignments"
+            else:
+              a = [OGS_C.EVENT_STR, OGS_C.NONE_STR]
+              method = OGS_C.SOURCE_STR
+              key = "events"
     return
 
   def summary(self):
-    for key, val in self.TP.items():
-      print(f"True Positives for {key}:")
-      for method, df in val.items():
-        print(f"  {method}: {df}")
-    for key, val in self.FN.items():
-      print(f"False Negatives for {key}:")
-      for method, df in val.items():
-        print(f"  {method}: {df}")
-    for key, val in self.FP.items():
-      print(f"False Positives for {key}:")
-      for method, df in val.items():
-        print(f"  {method}: {df}")
+    return
 
 def main(args : argparse.Namespace):
   comp = Comparison(args.base, args.target, args)

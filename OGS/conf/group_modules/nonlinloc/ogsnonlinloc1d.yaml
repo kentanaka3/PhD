@@ -1,7 +1,7 @@
 _target_: ml_catalog.modules.NonLinLoc
 _convert_: partial
 CONTROL: [1, 42]
-TRANS: [TRANS_MERC, WGS-84, 44.3,   9.8, 0.0]
+TRANS: [TRANS_MERC, WGS-84, 44.3, 9.5, 0.0]
 VGTYPE:
   - [P]
   - [S]

@@ -1,12 +1,5 @@
-<style>
-pink { color: #E4007C }
-green { color: #00e468}
-blue { color: #163771}
-orange { color: #FF8C00}
-yellow { color: #E4DA00}
-</style>
 <code><pre>
-&nbsp;<blue>                           ##                            </blue>
+&nbsp;<blue>                          ###                            </blue>
 &nbsp;<blue>                   #################                     </blue>
 &nbsp;<blue>                ########################                 </blue>
 &nbsp;<blue>             #############################               </blue>
@@ -55,6 +48,46 @@ yellow { color: #E4DA00}
 
 # PhD
 ## Abstract
+
+We present a procedural machine learning pipeline designed for earthquake pick 
+detection and phase association, leveraging high-performance and cloud 
+computing infrastructures. Our pipeline integrates state-of-the-art deep 
+learning models with advanced computational frameworks to enhance seismic data 
+analysis. We address the challenges of traditional methods in processing 
+complex seismic signals and the computational bottlenecks in large-scale 
+seismic datasets. Our implementation utilizes Python with GPU acceleration via 
+CUDA/PyTorch and multi-core processing with MPI, deployed on the Leonardo HPC 
+cluster and Ada Cloud at CINECA. Preliminary results demonstrate significant 
+improvements in accuracy and processing speed for P- and S-wave arrival 
+detection and event association. The modular design allows us to integrate 
+various components while maintaining computational efficiency, which is 
+critical for near real-time monitoring applications. Our research contributes 
+to the intersection of artificial intelligence and geophysics, offering 
+methodological advances in machine learning-based seismic processing and 
+practical implementation strategies for operational earthquake monitoring 
+systems. The pipeline's flexibility and scalability make it suitable for 
+integration with existing seismic monitoring infrastructures, enhancing the 
+capabilities of earthquake monitoring systems in seismically active regions.
+
+## Keywords:
+Seismology, Machine Learning, Phase Picking, Association, High-Performance 
+Computing, Cloud Computing
+
+## Introduction
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 In this work, we developed an automatic machine learning (ML)-based pipeline
 for earthquake pick detection and phase association, leveraging both 
 high-performance and cloud computing infrastructures. The proposed method

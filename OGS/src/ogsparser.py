@@ -108,11 +108,11 @@ class DataFile:
   RECORD_EXTRACTOR_LIST : list = [] # TBD in subclasses
   EVENT_EXTRACTOR_LIST : list = [] # TBD in subclasses
   GROUP_PATTERN = re.compile(r"\(\?P<(\w+)>[\[\]\w\d\{\}\-\\\?\+]+\)(\w)*")
-  def __init__(self, file_path: Path, start: datetime = datetime.max,
+  def __init__(self, filepath: Path, start: datetime = datetime.max,
                end: datetime = datetime.min, verbose: bool = False,
                polygon : mplPath = mplPath(OGS_C.OGS_POLY_REGION, closed=True),
                name : Path = DATA_PATH / "catalogs" / "OGSCatalog"):
-    self.file_path = file_path
+    self.filepath = filepath
     self.start = start
     self.end = end
     self.polygon : mplPath = polygon
@@ -131,6 +131,7 @@ class DataFile:
       list(flatten_list(self.RECORD_EXTRACTOR_LIST)))) # TBD in subclasses
     self.EVENT_EXTRACTOR : re.Pattern = re.compile(OGS_C.EMPTY_STR.join(
       list(flatten_list(self.EVENT_EXTRACTOR_LIST)))) # TBD in subclasses
+    print(f"Processing file: {self.filepath}")
     self.read()
     self.log()
 
@@ -143,101 +144,35 @@ class DataFile:
   }
   def log(self):
     name = self.name.stem
-    sfx = str(self.file_path.suffix[1:]).upper()
-    log = self.name / self.file_path.suffix
+    sfx = str(self.filepath.suffix[1:]).upper()
+    log = self.name / self.filepath.suffix
     DAYS = np.arange(self.start, self.end + OGS_C.ONE_DAY, OGS_C.ONE_DAY,
                      dtype='datetime64[D]').tolist()
-    for day in DAYS:
-      if self.file_path.suffix not in [OGS_C.PUN_EXT, OGS_C.TXT_EXT]:
-        folder = log / "assignments" / \
-                 self.DIR_FMT["year"].format(day.year) / \
-                 self.DIR_FMT["month"].format(day.month)
-        folder.mkdir(parents=True, exist_ok=True)
-      if self.file_path.suffix not in [OGS_C.DAT_EXT]:
-        folder = log / "events" / \
-                self.DIR_FMT["year"].format(day.year) / \
-                self.DIR_FMT["month"].format(day.month)
-        folder.mkdir(parents=True, exist_ok=True)
-    if not self.events.empty:
-      self.events[OGS_C.GROUPS_STR] = self.events[OGS_C.TIMESTAMP_STR].apply(
-        lambda x: x.date())
-      date = datetime.min
-      for date, df in self.events.groupby(OGS_C.GROUPS_STR):
-        df.to_csv(log / "events" /
-          self.DIR_FMT["year"].format(date.year) /
-          self.DIR_FMT["month"].format(date.month) /
-          f"{self.DIR_FMT["day"].format(date.day)}.csv", index=False)
-      OGS_P.map_plotter(
-        domain=OGS_C.OGS_STUDY_REGION,
-        x=self.events[OGS_C.LONGITUDE_STR],
-        y=self.events[OGS_C.LATITUDE_STR],
-        label="OGS Catalog",
-        legend=True,
-        facecolors="none",
-        edgecolors=OGS_C.OGS_BLUE,
-        output=f"{sfx}{date.year}{name}Map.png")
-      OGS_P.histogram_plotter(
-        self.events[OGS_C.DEPTH_STR].dropna(),
-        xlabel="Depth (km)",
-        ylabel="Number of Events",
-        title="OGS Catalog Depths",
-        color=OGS_C.OGS_BLUE,
-        output=f"{sfx}{date.year}{name}Depths.png",
-        legend=True)
-      OGS_P.histogram_plotter(
-        self.events[OGS_C.ERH_STR].dropna(),
-        xlabel="Horizontal Error (km)",
-        ylabel="Number of Events",
-        title="OGS Catalog Horizontal Errors",
-        color=OGS_C.OGS_BLUE,
-        output=f"{sfx}{date.year}{name}ERH.png",
-        legend=True)
-      OGS_P.histogram_plotter(
-        self.events[OGS_C.ERZ_STR].dropna(),
-        xlabel="Vertical Error (km)",
-        ylabel="Number of Events",
-        title="OGS Catalog Vertical Errors",
-        color=OGS_C.OGS_BLUE,
-        output=f"{sfx}{date.year}{name}ERZ.png",
-        legend=True)
-      OGS_P.day_plotter(
-        self.events[OGS_C.GROUPS_STR],
-        ylabel="Number of Events",
-        title="OGS Catalog Events by Date",
-        color=OGS_C.OGS_BLUE,
-        output=f"{sfx}{date.year}{name}Date.png",
-        grid=True)
-      if self.file_path.suffix == OGS_C.TXT_EXT:
-        OGS_P.histogram_plotter(
-          self.events[OGS_C.MAGNITUDE_L_STR].dropna(),
-          xlabel="Local Magnitude (Ml)",
-          ylabel="Number of Events",
-          title="OGS Catalog Magnitudes",
-          color=OGS_C.OGS_BLUE,
-          output=f"{sfx}{date.year}{name}Ml.png",
-          legend=True)
+    # Picks
     if not self.picks.empty:
-      self.picks[OGS_C.GROUPS_STR] = self.picks[OGS_C.TIMESTAMP_STR].apply(
-        lambda x: x.date())
-      for date, df in self.picks.groupby(OGS_C.GROUPS_STR):
-        df.to_csv(log / "assignments" /
-          self.DIR_FMT["year"].format(date.year) /
-          self.DIR_FMT["month"].format(date.month) /
-          f"{self.DIR_FMT["day"].format(date.day)}.csv", index=False)
-      OGS_P.histogram_plotter(
-        self.picks[OGS_C.ERT_STR],
-        xlabel="Estimated Reading Time (s)",
-        ylabel="Number of Picks",
-        title="OGS Catalog Estimated Reading Times",
-        color=OGS_C.OGS_BLUE,
-        output=f"{sfx}{date.year}{name}ERT.png")
+      for date, df in self.picks.groupby(
+          self.picks[OGS_C.TIMESTAMP_STR].dt.date):
+        dir_path = log / "assignments" / f"{date.year}" / f"{date.month:02}" /\
+                   f"{date.day:02}.csv"
+        dir_path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(dir_path, index=False)
+    print(self.picks)
+    # Events
+    if not self.events.empty:
+      for date, df in self.events.groupby(
+          self.events[OGS_C.TIMESTAMP_STR].dt.date):
+        dir_path = log / "events" / f"{date.year}" / f"{date.month:02}" /\
+                   f"{date.day:02}.csv"
+        dir_path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(dir_path, index=False)
+    print(self.events)
 
   def debug(self, line, EXTRACTOR_LIST) -> str:
     RECORD_EXTRACTOR_DEBUG = list(reversed(list(it.accumulate(
       EXTRACTOR_LIST[:-1],
       lambda x, y: x + (y if isinstance(y, str) else
                         OGS_C.EMPTY_STR.join(list(flatten_list(y))))))))
-    bug = self.GROUP_PATTERN.findall(EXTRACTOR_LIST[0])[0][0]
+    bug = self.GROUP_PATTERN.findall(EXTRACTOR_LIST[0])
     for i, extractor in enumerate(RECORD_EXTRACTOR_DEBUG):
       match_extractor = re.match(extractor, line)
       if match_extractor:
@@ -266,19 +201,19 @@ class DataCatalog(DataFile):
       fr"(?P<{OGS_C.ERZ_STR}>([\s\d]{{2}}\d\.\d|\s{{5}}))\s"        # ERZ
       fr"(?P<{OGS_C.QM_STR}>[A-Z][0-9])"                            # QM
     ]
-    def __init__(self, file_path: Path, start: datetime = datetime.max,
+    def __init__(self, filepath: Path, start: datetime = datetime.max,
                  end: datetime = datetime.min, verbose: bool = False,
                  polygon: mplPath = mplPath(
                    OGS_C.OGS_POLY_REGION, closed=True),
                  name: Path = DATA_PATH / "catalogs" / "OGSCatalog"):
-      super().__init__(file_path, start, end, verbose, polygon, name)
+      super().__init__(filepath, start, end, verbose, polygon, name)
 
     def read(self):
-      assert self.file_path.suffix == OGS_C.PUN_EXT
-      assert self.file_path.exists()
+      assert self.filepath.suffix == OGS_C.PUN_EXT
+      assert self.filepath.exists()
       SOURCE = list()
       event: int = 0
-      with open(self.file_path, 'r') as fr: lines = fr.readlines()[1:]
+      with open(self.filepath, 'r') as fr: lines = fr.readlines()[1:]
       for line in [l.strip() for l in lines]:
         match = self.RECORD_EXTRACTOR.match(line)
         if match:
@@ -306,12 +241,8 @@ class DataCatalog(DataFile):
             splt = result[OGS_C.LONGITUDE_STR].split(OGS_C.DASH_STR)
             result[OGS_C.LONGITUDE_STR] = float(splt[0]) + float(splt[1]) / 60.
           point = (result[OGS_C.LONGITUDE_STR], result[OGS_C.LATITUDE_STR])
-          if not self.polygon.contains_point(point): continue
           result[OGS_C.DEPTH_STR] = float(result[OGS_C.DEPTH_STR]) \
               if result[OGS_C.DEPTH_STR] else OGS_C.NONE_STR
-          result[OGS_C.MAGNITUDE_D_STR] = \
-            float(result[OGS_C.MAGNITUDE_D_STR].replace(
-              OGS_C.SPACE_STR, OGS_C.ZERO_STR))
           result[OGS_C.NO_STR] = int(result[OGS_C.NO_STR].replace(
             OGS_C.SPACE_STR, OGS_C.ZERO_STR)) \
               if result[OGS_C.NO_STR] else OGS_C.NONE_STR
@@ -344,6 +275,12 @@ class DataCatalog(DataFile):
         OGS_C.ERH_STR, OGS_C.ERZ_STR, OGS_C.QM_STR, OGS_C.NOTES_STR,
         OGS_C.GROUPS_STR
       ]).astype({ OGS_C.INDEX_STR: int})
+      self.events[OGS_C.MAGNITUDE_D_STR] = \
+        self.events[OGS_C.MAGNITUDE_D_STR].replace(" " * 5, "NaN").apply(float)
+      self.events = self.events[self.events[
+        [OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR]].apply(
+          lambda x: self.polygon.contains_point(
+            (x[OGS_C.LONGITUDE_STR], x[OGS_C.LATITUDE_STR])), axis=1)]
 
   class DataFileHPL(DataFile):
     RECORD_EXTRACTOR_LIST = [
@@ -406,8 +343,8 @@ class DataCatalog(DataFile):
       fr"(?P<{OGS_C.ERH_STR}>[\s\d\.]{{4}})\s",                     # ERH
       fr"(?P<{OGS_C.ERZ_STR}>[\s\d\.]{{4}})\s",                     # ERZ
       fr"(?P<{OGS_C.QM_STR}>[A-D\s])\s",                            # QM
-      fr"(([A-D]/[A-D])|\s{{3}})\s",                                # Unknown
-      fr"([\s\d\.]{{4}})\s",                                        # Unknown
+      fr"(([A-D]/[A-D])|\s{{3}})",                                  # Unknown
+      fr"([\s\d\.]{{5}})\s",                                        # Unknown
       fr"([\s\d]{{2}})\s",                                          # Unknown
       fr"([\s\d]{{2}})",                                            # Unknown
       fr"([\-\s\d\.]{{5}})",                                        # Unknown
@@ -433,22 +370,22 @@ class DataCatalog(DataFile):
     ]
     NOTES_EXTRACTOR = re.compile(OGS_C.EMPTY_STR.join(
       list(flatten_list(NOTES_EXTRACTOR_LIST))))
-    def __init__(self, file_path: Path, start: datetime = datetime.max,
+    def __init__(self, filepath: Path, start: datetime = datetime.max,
                  end: datetime = datetime.min, verbose: bool = False,
                  polygon: mplPath = mplPath(OGS_C.OGS_POLY_REGION,
                                             closed=True),
                  name: Path = DATA_PATH / "catalogs" / "OGSCatalog"):
-      super().__init__(file_path, start, end, verbose, polygon, name)
+      super().__init__(filepath, start, end, verbose, polygon, name)
 
     def read(self):
-      assert self.file_path.suffix == OGS_C.HPL_EXT
-      assert self.file_path.exists()
+      assert self.filepath.suffix == OGS_C.HPL_EXT
+      assert self.filepath.exists()
       SOURCE = list()
       DETECT = list()
       event_notes: str = ""
       event_detect: int = 0
       event_spacetime = (datetime.min, 0, 0, 0)
-      with open(self.file_path, 'r') as fr: lines = fr.readlines()
+      with open(self.filepath, 'r') as fr: lines = fr.readlines()
       for line in [l.strip("\n") for l in lines]:
         if event_detect > 0:
           event_detect -= 1
@@ -481,27 +418,37 @@ class DataCatalog(DataFile):
             hrs = td(hours=int(result[OGS_C.P_TIME_STR][:2]))
             result[OGS_C.P_TIME_STR] = datetime(
               date.year, date.month, date.day) + hrs + min
-            if self.start is not None and result[OGS_C.P_TIME_STR] < self.start:
-              event_detect = 0
+            if (self.start is not None and
+                result[OGS_C.P_TIME_STR] < self.start):
+              event_detect = -1 # Error
               continue
             if (self.end is not None and
                 result[OGS_C.P_TIME_STR] >= self.end + OGS_C.ONE_DAY): break
             DETECT.append([
               result[OGS_C.INDEX_STR],
               result[OGS_C.P_TIME_STR] + result[OGS_C.SECONDS_STR],
-              OGS_C.H71_OFFSET[result[OGS_C.P_WEIGHT_STR]],
-              OGS_C.PWAVE, None, result[OGS_C.STATION_STR], None,
-              result[OGS_C.P_TIME_STR].strftime(OGS_C.DATE_FMT)])
+              result[OGS_C.P_WEIGHT_STR],
+              OGS_C.PWAVE,
+              None,
+              result[OGS_C.STATION_STR],
+              None,
+              result[OGS_C.P_TIME_STR].strftime(OGS_C.DATE_FMT)
+            ])
             if result[OGS_C.S_TIME_STR]:
               result[OGS_C.S_WEIGHT_STR] = int(result[OGS_C.S_WEIGHT_STR])
               result[OGS_C.S_TIME_STR] = td(seconds=float(
                 result[OGS_C.S_TIME_STR].replace(OGS_C.SPACE_STR,
-                                                  OGS_C.ZERO_STR)))
-              timestamp = result[OGS_C.P_TIME_STR] + result[OGS_C.S_TIME_STR]
-              DETECT.append([result[OGS_C.INDEX_STR], timestamp,
-                             OGS_C.H71_OFFSET[result[OGS_C.S_WEIGHT_STR]],
-                             OGS_C.SWAVE, None, result[OGS_C.STATION_STR], 
-                             None, timestamp.strftime(OGS_C.DATE_FMT)])
+                                                 OGS_C.ZERO_STR)))
+              DETECT.append([
+                result[OGS_C.INDEX_STR],
+                result[OGS_C.P_TIME_STR] + result[OGS_C.S_TIME_STR],
+                result[OGS_C.S_WEIGHT_STR],
+                OGS_C.SWAVE,
+                None,
+                result[OGS_C.STATION_STR],
+                None,
+                result[OGS_C.P_TIME_STR].strftime(OGS_C.DATE_FMT)
+              ])
             continue
         else:
           match = self.EVENT_EXTRACTOR.match(line)
@@ -514,7 +461,7 @@ class DataCatalog(DataFile):
               result[OGS_C.DATE_STR].replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR),
               f"{OGS_C.YYMMDD_FMT}0%H%M") + result[OGS_C.SECONDS_STR]
             if self.start is not None and result[OGS_C.DATE_STR] < self.start:
-              event_detect = 0
+              event_detect = -1 # Error
               continue
             if (self.end is not None and
                 result[OGS_C.DATE_STR] >= self.end + OGS_C.ONE_DAY): break
@@ -567,14 +514,6 @@ class DataCatalog(DataFile):
             result[OGS_C.RMS_STR] = float(result[OGS_C.RMS_STR].replace(
               OGS_C.SPACE_STR, OGS_C.ZERO_STR)) \
                 if result[OGS_C.RMS_STR] else OGS_C.NONE_STR
-            # # Error Horizontal
-            result[OGS_C.ERH_STR] = float(result[OGS_C.ERH_STR].replace(
-              OGS_C.SPACE_STR, OGS_C.ZERO_STR)) \
-                if result[OGS_C.ERH_STR] else float("NaN")
-            # # Error Vertical
-            result[OGS_C.ERZ_STR] = float(result[OGS_C.ERZ_STR].replace(
-              OGS_C.SPACE_STR, OGS_C.ZERO_STR)) \
-                if result[OGS_C.ERZ_STR] else float("NaN")
             # # Quality Metric
             result[OGS_C.QM_STR] = result[OGS_C.QM_STR].strip(OGS_C.SPACE_STR)\
                 if result[OGS_C.QM_STR] else OGS_C.NONE_STR
@@ -612,12 +551,16 @@ class DataCatalog(DataFile):
         OGS_C.ERH_STR, OGS_C.ERZ_STR, OGS_C.QM_STR, OGS_C.NOTES_STR,
         OGS_C.GROUPS_STR
       ])
-      self.events[[OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR]].apply(
-        lambda x: mplPath(OGS_C.OGS_POLY_REGION, closed=True).contains_point(
-          (x[OGS_C.LONGITUDE_STR], x[OGS_C.LATITUDE_STR])), axis=1)
-      print(self.events)
-      print(self.picks)
-
+      self.events[OGS_C.ERH_STR] = \
+        self.events[OGS_C.ERH_STR].replace(" " * 4, "NaN").apply(float)
+      self.events[OGS_C.ERZ_STR] = \
+        self.events[OGS_C.ERZ_STR].replace(" " * 4, "NaN").apply(float)
+      self.events[OGS_C.MAGNITUDE_D_STR] = \
+        self.events[OGS_C.MAGNITUDE_D_STR].replace(" " * 6, "NaN").apply(float)
+      self.events = self.events[self.events[
+        [OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR]].apply(
+          lambda x: self.polygon.contains_point(
+            (x[OGS_C.LONGITUDE_STR], x[OGS_C.LATITUDE_STR])), axis=1)]
 
   class DataFileDAT(DataFile):
     RECORD_EXTRACTOR_LIST = [
@@ -657,19 +600,19 @@ class DataCatalog(DataFile):
       fr"(?P<{OGS_C.INDEX_STR}>[\s\d]{{4}})",                       # Event
       fr""
     ]
-    def __init__(self, file_path: Path, start: datetime = datetime.max,
+    def __init__(self, filepath: Path, start: datetime = datetime.max,
                  end: datetime = datetime.min, verbose: bool = False,
                  polygon: mplPath = mplPath(
                    OGS_C.OGS_POLY_REGION, closed=True),
                  name: Path = DATA_PATH / "catalogs" / "OGSCatalog"):
-      super().__init__(file_path, start, end, verbose, polygon, name)
+      super().__init__(filepath, start, end, verbose, polygon, name)
 
     def read(self, level = OGS_C.WARNING_STR):
-      assert self.file_path.suffix == OGS_C.DAT_EXT
-      assert self.file_path.exists()
+      assert self.filepath.suffix == OGS_C.DAT_EXT
+      assert self.filepath.exists()
       # TODO: Attemp restoration before SHUTDOWN
       DETECT = list()
-      with open(self.file_path, 'r') as fr: lines = fr.readlines()
+      with open(self.filepath, 'r') as fr: lines = fr.readlines()
       for line in [l.strip() for l in lines]:
         if self.EVENT_EXTRACTOR.match(line): continue
         match = self.RECORD_EXTRACTOR.match(line)
@@ -730,7 +673,7 @@ class DataCatalog(DataFile):
             print(e)
             continue
           DETECT.append([result[OGS_C.INDEX_STR], result[OGS_C.P_TIME_STR],
-                         OGS_C.H71_OFFSET[int(result[OGS_C.P_WEIGHT_STR])],
+                         int(result[OGS_C.P_WEIGHT_STR]),
                          OGS_C.PWAVE, None, result[OGS_C.STATION_STR], None,
                          result[OGS_C.P_TIME_STR].strftime(OGS_C.DATE_FMT)])
           # S Type
@@ -753,7 +696,7 @@ class DataCatalog(DataFile):
               print(e)
               continue
             DETECT.append([result[OGS_C.INDEX_STR], result[OGS_C.S_TIME_STR],
-                           OGS_C.H71_OFFSET[int(result[OGS_C.S_WEIGHT_STR])],
+                           int(result[OGS_C.S_WEIGHT_STR]),
                            OGS_C.SWAVE, None, result[OGS_C.STATION_STR], None,
                            result[OGS_C.S_TIME_STR].strftime(OGS_C.DATE_FMT)])
           # TODO: Add debug method
@@ -782,7 +725,7 @@ class DataCatalog(DataFile):
 
   class DataFileTXT(DataFile):
     def read(self):
-      self.events = pd.read_csv(self.file_path, delimiter=";").rename(columns={
+      self.events = pd.read_csv(self.filepath, delimiter=";").rename(columns={
         "t_err": OGS_C.ERT_STR,
         "origin_time(UTC)": OGS_C.TIMESTAMP_STR,
         "lat": OGS_C.LATITUDE_STR,
@@ -812,16 +755,21 @@ class DataCatalog(DataFile):
         self.events[OGS_C.DEPTH_STR].replace("-" * 5, "NaN").apply(float)
       self.events[OGS_C.MAGNITUDE_L_STR] = \
         self.events[OGS_C.MAGNITUDE_L_STR].replace("-" * 4, "NaN").apply(float)
+      self.events[OGS_C.MAGNITUDE_D_STR] = \
+        self.events[OGS_C.MAGNITUDE_D_STR].replace("-" * 4, "NaN").apply(float)
       self.events[OGS_C.TIMESTAMP_STR] = \
         pd.to_datetime(self.events[OGS_C.TIMESTAMP_STR])
       self.events[OGS_C.INDEX_STR] = \
         self.events[OGS_C.INDEX_STR].apply(int) + \
           self.events[OGS_C.TIMESTAMP_STR].dt.year * OGS_C.MAX_PICKS_YEAR
+      self.events[OGS_C.GROUPS_STR] = \
+        self.events[OGS_C.TIMESTAMP_STR].dt.date
+      self.events[OGS_C.NOTES_STR] = None
       self.events.drop(columns=["event-id"], inplace=True)
       self.events = self.events.astype({ OGS_C.INDEX_STR: int})
       self.events = self.events[
         (self.events[OGS_C.TIMESTAMP_STR].between(
-          self.start, self.end + OGS_C.ONE_DAY)) & 
+          self.start, self.end + OGS_C.ONE_DAY)) &
         (self.events["event_type"] != "[suspected explosion]")]
 
   DATAFILE_TYPES = {
@@ -847,8 +795,67 @@ class DataCatalog(DataFile):
           name=self.args.name))
 
   def log(self) -> None:
-    # Shut up (literally)
-    pass
+    self.EVENTS = pd.DataFrame(columns=[
+      OGS_C.INDEX_STR, OGS_C.TIMESTAMP_STR, OGS_C.LATITUDE_STR,
+      OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR, OGS_C.MAGNITUDE_D_STR,
+      OGS_C.NO_STR, OGS_C.DMIN_STR, OGS_C.GAP_STR, OGS_C.RMS_STR,
+      OGS_C.ERH_STR, OGS_C.ERZ_STR, OGS_C.QM_STR, OGS_C.NOTES_STR,
+      OGS_C.GROUPS_STR])
+    events = {}
+    self.PICKS = pd.DataFrame(columns=[
+      OGS_C.INDEX_STR, OGS_C.TIMESTAMP_STR, OGS_C.ERT_STR, OGS_C.PHASE_STR,
+      OGS_C.NOTES_STR, OGS_C.STATION_STR, OGS_C.NETWORK_STR,
+      OGS_C.GROUPS_STR])
+    picks = {}
+    # Events
+    for f in self.files:
+      if not f.events.empty:
+        ext = f.filepath.suffix
+        if ext == OGS_C.HPL_EXT:
+          # MD, Depth
+          f.events.drop(
+            columns=[
+            ],
+            inplace=True)
+          f.events[OGS_C.GROUPS_STR] = f.events[OGS_C.TIMESTAMP_STR].apply(
+            lambda x: x.date())
+          if self.EVENTS.empty:
+            self.EVENTS = f.events
+          else:
+            self.EVENTS = pd.merge(self.EVENTS, f.events, how="outer", on=[
+                                   OGS_C.TIMESTAMP_STR, OGS_C.GROUPS_STR],)
+        elif ext == OGS_C.TXT_EXT:
+          f.events.drop(
+            columns=[OGS_C.MAGNITUDE_D_STR, OGS_C.DEPTH_STR, OGS_C.NOTES_STR],
+            inplace=True)
+          f.events[OGS_C.GROUPS_STR] = f.events[OGS_C.TIMESTAMP_STR].apply(
+            lambda x: x.date())
+          if self.EVENTS.empty:
+            self.EVENTS = f.events
+          else:
+            self.EVENTS = pd.merge(self.EVENTS, f.events, how="outer", on=[
+                OGS_C.TIMESTAMP_STR, OGS_C.GROUPS_STR, OGS_C.INDEX_STR,
+                OGS_C.ERH_STR])
+    self.EVENTS.to_csv("tmpEvents.csv", index=False)
+    indexes = self.EVENTS[OGS_C.INDEX_STR].unique().tolist()
+    for f in self.files:
+      if not f.picks.empty:
+        f.picks = f.picks[f.picks[OGS_C.INDEX_STR].isin(indexes)]
+        f.picks[OGS_C.GROUPS_STR] = f.picks[OGS_C.TIMESTAMP_STR].apply(
+            lambda x: x.date())
+        f.picks.drop(
+          columns=[OGS_C.NETWORK_STR, OGS_C.NOTES_STR],
+          inplace=True)
+        print(f.filepath)
+        print(f.picks)
+        if self.PICKS.empty:
+          self.PICKS = f.picks
+        else:
+          self.PICKS = pd.merge(self.PICKS, f.picks, how="left", on=[
+            OGS_C.INDEX_STR, OGS_C.TIMESTAMP_STR, OGS_C.STATION_STR,
+            OGS_C.PHASE_STR])
+    print(self.PICKS)
+    self.PICKS.to_csv("tmpPicks.csv", index=False)
 
 
 def main(args: argparse.Namespace) -> None:

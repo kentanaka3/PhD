@@ -125,7 +125,6 @@ def data_downloader(args: argparse.Namespace) -> None:
   notes:
 
   """
-  print(args)
   if args.pyrocko:
     # We enable the option to use the PyRocko module to download the data as it
     # is more efficient than the ObsPy module by multithreading the download.
@@ -196,4 +195,5 @@ def data_downloader(args: argparse.Namespace) -> None:
       for filepath in D_FILE.glob("*.mseed"):
         op.read(filepath).resample(100).write(filepath, format="MSEED")
         os.remove(filepath)
+
 if __name__ == "__main__": data_downloader(parse_arguments())

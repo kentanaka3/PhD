@@ -430,6 +430,27 @@ class histogram_plotter(plotter):
       self.ax.legend()
     if output is not None: self.savefig(output=output)
 
+  def add_fit(self, func, p0=None, color=OGS_C.MEX_PINK, label=None,
+              output=None, savefig=False, xlabel=None, ylabel=None,
+              title=None, legend=None, alpha=None) -> None:
+    y2 = self.ax.twinx()
+    y2.set_ylabel("Probability Density", color=color)
+    y2.tick_params(axis='y', labelcolor=color)
+    y = func(self.bins, p0)
+    y2.plot(self.bins, y, color=color, label=label, alpha=alpha)
+    if xlabel:
+      self.ax.set_xlabel(xlabel)
+    if ylabel:
+      self.ax.set_ylabel(ylabel)
+    if title:
+      self.ax.set_title(title)
+    if legend is not None:
+      self.ax.legend()
+      if legend == False:
+        self.ax.get_legend().remove()
+    if output is not None: savefig = True
+    if savefig: self.savefig(output=output)
+
   def add_plot(self, data, xlabel=None, ylabel=None, title=None, step=False,
                color=OGS_C.MEX_PINK, label=None, legend=None, facecolor=None,
                edgecolor=None, alpha=0.5, output=None, savefig=False) -> None:

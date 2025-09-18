@@ -200,7 +200,6 @@ env/*
 .vscode/*
 *.nsys-rep
 data/*
-*TRUE*
 *CP_*_*_*.png
 *FN_*_*.png
 *.hdf5
