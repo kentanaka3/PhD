@@ -193,7 +193,10 @@ def data_downloader(args: argparse.Namespace) -> None:
       print("Downloaded data for date:", d_.strftime(OGS_C.YYMMDD_FMT))
       print("Resampling the data in the directory:", D_FILE)
       for filepath in D_FILE.glob("*.mseed"):
-        op.read(filepath).resample(100).write(filepath, format="MSEED")
+        st = op.read(filepath, headeronly=True)
+        if st[0].stats.sampling_rate == 100: continue
+        wvfrmStream = op.read(filepath)
         os.remove(filepath)
+        wvfrmStream.resample(100).write(filepath, format="MSEED")
 
 if __name__ == "__main__": data_downloader(parse_arguments())
