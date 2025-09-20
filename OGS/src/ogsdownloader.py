@@ -204,6 +204,6 @@ def data_downloader(args: argparse.Namespace) -> None:
         os.remove(filepath)
         wvfrmStream = wvfrmStream.resample(100)
         wvfrmStream.write(filepath)
-        print(f"Resampled to {filepath} from {st[0].stats.sampling_rate} Hz sampling rate")
+        print(f"Resampled {filepath} from {st[0].stats.sampling_rate} Hz sampling rate")
 
 if __name__ == "__main__": data_downloader(parse_arguments())

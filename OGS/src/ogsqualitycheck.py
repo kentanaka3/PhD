@@ -30,19 +30,27 @@ class StationChannel:
   def __repr__(self) -> str:
     return f"{self.network}.{self.station}.{self.location}.{self.channel}"
 
+STATIONS_RM : list[StationChannel] = []
+def removeFile(filePath: Path, st) -> None:
+  os.remove(filePath)
+  if st is not None:
+    STATIONS_RM.append(
+      StationChannel(st.network, st.station, st.location, st.channel))
+
 def data_check(args: argparse.Namespace) -> None:
-  STATIONS_RM : list[StationChannel] = []
   for waveform in args.directory.glob("*/*/*/*.mseed"):
-    st = op.read(waveform)
-    if len(st[0]) < 1000:
-      os.remove(waveform)
-      print(f"Removed {waveform} with {len(st[0])} samples")
-      STATIONS_RM.append(
-        StationChannel(st[0].stats.network, st[0].stats.station,
-                       st[0].stats.location, st[0].stats.channel))
-    if st[0].stats.sampling_rate != 100:
-      os.remove(waveform)
-      print(f"Removed {waveform} with {st[0].stats.sampling_rate} Hz sampling rate")
-      st[0].resample(100).write(waveform, format="MSEED")
+    try:
+      st = op.read(waveform)
+    except Exception as e:
+      removeFile(waveform, None)
+      print(f"Removed corrupted file {waveform} due to {e}")
+      continue
+    if len(st[0]) > 1000: continue
+    if st[0].stats.sampling_rate == 100: continue
+    wvfrmStream = op.read(waveform)
+    removeFile(waveform, st=st[0].stats)
+    wvfrmStream = wvfrmStream.resample(100)
+    wvfrmStream.write(waveform)
+    print(f"Resampled {waveform} from {st[0].stats.sampling_rate} Hz sampling rate")
 
 if __name__ == "__main__": data_check(parse_arguments())
