@@ -143,20 +143,20 @@ def data_downloader(args: argparse.Namespace) -> None:
         minradius=args.circdomain[2], maxradius=args.circdomain[3])
     from obspy.clients.fdsn.mass_downloader import Restrictions, MassDownloader
     start, end = args.dates
-    DAYS = np.arange(start, end, OGS_C.ONE_DAY, dtype='datetime64[D]').tolist()
+    DAYS = np.arange(start, end, OGS_C.ONE_DAY,
+                     dtype='datetime64[D]').tolist()
     if args.inclusive: DAYS.append(end)
     DIR_FMT = {
       "year": "{:04}",
       "month": "{:02}",
       "day": "{:02}",
     }
-    for d_ in DAYS[:-1]:
+    for d_ in DAYS:
       D_FILE = Path(args.directory / DIR_FMT["year"].format(d_.year) /
                     DIR_FMT["month"].format(d_.month) /
                     DIR_FMT["day"].format(d_.day))
       D_FILE.mkdir(parents=True, exist_ok=True)
-      if args.verbose:
-        print("Downloading the data in the directory:", D_FILE)
+      print("Downloading the data in the directory:", D_FILE)
       restrictions = Restrictions(
         starttime=d_, endtime=d_ + OGS_C.ONE_DAY,
         network=OGS_C.COMMA_STR.join(args.network),
@@ -193,10 +193,17 @@ def data_downloader(args: argparse.Namespace) -> None:
       print("Downloaded data for date:", d_.strftime(OGS_C.YYMMDD_FMT))
       print("Resampling the data in the directory:", D_FILE)
       for filepath in D_FILE.glob("*.mseed"):
-        st = op.read(filepath, headeronly=True)
+        try:
+          st = op.read(filepath, headeronly=True)
+        except Exception as e:
+          print(f"Error reading and removing file {filepath}: {e}")
+          os.remove(filepath)
+          continue
         if st[0].stats.sampling_rate == 100: continue
         wvfrmStream = op.read(filepath)
         os.remove(filepath)
-        wvfrmStream.resample(100).write(filepath, format="MSEED")
+        wvfrmStream = wvfrmStream.resample(100)
+        wvfrmStream.write(filepath)
+        print(f"Resampled to {filepath} from {st[0].stats.sampling_rate} Hz sampling rate")
 
 if __name__ == "__main__": data_downloader(parse_arguments())
