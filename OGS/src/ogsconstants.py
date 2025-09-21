@@ -1,6 +1,14 @@
+import re
 import numpy as np
-import seisbench.models as sbm
-from datetime import timedelta as td
+import pandas as pd
+import itertools as it
+from pathlib import Path
+from datetime import datetime, timedelta as td
+from matplotlib.path import Path as mplPath
+
+from matplotlib.cbook import flatten as flatten_list
+
+THIS_FILE = Path(__file__)
 
 EPSILON = 1e-6
 
@@ -351,3 +359,77 @@ HEADER_EVENTS = [INDEX_STR, TIMESTAMP_STR, LATITUDE_STR, LONGITUDE_STR,
                  DEPTH_STR, ERH_STR, ERZ_STR, GAP_STR]
 HEADER_PICKS = [INDEX_STR, TIMESTAMP_STR, PHASE_STR, STATION_STR, ONSET_STR,
                 POLARITY_STR, WEIGHT_STR]
+
+# OGS Catalog
+class OGSDataFile:
+  RECORD_EXTRACTOR_LIST : list = [] # TBD in subclasses
+  EVENT_EXTRACTOR_LIST : list = [] # TBD in subclasses
+  GROUP_PATTERN = re.compile(r"\(\?P<(\w+)>[\[\]\w\d\{\}\-\\\?\+]+\)(\w)*")
+  def __init__(self, filepath: Path, start: datetime = datetime.max,
+               end: datetime = datetime.min, verbose: bool = False,
+               polygon : mplPath = mplPath(OGS_POLY_REGION, closed=True),
+               name : Path = THIS_FILE.parent / "data" / "OGSCatalog"):
+    self.filepath = filepath
+    self.start = start
+    self.end = end
+    self.polygon : mplPath = polygon
+    self.verbose = verbose
+    self.name = name
+    self.picks = pd.DataFrame(columns=[
+      INDEX_STR, TIMESTAMP_STR, PHASE_STR, STATION_STR,
+      ERT_STR, NOTES_STR, NETWORK_STR, GROUPS_STR])
+    self.events = pd.DataFrame(columns=[
+      INDEX_STR, TIMESTAMP_STR, LATITUDE_STR,
+      LONGITUDE_STR, DEPTH_STR, NO_STR,
+      GAP_STR, DMIN_STR, RMS_STR,
+      ERH_STR, ERZ_STR, QM_STR, MAGNITUDE_L_STR,
+      MAGNITUDE_D_STR, NOTES_STR,])
+    self.RECORD_EXTRACTOR : re.Pattern = re.compile(EMPTY_STR.join(
+      list(flatten_list(self.RECORD_EXTRACTOR_LIST)))) # TBD in subclasses
+    self.EVENT_EXTRACTOR : re.Pattern = re.compile(EMPTY_STR.join(
+      list(flatten_list(self.EVENT_EXTRACTOR_LIST)))) # TBD in subclasses
+    print(f"Processing file: {self.filepath}")
+
+  def read(self):
+    raise NotImplementedError
+  DIR_FMT = {
+    "year": "{:04}",
+    "month": "{:02}",
+    "day": "{:02}",
+  }
+  def log(self):
+    log = self.name / self.filepath.suffix
+    # Picks
+    if not self.picks.empty:
+      for date, df in self.picks.groupby(
+          self.picks[TIMESTAMP_STR].dt.date):
+        dir_path = log / "assignments" / f"{date.year}" / f"{date.month:02}" /\
+                   f"{date.day:02}.csv"
+        dir_path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(dir_path, index=False)
+    print(self.picks)
+    # Events
+    if not self.events.empty:
+      for date, df in self.events.groupby(
+          self.events[TIMESTAMP_STR].dt.date):
+        dir_path = log / "events" / f"{date.year}" / f"{date.month:02}" /\
+                   f"{date.day:02}.csv"
+        dir_path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(dir_path, index=False)
+    print(self.events)
+
+  def debug(self, line, EXTRACTOR_LIST):
+    RECORD_EXTRACTOR_DEBUG = list(reversed(list(it.accumulate(
+      EXTRACTOR_LIST[:-1],
+      lambda x, y: x + (y if isinstance(y, str) else
+                        EMPTY_STR.join(list(flatten_list(y))))))))
+    bug = self.GROUP_PATTERN.findall(EXTRACTOR_LIST[0])
+    for i, extractor in enumerate(RECORD_EXTRACTOR_DEBUG):
+      match_extractor = re.match(extractor, line)
+      if match_extractor:
+        match_group = self.GROUP_PATTERN.findall(RECORD_EXTRACTOR_DEBUG[i - 1])
+        match_compare = self.GROUP_PATTERN.findall(extractor)
+        bug = match_group[-1][match_group[-1][1] != match_compare[-1][1]]
+        print(f"{self.filepath.suffix} {bug} : {line}")
+        break
+    return bug

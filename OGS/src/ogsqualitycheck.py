@@ -39,6 +39,7 @@ def removeFile(filePath: Path, st) -> None:
 
 def data_check(args: argparse.Namespace) -> None:
   for waveform in args.directory.glob("*/*/*/*.mseed"):
+    print(f"Checking {waveform}")
     try:
       st = op.read(waveform)
     except Exception as e:

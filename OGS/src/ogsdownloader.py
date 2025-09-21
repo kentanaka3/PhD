@@ -63,14 +63,15 @@ def parse_arguments() -> argparse.Namespace:
     "--client", metavar=OGS_C.EMPTY_STR, default=OGS_C.OGS_CLIENTS_DEFAULT,
     required=False, type=str, nargs=OGS_C.ONE_MORECHAR_STR,
     help="Client to download the data")
-  parser.add_argument("--force", default=False, action='store_true',
-                      required=False, help="Force running all the pipeline")
-  parser.add_argument("--pyrocko", default=False, action='store_true',
-                      help="Enable PyRocko calls")
-  parser.add_argument("--timing", default=False, action='store_true',
-                      required=False, help="Enable timing")
-  parser.add_argument("--inclusive", default=False, action='store_true',
-                      help="Enable inclusive date range")
+  parser.add_argument(
+    "--force", default=False, action='store_true', required=False,
+    help="Force running all the pipeline")
+  parser.add_argument(
+    "--pyrocko", default=False, action='store_true',
+    help="Enable PyRocko calls")
+  parser.add_argument(
+    "--timing", default=False, action='store_true', required=False,
+    help="Enable timing")
   date_group = parser.add_mutually_exclusive_group(required=False)
   date_group.add_argument(
     '-D', "--dates", required=False, metavar=OGS_C.DATE_STD, type=is_date,
@@ -191,19 +192,5 @@ def data_downloader(args: argparse.Namespace) -> None:
       except Exception as e:
         print(f"Error downloading data: {e}")
       print("Downloaded data for date:", d_.strftime(OGS_C.YYMMDD_FMT))
-      print("Resampling the data in the directory:", D_FILE)
-      for filepath in D_FILE.glob("*.mseed"):
-        try:
-          st = op.read(filepath, headeronly=True)
-        except Exception as e:
-          print(f"Error reading and removing file {filepath}: {e}")
-          os.remove(filepath)
-          continue
-        if st[0].stats.sampling_rate == 100: continue
-        wvfrmStream = op.read(filepath)
-        os.remove(filepath)
-        wvfrmStream = wvfrmStream.resample(100)
-        wvfrmStream.write(filepath)
-        print(f"Resampled {filepath} from {st[0].stats.sampling_rate} Hz sampling rate")
 
 if __name__ == "__main__": data_downloader(parse_arguments())
