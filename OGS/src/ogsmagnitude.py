@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from ml_catalog.modules import LocalMagnitude
 
 
@@ -9,10 +8,13 @@ class OGSLocalMagnitude(LocalMagnitude):
   This magnitude scale use has been calibrated for ...
   """
 
-  def __init__(self, station_corrections: pd.DataFrame,
+  def __init__(self,
+               station_corrections: pd.DataFrame,
+               ignore_stations: pd.DataFrame = pd.DataFrame(),
                components: str = "NE") -> None:
     self.components = components
     self.station_corrections = station_corrections
+    self.ignore_stations = ignore_stations
     super().__init__(hypocentral_range=(3, 150))
 
   def get_log_amp_0(
@@ -83,36 +85,18 @@ class OGSLocalMagnitude(LocalMagnitude):
 
   def _calc_station_magnitude(self, assignments: pd.DataFrame) -> None:
     self._calc_station_amplitude(assignments)
-    assignments["station_ML"] = np.log10(
-        assignments["amplitude"]
-    ) + self.get_log_amp_0(
-        assignments["epicentral_distance"],
-        assignments["depth"],
-        assignments["station"],
-    )
-    assignments.loc[
-        ~self._is_distance_valid(
-            assignments["epicentral_distance"], assignments["depth"]
-        ),
-        "station_ML",
-    ] = np.nan
-    assignments.loc[
-        assignments["phase"] != self.phase,
-        "station_ML",
-    ] = np.nan
+    super()._calc_station_magnitude(assignments)
 
   def _calc_event_magnitudes(self, events: pd.DataFrame,
-                             assignments: pd.DataFrame,
-                             ignore_stations: list[str] = []) -> pd.DataFrame:
+                             assignments: pd.DataFrame) -> pd.DataFrame:
     magnitudes = []
     for (event_idx, group), event_df in assignments.groupby(["event_idx", "group"]):
       event_df = event_df[event_df["phase"] == self.phase]
-      station_magnitudes = event_df["station_ML"].values
-      # Remove listed stations and filter based on absolute median deviation
-      if ignore_stations:
-        ignore_set = {s.split(".")[-1] for s in ignore_stations}
+
+      # Remove listed stations
+      if not self.ignore_stations.empty:
         event_df = event_df[
-          ~event_df["station"].str.split(".").str[-1].isin(ignore_set)
+          event_df["station"].isin(self.ignore_stations["station"])
         ]
 
       station_magnitudes = event_df["station_ML"].values
@@ -121,10 +105,12 @@ class OGSLocalMagnitude(LocalMagnitude):
         med = np.nanmedian(station_magnitudes)
         # Calculate the absolute deviation from the median
         abs_dev = np.abs(station_magnitudes - med)
+        # Compute the median absolute deviation
         mad = np.nanmedian(abs_dev)
         if mad > 0:
-          keep = (abs_dev <= 5.0 * mad) | ~valid
-          station_magnitudes = station_magnitudes[keep]
+          # Remove stations with absolute deviation NO greater than 5 times the
+          # median absolute deviation
+          station_magnitudes = station_magnitudes[abs_dev <= 5 * mad | ~valid]
 
       n_stations = np.sum(~np.isnan(station_magnitudes))
       magnitudes.append(

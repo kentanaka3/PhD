@@ -92,16 +92,16 @@ def parse_arguments() -> argparse.Namespace:
     help="Rectangular domain to download the data: [longitude West] "
          "[longitude East] [latitude South] [latitude North]")
   domain_group.add_argument(
-    "--circdomain", nargs=4, type=float, # default=[46.3583, 12.808, 0., 0.3],
-    metavar=("lat", "lon", "min_r", "max_r"),
-    help="Circular domain to download the data: [center latitude] "
-         "[center longitude] [minimum radius] [maximum radius]")
+    "--circdomain", nargs=4, type=float, # default=[12.808, 46.3583, 0., 0.3],
+    metavar=("lon", "lat", "min_r", "max_r"),
+    help="Circular domain to download the data: [center longitude] "
+         "[center latitude] [minimum radius] [maximum radius]")
   verbal_group = parser.add_mutually_exclusive_group(required=False)
-  verbal_group.add_argument("--silent", default=False, action='store_true',
-                            help="Silent mode")
+  verbal_group.add_argument(
+    "--silent", default=False, action='store_true', help="Silent mode")
   # TODO: Add verbose LEVEL
-  verbal_group.add_argument("-v", "--verbose", default=False,
-                            action='store_true', help="Verbose mode")
+  verbal_group.add_argument(
+    "-v", "--verbose", default=False, action='store_true', help="Verbose mode")
   args = parser.parse_args()
   # TODO: Fix special cases
   # print(vars(args))
