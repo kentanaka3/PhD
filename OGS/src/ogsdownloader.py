@@ -144,9 +144,8 @@ def data_downloader(args: argparse.Namespace) -> None:
         minradius=args.circdomain[2], maxradius=args.circdomain[3])
     from obspy.clients.fdsn.mass_downloader import Restrictions, MassDownloader
     start, end = args.dates
-    DAYS = np.arange(start, end, OGS_C.ONE_DAY,
+    DAYS = np.arange(start, end + OGS_C.ONE_DAY, OGS_C.ONE_DAY,
                      dtype='datetime64[D]').tolist()
-    if args.inclusive: DAYS.append(end)
     DIR_FMT = {
       "year": "{:04}",
       "month": "{:02}",
