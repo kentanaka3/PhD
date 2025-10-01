@@ -2,8 +2,8 @@ import re
 import argparse
 import pandas as pd
 from pathlib import Path
+from obspy import UTCDateTime
 from datetime import datetime, timedelta as td
-from matplotlib.path import Path as mplPath
 
 import ogsconstants as OGS_C
 
@@ -11,24 +11,17 @@ from matplotlib.cbook import flatten as flatten_list
 
 DATA_PATH = Path(__file__).parent.parent.parent
 
-def is_date(string: str) -> datetime:
-  return datetime.strptime(string, OGS_C.YYMMDD_FMT)
-
-class SortDatesAction(argparse.Action):
-  def __call__(self, parser, namespace, values, option_string=None):
-    setattr(namespace, self.dest, sorted(values)) # type: ignore
-
 def parse_arguments():
   parser = argparse.ArgumentParser(description="Run OGS HPL quality checks")
   parser.add_argument("-f", "--file", type=Path, required=True,
                       help="Path to the input file")
   parser.add_argument(
-    '-D', "--dates", required=False, metavar=OGS_C.DATE_STD, type=is_date,
-  nargs=2, action=SortDatesAction,
-  default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
-           datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
-  help="Specify the beginning and ending (inclusive) Gregorian date " \
-        "(YYMMDD) range to work with.")
+    '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
+    type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
+    default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
+             datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
+    help="Specify the beginning and ending (inclusive) Gregorian date " \
+          "(YYMMDD) range to work with.")
   return parser.parse_args()
 
 class DataFileHPL(OGS_C.OGSDataFile):
@@ -68,8 +61,8 @@ class DataFileHPL(OGS_C.OGSDataFile):
       fr"(?P<{OGS_C.S_WEIGHT_STR}>[0-5\s])\s",                    # S Weight
       fr"(?P<{OGS_C.S_TIME_STR}>[\s\d\.]{{5}})\s",                # S Time
       fr"(?P<P>[\s\d\-\.]{{5}})\s",                               # Unknown
-      fr"(?P<Q>[\s\d\-\.]{{5}})\s{{3}}",                          # Unknown
-      fr"(?P<R>[\s\d\.]{{3}})\s{{5}})|\s{{33}})\s"                # Unknown
+      fr"(?P<Q>[\s\d\-\.]{{5}})\s{{2}}",                          # Unknown
+      fr"(?P<R>[\s\d\.]{{4}})\s{{5}})|\s{{33}})\s"                # Unknown
     ],
     fr"(?P<S>[A-Z0-9\s]{{4}})\s{{4}}g[\sg]",                      # Station
   ]
@@ -83,28 +76,28 @@ class DataFileHPL(OGS_C.OGSDataFile):
     fr"(?P<{OGS_C.LONGITUDE_STR}>[\s\d\-\.]{{8}})\s{{2}}",        # Longitude
     fr"(?P<{OGS_C.DEPTH_STR}>[\s\d\.]{{5}})\s",                   # Depth
     fr"(?P<{OGS_C.MAGNITUDE_D_STR}>[\s\-\d\.]{{6}})\s",           # Magnitude
-    fr"(?P<{OGS_C.NO_STR}>[\s\d]{{2}})\s",                        # NO
-    fr"(?P<{OGS_C.DMIN_STR}>[\s\d]{{2}})\s",                      # DMIN
+    fr"(?P<{OGS_C.NO_STR}>[\s\d]{{2}})",                          # NO
+    fr"(?P<{OGS_C.DMIN_STR}>[\s\d]{{3}})\s",                      # DMIN
     fr"(?P<{OGS_C.GAP_STR}>[\s\d]{{3}})\s1\s",                    # GAP
     fr"(?P<{OGS_C.RMS_STR}>[\s\d\.]{{4}})\s",                     # RMS
-    fr"(?P<{OGS_C.ERH_STR}>[\s\d\.]{{4}})\s",                     # ERH
-    fr"(?P<{OGS_C.ERZ_STR}>[\s\d\.]{{4}})\s",                     # ERZ
+    fr"(?P<{OGS_C.ERH_STR}>[\s\d\.]{{4}})",                       # ERH
+    fr"(?P<{OGS_C.ERZ_STR}>[\s\d\.]{{5}})\s",                     # ERZ
     fr"(?P<{OGS_C.QM_STR}>[A-D\s])\s",                            # QM
     fr"(([A-D]/[A-D])|\s{{3}})",                                  # Unknown
-    fr"(?P<A>[\s\d\.]{{5}})\s",                                    # Unknown
-    fr"(?P<B>[\s\d]{{2}})\s",                                      # Unknown
-    fr"(?P<C>[\s\d]{{2}})",                                        # Unknown
-    fr"(?P<D>[\-\s\d\.]{{5}})",                                    # Unknown
-    fr"(?P<E>[\s\d\.]{{5}})\s",                                    # Unknown
-    fr"(?P<F>[\s\d]{{2}})\s",                                      # Unknown
-    fr"(?P<G>[\s\d\.]{{4}})\s",                                    # Unknown
-    fr"(?P<H>[\s\d\.]{{4}})\s",                                    # Unknown
-    fr"(?P<I>[\s\d]{{2}})\s",                                      # Unknown
-    fr"(?P<J>[\s\d\-\.]{{4}})\s",                                  # Unknown
-    fr"(?P<K>[\s\d\.]{{4}})",                                      # Unknown
-    fr"(?P<L>[\s\d]{{2}})",                                        # Unknown
-    fr"(?P<M>[\s\d\.]{{5}})\s",                                    # Unknown
-    fr"(?P<N>[\s\d\.]{{4}})\s{{9}}",                               # Unknown
+    fr"(?P<A>[\s\d\.]{{5}})\s",                                   # Unknown
+    fr"(?P<B>[\s\d]{{2}})\s",                                     # Unknown
+    fr"(?P<C>[\s\d]{{2}})",                                       # Unknown
+    fr"(?P<D>[\-\s\d\.]{{5}})",                                   # Unknown
+    fr"(?P<E>[\s\d\.]{{5}})\s",                                   # Unknown
+    fr"(?P<F>[\s\d]{{2}})\s",                                     # Unknown
+    fr"(?P<G>[\s\d\.]{{4}})\s",                                   # Unknown
+    fr"(?P<H>[\s\d\.]{{4}})\s",                                   # Unknown
+    fr"(?P<I>[\s\d]{{2}})\s",                                     # Unknown
+    fr"(?P<J>[\s\d\-\.]{{4}})\s",                                 # Unknown
+    fr"(?P<K>[\s\d\.]{{4}})",                                     # Unknown
+    fr"(?P<L>[\s\d]{{2}})",                                       # Unknown
+    fr"(?P<M>[\s\d\.]{{5}})\s",                                   # Unknown
+    fr"(?P<N>[\s\d\.]{{4}})\s{{9}}",                              # Unknown
     fr"(?P<{OGS_C.NOTES_STR}>[\s\d]\d)",                          # Notes
   ]
   LOCATION_EXTRACTOR_LIST = [
@@ -155,6 +148,7 @@ class DataFileHPL(OGS_C.OGSDataFile):
             OGS_C.SPACE_STR, OGS_C.ZERO_STR)
           date = event_spacetime[0]
           min = td(minutes=int(result[OGS_C.P_TIME_STR][2:]))
+          hrs = td(hours=int(result[OGS_C.P_TIME_STR][:2]))
           result[OGS_C.P_TIME_STR] = datetime(
             date.year, date.month, date.day) + hrs + min
           if (self.start is not None and
@@ -200,7 +194,7 @@ class DataFileHPL(OGS_C.OGSDataFile):
             result[OGS_C.DATE_STR].replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR),
             f"{OGS_C.YYMMDD_FMT}0%H%M") + result[OGS_C.SECONDS_STR]
           if self.start is not None and result[OGS_C.DATE_STR] < self.start:
-            event_detect = -1 # Error
+            event_detect = 0
             continue
           if (self.end is not None and
               result[OGS_C.DATE_STR] >= self.end + OGS_C.ONE_DAY): break
@@ -229,12 +223,13 @@ class DataFileHPL(OGS_C.OGSDataFile):
           result[OGS_C.DEPTH_STR] = float(result[OGS_C.DEPTH_STR])\
               if result[OGS_C.DEPTH_STR] else OGS_C.NONE_STR
           event_spacetime = (
-            datetime(result[OGS_C.DATE_STR].year,
-                      result[OGS_C.DATE_STR].month,
-                      result[OGS_C.DATE_STR].day,
-                      result[OGS_C.DATE_STR].hour,
-                      result[OGS_C.DATE_STR].minute) +
-            result[OGS_C.SECONDS_STR],
+            datetime(
+              result[OGS_C.DATE_STR].year,
+              result[OGS_C.DATE_STR].month,
+              result[OGS_C.DATE_STR].day,
+              result[OGS_C.DATE_STR].hour,
+              result[OGS_C.DATE_STR].minute
+            ) + result[OGS_C.SECONDS_STR],
             result[OGS_C.LONGITUDE_STR], result[OGS_C.LATITUDE_STR],
             result[OGS_C.DEPTH_STR])
           # # Number of Observations
@@ -257,12 +252,14 @@ class DataFileHPL(OGS_C.OGSDataFile):
           result[OGS_C.QM_STR] = result[OGS_C.QM_STR].strip(OGS_C.SPACE_STR) \
               if result[OGS_C.QM_STR] else OGS_C.NONE_STR
           event_detect = int(result[OGS_C.NOTES_STR])
-          SOURCE.append([result[OGS_C.INDEX_STR], *event_spacetime,
-                          result[OGS_C.MAGNITUDE_D_STR], result[OGS_C.NO_STR],
-                          result[OGS_C.DMIN_STR], result[OGS_C.GAP_STR],
-                          result[OGS_C.RMS_STR], result[OGS_C.ERH_STR],
-                          result[OGS_C.ERZ_STR], result[OGS_C.QM_STR], None,
-                          event_spacetime[0].strftime(OGS_C.DATE_FMT)])
+          SOURCE.append([
+            result[OGS_C.INDEX_STR], *event_spacetime,
+            result[OGS_C.MAGNITUDE_D_STR], result[OGS_C.NO_STR],
+            result[OGS_C.DMIN_STR], result[OGS_C.GAP_STR],
+            result[OGS_C.RMS_STR], result[OGS_C.ERH_STR],
+            result[OGS_C.ERZ_STR], result[OGS_C.QM_STR], None,
+            event_spacetime[0].strftime(OGS_C.DATE_FMT)
+          ])
           continue
         match = self.LOCATION_EXTRACTOR.match(line)
         if match:
@@ -277,32 +274,35 @@ class DataFileHPL(OGS_C.OGSDataFile):
               SOURCE[-1][-2] = event_notes
             continue
         if re.match(r"^\s*$", line): continue
-      self.debug(line, self.EVENT_EXTRACTOR_LIST if event_detect == 0
-                  else self.RECORD_EXTRACTOR_LIST)
-    self.picks = pd.DataFrame(DETECT, columns=[
+      if event_detect < 0:
+        self.debug(line, self.EVENT_EXTRACTOR_LIST if event_detect == 0
+                   else self.RECORD_EXTRACTOR_LIST)
+    self.PICKS = pd.DataFrame(DETECT, columns=[
       OGS_C.INDEX_STR, OGS_C.TIMESTAMP_STR, OGS_C.ERT_STR, OGS_C.PHASE_STR,
       OGS_C.NOTES_STR, OGS_C.STATION_STR, OGS_C.NETWORK_STR,
-      OGS_C.GROUPS_STR]).astype({ OGS_C.INDEX_STR: int})
-    self.events = pd.DataFrame(SOURCE, columns=[
+      OGS_C.GROUPS_STR
+    ]).astype({ OGS_C.INDEX_STR: int })
+    for date, df in self.PICKS.groupby(OGS_C.GROUPS_STR):
+      self.picks[UTCDateTime(date).date] = df
+    self.EVENTS = pd.DataFrame(SOURCE, columns=[
       OGS_C.INDEX_STR, OGS_C.TIMESTAMP_STR, OGS_C.LONGITUDE_STR,
       OGS_C.LATITUDE_STR, OGS_C.DEPTH_STR, OGS_C.MAGNITUDE_D_STR,
       OGS_C.NO_STR, OGS_C.DMIN_STR, OGS_C.GAP_STR, OGS_C.RMS_STR,
       OGS_C.ERH_STR, OGS_C.ERZ_STR, OGS_C.QM_STR, OGS_C.NOTES_STR,
       OGS_C.GROUPS_STR
     ])
-    self.events[OGS_C.ERH_STR] = \
-      self.events[OGS_C.ERH_STR].replace(" " * 4, "NaN").apply(float)
-    self.events[OGS_C.ERZ_STR] = \
-      self.events[OGS_C.ERZ_STR].replace(" " * 4, "NaN").apply(float)
-    self.events[OGS_C.MAGNITUDE_D_STR] = \
-      self.events[OGS_C.MAGNITUDE_D_STR].replace(" " * 6, "NaN").apply(float)
-    self.events = self.events[self.events[
+    self.EVENTS[OGS_C.ERH_STR] = \
+      self.EVENTS[OGS_C.ERH_STR].replace(" " * 4, "NaN").apply(float)
+    self.EVENTS[OGS_C.ERZ_STR] = \
+      self.EVENTS[OGS_C.ERZ_STR].replace(" " * 5, "NaN").apply(float)
+    self.EVENTS[OGS_C.MAGNITUDE_D_STR] = \
+      self.EVENTS[OGS_C.MAGNITUDE_D_STR].replace(" " * 6, "NaN").apply(float)
+    self.EVENTS = self.EVENTS[self.EVENTS[
       [OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR]].apply(
         lambda x: self.polygon.contains_point(
           (x[OGS_C.LONGITUDE_STR], x[OGS_C.LATITUDE_STR])), axis=1)]
-
-  def log(self) -> None:
-    super().log()
+    for date, df in self.EVENTS.groupby(OGS_C.GROUPS_STR):
+      self.events[UTCDateTime(date).date] = df
 
 def main(args):
   datafile = DataFileHPL(args.file, args.dates[0], args.dates[1])

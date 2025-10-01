@@ -1,6 +1,6 @@
 import pandas as pd
-from matplotlib.path import Path as mplPath
 from ml_catalog.base import CacheHelper
+from matplotlib.path import Path as mplPath
 from ml_catalog.modules import GammaAssociator
 
 OGS_STUDY_REGION = [
@@ -9,8 +9,7 @@ OGS_STUDY_REGION = [
 ]
 
 class OGSGammaAssociator(GammaAssociator):
-  def __init__(
-    self,
+  def __init__(self,
     config: dict,
     region: mplPath = mplPath(OGS_STUDY_REGION, closed=True),
     **kwargs,

@@ -9,41 +9,17 @@ import ogsconstants as OGS_C
 
 DATA_PATH = Path(__file__).parent.parent.parent
 
-def is_date(string: str) -> datetime:
-  return datetime.strptime(string, OGS_C.YYMMDD_FMT)
-
-def is_julian(string: str) -> datetime:
-  # TODO: Define and convert Julian date to Gregorian date
-  raise NotImplementedError
-  return datetime.strptime(string, OGS_C.YYMMDD_FMT)._set_julday(string)
-
-def is_file_path(string: str) -> Path:
-  if os.path.isfile(string):
-    return Path(os.path.abspath(string))
-  else:
-    raise FileNotFoundError(string)
-
-def is_dir_path(string: str) -> Path:
-  if os.path.isdir(string):
-    return Path(os.path.abspath(string))
-  else:
-    raise NotADirectoryError(string)
-
 def is_path(string: str) -> Path:
   if os.path.isfile(string) or os.path.isdir(string):
     return Path(os.path.abspath(string))
   else:
     raise FileNotFoundError(string)
 
-class SortDatesAction(argparse.Action):
-  def __call__(self, parser, namespace, values, option_string=None):
-    setattr(namespace, self.dest, sorted(values)) # type: ignore
-
 def parse_arguments() -> argparse.Namespace:
   parser = argparse.ArgumentParser(description="Process AdriaArray Dataset")
   # TODO: Handle security issues
   parser.add_argument(
-    '-K', "--key", default=None, required=False, type=is_file_path,
+    '-K', "--key", default=None, required=False, type=OGS_C.is_file_path,
     metavar=OGS_C.EMPTY_STR, help="Key to download the data from server.")
   parser.add_argument(
     '-N', "--network", default=[OGS_C.ALL_WILDCHAR_STR], type=str,
@@ -56,7 +32,7 @@ def parse_arguments() -> argparse.Namespace:
     help="Specify a set of Stations to analyze. To allow downloading data for "
         f"any channel, set this option to \'{OGS_C.ALL_WILDCHAR_STR}\'.")
   parser.add_argument(
-    '-d', "--directory", required=False, type=is_dir_path,
+    '-d', "--directory", required=False, type=OGS_C.is_dir_path,
     default=Path(DATA_PATH, OGS_C.WAVEFORMS_STR), metavar=OGS_C.EMPTY_STR,
     help="Directory path to the raw files")
   parser.add_argument(
@@ -74,15 +50,15 @@ def parse_arguments() -> argparse.Namespace:
     help="Enable timing")
   date_group = parser.add_mutually_exclusive_group(required=False)
   date_group.add_argument(
-    '-D', "--dates", required=False, metavar=OGS_C.DATE_STD, type=is_date,
-    nargs=2, action=SortDatesAction,
+    '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
+    type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
     default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
              datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
     help="Specify the beginning and ending (inclusive) Gregorian date " \
          "(YYMMDD) range to work with.")
   date_group.add_argument(
     '-J', "--julian", required=False, metavar=OGS_C.DATE_STD,
-    action=SortDatesAction, type=is_julian, default=None, nargs=2,
+    action=OGS_C.SortDatesAction, type=OGS_C.is_julian, default=None, nargs=2,
     help="Specify the beginning and ending (inclusive) Julian date (YYMMDD) " \
          "range to work with.")
   domain_group = parser.add_mutually_exclusive_group(required=False)

@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 from ml_catalog.modules import LocalMagnitude
 
-
 class OGSLocalMagnitude(LocalMagnitude):
   """
   This magnitude scale use has been calibrated for ...
@@ -90,16 +89,18 @@ class OGSLocalMagnitude(LocalMagnitude):
   def _calc_event_magnitudes(self, events: pd.DataFrame,
                              assignments: pd.DataFrame) -> pd.DataFrame:
     magnitudes = []
-    for (event_idx, group), event_df in assignments.groupby(["event_idx", "group"]):
+    for (event_idx, group), event_df in assignments.groupby(
+      ["event_idx", "group"]):
       event_df = event_df[event_df["phase"] == self.phase]
 
       # Remove listed stations
       if not self.ignore_stations.empty:
         event_df = event_df[
-          event_df["station"].isin(self.ignore_stations["station"])
+          ~event_df["station"].isin(self.ignore_stations["station"])
         ]
 
       station_magnitudes = event_df["station_ML"].values
+      """
       valid = ~np.isnan(station_magnitudes)
       if np.sum(valid) >= 3:
         med = np.nanmedian(station_magnitudes)
@@ -110,8 +111,10 @@ class OGSLocalMagnitude(LocalMagnitude):
         if mad > 0:
           # Remove stations with absolute deviation NO greater than 5 times the
           # median absolute deviation
-          station_magnitudes = station_magnitudes[abs_dev <= 5 * mad | ~valid]
+          station_magnitudes = station_magnitudes[abs_dev <= 5 * mad | valid]
 
+      print(station_magnitudes)
+      """
       n_stations = np.sum(~np.isnan(station_magnitudes))
       magnitudes.append(
         {

@@ -11,30 +11,23 @@ from matplotlib.path import Path as mplPath
 from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 import ogsconstants as OGS_C
 import ogsplotter as OGS_P
-import ogsbpgma as OGS_B
 
 RES_DIR = Path(__file__).parent.parent.parent / "data" / "compare"
 RES_DIR.mkdir(parents=True, exist_ok=True)
 IMG_PATH = Path(__file__).parent.parent / "img"
 
-def is_date(string: str) -> datetime:
-  return datetime.strptime(string, OGS_C.YYMMDD_FMT)
-
-class SortDatesAction(argparse.Action):
-  def __call__(self, parser, namespace, values, option_string=None):
-    setattr(namespace, self.dest, sorted(values)) # type: ignore
 
 def parse_arguments():
   parser = argparse.ArgumentParser(description="Process some data files.")
   parser.add_argument('-B', "--base", type=Path, required=True,
                       help="Base directory for data files.")
   parser.add_argument(
-    '-D', "--dates", required=False, metavar=OGS_C.DATE_STD, type=is_date,
-  nargs=2, action=SortDatesAction,
-  default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
-           datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
-  help="Specify the beginning and ending (inclusive) Gregorian date " \
-        "(YYMMDD) range to work with.")
+    '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
+    type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
+    default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
+             datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
+    help="Specify the beginning and ending (inclusive) Gregorian date " \
+          "(YYMMDD) range to work with.")
   parser.add_argument('-S', "--station", type=Path, required=False,
                       help="Path to the station directory.")
   parser.add_argument('-T', "--target", type=Path, required=True,

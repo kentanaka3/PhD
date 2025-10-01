@@ -41,7 +41,7 @@ class event_plotter(plotter):
                center=None) -> None:
     super().__init__(fig=fig)
     self.ax = self.fig.add_subplot(111)
-    self.pick_time = datetime(event[OGS_C.TIME_STR])
+    self.pick_time = op.UTCDateTime(event[OGS_C.TIME_STR])
     self.filepath = filepath
     self.inventory = inventory
     self.ymax = ymax
@@ -50,8 +50,9 @@ class event_plotter(plotter):
     if center is None:
       center = [event[OGS_C.LONGITUDE_STR], event[OGS_C.LATITUDE_STR]]
     else:
-      diff = gps2dist_azimuth(center[1], center[0],
-                              event[OGS_C.LATITUDE_STR], event[OGS_C.LONGITUDE_STR])[0] / 1000.0
+      diff = gps2dist_azimuth(
+        center[1], center[0],
+        event[OGS_C.LATITUDE_STR], event[OGS_C.LONGITUDE_STR])[0] / 1000.0
     self.x, self.y = center
     self.z = event[OGS_C.DEPTH_STR] / 1000.0  # Convert to km
     self.offset = td(seconds=1)
@@ -77,10 +78,10 @@ class event_plotter(plotter):
       normed = normed / np.max(np.abs(normed))
       if sta not in self.inventory: continue
       station_x, station_y, station_z, _ = self.inventory[sta]
-      y_ = np.sqrt(
-        (gps2dist_azimuth(station_y, station_x,
-                          self.y, self.x)[0] / 1000.0) ** 2 +
-        (abs(self.z - station_z) / 1000.0) ** 2)
+      y_ = np.sqrt((gps2dist_azimuth(
+            station_y, station_x, self.y, self.x
+          )[0] / 1000.0) ** 2 + (abs(self.z - station_z) / 1000.0) ** 2
+      )
       base = int(np.log10(y_))
       y_max = max(((y_ // (10 ** base)) + 1) * 10 ** base, y_max)
       if color is not None:
@@ -139,9 +140,8 @@ class event_plotter(plotter):
       normed = trace.event - np.mean(trace.event)
       normed = normed / np.max(np.abs(normed))
       station_x, station_y, station_z, _ = self.inventory[sta]
-      y_ = np.sqrt(
-        (gps2dist_azimuth(station_y, station_x,
-                          self.y, self.x)[0] / 1000.0) ** 2 +
+      y_ = np.sqrt((gps2dist_azimuth(
+        station_y, station_x, self.y, self.x)[0] / 1000.0) ** 2 +
         (abs(self.z - station_z) / 1000.0) ** 2)
       if flip:
         if y_ < 0: raise ValueError("y_ must be positive for plotting.")
@@ -211,7 +211,6 @@ class day_plotter(plotter):
     x = picks.value_counts().sort_index()
     y = np.cumsum(x.values)
     x = x.index
-    picks.drop(columns=[OGS_C.DATE_STR], inplace=True)
     self.ax = self.fig.add_subplot(111)
     if ylabel:
       self.ax.set_ylabel(ylabel)
@@ -283,10 +282,12 @@ class map_plotter(plotter):
     rgAx = self.fig.add_axes((.74, 0.01, 0.15, 0.27), projection=self.proj)
     rgAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
                                       fill=False))
-    rgAx.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
-    rgAx.add_feature(cfeature.BORDERS, linewidth=0.5, edgecolor=OGS_C.MEX_PINK)
-    rgAx.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
-    rgAx.set_extent([6, 19, 36, 48], crs=self.proj)
+    rgAx.add_feature(cfeature.OCEAN, facecolor=("lightblue")) # type: ignore
+    rgAx.add_feature(cfeature.BORDERS, linewidth=0.5, # type: ignore
+                     edgecolor=OGS_C.MEX_PINK)
+    rgAx.add_feature(cfeature.COASTLINE, linewidth=0.5, # type: ignore
+                     edgecolor='black')
+    rgAx.set_extent([6, 19, 36, 48], crs=self.proj) # type: ignore
     rgAx.set_aspect('equal', adjustable='box')
     ita = rgAx.annotate("Italy", xy=(0.5, 0.55), xycoords='axes fraction',
                         ha='center', va='center', fontsize=20,
@@ -294,12 +295,14 @@ class map_plotter(plotter):
     ita.set(rotation=-30)
     self.ax.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
                                          fill=False, label="Station Area"))
-    self.ax.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
-    self.ax.add_feature(cfeature.BORDERS, linewidth=0.5, edgecolor=OGS_C.MEX_PINK)
-    self.ax.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
-    self.ax.set_extent(extent, crs=proj)
+    self.ax.add_feature(cfeature.OCEAN, facecolor=("lightblue")) # type: ignore
+    self.ax.add_feature(cfeature.BORDERS, linewidth=0.5, # type: ignore
+                        edgecolor=OGS_C.MEX_PINK)
+    self.ax.add_feature(cfeature.COASTLINE, linewidth=0.5, # type: ignore
+                        edgecolor='black')
+    self.ax.set_extent(extent, crs=proj) # type: ignore
     self.ax.set_aspect('equal', adjustable='box')
-    gl = self.ax.gridlines()
+    gl = self.ax.gridlines() # type: ignore
     gl.left_labels = True
     gl.top_labels = True
     if x is None or y is None:
@@ -396,7 +399,7 @@ class histogram_plotter(plotter):
   def __init__(self, data, bins=OGS_C.NUM_BINS, xlabel=None,
                ylabel="Number of Events", title=None, fig=None, ax=None,
                color=OGS_C. OGS_BLUE, gs=111, label=None, legend=False,
-               method=None, edgecolor=None, facecolor=None,
+               sec=None, edgecolor=None, facecolor=None,
                output=None) -> None:
     super().__init__(fig=fig, figsize=(10, 5))
     self.ax = self.fig.add_subplot(gs)
@@ -406,10 +409,7 @@ class histogram_plotter(plotter):
       self.ax.set_ylabel(ylabel)
     if title:
       self.ax.set_title(title)
-    if method is not None:
-      if method not in OGS_C.MATCH_CNFG:
-        raise ValueError(f"Method {method} not found in MATCH_CNFG.")
-      sec = OGS_C.MATCH_CNFG[method][OGS_C.TIME_DSPLCMT_STR].total_seconds()
+    if sec is not None:
       self.ax.set_xlim(-sec, sec)
       self.bins = np.linspace(-sec, sec, bins, endpoint=True)
       self.bins = self.bins + (self.bins[1] - self.bins[0]) / 2.0
@@ -419,10 +419,10 @@ class histogram_plotter(plotter):
     self.ax.hist(data, bins=self.bins[:-1], color=color, label=label,
                  align="mid")
     if legend:
-      mean = np.mean(data)
+      mean = float(np.mean(data))
       self.ax.axvline(x=mean, c='k', lw=1, alpha=0.5, ls='--', label="Mean" + (
         " of " + title if title else ""))
-      std = np.std(data)
+      std = float(np.std(data))
       self.ax.axvline(x=mean + std, c='r', lw=1, alpha=0.5, ls='--',
                       label="Standard Deviation" + (" of " + title
                                                     if title else ""))
@@ -458,8 +458,9 @@ class histogram_plotter(plotter):
       y, _ = np.histogram(data, bins=self.bins)
       self.ax.step(self.bins[:-1], y, color=color, label=label)
     else:
-      self.ax.hist(data, bins=self.bins[:-1], color=color, label=label,
-                   facecolor=facecolor, edgecolor=edgecolor, alpha=alpha)
+      self.ax.hist(data, bins=self.bins[:-1], color=color, # type: ignore
+                   label=label, facecolor=facecolor, edgecolor=edgecolor,
+                   alpha=alpha)
     if xlabel:
       self.ax.set_xlabel(xlabel)
     if ylabel:

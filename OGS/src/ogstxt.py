@@ -9,24 +9,17 @@ import ogsconstants as OGS_C
 
 DATA_PATH = Path(__file__).parent.parent.parent
 
-def is_date(string: str) -> datetime:
-  return datetime.strptime(string, OGS_C.YYMMDD_FMT)
-
-class SortDatesAction(argparse.Action):
-  def __call__(self, parser, namespace, values, option_string=None):
-    setattr(namespace, self.dest, sorted(values)) # type: ignore
-
 def parse_arguments():
   parser = argparse.ArgumentParser(description="Run OGS HPL quality checks")
   parser.add_argument("-f", "--file", type=Path, required=True,
                       help="Path to the input file")
   parser.add_argument(
-    '-D', "--dates", required=False, metavar=OGS_C.DATE_STD, type=is_date,
-  nargs=2, action=SortDatesAction,
-  default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
-           datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
-  help="Specify the beginning and ending (inclusive) Gregorian date " \
-        "(YYMMDD) range to work with.")
+    '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
+    type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
+    default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
+              datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
+    help="Specify the beginning and ending (inclusive) Gregorian date " \
+          "(YYMMDD) range to work with.")
   return parser.parse_args()
 
 class DataFileTXT(OGS_C.OGSDataFile):

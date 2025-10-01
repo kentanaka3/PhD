@@ -1,7 +1,6 @@
-import os
-import sys
 import argparse
 from pathlib import Path
+from obspy import UTCDateTime
 from datetime import datetime, timedelta as td
 import pandas as pd
 
@@ -9,24 +8,17 @@ import ogsconstants as OGS_C
 
 DATA_PATH = Path(__file__).parent.parent.parent
 
-def is_date(string: str) -> datetime:
-  return datetime.strptime(string, OGS_C.YYMMDD_FMT)
-
-class SortDatesAction(argparse.Action):
-  def __call__(self, parser, namespace, values, option_string=None):
-    setattr(namespace, self.dest, sorted(values)) # type: ignore
-
 def parse_arguments():
   parser = argparse.ArgumentParser(description="Run OGS HPL quality checks")
   parser.add_argument("-f", "--file", type=Path, required=True,
                       help="Path to the input file")
   parser.add_argument(
-    '-D', "--dates", required=False, metavar=OGS_C.DATE_STD, type=is_date,
-  nargs=2, action=SortDatesAction,
-  default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
-           datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
-  help="Specify the beginning and ending (inclusive) Gregorian date " \
-        "(YYMMDD) range to work with.")
+    '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
+    type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
+    default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
+             datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
+    help="Specify the beginning and ending (inclusive) Gregorian date " \
+          "(YYMMDD) range to work with.")
   return parser.parse_args()
 
 class DataFilePUN(OGS_C.OGSDataFile):
@@ -107,19 +99,21 @@ class DataFilePUN(OGS_C.OGSDataFile):
         ])
         event += 1
       self.debug(line, self.RECORD_EXTRACTOR_LIST)
-    self.events = pd.DataFrame(SOURCE, columns=[
+    self.EVENTS = pd.DataFrame(SOURCE, columns=[
       OGS_C.INDEX_STR, OGS_C.TIMESTAMP_STR, OGS_C.LATITUDE_STR,
       OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR, OGS_C.MAGNITUDE_D_STR,
       OGS_C.NO_STR, OGS_C.GAP_STR, OGS_C.DMIN_STR, OGS_C.RMS_STR,
       OGS_C.ERH_STR, OGS_C.ERZ_STR, OGS_C.QM_STR, OGS_C.NOTES_STR,
       OGS_C.GROUPS_STR
     ]).astype({ OGS_C.INDEX_STR: int})
-    self.events[OGS_C.MAGNITUDE_D_STR] = \
-      self.events[OGS_C.MAGNITUDE_D_STR].replace(" " * 5, "NaN").apply(float)
-    self.events = self.events[self.events[
+    self.EVENTS[OGS_C.MAGNITUDE_D_STR] = \
+      self.EVENTS[OGS_C.MAGNITUDE_D_STR].replace(" " * 5, "NaN").apply(float)
+    self.EVENTS = self.EVENTS[self.EVENTS[
       [OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR]].apply(
         lambda x: self.polygon.contains_point(
           (x[OGS_C.LONGITUDE_STR], x[OGS_C.LATITUDE_STR])), axis=1)]
+    for date, df in self.EVENTS.groupby(OGS_C.GROUPS_STR):
+      self.events[UTCDateTime(date).date] = df
 
 
 def main(args):

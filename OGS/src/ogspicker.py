@@ -1,10 +1,8 @@
-from ml_catalog.modules import AmplitudeExtractor
-from collections import defaultdict
-import seisbench.util as sbu
-import re
 import obspy
 import numpy as np
-from datetime import timedelta
+import seisbench.util as sbu
+from datetime import datetime, timedelta as td
+from ml_catalog.modules import AmplitudeExtractor
 
 OGS_WOOD_ANDERSON = {
     "poles": [-5.49779 - 5.60886j, -5.49779 + 5.60886j],
@@ -18,12 +16,11 @@ WATER_LEVEL = 60
 # SNR parameters
 FREQ_RANGE = [1, 40]
 SNR_THRESHOLD = 1.3
-EPSILON_TIMEDELTA = timedelta(seconds=0.1)
+EPSILON_TIMEDELTA = td(seconds=0.1)
 
 TIME_BEFORE = 2.0  # seconds before the pick
 TIME_AFTER = 10.0  # seconds after the pick
 TIME_SLACK = 10.0  # seconds slack around the pick
-
 
 class OGSAmplitudeExtractor(AmplitudeExtractor):
   def __init__(self, **kwargs):

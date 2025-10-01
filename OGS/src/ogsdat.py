@@ -2,30 +2,24 @@ import re
 import argparse
 import pandas as pd
 from pathlib import Path
+from obspy import UTCDateTime
 from datetime import datetime, timedelta as td
 
 import ogsconstants as OGS_C
 
 DATA_PATH = Path(__file__).parent.parent.parent
 
-def is_date(string: str) -> datetime:
-  return datetime.strptime(string, OGS_C.YYMMDD_FMT)
-
-class SortDatesAction(argparse.Action):
-  def __call__(self, parser, namespace, values, option_string=None):
-    setattr(namespace, self.dest, sorted(values)) # type: ignore
-
 def parse_arguments():
   parser = argparse.ArgumentParser(description="Run OGS HPL quality checks")
   parser.add_argument("-f", "--file", type=Path, required=True,
                       help="Path to the input file")
   parser.add_argument(
-    '-D', "--dates", required=False, metavar=OGS_C.DATE_STD, type=is_date,
-  nargs=2, action=SortDatesAction,
-  default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
-           datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
-  help="Specify the beginning and ending (inclusive) Gregorian date " \
-        "(YYMMDD) range to work with.")
+    '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
+    type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
+    default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
+              datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
+    help="Specify the beginning and ending (inclusive) Gregorian date " \
+         "(YYMMDD) range to work with.")
   return parser.parse_args()
 
 class DataFileDAT(OGS_C.OGSDataFile):
@@ -175,12 +169,14 @@ class DataFileDAT(OGS_C.OGSDataFile):
       if re.match(r"1\s+D$", line): continue
       if line == OGS_C.EMPTY_STR: continue
       self.debug(line, self.RECORD_EXTRACTOR_LIST)
-    self.picks = pd.DataFrame(DETECT, columns=[
+    self.PICKS = pd.DataFrame(DETECT, columns=[
       OGS_C.INDEX_STR, OGS_C.TIMESTAMP_STR, OGS_C.ERT_STR, OGS_C.PHASE_STR,
       OGS_C.NOTES_STR, OGS_C.STATION_STR, OGS_C.NETWORK_STR,
       OGS_C.GROUPS_STR]).astype({ OGS_C.INDEX_STR: int})
-    self.picks[OGS_C.GROUPS_STR] = self.picks[OGS_C.TIMESTAMP_STR].apply(
+    self.PICKS[OGS_C.GROUPS_STR] = self.PICKS[OGS_C.TIMESTAMP_STR].apply(
       lambda x: x.date())
+    for date, df in self.PICKS.groupby(OGS_C.GROUPS_STR):
+      self.picks[UTCDateTime(date).date] = df
 
 
 def main(args):
