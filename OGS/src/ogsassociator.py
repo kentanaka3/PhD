@@ -9,6 +9,12 @@ OGS_STUDY_REGION = [
 ]
 
 class OGSGammaAssociator(GammaAssociator):
+  """
+  OGS-specific implementation of the ML Catalog Gamma Associator.
+
+  We define an enclosed study region for seismic event association and discard
+  those events that fall outside this region.
+  """
   def __init__(self,
     config: dict,
     region: mplPath = mplPath(OGS_STUDY_REGION, closed=True),

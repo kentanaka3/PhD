@@ -1,13 +1,15 @@
-from pathlib import Path
 import numpy as np
-import pandas as pd
-from datetime import datetime, timedelta as td
-import matplotlib.pyplot as plt
 import obspy as op
+import pandas as pd
 import cartopy.crs as ccrs
+import matplotlib.pyplot as plt
 import cartopy.feature as cfeature
-from obspy.geodetics import gps2dist_azimuth
 import matplotlib.patches as mpatches
+from pathlib import Path
+from obspy.geodetics import gps2dist_azimuth
+from datetime import datetime, timedelta as td
+from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
+
 import ogsconstants as OGS_C
 
 IMG_PATH = Path(__file__).parent.parent / "img"
@@ -33,6 +35,29 @@ class plotter:
       plt.savefig(Path(IMG_PATH, self.output), bbox_inches='tight', dpi=300,
                   **kwargs)
       print(f"Figure saved to {self.output}")
+
+class line_plotter(plotter):
+  def __init__(
+      self, x, y, xlabel=None, ylabel=None, title=None, fig=None, ax=None,
+      color=OGS_C.OGS_BLUE, gs=111, label=None, legend=False,
+      output=None) -> None:
+    super().__init__(fig=fig)
+    self.ax = self.fig.add_subplot(gs)
+    if xlabel: self.ax.set_xlabel(xlabel)
+    if ylabel: self.ax.set_ylabel(ylabel)
+    if title: self.ax.set_title(title)
+    self.ax.plot(x, y, color=color, label=label)
+    if legend: self.ax.legend()
+    if output is not None: self.savefig(output=output)
+
+  def add_plot(self, x, y, xlabel=None, ylabel=None, color=OGS_C.MEX_PINK,
+               label=None, legend=None, output=None, savefig=False) -> None:
+    self.ax.plot(x, y, color=color, label=label)
+    if xlabel: self.ax.set_xlabel(xlabel)
+    if ylabel: self.ax.set_ylabel(ylabel)
+    if legend is not None: self.ax.legend()
+    if output is not None: savefig = True
+    if savefig: self.savefig(output=output)
 
 class event_plotter(plotter):
   def __init__(self, picks, event, filepath, inventory, fig=None, ax=None,
@@ -207,10 +232,11 @@ class day_plotter(plotter):
   def __init__(self, picks, ylabel=None, title=None, ylim=None, label=None,
                output=None, legend=None, yscale=None, color=OGS_C.OGS_BLUE,
                grid=False) -> None:
+    from obspy import UTCDateTime
     super().__init__()
     x = picks.value_counts().sort_index()
     y = np.cumsum(x.values)
-    x = x.index
+    x = [UTCDateTime(xx).date for xx in x.index]
     self.ax = self.fig.add_subplot(111)
     if ylabel:
       self.ax.set_ylabel(ylabel)
@@ -411,13 +437,12 @@ class histogram_plotter(plotter):
       self.ax.set_title(title)
     if sec is not None:
       self.ax.set_xlim(-sec, sec)
-      self.bins = np.linspace(-sec, sec, bins, endpoint=True)
-      self.bins = self.bins + (self.bins[1] - self.bins[0]) / 2.0
+      self.bins = np.linspace(-sec, sec, bins + 1)
     else:
       _, self.bins = np.histogram(data, bins=bins)
-      self.bins = self.bins + (self.bins[1] - self.bins[0]) / 2.0
-    self.ax.hist(data, bins=self.bins[:-1], color=color, label=label,
-                 align="mid")
+    self.bins = self.bins - (self.bins[1] - self.bins[0]) / 2.0
+    self.ax.hist(data, bins=self.bins, color=color, label=label, # type: ignore
+                 align='left')
     if legend:
       mean = float(np.mean(data))
       self.ax.axvline(x=mean, c='k', lw=1, alpha=0.5, ls='--', label="Mean" + (
@@ -456,11 +481,11 @@ class histogram_plotter(plotter):
                edgecolor=None, alpha=0.5, output=None, savefig=False) -> None:
     if step:
       y, _ = np.histogram(data, bins=self.bins)
-      self.ax.step(self.bins[:-1], y, color=color, label=label)
+      self.ax.step(self.bins[:-1], y, color=color, label=label, where='mid')
     else:
       self.ax.hist(data, bins=self.bins[:-1], color=color, # type: ignore
                    label=label, facecolor=facecolor, edgecolor=edgecolor,
-                   alpha=alpha)
+                   align='right', alpha=alpha)
     if xlabel:
       self.ax.set_xlabel(xlabel)
     if ylabel:
@@ -473,3 +498,17 @@ class histogram_plotter(plotter):
         self.ax.get_legend().remove()
     if output is not None: savefig = True
     if savefig: self.savefig(output=output)
+
+class ConfMtx_plotter(plotter):
+  def __init__(self, data, title=None, fig=None, ax=None,
+               color=OGS_C.MEX_PINK, gs=111, label=None, legend=False,
+               facecolor=None, edgecolor=None, output=None) -> None:
+    super().__init__(fig=fig, figsize=(10, 5))
+    self.ax = self.fig.add_subplot(gs)
+    if title: self.ax.set_title(title)
+    disp = ConfMtxDisp(data, display_labels=label)
+    disp.plot(values_format='d', colorbar=True, ax=self.ax)
+    for labels in disp.text_.ravel():
+      labels.set(color=OGS_C.MEX_PINK, fontsize=12, fontweight="bold")
+    disp.im_.set(clim=(0, max(data.flatten())), cmap="Blues", norm="log")
+    if output is not None: self.savefig(output=output)

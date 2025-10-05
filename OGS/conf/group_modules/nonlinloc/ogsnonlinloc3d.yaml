@@ -2,7 +2,7 @@ _target_: ml_catalog.modules.NonLinLoc
 _convert_: partial
 mode_3d: true
 CONTROL: [1, 42]
-TRANS: [TRANS_MERC, WGS-84, 44.3,  9.5, 0.0]
+TRANS: [TRANS_MERC, WGS-84, 45.9,  12.25, 0.0]
 velocity_models_3d:
   P: "OGS/data/NAC5.P.sim"
   S: "OGS/data/NAC5.S.sim"

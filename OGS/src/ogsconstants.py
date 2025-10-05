@@ -2,6 +2,7 @@ import os
 import re
 import argparse
 import numpy as np
+import obspy as op
 import pandas as pd
 import networkx as nx
 import itertools as it
@@ -45,7 +46,7 @@ H71_OFFSET = {
     5: 25
 }
 EVENT_TIME_OFFSET = td(seconds=1.5)
-EVENT_DIST_OFFSET = 8  # km
+EVENT_DIST_OFFSET = 3  # km
 
 # Strings
 EMPTY_STR = ''
@@ -174,8 +175,7 @@ OGS_PROJECTION = "+proj=sterea +lon_0={lon} +lat_0={lat} +units=km"
 OGS_MAX_MAGNITUDE = 3.5
 
 # Data components
-ID_STR = "idx"
-INDEX_STR = "index"
+INDEX_STR = "idx"
 TIMESTAMP_STR = "time"
 TIME_STR = "time"
 METADATA_STR = "metadata"
@@ -342,48 +342,39 @@ HEADER_EVENTS = [INDEX_STR, TIMESTAMP_STR, LATITUDE_STR, LONGITUDE_STR,
 HEADER_PICKS = [INDEX_STR, TIMESTAMP_STR, PHASE_STR, STATION_STR, ONSET_STR,
                 POLARITY_STR, WEIGHT_STR]
 
-"""
-def dist_balanced(B: pd.Series, T: pd.Series) -> float:
-  return (dist_time(T, P) + 9. * dist_phase(T, P)) / 10.
-"""
-
-"""
-def dist_default(B: pd.Series, T: pd.Series) -> float:
-  return (99. * dist_balanced(T, P) + P[PROBABILITY_STR]) / 100.
-"""
-
 def dist_prob(B: pd.Series, T: pd.Series) -> float:
-  return T[PROBABILITY_STR]/B[PROBABILITY_STR]
+  return T[PROBABILITY_STR] / B[PROBABILITY_STR]
 
 def dist_phase(B: pd.Series, T: pd.Series) -> float:
   return int(T[PHASE_STR] == B[PHASE_STR])
 
 def diff_time(B: pd.Series, T: pd.Series) -> float:
-  return B[TIMESTAMP_STR] - T[TIMESTAMP_STR]
+  return abs(B[TIMESTAMP_STR] - T[TIMESTAMP_STR])
 def dist_time(B: pd.Series, T: pd.Series,
               offset: td = PICK_TIME_OFFSET) -> float:
   return 1. - (diff_time(B, T) / offset.total_seconds())
 
 def diff_space(B: pd.Series, T: pd.Series) -> float:
-  return gps2dist_azimuth(B[LATITUDE_STR], B[LONGITUDE_STR],
-                          T[LATITUDE_STR], T[LONGITUDE_STR])[0]
+  return float(format(gps2dist_azimuth(
+    B[LATITUDE_STR], B[LONGITUDE_STR],
+    T[LATITUDE_STR], T[LONGITUDE_STR])[0] / 1000., ".4f"))
 def dist_space(B: pd.Series, T: pd.Series,
                offset: float = EVENT_DIST_OFFSET) -> float:
-  return 1. - (float(format(diff_space(B, T) / 1000., ".4f")) / offset)
+  return 1. - diff_space(B, T) / offset
 
 def dist_pick(B: pd.Series, T: pd.Series,
               time_offset_sec: td = PICK_TIME_OFFSET) -> float:
   return (
-   3 * dist_time(T, B, time_offset_sec) +
-   1 * dist_phase(T, B) +
-   1 * dist_prob(T, B)
-  ) / 5.
+   97. * dist_time(T, B, time_offset_sec) +
+   2. * dist_phase(T, B) +
+   1. * dist_prob(T, B)
+  ) / 100.
 
 def dist_event(T: pd.Series, P: pd.Series,
                time_offset_sec: td = EVENT_TIME_OFFSET,
                space_offset_km: float = EVENT_DIST_OFFSET) -> float:
-  return (dist_time(T, P, time_offset_sec) +
-          dist_space(T, P, space_offset_km)) / 2.
+  return (99. * dist_time(T, P, time_offset_sec) +
+          1. * dist_space(T, P, space_offset_km)) / 100.
 
 def is_date(string: str) -> datetime:
   return datetime.strptime(string, YYMMDD_FMT)
@@ -426,7 +417,7 @@ def inventory(stations: Path) -> dict[str, tuple[float, float, float, str]]:
     orient='index',
     columns=[LONGITUDE_STR, LATITUDE_STR, DEPTH_STR, NETWORK_STR])
   mystations = OGS_P.map_plotter(OGS_STUDY_REGION, legend=True,
-                                  marker='^', output="OGS_Stations.png")
+                                  marker='^', output="OGSStations.png")
   cmap = plt.get_cmap("turbo")
   colors = cmap(np.linspace(0, 1, inv[NETWORK_STR].nunique()))
   for i, (net, sta) in enumerate(inv.groupby(NETWORK_STR)):
@@ -436,6 +427,34 @@ def inventory(stations: Path) -> dict[str, tuple[float, float, float, str]]:
   mystations.savefig()
   plt.close()
   return INVENTORY
+
+def waveforms(
+    directory: Path,
+    start: datetime,
+    end: datetime) -> dict[str, dict[str, list[Path]]]:
+  import ogsplotter as OGS_P
+  from matplotlib import pyplot as plt
+  WAVEFORMS: dict[str, dict[str, list[Path]]] = dict()
+  DAYS = np.arange(start, end + ONE_DAY, ONE_DAY,
+                   dtype='datetime64[D]').tolist()
+  DAYS = [UTCDateTime(day).date for day in DAYS]
+  for wf in directory.glob("**/*.mseed"):
+    stid, dateinitid, _ = wf.stem.split(UNDERSCORE_STR + UNDERSCORE_STR)
+    dateinitid = UTCDateTime(dateinitid).date
+    if dateinitid not in WAVEFORMS: WAVEFORMS[dateinitid] = dict()
+    if stid not in WAVEFORMS[dateinitid]: WAVEFORMS[dateinitid][stid] = list()
+    WAVEFORMS[dateinitid][stid].append(wf)
+  x, y = zip(*sorted([
+    (date, len(WAVEFORMS[date].keys())) for date in DAYS if date in WAVEFORMS
+  ], key=lambda x: x[0]))
+  OGS_P.line_plotter(
+    x, y,
+    xlabel="Date",
+    ylabel="Number of Waveforms",
+    title="Availability",
+    output="OGSAvailability.png"
+  )
+  return WAVEFORMS
 
 class SortDatesAction(argparse.Action):
   def __call__(self, parser, namespace, values, option_string=None):
@@ -468,21 +487,18 @@ class OGSBPGraphPicks(OGSBPGraph):
   def makeMatch(self) -> None:
     I = len(self.Base)
     J = len(self.Target)
-    i = 0
-    j = 0
-    while i < I:
-      while j < J:
-        if dist_time(self.Base.iloc[i], self.Target.iloc[j]) <= \
-            PICK_TIME_OFFSET.total_seconds():
-          d = dist_pick(self.Base.iloc[i], self.Target.iloc[j])
-          if d >= PWAVE_THRESHOLD: self.G.add_edge(i, j + I, weight=d)
-          j += 1
-        else:
-          if (self.Base.iloc[i][TIMESTAMP_STR] <
-              self.Target.iloc[j][TIMESTAMP_STR]):
-            break
-          j += 1
-      i += 1
+    self.G = nx.Graph()
+    self.Target[NETWORK_STR] = self.Target[STATION_STR].str.split(".").str[0]
+    self.Target[STATION_STR] = self.Target[STATION_STR].str.split(".").str[1]
+    self.Base[STATION_STR] = self.Base[STATION_STR].astype(str)
+    for idxBase, rowBase in self.Base.iterrows():
+      for idxTarget, rowTarget in self.Target.iterrows():
+        if ((diff_time(rowBase, rowTarget) <= PICK_TIME_OFFSET.total_seconds())
+            & (rowBase[STATION_STR] == rowTarget[STATION_STR])):
+          self.G.add_edge(
+            idxBase, int(idxTarget) + I,
+            weight=dist_pick(rowBase, rowTarget)
+          )
     self.E = nx.max_weight_matching(self.G, maxcardinality=False, weight='weight')
 
 class OGSBPGraphEvents(OGSBPGraph):
@@ -499,22 +515,14 @@ class OGSBPGraphEvents(OGSBPGraph):
 
   def makeMatch(self):
     I = len(self.Base)
-    J = len(self.Target)
-    i = j = 0
-    while i < I:
-      while j < J:
-        if dist_time(self.Base.iloc[i], self.Target.iloc[j]) <= EVENT_TIME_OFFSET.total_seconds():
+    for idxBase, rowBase in self.Base.iterrows():
+      for idxTarget, rowTarget in self.Target.iterrows():
+        if (diff_time(rowBase, rowTarget) <= EVENT_TIME_OFFSET.total_seconds()
+            and diff_space(rowBase, rowTarget) <= EVENT_DIST_OFFSET):
           self.G.add_edge(
-            i,
-            j + I,
-            weight=dist_event(self.Base.iloc[i], self.Target.iloc[j])
+            idxBase, int(idxTarget) + I,
+            weight=dist_event(rowBase, rowTarget)
           )
-          j += 1
-        else:
-          if self.Base.iloc[i][TIMESTAMP_STR] < self.Target.iloc[j][TIMESTAMP_STR]:
-            break
-          j += 1
-      i += 1
     self.E = nx.max_weight_matching(self.G, maxcardinality=False, weight='weight')
 
 
@@ -608,7 +616,8 @@ class OGSCatalog:
   def load(self):
     print(f"Loading picks from {self.filepath} files...")
 
-  def plot(self, other = None):
+  def plot(self, other = None, waveforms: dict[datetime, dict[str, list[Path]]] = dict()):
+    i = 0
     if not self.get("EVENTS").empty:
       self.plot_events()
       self.plot_events(other)
@@ -618,8 +627,13 @@ class OGSCatalog:
       self.plot_erh_histogram(NUM_BINS)
       self.plot_erz_histogram(NUM_BINS)
       self.plot_cumulative_events(other)
+      i += 1
     if not self.get("PICKS").empty:
+      i += 1
       self.plot_cumulative_picks(other)
+    if i == 2:
+      if waveforms != {}:
+        print(self.EventsFN)
 
   def plot_cumulative_picks(self, other = None):
     import ogsplotter as OGS_P
@@ -867,10 +881,6 @@ class OGSCatalog:
   def plot_magnitude_histogram(self, bins: int = NUM_BINS, other = None):
     import ogsplotter as OGS_P
     from matplotlib import pyplot as plt
-    events = self.get("EVENTS")
-    if events.empty or MAGNITUDE_L_STR not in events.columns:
-      print("No magnitude data available for histogram.")
-      return
     if (other is not None and isinstance(other, OGSCatalog) and
         MAGNITUDE_L_STR in other.get("EVENTS").columns):
       other_events = other.get("EVENTS")
@@ -878,7 +888,12 @@ class OGSCatalog:
         data=other_events[MAGNITUDE_L_STR].dropna(),
         label=other.name,
         color=MEX_PINK,
+        output=f"{other.filepath.name}_Magnitude.png"
       )
+      events = self.get("EVENTS")
+      if events.empty or MAGNITUDE_L_STR not in events.columns:
+        print("No magnitude data available for histogram.")
+        return
       hist.add_plot(
         data=events[MAGNITUDE_L_STR].dropna(),
         xlabel="Magnitude $M_L$", ylabel="Number of Events",
@@ -887,6 +902,10 @@ class OGSCatalog:
         output=f"{self.filepath.name}_{other.filepath.name}_Magnitude.png"
       )
     else:
+      events = self.get("EVENTS")
+      if events.empty or MAGNITUDE_L_STR not in events.columns:
+        print("No magnitude data available for histogram.")
+        return
       hist = OGS_P.histogram_plotter(
         data=events[MAGNITUDE_L_STR].dropna(),
         bins=bins, xlabel="Magnitude $M_L$", ylabel="Number of Events",
@@ -895,65 +914,305 @@ class OGSCatalog:
       )
     plt.close()
 
-  def bpgma(self, other: "OGSCatalog") -> None:
+  def bgmaEvents(self, other: "OGSCatalog") -> None:
+    import ogsplotter as OGS_P
+    from matplotlib import pyplot as plt
     if not isinstance(other, OGSCatalog):
-      raise ValueError("Can only perform bpgma on OGSCatalog")
+      raise ValueError("Can only perform bgmaEvents on OGSCatalog")
     EVENTS_CFN_MTX = pd.DataFrame(0, index=[EVENT_STR, NONE_STR],
                                   columns=[EVENT_STR, NONE_STR], dtype=int)
+    self.EventsTP = list()
+    self.EventsFN = list()
+    self.EventsFP = list()
+    columns = [INDEX_STR, TIMESTAMP_STR, LATITUDE_STR, LONGITUDE_STR,
+               DEPTH_STR, ERH_STR, ERZ_STR, GAP_STR, MAGNITUDE_L_STR]
     for date, _ in self.events_.items():
       BASE = self.get_(date, "events").reset_index(drop=True)
       TARGET = other.get_(date, "events").reset_index(drop=True)
       I = len(BASE)
-      J = len(TARGET)
       bpgEvents = OGSBPGraphEvents(BASE, TARGET)
       baseIDs = set(range(I))
-      targetIDs = set(range(J))
+      targetIDs = set(range(len(TARGET)))
       for i, j in bpgEvents.E:
-        a = min(i, j)
-        b = max(i, j) - I
+        a, b = sorted((i, j))
+        b -= I
         EVENTS_CFN_MTX.at[EVENT_STR, EVENT_STR] += 1 # type: ignore
         baseIDs.remove(a)
         targetIDs.remove(b)
+
+        self.EventsTP.append([
+          (BASE.at[a, col] if col in BASE.columns else None,
+           TARGET.at[b, col] if col in TARGET.columns else None)
+           for col in columns
+        ])
       for i in baseIDs:
         EVENTS_CFN_MTX.at[EVENT_STR, NONE_STR] += 1 # type: ignore
+        self.EventsFN.append([
+          BASE.at[i, col] if col in BASE.columns else None for col in columns
+        ])
       for j in targetIDs:
         EVENTS_CFN_MTX.at[NONE_STR, EVENT_STR] += 1 # type: ignore
+        self.EventsFP.append([
+          TARGET.at[j, col] if col in TARGET.columns else None
+          for col in columns
+        ])
+    recall = \
+      EVENTS_CFN_MTX.at[EVENT_STR, EVENT_STR] / ( # type: ignore
+        EVENTS_CFN_MTX.at[EVENT_STR, EVENT_STR] +
+        EVENTS_CFN_MTX.at[EVENT_STR, NONE_STR]
+      )
+    print("Recall: ", recall)
+    print("TP: ", EVENTS_CFN_MTX.at[EVENT_STR, EVENT_STR],
+          "FP (Type I Error): ", EVENTS_CFN_MTX.at[NONE_STR, EVENT_STR],
+          "FN (Type II Error): ", EVENTS_CFN_MTX.at[EVENT_STR, NONE_STR])
+    print(EVENTS_CFN_MTX)
+    self.EventsTP = pd.DataFrame(self.EventsTP, columns=columns)
+    self.EventsFN = pd.DataFrame(self.EventsFN, columns=columns).sort_values(
+      by=TIMESTAMP_STR)
+    self.EventsFP = pd.DataFrame(self.EventsFP, columns=columns).sort_values(
+      by=TIMESTAMP_STR)
+    filepath = f"{self.filepath.name}_{other.filepath.name}_EventsTP.csv"
+    self.EventsTP.to_csv(filepath, index=False)
+    print(f"{filepath} written.")
+    filepath = f"{self.filepath.name}_{other.filepath.name}_EventsFN.csv"
+    self.EventsFN.to_csv(filepath, index=False)
+    print(f"{filepath} written.")
+    filepath = f"{self.filepath.name}_{other.filepath.name}_EventsFP.csv"
+    self.EventsFP.to_csv(filepath, index=False)
+    print(f"{filepath} written.")
+    filepath = f"{self.filepath.name}_" + \
+               f"{other.filepath.name}_EventsConfMtx.png"
+    OGS_P.ConfMtx_plotter(
+      EVENTS_CFN_MTX.values,
+      title="Recall: {:.4f}".format(recall),
+      label=EVENTS_CFN_MTX.columns.tolist(),
+      output=filepath
+    )
+    # Time Difference Histogram
+    OGS_P.histogram_plotter(
+      self.EventsTP[TIMESTAMP_STR].apply(lambda x: x[0] - x[1]),
+      xlabel="Time Difference (s)",
+      title="Event Time Difference",
+      sec=EVENT_TIME_OFFSET.total_seconds(),
+      output=f"{self.filepath.name}_{other.filepath.name}_EventsTimeDiff.png",
+      legend=True)
+    plt.close()
+    # True Positive Map
+    myplot = OGS_P.map_plotter(
+      domain=OGS_STUDY_REGION,
+      x=self.EventsTP[LONGITUDE_STR].apply(lambda x: x[0]),
+      y=self.EventsTP[LATITUDE_STR].apply(lambda x: x[0]),
+      facecolors="none", edgecolors=OGS_BLUE, legend=True,
+      label=self.name)
+    myplot.add_plot(
+      self.EventsTP[LONGITUDE_STR].apply(lambda x: x[1]),
+      self.EventsTP[LATITUDE_STR].apply(lambda x: x[1]), color=None,
+        label="True Positive (SBC)", legend=True, facecolors="none",
+        edgecolors=MEX_PINK,
+        output=f"{self.filepath.name}_{other.filepath.name}_True.png")
+    plt.close()
+    # False Negative and False Positive Map
+    myplot = OGS_P.map_plotter(
+      domain=OGS_STUDY_REGION,
+      x=self.EventsFN[LONGITUDE_STR], y=self.EventsFN[LATITUDE_STR],
+      label="False Negative (OGS)", legend=True,)
+    myplot.add_plot(
+      self.EventsFP[LONGITUDE_STR], self.EventsFP[LATITUDE_STR], color=None,
+        label="False Positive (SBC)", legend=True, facecolors="none",
+        edgecolors=MEX_PINK,
+        output=f"{self.filepath.name}_{other.filepath.name}_False.png")
+    plt.close()
+    # Depth Difference Histogram
+    OGS_P.histogram_plotter(
+      self.EventsTP[DEPTH_STR].apply(lambda x: x[0] - x[1]),
+      xlabel="Depth Difference (km) [OGS - SBC]",
+      title="Event Depth Difference",
+      sec=5,
+      output=f"{self.filepath.name}_{other.filepath.name}_DepthDiff.png",
+      legend=True)
+    plt.close()
+    # Event Location Scatter Plot
+    OGS_P.histogram_plotter(
+      OGS_P.v_lat_long_to_distance(
+        self.EventsTP[LONGITUDE_STR].apply(lambda x: x[0]),
+        self.EventsTP[LATITUDE_STR].apply(lambda x: x[0]),
+        self.EventsTP[DEPTH_STR].apply(lambda x: 0),
+        self.EventsTP[LONGITUDE_STR].apply(lambda x: x[1]),
+        self.EventsTP[LATITUDE_STR].apply(lambda x: x[1]),
+        self.EventsTP[DEPTH_STR].apply(lambda x: x[1]),
+        dim=3
+      ),
+      xlabel="Hypocentral Distance",
+      title="Event Hypocentral Distance Difference",
+      output=f"{self.filepath.name}_{other.filepath.name}_HypoDistDiff.png",
+      legend=True)
+    plt.close()
+    self.EVENTS = self.get("EVENTS")
+    other.EVENTS = other.get("EVENTS")
+
+  def bgmaPicks(self, other: "OGSCatalog") -> None:
+    import ogsplotter as OGS_P
+    from matplotlib import pyplot as plt
+    if not isinstance(other, OGSCatalog):
+      raise ValueError("Can only perform bgmaPicks on OGSCatalog")
     PICKS_CFN_MTX = pd.DataFrame(0, index=[PWAVE, SWAVE, NONE_STR],
                                  columns=[PWAVE, SWAVE, NONE_STR], dtype=int)
+    self.PicksTP = list()
+    self.PicksFN = list()
+    self.PicksFP = list()
+    columns = [INDEX_STR, TIMESTAMP_STR, PHASE_STR, STATION_STR, PROBABILITY_STR, ERT_STR]
     for date, _ in self.picks_.items():
       BASE = self.get_(date, "picks").reset_index(drop=True)
       TARGET = other.get_(date, "picks").reset_index(drop=True)
       I = len(BASE)
-      J = len(TARGET)
-      if BASE.empty or TARGET.empty:
-        continue
       bpgPicks = OGSBPGraphPicks(BASE, TARGET)
       baseIDs = set(range(I))
-      targetIDs = set(range(J))
+      targetIDs = set(range(len(TARGET)))
       for i, j in bpgPicks.E:
         a, b = sorted((i, j))
         b -= I
         PICKS_CFN_MTX.at[BASE.at[a, PHASE_STR],
                          TARGET.at[b, PHASE_STR]] += 1 # type: ignore
+        self.PicksTP.append([
+          (BASE.at[a, INDEX_STR], TARGET.at[b, "index"]),
+          (str(BASE.at[a, TIMESTAMP_STR]), str(TARGET.at[b, TIMESTAMP_STR])),
+          (BASE.at[a, PHASE_STR], TARGET.at[b, PHASE_STR]),
+          (BASE.at[a, STATION_STR], TARGET.at[b, STATION_STR]),
+          (BASE.at[a, PROBABILITY_STR], TARGET.at[b, PROBABILITY_STR]
+           if PROBABILITY_STR in TARGET.columns else None),
+          (BASE.at[a, ERT_STR], TARGET.at[b, ERT_STR]
+           if ERT_STR in TARGET.columns else None),
+        ])
         baseIDs.remove(a)
         targetIDs.remove(b)
       for i in baseIDs:
         PICKS_CFN_MTX.at[BASE.at[i, PHASE_STR], NONE_STR] += 1 # type: ignore
+        self.PicksFN.append([BASE.at[i, col] for col in columns])
       for j in targetIDs:
-        PICKS_CFN_MTX.at[NONE_STR, TARGET.at[j, PHASE_STR]] += 1 # type: ignore
-    print(EVENTS_CFN_MTX)
+        PICKS_CFN_MTX.at[NONE_STR,
+                          TARGET.at[j, PHASE_STR]] += 1 # type: ignore
+        self.PicksFP.append([
+          TARGET.at[j, "index"],
+          TARGET.at[j, TIMESTAMP_STR],
+          TARGET.at[j, PHASE_STR],
+          TARGET.at[j, STATION_STR],
+          TARGET.at[j, PROBABILITY_STR] if PROBABILITY_STR in TARGET.columns else None,
+          TARGET.at[j, ERT_STR] if ERT_STR in TARGET.columns else None,
+        ])
+    recall = \
+      (PICKS_CFN_MTX.at[PWAVE, PWAVE] + # type: ignore
+      PICKS_CFN_MTX.at[SWAVE, SWAVE]) / (
+        PICKS_CFN_MTX.at[PWAVE, PWAVE] + # type: ignore
+        PICKS_CFN_MTX.at[SWAVE, SWAVE] +
+        PICKS_CFN_MTX.at[PWAVE, NONE_STR] + PICKS_CFN_MTX.at[SWAVE, NONE_STR]
+      )
+    print("Recall: ", recall)
+    p_recall = PICKS_CFN_MTX.at[PWAVE, PWAVE] / ( # type: ignore
+      PICKS_CFN_MTX.at[PWAVE, PWAVE] + PICKS_CFN_MTX.at[PWAVE, NONE_STR]
+    )
+    print("Recall P-wave: ", p_recall)
+    s_recall = PICKS_CFN_MTX.at[SWAVE, SWAVE] / ( # type: ignore
+      PICKS_CFN_MTX.at[SWAVE, SWAVE] + PICKS_CFN_MTX.at[SWAVE, NONE_STR]
+    )
+    print("Recall S-wave: ", s_recall)
     print(PICKS_CFN_MTX)
+    print("TP: ", PICKS_CFN_MTX.at[PWAVE, PWAVE] + # type: ignore
+                  PICKS_CFN_MTX.at[SWAVE, SWAVE],
+          "FP (Type I Error): ", PICKS_CFN_MTX.at[NONE_STR, PWAVE] +
+          PICKS_CFN_MTX.at[NONE_STR, SWAVE], # type: ignore
+          "FN (Type II Error): ", PICKS_CFN_MTX.at[PWAVE, NONE_STR] +
+                  PICKS_CFN_MTX.at[SWAVE, NONE_STR]) # type: ignore
+    self.PicksTP = pd.DataFrame(self.PicksTP, columns=columns).sort_values(
+      by=TIMESTAMP_STR
+    )
+    self.PicksFN = pd.DataFrame(self.PicksFN, columns=columns).sort_values(
+      by=TIMESTAMP_STR
+    ).sort_values(by=TIMESTAMP_STR)
+    self.PicksFP = pd.DataFrame(self.PicksFP, columns=columns).sort_values(
+      by=TIMESTAMP_STR
+    ).sort_values(by=TIMESTAMP_STR)
+    filepath = f"{self.filepath.name}_{other.filepath.name}_PicksTP.csv"
+    self.PicksTP.to_csv(filepath, index=False)
+    print(f"{filepath} written.")
+    filepath = f"{self.filepath.name}_{other.filepath.name}_PicksFN.csv"
+    self.PicksFN.to_csv(filepath, index=False)
+    print(f"{filepath} written.")
+    filepath = f"{self.filepath.name}_{other.filepath.name}_PicksFP.csv"
+    self.PicksFP.to_csv(filepath, index=False)
+    print(f"{filepath} written.")
+    filepath = f"{self.filepath.name}_" + \
+               f"{other.filepath.name}_PicksConfMtx.png"
+    OGS_P.ConfMtx_plotter(
+      PICKS_CFN_MTX.values,
+      title="Recall: {:.4f}, Recall P: {:.4f}, Recall S: {:.4f}".format(
+        recall, p_recall, s_recall
+      ),
+      label=PICKS_CFN_MTX.columns.tolist(),
+      output=filepath
+    )
+    # Time Difference Histogram
+    pickdiff = OGS_P.histogram_plotter(
+      self.PicksTP[TIMESTAMP_STR].apply(
+        lambda x: UTCDateTime(x[0]) - UTCDateTime(x[1]) # type: ignore
+      ),
+      xlabel="Time Difference (s)",
+      title="Event Time Difference",
+      sec=PICK_TIME_OFFSET.total_seconds())
+    pickdiff.add_plot(
+      self.PicksTP.loc[
+        self.PicksTP[PHASE_STR] == (PWAVE, PWAVE),
+        TIMESTAMP_STR
+      ].apply(
+        lambda x: UTCDateTime(x[0]) - UTCDateTime(x[1]) # type: ignore
+      ),
+      alpha=1,
+      step=True,
+      color=MEX_PINK,
+      label="P Picks",
+    )
+    pickdiff.add_plot(
+      self.PicksTP.loc[
+        self.PicksTP[PHASE_STR] == (SWAVE, SWAVE),
+        TIMESTAMP_STR
+      ].apply(
+        lambda x: UTCDateTime(x[0]) - UTCDateTime(x[1]) # type: ignore
+      ),
+      alpha=1,
+      color=ALN_GREEN,
+      step=True,
+      label="S Picks",
+      legend=True,
+      output=f"{self.filepath.name}_{other.filepath.name}_PicksTimeDiff.png",
+    )
+    plt.close()
+    self.PICKS = self.get("PICKS")
+    other.PICKS = other.get("PICKS")
 
-  def __add__(self, other):
+  def bpgma(self, other: "OGSCatalog") -> None:
+    if not isinstance(other, OGSCatalog):
+      raise ValueError("Can only perform bpgma on OGSCatalog")
+    if self.events_ != {}: self.bgmaEvents(other)
+    if self.picks_ != {}: self.bgmaPicks(other)
+
+  def plotFNWaveforms(self, other: "OGSCatalog", output: Path) -> None:
+    pass
+
+  def __iadd__(self, other):
     if not isinstance(other, OGSCatalog):
       raise ValueError("Can only add OGSCatalog to OGSCatalog")
     self.picks_ = {**self.picks_, **other.picks_}
-    self.PICKS = pd.concat([self.PICKS, other.PICKS], ignore_index=True)
+    if not self.PICKS.empty and not other.PICKS.empty:
+      self.PICKS = pd.concat([self.PICKS, other.PICKS], ignore_index=True)
+    elif self.PICKS.empty:
+      self.PICKS = other.PICKS.copy()
     self.events_ = {**self.events_, **other.events_}
-    self.EVENTS = pd.concat([self.EVENTS, other.EVENTS], ignore_index=True)
+    if not self.EVENTS.empty and not other.EVENTS.empty:
+      self.EVENTS = pd.concat([self.EVENTS, other.EVENTS], ignore_index=True)
+    elif self.EVENTS.empty:
+      self.EVENTS = other.EVENTS.copy()
     return self
 
-  def __sub__(self, other):
+  def __isub__(self, other):
     if not isinstance(other, OGSCatalog):
       raise ValueError("Can only subtract OGSCatalog from OGSCatalog")
     self.picks_ = {k: v for k, v in self.picks_.items()
@@ -966,14 +1225,10 @@ class OGSCatalog:
       other.EVENTS[INDEX_STR])]
     return self
 
-  def __div__(self, other):
+  def __idiv__(self, other):
     if not isinstance(other, OGSCatalog):
       raise ValueError("Can only divide OGSCatalog by OGSCatalog")
-    [(PICKS_CFN_MTX, PICKS_TP, PICKS_FN, PICKS_FP),
-     (EVENTS_CFN_MTX, EVENTS_TP, EVENTS_FN, EVENTS_FP)] = self.bpgma(
-       other)
-    self.EVENTS = self.EVENTS[self.EVENTS[INDEX_STR].isin(
-      other.EVENTS[INDEX_STR])]
+    self.bpgma(other)
     return self
 
 class OGSDataFile(OGSCatalog):

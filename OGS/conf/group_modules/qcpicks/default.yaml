@@ -1,1 +1,6 @@
 _target_: ml_catalog.modules.PickStatQC  # Without further parameters, this will just write statistics
+
+p_picks: 3
+s_picks: 3
+total_picks: 6
+p_and_s_picks: 3

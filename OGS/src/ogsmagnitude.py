@@ -4,16 +4,22 @@ from ml_catalog.modules import LocalMagnitude
 
 class OGSLocalMagnitude(LocalMagnitude):
   """
-  This magnitude scale use has been calibrated for ...
-  """
+  OGS-specific implementation of the ML Catalog LocalMagnitude.
 
+  OGGS has performed extensive calibration of the local magnitude scale for
+  Switzerland and surrounding regions. This implementation includes station
+  corrections and the option to ignore specific stations that are known to
+  produce unreliable amplitude measurements.
+  """
   def __init__(self,
                station_corrections: pd.DataFrame,
                ignore_stations: pd.DataFrame = pd.DataFrame(),
+               networkfocus: str = "",
                components: str = "NE") -> None:
     self.components = components
     self.station_corrections = station_corrections
     self.ignore_stations = ignore_stations
+    self.networkfocus = networkfocus
     super().__init__(hypocentral_range=(3, 150))
 
   def get_log_amp_0(
@@ -100,7 +106,6 @@ class OGSLocalMagnitude(LocalMagnitude):
         ]
 
       station_magnitudes = event_df["station_ML"].values
-      """
       valid = ~np.isnan(station_magnitudes)
       if np.sum(valid) >= 3:
         med = np.nanmedian(station_magnitudes)
@@ -111,10 +116,8 @@ class OGSLocalMagnitude(LocalMagnitude):
         if mad > 0:
           # Remove stations with absolute deviation NO greater than 5 times the
           # median absolute deviation
-          station_magnitudes = station_magnitudes[abs_dev <= 5 * mad | valid]
+          station_magnitudes = station_magnitudes[abs_dev <= 5 * mad]
 
-      print(station_magnitudes)
-      """
       n_stations = np.sum(~np.isnan(station_magnitudes))
       magnitudes.append(
         {
