@@ -425,7 +425,7 @@ class histogram_plotter(plotter):
   def __init__(self, data, bins=OGS_C.NUM_BINS, xlabel=None,
                ylabel="Number of Events", title=None, fig=None, ax=None,
                color=OGS_C. OGS_BLUE, gs=111, label=None, legend=False,
-               sec=None, edgecolor=None, facecolor=None,
+               xlim=None, edgecolor=None, facecolor=None,
                output=None) -> None:
     super().__init__(fig=fig, figsize=(10, 5))
     self.ax = self.fig.add_subplot(gs)
@@ -435,9 +435,15 @@ class histogram_plotter(plotter):
       self.ax.set_ylabel(ylabel)
     if title:
       self.ax.set_title(title)
-    if sec is not None:
-      self.ax.set_xlim(-sec, sec)
-      self.bins = np.linspace(-sec, sec, bins + 1)
+    if xlim is not None:
+      self.ax.set(xlim=xlim)
+      if type(xlim) != list and type(xlim) != tuple:
+        raise ValueError("xlim must be a list or tuple of two floats.")
+      if len(xlim) != 2:
+        raise ValueError("xlim must be a list or tuple of two floats.")
+      if xlim[0] >= xlim[1]:
+        raise ValueError("xlim[0] must be less than xlim[1].")
+      self.bins = np.linspace(xlim[0], xlim[1], bins + 1)
     else:
       _, self.bins = np.histogram(data, bins=bins)
     self.bins = self.bins - (self.bins[1] - self.bins[0]) / 2.0

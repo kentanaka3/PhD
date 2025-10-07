@@ -46,7 +46,7 @@ H71_OFFSET = {
     5: 25
 }
 EVENT_TIME_OFFSET = td(seconds=1.5)
-EVENT_DIST_OFFSET = 3  # km
+EVENT_DIST_OFFSET = 7  # km
 
 # Strings
 EMPTY_STR = ''
@@ -354,10 +354,16 @@ def dist_time(B: pd.Series, T: pd.Series,
               offset: td = PICK_TIME_OFFSET) -> float:
   return 1. - (diff_time(B, T) / offset.total_seconds())
 
-def diff_space(B: pd.Series, T: pd.Series) -> float:
-  return float(format(gps2dist_azimuth(
+def diff_space(
+    B: pd.Series,
+    T: pd.Series,
+    ndim: int = 2,
+    p: float = 2.
+  ) -> float:
+  return float(format(np.sqrt((gps2dist_azimuth(
     B[LATITUDE_STR], B[LONGITUDE_STR],
-    T[LATITUDE_STR], T[LONGITUDE_STR])[0] / 1000., ".4f"))
+    T[LATITUDE_STR], T[LONGITUDE_STR])[0] / 1000.) ** p +
+    ((B[DEPTH_STR] - T[DEPTH_STR]) / 1000.) ** p if ndim == 3 else 0.), ".4f"))
 def dist_space(B: pd.Series, T: pd.Series,
                offset: float = EVENT_DIST_OFFSET) -> float:
   return 1. - diff_space(B, T) / offset
@@ -772,7 +778,7 @@ class OGSCatalog:
         ERT_STR in other.get("EVENTS").columns):
       other_events = other.get("EVENTS")
       hist = OGS_P.histogram_plotter(
-        data=other_events[ERT_STR].dropna(),
+        data=other_events["probability"].dropna(),
         label=other.name,
         color=MEX_PINK,
       )
@@ -897,8 +903,9 @@ class OGSCatalog:
       hist.add_plot(
         data=events[MAGNITUDE_L_STR].dropna(),
         xlabel="Magnitude $M_L$", ylabel="Number of Events",
-        title=f"Magnitude Histogram for {self.name}", label=self.name,
-        legend=True, alpha=1, color=OGS_BLUE, facecolor=OGS_BLUE,
+        title=f"Magnitude Comparison between {self.name} and {other.name}",
+        label=self.name, legend=True, alpha=1, color=OGS_BLUE,
+        facecolor=OGS_BLUE,
         output=f"{self.filepath.name}_{other.filepath.name}_Magnitude.png"
       )
     else:
@@ -993,7 +1000,8 @@ class OGSCatalog:
       self.EventsTP[TIMESTAMP_STR].apply(lambda x: x[0] - x[1]),
       xlabel="Time Difference (s)",
       title="Event Time Difference",
-      sec=EVENT_TIME_OFFSET.total_seconds(),
+      xlim=(-EVENT_TIME_OFFSET.total_seconds(),
+            EVENT_TIME_OFFSET.total_seconds()),
       output=f"{self.filepath.name}_{other.filepath.name}_EventsTimeDiff.png",
       legend=True)
     plt.close()
@@ -1027,7 +1035,7 @@ class OGSCatalog:
       self.EventsTP[DEPTH_STR].apply(lambda x: x[0] - x[1]),
       xlabel="Depth Difference (km) [OGS - SBC]",
       title="Event Depth Difference",
-      sec=5,
+      xlim=(-EVENT_DIST_OFFSET, EVENT_DIST_OFFSET),
       output=f"{self.filepath.name}_{other.filepath.name}_DepthDiff.png",
       legend=True)
     plt.close()
@@ -1040,8 +1048,9 @@ class OGSCatalog:
         self.EventsTP[LONGITUDE_STR].apply(lambda x: x[1]),
         self.EventsTP[LATITUDE_STR].apply(lambda x: x[1]),
         self.EventsTP[DEPTH_STR].apply(lambda x: x[1]),
-        dim=3
+        dim=2
       ),
+      xlim=(0, EVENT_DIST_OFFSET),
       xlabel="Hypocentral Distance",
       title="Event Hypocentral Distance Difference",
       output=f"{self.filepath.name}_{other.filepath.name}_HypoDistDiff.png",
@@ -1060,7 +1069,8 @@ class OGSCatalog:
     self.PicksTP = list()
     self.PicksFN = list()
     self.PicksFP = list()
-    columns = [INDEX_STR, TIMESTAMP_STR, PHASE_STR, STATION_STR, PROBABILITY_STR, ERT_STR]
+    columns = [INDEX_STR, TIMESTAMP_STR, PHASE_STR, STATION_STR,
+               ERT_STR]
     for date, _ in self.picks_.items():
       BASE = self.get_(date, "picks").reset_index(drop=True)
       TARGET = other.get_(date, "picks").reset_index(drop=True)
@@ -1073,16 +1083,14 @@ class OGSCatalog:
         b -= I
         PICKS_CFN_MTX.at[BASE.at[a, PHASE_STR],
                          TARGET.at[b, PHASE_STR]] += 1 # type: ignore
-        self.PicksTP.append([
-          (BASE.at[a, INDEX_STR], TARGET.at[b, "index"]),
-          (str(BASE.at[a, TIMESTAMP_STR]), str(TARGET.at[b, TIMESTAMP_STR])),
-          (BASE.at[a, PHASE_STR], TARGET.at[b, PHASE_STR]),
-          (BASE.at[a, STATION_STR], TARGET.at[b, STATION_STR]),
-          (BASE.at[a, PROBABILITY_STR], TARGET.at[b, PROBABILITY_STR]
-           if PROBABILITY_STR in TARGET.columns else None),
-          (BASE.at[a, ERT_STR], TARGET.at[b, ERT_STR]
-           if ERT_STR in TARGET.columns else None),
-        ])
+        if BASE.at[a, PHASE_STR] == TARGET.at[b, PHASE_STR]:
+          self.PicksTP.append([
+            (BASE.at[a, INDEX_STR], TARGET.at[b, "index"]),
+            (str(BASE.at[a, TIMESTAMP_STR]), str(TARGET.at[b, TIMESTAMP_STR])),
+            (BASE.at[a, PHASE_STR]),
+            (TARGET.at[b, STATION_STR]),
+            (BASE.at[a, ERT_STR], TARGET.at[b, "probability"])
+          ])
         baseIDs.remove(a)
         targetIDs.remove(b)
       for i in baseIDs:
@@ -1096,8 +1104,7 @@ class OGSCatalog:
           TARGET.at[j, TIMESTAMP_STR],
           TARGET.at[j, PHASE_STR],
           TARGET.at[j, STATION_STR],
-          TARGET.at[j, PROBABILITY_STR] if PROBABILITY_STR in TARGET.columns else None,
-          TARGET.at[j, ERT_STR] if ERT_STR in TARGET.columns else None,
+          TARGET.at[j, "probability"]
         ])
     recall = \
       (PICKS_CFN_MTX.at[PWAVE, PWAVE] + # type: ignore
@@ -1157,10 +1164,11 @@ class OGSCatalog:
       ),
       xlabel="Time Difference (s)",
       title="Event Time Difference",
-      sec=PICK_TIME_OFFSET.total_seconds())
+      xlim=(-PICK_TIME_OFFSET.total_seconds(),
+            PICK_TIME_OFFSET.total_seconds()))
     pickdiff.add_plot(
       self.PicksTP.loc[
-        self.PicksTP[PHASE_STR] == (PWAVE, PWAVE),
+        self.PicksTP[PHASE_STR] == PWAVE,
         TIMESTAMP_STR
       ].apply(
         lambda x: UTCDateTime(x[0]) - UTCDateTime(x[1]) # type: ignore
@@ -1172,7 +1180,7 @@ class OGSCatalog:
     )
     pickdiff.add_plot(
       self.PicksTP.loc[
-        self.PicksTP[PHASE_STR] == (SWAVE, SWAVE),
+        self.PicksTP[PHASE_STR] == SWAVE,
         TIMESTAMP_STR
       ].apply(
         lambda x: UTCDateTime(x[0]) - UTCDateTime(x[1]) # type: ignore
@@ -1183,6 +1191,36 @@ class OGSCatalog:
       label="S Picks",
       legend=True,
       output=f"{self.filepath.name}_{other.filepath.name}_PicksTimeDiff.png",
+    )
+    plt.close()
+    # Probability Histogram
+    myprob = OGS_P.histogram_plotter(
+      self.PicksTP[ERT_STR].apply(lambda x: x[1]),
+      xlabel="Pick Probability",
+      title="Pick Probability Distribution",
+      label=other.name,
+      xlim=(0, 1),)
+    myprob.add_plot(
+      self.PicksTP.loc[
+        self.PicksTP[PHASE_STR] == PWAVE,
+        ERT_STR
+      ].apply(lambda x: x[1]),
+      alpha=1,
+      step=True,
+      color=MEX_PINK,
+      label="P Picks",
+    )
+    myprob.add_plot(
+      self.PicksTP.loc[
+        self.PicksTP[PHASE_STR] == SWAVE,
+        ERT_STR
+      ].apply(lambda x: x[1]),
+      alpha=1,
+      color=ALN_GREEN,
+      step=True,
+      label="S Picks",
+      legend=True,
+      output=f"{other.filepath.name}_PicksProbDist.png",
     )
     plt.close()
     self.PICKS = self.get("PICKS")

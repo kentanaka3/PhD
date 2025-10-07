@@ -1,0 +1,4 @@
+_target_: OGS.src.ogsqc.OGSPickStatQC  # Without further parameters, this will just write statistics
+
+total_picks: 6
+p_and_s_picks: 3
