@@ -1,0 +1,10 @@
+_target_: dask.distributed.LocalCluster
+
+n_workers: 2
+threads_per_worker: 16
+processes: True
+account: "IscrC_AI2Seism"
+walltime: "23:59:59"
+cores: 1
+memory: "490000MB"
+queue: "boost_usr_prod"

@@ -8,6 +8,12 @@ paths:
   #- /Users/admin/Desktop/OGS_Catalog/waveforms/
   - /Users/admin/Desktop/OGS_Catalog/station/
 
+channel_priorities:
+  - HH?
+  - EH?
+  - HN?
+  - HG?
+  - BH?
 starttime: "2024-03-20"
 endtime: "2024-06-20"
 

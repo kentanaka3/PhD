@@ -451,12 +451,10 @@ class histogram_plotter(plotter):
                  align='left')
     if legend:
       mean = float(np.mean(data))
-      self.ax.axvline(x=mean, c='k', lw=1, alpha=0.5, ls='--', label="Mean" + (
-        " of " + title if title else ""))
+      self.ax.axvline(x=mean, c='k', lw=1, alpha=0.5, ls='--', label="Mean")
       std = float(np.std(data))
       self.ax.axvline(x=mean + std, c='r', lw=1, alpha=0.5, ls='--',
-                      label="Standard Deviation" + (" of " + title
-                                                    if title else ""))
+                      label="Standard Deviation")
       self.ax.axvline(x=mean - std, c='r', lw=1, alpha=0.5, ls='--')
       self.ax.legend()
     if output is not None: self.savefig(output=output)
@@ -484,7 +482,8 @@ class histogram_plotter(plotter):
 
   def add_plot(self, data, xlabel=None, ylabel=None, title=None, step=False,
                color=OGS_C.MEX_PINK, label=None, legend=None, facecolor=None,
-               edgecolor=None, alpha=0.5, output=None, savefig=False) -> None:
+               edgecolor=None, alpha=0.5, output=None, savefig=False,
+               xscale=None, yscale=None) -> None:
     if step:
       y, _ = np.histogram(data, bins=self.bins)
       self.ax.step(self.bins[:-1], y, color=color, label=label, where='mid')
@@ -502,6 +501,10 @@ class histogram_plotter(plotter):
       self.ax.legend()
       if legend == False:
         self.ax.get_legend().remove()
+    if xscale is not None:
+      self.ax.set_xscale(xscale)
+    if yscale is not None:
+      self.ax.set_yscale(yscale)
     if output is not None: savefig = True
     if savefig: self.savefig(output=output)
 

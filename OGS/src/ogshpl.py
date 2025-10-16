@@ -159,13 +159,11 @@ class DataFileHPL(OGS_C.OGSDataFile):
               result[OGS_C.P_TIME_STR] >= self.end + OGS_C.ONE_DAY): break
           DETECT.append([
             result[OGS_C.INDEX_STR],
+            result[OGS_C.P_TIME_STR].strftime(OGS_C.DATE_FMT),
             result[OGS_C.P_TIME_STR] + result[OGS_C.SECONDS_STR],
-            result[OGS_C.P_WEIGHT_STR],
-            OGS_C.PWAVE,
-            None,
-            result[OGS_C.STATION_STR],
-            None,
-            result[OGS_C.P_TIME_STR].strftime(OGS_C.DATE_FMT)
+            f".{result[OGS_C.STATION_STR]}.",
+            OGS_C.PWAVE, result[OGS_C.P_WEIGHT_STR],
+            None, None, None, None, 1.0
           ])
           if result[OGS_C.S_TIME_STR]:
             result[OGS_C.S_WEIGHT_STR] = int(result[OGS_C.S_WEIGHT_STR])
@@ -174,13 +172,11 @@ class DataFileHPL(OGS_C.OGSDataFile):
                                                 OGS_C.ZERO_STR)))
             DETECT.append([
               result[OGS_C.INDEX_STR],
+              result[OGS_C.P_TIME_STR].strftime(OGS_C.DATE_FMT),
               result[OGS_C.P_TIME_STR] + result[OGS_C.S_TIME_STR],
-              result[OGS_C.S_WEIGHT_STR],
-              OGS_C.SWAVE,
-              None,
-              result[OGS_C.STATION_STR],
-              None,
-              result[OGS_C.P_TIME_STR].strftime(OGS_C.DATE_FMT)
+              f".{result[OGS_C.STATION_STR]}.",
+              OGS_C.SWAVE, result[OGS_C.S_WEIGHT_STR],
+              None, None, None, None, 1.0
             ])
           continue
       else:
@@ -220,8 +216,8 @@ class DataFileHPL(OGS_C.OGSDataFile):
             result[OGS_C.LONGITUDE_STR] = float("{:.4f}".format(
                 float(splt[0]) + float(splt[1]) / 60.))
           # # Depth
-          result[OGS_C.DEPTH_STR] = float(result[OGS_C.DEPTH_STR])\
-              if result[OGS_C.DEPTH_STR] else OGS_C.NONE_STR
+          result[OGS_C.DEPTH_STR] = float(result[OGS_C.DEPTH_STR]) \
+            if result[OGS_C.DEPTH_STR] else OGS_C.NONE_STR
           event_spacetime = (
             datetime(
               result[OGS_C.DATE_STR].year,
@@ -250,15 +246,13 @@ class DataFileHPL(OGS_C.OGSDataFile):
               if result[OGS_C.RMS_STR] else OGS_C.NONE_STR
           # # Quality Metric
           result[OGS_C.QM_STR] = result[OGS_C.QM_STR].strip(OGS_C.SPACE_STR) \
-              if result[OGS_C.QM_STR] else OGS_C.NONE_STR
+            if result[OGS_C.QM_STR] else OGS_C.NONE_STR
           event_detect = int(result[OGS_C.NOTES_STR])
           SOURCE.append([
-            result[OGS_C.INDEX_STR], *event_spacetime,
-            result[OGS_C.MAGNITUDE_D_STR], result[OGS_C.NO_STR],
-            result[OGS_C.DMIN_STR], result[OGS_C.GAP_STR],
-            result[OGS_C.RMS_STR], result[OGS_C.ERH_STR],
-            result[OGS_C.ERZ_STR], result[OGS_C.QM_STR], None,
-            event_spacetime[0].strftime(OGS_C.DATE_FMT)
+            result[OGS_C.INDEX_STR], *event_spacetime, result[OGS_C.GAP_STR],
+            result[OGS_C.ERZ_STR], result[OGS_C.ERH_STR],
+            event_spacetime[0].strftime(OGS_C.DATE_FMT), result[OGS_C.NO_STR],
+            None, None, None, result[OGS_C.MAGNITUDE_D_STR], None, None, None
           ])
           continue
         match = self.LOCATION_EXTRACTOR.match(line)
@@ -278,25 +272,25 @@ class DataFileHPL(OGS_C.OGSDataFile):
         self.debug(line, self.EVENT_EXTRACTOR_LIST if event_detect == 0
                    else self.RECORD_EXTRACTOR_LIST)
     self.PICKS = pd.DataFrame(DETECT, columns=[
-      OGS_C.INDEX_STR, OGS_C.TIMESTAMP_STR, OGS_C.ERT_STR, OGS_C.PHASE_STR,
-      OGS_C.NOTES_STR, OGS_C.STATION_STR, OGS_C.NETWORK_STR,
-      OGS_C.GROUPS_STR
-    ]).astype({ OGS_C.INDEX_STR: int })
+      OGS_C.IDX_PICKS_STR, OGS_C.GROUPS_STR, OGS_C.TIME_STR, OGS_C.STATION_STR,
+      OGS_C.PHASE_STR, OGS_C.WEIGHT_STR, OGS_C.EPICENTRAL_DISTANCE_STR,
+      OGS_C.DEPTH_STR, OGS_C.AMPLITUDE_STR, OGS_C.STATION_ML_STR,
+      OGS_C.PROBABILITY_STR
+    ]).astype({ OGS_C.IDX_PICKS_STR: int })
     for date, df in self.PICKS.groupby(OGS_C.GROUPS_STR):
       self.picks[UTCDateTime(date).date] = df
     self.EVENTS = pd.DataFrame(SOURCE, columns=[
-      OGS_C.INDEX_STR, OGS_C.TIMESTAMP_STR, OGS_C.LONGITUDE_STR,
-      OGS_C.LATITUDE_STR, OGS_C.DEPTH_STR, OGS_C.MAGNITUDE_D_STR,
-      OGS_C.NO_STR, OGS_C.DMIN_STR, OGS_C.GAP_STR, OGS_C.RMS_STR,
-      OGS_C.ERH_STR, OGS_C.ERZ_STR, OGS_C.QM_STR, OGS_C.NOTES_STR,
-      OGS_C.GROUPS_STR
+      OGS_C.IDX_EVENTS_STR, OGS_C.TIME_STR, OGS_C.LATITUDE_STR,
+      OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR, OGS_C.GAP_STR, OGS_C.ERZ_STR,
+      OGS_C.ERH_STR, OGS_C.GROUPS_STR, OGS_C.NO_STR,
+      OGS_C.NUMBER_P_PICKS_STR, OGS_C.NUMBER_S_PICKS_STR,
+      OGS_C.NUMBER_P_AND_S_PICKS_STR, OGS_C.ML_STR, OGS_C.ML_MEDIAN_STR,
+      OGS_C.ML_UNC_STR, OGS_C.ML_STATIONS_STR
     ])
     self.EVENTS[OGS_C.ERH_STR] = \
       self.EVENTS[OGS_C.ERH_STR].replace(" " * 4, "NaN").apply(float)
     self.EVENTS[OGS_C.ERZ_STR] = \
       self.EVENTS[OGS_C.ERZ_STR].replace(" " * 5, "NaN").apply(float)
-    self.EVENTS[OGS_C.MAGNITUDE_D_STR] = \
-      self.EVENTS[OGS_C.MAGNITUDE_D_STR].replace(" " * 6, "NaN").apply(float)
     self.EVENTS = self.EVENTS[self.EVENTS[
       [OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR]].apply(
         lambda x: self.polygon.contains_point(

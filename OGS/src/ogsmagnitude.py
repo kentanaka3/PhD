@@ -14,7 +14,7 @@ class OGSLocalMagnitude(LocalMagnitude):
   def __init__(self,
                station_corrections: pd.DataFrame,
                ignore_stations: pd.DataFrame = pd.DataFrame(),
-               networkfocus: str = "",
+               networkfocus: list[str] = [],
                components: str = "NE") -> None:
     self.components = components
     self.station_corrections = station_corrections
@@ -99,12 +99,20 @@ class OGSLocalMagnitude(LocalMagnitude):
       ["event_idx", "group"]):
       event_df = event_df[event_df["phase"] == self.phase]
 
+      # Use specific list of networks if provided
+      if self.networkfocus:
+        event_df["network"] = event_df["station"].str.split(".").str[0]
+        event_df = event_df[event_df["network"].isin(self.networkfocus)]
+        event_df.drop(columns="network", inplace=True)
+
       # Remove listed stations
       if not self.ignore_stations.empty:
         event_df = event_df[
           ~event_df["station"].isin(self.ignore_stations["station"])
         ]
 
+      # Remove stations with absolute deviation NO greater than 5 times the
+      # median absolute deviation
       station_magnitudes = event_df["station_ML"].values
       valid = ~np.isnan(station_magnitudes)
       if np.sum(valid) >= 3:
@@ -113,10 +121,7 @@ class OGSLocalMagnitude(LocalMagnitude):
         abs_dev = np.abs(station_magnitudes - med)
         # Compute the median absolute deviation
         mad = np.nanmedian(abs_dev)
-        if mad > 0:
-          # Remove stations with absolute deviation NO greater than 5 times the
-          # median absolute deviation
-          station_magnitudes = station_magnitudes[abs_dev <= 5 * mad]
+        if mad > 0: station_magnitudes = station_magnitudes[abs_dev <= 5 * mad]
 
       n_stations = np.sum(~np.isnan(station_magnitudes))
       magnitudes.append(
@@ -129,6 +134,4 @@ class OGSLocalMagnitude(LocalMagnitude):
           "ML_stations": n_stations,
         }
       )
-    magnitudes = pd.DataFrame(magnitudes)
-
-    return pd.merge(events, magnitudes, on=["idx", "group"])
+    return pd.merge(events, pd.DataFrame(magnitudes), on=["idx", "group"])

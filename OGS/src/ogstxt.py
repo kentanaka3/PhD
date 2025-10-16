@@ -26,12 +26,12 @@ class DataFileTXT(OGS_C.OGSDataFile):
     self.EVENTS = pd.read_csv(self.filepath, delimiter=";").rename(columns={
       "index": OGS_C.INDEX_STR,
       "t_err": OGS_C.ERT_STR,
-      "origin_time(UTC)": OGS_C.TIMESTAMP_STR,
+      "origin_time(UTC)": OGS_C.TIME_STR,
       "lat": OGS_C.LATITUDE_STR,
       "lon": OGS_C.LONGITUDE_STR,
       "depth": OGS_C.DEPTH_STR,
       "gap": OGS_C.GAP_STR,
-      "ml": OGS_C.MAGNITUDE_L_STR,
+      "ml": OGS_C.ML_STR,
       "md": OGS_C.MAGNITUDE_D_STR,
       "h_err": OGS_C.ERH_STR,
       "v_err": OGS_C.ERZ_STR,
@@ -56,18 +56,18 @@ class DataFileTXT(OGS_C.OGSDataFile):
       self.EVENTS[OGS_C.MAGNITUDE_L_STR].replace("-" * 4, "NaN").apply(float)
     self.EVENTS[OGS_C.MAGNITUDE_D_STR] = \
       self.EVENTS[OGS_C.MAGNITUDE_D_STR].replace("-" * 4, "NaN").apply(float)
-    self.EVENTS[OGS_C.TIMESTAMP_STR] = \
-      pd.to_datetime(self.EVENTS[OGS_C.TIMESTAMP_STR])
+    self.EVENTS[OGS_C.TIME_STR] = \
+      pd.to_datetime(self.EVENTS[OGS_C.TIME_STR])
     self.EVENTS[OGS_C.INDEX_STR] = \
       self.EVENTS[OGS_C.INDEX_STR].apply(int) + \
-        self.EVENTS[OGS_C.TIMESTAMP_STR].dt.year * OGS_C.MAX_PICKS_YEAR
+        self.EVENTS[OGS_C.TIME_STR].dt.year * OGS_C.MAX_PICKS_YEAR
     self.EVENTS[OGS_C.GROUPS_STR] = \
-      self.EVENTS[OGS_C.TIMESTAMP_STR].dt.date
+      self.EVENTS[OGS_C.TIME_STR].dt.date
     self.EVENTS[OGS_C.NOTES_STR] = None
     self.EVENTS.drop(columns=["event-id"], inplace=True)
     self.EVENTS = self.EVENTS.astype({ OGS_C.INDEX_STR: int})
     self.EVENTS = self.EVENTS[
-      (self.EVENTS[OGS_C.TIMESTAMP_STR].between(
+      (self.EVENTS[OGS_C.TIME_STR].between(
         self.start, self.end + OGS_C.ONE_DAY)) &
       (self.EVENTS["event_type"] != "[suspected explosion]")]
     for date, df in self.EVENTS.groupby(OGS_C.GROUPS_STR):
