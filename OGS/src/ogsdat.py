@@ -125,10 +125,14 @@ class DataFileDAT(OGS_C.OGSDataFile):
         except ValueError as e:
           print(e)
           continue
-        DETECT.append([result[OGS_C.INDEX_STR], result[OGS_C.P_TIME_STR],
-                        int(result[OGS_C.P_WEIGHT_STR]),
-                        OGS_C.PWAVE, None, result[OGS_C.STATION_STR], None,
-                        result[OGS_C.P_TIME_STR].strftime(OGS_C.DATE_FMT)])
+        DETECT.append([
+          result[OGS_C.INDEX_STR],
+          result[OGS_C.P_TIME_STR].strftime(OGS_C.DATE_FMT),
+          result[OGS_C.P_TIME_STR],
+          f".{result[OGS_C.STATION_STR]}.",
+          OGS_C.PWAVE, int(result[OGS_C.P_WEIGHT_STR]),
+          None, None, None, None, 1.0
+        ])
         # S Type
         if result[OGS_C.S_TIME_STR]:
           # S Weight
@@ -148,32 +152,25 @@ class DataFileDAT(OGS_C.OGSDataFile):
           except ValueError as e:
             print(e)
             continue
-          DETECT.append([result[OGS_C.INDEX_STR], result[OGS_C.S_TIME_STR],
-                          int(result[OGS_C.S_WEIGHT_STR]),
-                          OGS_C.SWAVE, None, result[OGS_C.STATION_STR], None,
-                          result[OGS_C.S_TIME_STR].strftime(OGS_C.DATE_FMT)])
-        # TODO: Add debug method
-        # if verbose:
-        #   print(line)
-        #   with open()
-        #   print(EVENT_CONTRIVER_DAT.format(
-        #       STATION_STR=result[STATION_STR].lfill(
-        #           4, SPACE_STR),
-        #                                    P_WEIGHT_STR=result[STATION_STR],
-        #                                    DATE_STR=
-        #                                    "{P_TIME_STR}"
-        #                                    "{S_TIME_STR}"
-        #                                    "{S_WEIGHT_STR}"
-        #                                     "{EVENT_STR}"))
+          DETECT.append([
+            result[OGS_C.INDEX_STR],
+            result[OGS_C.S_TIME_STR].strftime(OGS_C.DATE_FMT),
+            result[OGS_C.S_TIME_STR],
+            f".{result[OGS_C.STATION_STR]}.",
+            OGS_C.SWAVE, int(result[OGS_C.S_WEIGHT_STR]),
+            None, None, None, None, 1.0
+          ])
         continue
       if re.match(r"1\s+D$", line): continue
       if line == OGS_C.EMPTY_STR: continue
       self.debug(line, self.RECORD_EXTRACTOR_LIST)
     self.PICKS = pd.DataFrame(DETECT, columns=[
-      OGS_C.INDEX_STR, OGS_C.TIMESTAMP_STR, OGS_C.ERT_STR, OGS_C.PHASE_STR,
-      OGS_C.NOTES_STR, OGS_C.STATION_STR, OGS_C.NETWORK_STR,
-      OGS_C.GROUPS_STR]).astype({ OGS_C.INDEX_STR: int})
-    self.PICKS[OGS_C.GROUPS_STR] = self.PICKS[OGS_C.TIMESTAMP_STR].apply(
+      OGS_C.IDX_PICKS_STR, OGS_C.GROUPS_STR, OGS_C.TIME_STR, OGS_C.STATION_STR,
+      OGS_C.PHASE_STR, OGS_C.WEIGHT_STR, OGS_C.EPICENTRAL_DISTANCE_STR,
+      OGS_C.DEPTH_STR, OGS_C.AMPLITUDE_STR, OGS_C.STATION_ML_STR,
+      OGS_C.PROBABILITY_STR
+    ]).astype({ OGS_C.IDX_PICKS_STR: int})
+    self.PICKS[OGS_C.GROUPS_STR] = self.PICKS[OGS_C.TIME_STR].apply(
       lambda x: x.date())
     for date, df in self.PICKS.groupby(OGS_C.GROUPS_STR):
       self.picks[UTCDateTime(date).date] = df

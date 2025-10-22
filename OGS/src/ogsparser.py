@@ -16,6 +16,17 @@ def is_polygon(points: str) -> mplPath:
   return mplPath(points, closed=True)
 
 def parse_arguments() -> argparse.Namespace:
+  """
+  Parse the arguments provided by the user.
+  input:
+    - None
+    output:
+    - args          (argparse.Namespace)
+  errors:
+    - None
+  notes:
+    - None
+  """
   parser = argparse.ArgumentParser(description="Parse OGS Manual Catalogs")
   parser.add_argument(
     "-x", "--ext", default=OGS_C.ALL_WILDCHAR_STR, type=str,
@@ -53,15 +64,20 @@ def parse_arguments() -> argparse.Namespace:
     "-P", "--polygon", required=False, type=is_polygon,
     default=mplPath(OGS_C.OGS_POLY_REGION, closed=True),
     nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR,
-    help="Polygon WKT string to filter events")
+    help="Polygon string to filter events")
   return parser.parse_args()
 
 class DataCatalog(OGS_C.OGSDataFile):
+  """
+  Data catalog class for managing OGS data files. In order to add a new data
+  file type, simply create a new class that inherits from OGSDataFile and add
+  it to the DATAFILE_TYPES dictionary below.
+  """
   DATAFILE_TYPES = {
-    OGS_C.HPL_EXT: DataFileHPL,
-    OGS_C.DAT_EXT: DataFileDAT,
-    OGS_C.TXT_EXT: DataFileTXT,
-    OGS_C.PUN_EXT: DataFilePUN,
+    OGS_C.HPL_EXT: DataFileHPL, # (Highly recommended) Hypocenter information
+    OGS_C.DAT_EXT: DataFileDAT, # (Recommended) Picks information
+    OGS_C.TXT_EXT: DataFileTXT, # Local Magnitude information
+    OGS_C.PUN_EXT: DataFilePUN, # Events
   }
   def __init__(self, args: argparse.Namespace) -> None:
     self.args = args

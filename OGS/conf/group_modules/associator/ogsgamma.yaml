@@ -1,8 +1,7 @@
-_target_: OGS.src.ogsassociator.OGSGammaAssociator
+_target_: ml_catalog.modules.GammaAssociator
 crs:
   _target_: pyproj.crs.CRS.from_user_input
   value: "+proj=sterea +lon_0=12 +lat_0=46 +units=km +type=crs"
-region: [[9.5, 15.0], [9.5, 47.5], [44.3, 15.0], [44.3, 47.5]]
 config:
   dims: ["x(km)", "y(km)", "z(km)"]
   use_dbscan: True
@@ -15,13 +14,13 @@ config:
     s: 3.28
   method: "BGMM"
   oversample_factor: 5
-  dbscan_eps: 13.4 # seconds
+  dbscan_eps: 8.1 # seconds
   dbscan_min_samples: 3
   # Filtering
   min_picks_per_eq: 5
   min_p_picks_per_eq: 3
   min_s_picks_per_eq: 2
   covariance_prior_pre: [5.0, 5.0] # Andrea Carducci reference
-  max_sigma11: 1.0
-  #max_sigma22: 1.0
+  max_sigma11: 1.5 # Increase to allow more pick time
+  #max_sigma22: 1.0 # Increase to allow more (amplitude)
   #max_sigma12: 1.0

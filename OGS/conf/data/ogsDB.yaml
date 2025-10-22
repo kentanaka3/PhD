@@ -7,8 +7,19 @@ paths:
   - /leonardo/home/userexternal/ktanakah/AI2Seism/WORK/waveform/
   - /leonardo/home/userexternal/ktanakah/AI2Seism/WORK/station/
 
+<<<<<<< HEAD
 starttime: "2020-01-01"
 endtime: "2024-12-31"
+=======
+channel_priorities:
+  - HH?
+  - EH?
+  - HN?
+  - HG?
+  - BH?
+starttime: "2024-03-20"
+endtime: "2024-06-20"
+>>>>>>> be079cf7ce8b4dfc56ee4b6f21f32c81914d14f9
 
 velocity_model:
   _target_: pandas.read_csv
