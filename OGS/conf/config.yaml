@@ -1,11 +1,11 @@
 defaults:
   - _self_
   - data: ogsDB.yaml
-  - group_modules: default.yaml
+  - group_modules: SeisBenchPicker.yaml
   - merge_module: default.yaml
   - joint_modules: none.yaml
   - builder: default.yaml
-  - cluster: ktanaka.yaml
+  - cluster: LeonardoNode.yaml
 
 log_level: DEBUG
-output_path: catalogs/OGS
+output_path: catalog/OGS

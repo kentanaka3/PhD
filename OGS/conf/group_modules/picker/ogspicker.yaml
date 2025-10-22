@@ -2,7 +2,7 @@ _target_: ml_catalog.modules.SeisBenchPicker
 
 model:
   _target_: seisbench.models.PhaseNet.from_pretrained
-  name: phd_ken_tanaka
+  name: instance
 
 classify_args:
   P_threshold: 0.1

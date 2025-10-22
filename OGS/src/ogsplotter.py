@@ -40,12 +40,14 @@ class line_plotter(plotter):
   def __init__(
       self, x, y, xlabel=None, ylabel=None, title=None, fig=None, ax=None,
       color=OGS_C.OGS_BLUE, gs=111, label=None, legend=False,
-      output=None) -> None:
+      output=None, xlim=None, ylim=None) -> None:
     super().__init__(fig=fig)
     self.ax = self.fig.add_subplot(gs)
     if xlabel: self.ax.set_xlabel(xlabel)
     if ylabel: self.ax.set_ylabel(ylabel)
     if title: self.ax.set_title(title)
+    if xlim is not None: self.ax.set(xlim=xlim)
+    if ylim is not None: self.ax.set(ylim=ylim)
     self.ax.plot(x, y, color=color, label=label)
     if legend: self.ax.legend()
     if output is not None: self.savefig(output=output)
