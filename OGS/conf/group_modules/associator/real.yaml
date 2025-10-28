@@ -1,0 +1,13 @@
+defaults:
+  - default
+  - _self_
+
+_target_: ml_catalog.modules.REALAssociator
+
+p_picks: 2
+s_picks: 2
+total_picks: 8
+p_and_s_picks: 2
+max_residual_std: 1.5
+min_p_to_s_separation: 2
+event_separation_sec: 3

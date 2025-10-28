@@ -4,8 +4,7 @@ env: ogsDB
 persistent: v1
 check: false
 paths:
-  - /Volumes/Expansion/KEN/waveforms/
-  #- /Users/admin/Desktop/OGS_Catalog/waveforms/
+  - /Users/admin/Desktop/OGS_Catalog/waveforms/
   - /Users/admin/Desktop/OGS_Catalog/station/
 
 channel_priorities:
@@ -14,9 +13,9 @@ channel_priorities:
   - HN?
   - HG?
   - BH?
-starttime: "2024-03-20"
-endtime: "2024-06-20"
+starttime: "2024-03-27"
+endtime: "2024-04-01"
 
 velocity_model:
   _target_: pandas.read_csv
-  filepath_or_buffer: OGS/data/ogs1d.csv
+  filepath_or_buffer: OGS/data/VelocityModel.csv

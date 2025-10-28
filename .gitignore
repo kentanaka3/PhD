@@ -181,6 +181,7 @@ doc/Reports/*
 doc/Pres/*
 doc/Doc/*
 doc/MICAI/*
+doc/UniTS/*
 !doc/Doc/doc.pdf
 !doc/Doc/doc.tex
 !doc/MICAI/DocCon.pdf

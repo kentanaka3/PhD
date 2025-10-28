@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import cartopy.feature as cfeature
 import matplotlib.patches as mpatches
 from pathlib import Path
+from obspy import UTCDateTime
 from obspy.geodetics import gps2dist_azimuth
 from datetime import datetime, timedelta as td
 from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
@@ -39,7 +40,7 @@ class plotter:
 class line_plotter(plotter):
   def __init__(
       self, x, y, xlabel=None, ylabel=None, title=None, fig=None, ax=None,
-      color=OGS_C.OGS_BLUE, gs=111, label=None, legend=False,
+      color=OGS_C.OGS_BLUE, gs=111, label=None, legend=False, ylim=(-100, 100),
       output=None) -> None:
     super().__init__(fig=fig)
     self.ax = self.fig.add_subplot(gs)
@@ -48,6 +49,7 @@ class line_plotter(plotter):
     if title: self.ax.set_title(title)
     self.ax.plot(x, y, color=color, label=label)
     if legend: self.ax.legend()
+    if ylim is not None: self.ax.set(ylim=ylim)
     if output is not None: self.savefig(output=output)
 
   def add_plot(self, x, y, xlabel=None, ylabel=None, color=OGS_C.MEX_PINK,
@@ -60,151 +62,138 @@ class line_plotter(plotter):
     if savefig: self.savefig(output=output)
 
 class event_plotter(plotter):
-  def __init__(self, picks, event, filepath, inventory, fig=None, ax=None,
-               gs=None, title=None, color=None, xlabel="Time (s)", output=None,
-               ylabel="Epicentral Distance (km)", ymax=np.inf,
-               center=None) -> None:
+  def __init__(self,
+        picks: pd.DataFrame,
+        event: pd.Series,
+        waveforms: dict[str, list[Path]],
+        inventory: dict[str, tuple[float, float, float, str, str, str, str]],
+        fig=None, ax=None, gs=None, title=None, color=None, xlabel="Time (s)",
+        output=None, ylabel="Epicentral Distance (km)", ylim=(-100, 100),
+        center=None) -> None:
     super().__init__(fig=fig)
     self.ax = self.fig.add_subplot(111)
     self.pick_time = op.UTCDateTime(event[OGS_C.TIME_STR])
-    self.filepath = filepath
+    self.event = event
+    self.waveforms = waveforms
     self.inventory = inventory
-    self.ymax = ymax
     self.t = event[OGS_C.TIME_STR]
-    diff = 0.
-    if center is None:
-      center = [event[OGS_C.LONGITUDE_STR], event[OGS_C.LATITUDE_STR]]
-    else:
-      diff = gps2dist_azimuth(
-        center[1], center[0],
-        event[OGS_C.LATITUDE_STR], event[OGS_C.LONGITUDE_STR])[0] / 1000.0
-    self.x, self.y = center
-    self.z = event[OGS_C.DEPTH_STR] / 1000.0  # Convert to km
     self.offset = td(seconds=1)
-    self.stream = op.read(Path(self.filepath, str(self.pick_time.year),
-                               "{:02}".format(self.pick_time.month),
-                               "{:02}".format(self.pick_time.day),
-                               OGS_C.ALL_WILDCHAR_STR),
-                          starttime=self.pick_time - self.offset,
-                          endtime=self.pick_time + td(seconds=30)).select(
-      component='Z')
-    self.stream.detrend()
-    self.stream.filter("highpass", freq=2)
-    y_max = 0
-    self.sta2color = {}
+    self.sta2sta = {
+      sta.split('.')[1]: sta for sta in self.inventory.keys()
+    }
+    self.sta2sta.update({
+      sta: sta for sta in self.inventory.keys()
+    })
+    self.sta2color = {
+      sta.split('.')[1]: col for sta, (_, _, _, _, _, _, col) in
+      self.inventory.items()
+    }
     self.antis2c = {}
     for sta, df in picks.groupby(OGS_C.STATION_STR):
-      trace = self.stream.select(station=sta)
+      if sta not in self.sta2sta: continue
+      if self.sta2sta[sta] not in self.waveforms: continue # type: ignore
+      self.stream: op.Stream = op.read(
+        self.waveforms[self.sta2sta[sta]][0], # type: ignore
+        starttime=self.pick_time - self.offset,
+        endtime=self.pick_time + td(seconds=30)
+      )
+      self.stream.detrend()
+      self.stream.filter("highpass", freq=2)
+      trace = self.stream.select(
+        station=self.sta2sta[sta].split(OGS_C.PERIOD_STR)[1]) # type: ignore
       if len(trace) == 0:
         print(f"Warning: No trace found for station {sta}. Skipping.")
         continue
       trace = trace[0]
-      normed = trace.event - np.mean(trace.event)
-      normed = normed / np.max(np.abs(normed))
-      if sta not in self.inventory: continue
-      station_x, station_y, station_z, _ = self.inventory[sta]
+      station_x, station_y, station_z, _, _, color, _ = self.inventory[
+        self.sta2sta[sta] # type: ignore
+      ]
       y_ = np.sqrt((gps2dist_azimuth(
-            station_y, station_x, self.y, self.x
-          )[0] / 1000.0) ** 2 + (abs(self.z - station_z) / 1000.0) ** 2
-      )
-      base = int(np.log10(y_))
-      y_max = max(((y_ // (10 ** base)) + 1) * 10 ** base, y_max)
-      if color is not None:
-        self.ax.plot(trace.times(), 2 * normed + y_, color=color)
-        self.sta2color[sta] = color
-      else:
-        self.ax.plot(trace.times(), 2 * normed + y_)
-        self.sta2color[sta] = self.ax.lines[-1].get_color()
+        event[OGS_C.LATITUDE_STR], event[OGS_C.LONGITUDE_STR],
+        station_y, station_x)[0] / 1000.0) ** 2 +
+        (station_z / 1000.0) ** 2)
+      trace_data_max = np.max(np.abs(trace.data))
+      trace.data = trace.data / trace_data_max * 5.0 + y_
+      self.ax.plot(trace.times(), trace.data, color=color)
       for _, p in df.groupby(OGS_C.PHASE_STR):
         if len(p.index) > 1:
-          print(f"Warning: Multiple picks for {sta} at {p[OGS_C.TIME_STR].iloc[0]}. "
-                "Using the first one.")
+          print(f"Warning: Multiple picks for {sta} at "
+                f"{p[OGS_C.TIME_STR].iloc[0]}. Using the first one.")
         p = p.iloc[0]
-        x_ = datetime(p[OGS_C.TIME_STR]) - (datetime(self.t) - self.offset)
+        x_ = \
+          UTCDateTime(p[OGS_C.TIME_STR]) - (UTCDateTime(self.t) - self.offset)
         if p[OGS_C.PHASE_STR] == "P":
             ls = '-'
             lc = "red"
         else:
             ls = '--'
             lc = "blue"
-        self.ax.plot(np.array([x_, x_]), [y_ - 3, y_ + 3], 'k', ls=ls,
-                     color=lc)
-      self.ax.text(31.3, y_, sta, fontsize=8,)
-    if xlabel:
-      self.ax.set_xlabel(xlabel)
-    if ylabel:
-      self.ax.set_ylabel(ylabel)
-    self.ax.set_ylim(0, min(y_max, self.ymax))
+        self.ax.plot(np.array([x_, x_]), [y_ - 3, y_ + 3], ls=ls, color=lc)
+      weights = df[OGS_C.WEIGHT_STR].to_list() \
+        if OGS_C.WEIGHT_STR in df.columns \
+          else df[OGS_C.PROBABILITY_STR].to_list()
+      self.ax.text(31.3, y_, f"{sta} {weights}", fontsize=8)
+    if xlabel: self.ax.set_xlabel(xlabel)
+    if ylabel: self.ax.set_ylabel(ylabel)
+    self.ax.set(ylim=ylim)
     self.ax.set_ylim(0)
     self.ax.set_xlim(0)
-    if diff != 0.:
-      xmin, xmax = self.ax.get_xlim()
-      self.ax.hlines(y=diff, xmin=xmin, xmax=xmax, color=OGS_C.MEX_PINK,
-                     linestyles='--')
-      self.ax.hlines(y=-diff, xmin=xmin, xmax=xmax, color=OGS_C.MEX_PINK,
-                     linestyles='--')
-      self.ax.hlines(y=0, xmin=xmin, xmax=xmax, color=OGS_C.ALN_GREEN,
-                    linestyles='--')
-      self.y2 = self.ax.secondary_yaxis(
-        .95, functions=(lambda x: x - diff, lambda x: x + diff),
-        label="Distance from Event Location", color=OGS_C.MEX_PINK)
-    if title:
-      self.ax.set_title(title)
+    xmin, xmax = self.ax.get_xlim()
+    self.ax.hlines(y=0, xmin=xmin, xmax=xmax, color=OGS_C.MEX_PINK,
+                   linestyles='--')
+    self.ax.hlines(y=[-3, 3], xmin=xmin, xmax=xmax, color=OGS_C.ALN_GREEN,
+                   linestyles='--')
+    if title: self.ax.set_title(title)
     if output is not None: self.savefig(output=output)
 
   def add_plot(self, picks, color=None, label=None, output=None, savefig=False,
-               alpha=1., flip=False, ymax=None) -> None:
-    if ymax is not None: self.ymax = ymax
-    y_max = 0
+               alpha=1., flip=False, ylim=(-100, 100)) -> None:
     for sta, df in picks.groupby(OGS_C.STATION_STR):
-      trace = self.stream.select(station=sta)
+      if sta not in self.sta2sta: continue
+      if self.sta2sta[sta] not in self.waveforms: continue
+      self.stream: op.Stream = op.read(
+        self.waveforms[self.sta2sta[sta]][0], # type: ignore
+        starttime=self.pick_time - self.offset,
+        endtime=self.pick_time + td(seconds=30)
+      )
+      self.stream.detrend()
+      self.stream.filter("highpass", freq=2)
+      trace = self.stream.select(station=self.sta2sta[sta].split('.')[1])
       if len(trace) == 0:
         print(f"Warning: No trace found for station {sta}. Skipping.")
         continue
       trace = trace[0]
-      normed = trace.event - np.mean(trace.event)
-      normed = normed / np.max(np.abs(normed))
-      station_x, station_y, station_z, _ = self.inventory[sta]
+      station_x, station_y, station_z, _, _, color, _ = self.inventory[
+        self.sta2sta[sta] # type: ignore
+      ]
       y_ = np.sqrt((gps2dist_azimuth(
-        station_y, station_x, self.y, self.x)[0] / 1000.0) ** 2 +
-        (abs(self.z - station_z) / 1000.0) ** 2)
+        self.event[OGS_C.LATITUDE_STR], self.event[OGS_C.LONGITUDE_STR],
+        station_y, station_x)[0] / 1000.0) ** 2 +
+        (station_z / 1000.0) ** 2)
+      if y_ > 100: continue
       if flip:
         if y_ < 0: raise ValueError("y_ must be positive for plotting.")
-        base = int(np.log10(y_))
-        y_max = max(((y_ // (10 ** base)) + 1) * 10 ** base, y_max)
         y_ = -y_
-      if y_ > self.ymax:
-        print(f"Warning: y_ ({y_}) exceeds ymax ({self.ymax}). Skipping {sta}.")
-        continue
-      if label is None: label = sta
-      tmp_color = self.sta2color.get(sta, color)
-      if tmp_color is not None:
-        self.ax.plot(trace.times(), 2 * normed + y_, label=label,
-                     color=tmp_color, alpha=alpha)
-      else:
-        self.ax.plot(trace.times(), 2 * normed + y_, label=label, alpha=alpha)
-      if flip:
-        self.antis2c[sta] = self.ax.lines[-1].get_color()
-      else:
-        self.sta2color[sta] = self.ax.lines[-1].get_color()
+      trace_data_max = np.max(np.abs(trace.data))
+      trace.data = trace.data / trace_data_max * 5.0 + y_
+      self.ax.plot(trace.times(), trace.data, color=color, alpha=alpha)
       for _, p in df.groupby(OGS_C.PHASE_STR):
         if len(p.index) > 1:
           print(f"Warning: Multiple picks for {sta} at {p[OGS_C.TIME_STR].iloc[0]}. "
                 "Using the first one.")
         p = p.iloc[0]
-        x_ = datetime(p[OGS_C.TIME_STR]) - (datetime(self.t) - self.offset)
+        x_ = UTCDateTime(p[OGS_C.TIME_STR]) - (UTCDateTime(self.t) - self.offset)
         if p[OGS_C.PHASE_STR] == OGS_C.PWAVE:
           ls = '-'
           lc = "red"
         else:
           ls = '--'
           lc = "blue"
-        self.ax.plot(np.array([x_, x_]), [y_ - 3, y_ + 3], 'k', ls=ls,
+        self.ax.plot(np.array([x_, x_]), [y_ - 3, y_ + 3], ls=ls,
                      color=lc)
       if not sta in self.sta2color: self.ax.text(31.3, y_, sta, fontsize=8,)
     if flip:
-      y_max = min(y_max, self.ymax)
-      self.ax.set_ylim(-y_max, y_max)
+      self.ax.set_ylim(ylim)
       ticks = self.ax.get_yticks()
       self.ax.set_yticklabels([f"{int(abs(tick))}" for tick in ticks])
     plt.tight_layout(pad=0.1)
@@ -359,7 +348,8 @@ class map_plotter(plotter):
       self.ax.set_title(title)
     if output is not None: self.savefig(output=output)
 
-  def add_plot(self, x, y, xlabel=None, ylabel=None, color=OGS_C.MEX_PINK,
+  def add_plot(self, x, y, xlabel=None, ylabel=None,
+               color: str | None = OGS_C.MEX_PINK,
                label=None, facecolors=None, edgecolors=None, legend=None,
                s=None, output=None, savefig=False, marker=None) -> None:
     if marker is not None: self.marker = marker
@@ -425,7 +415,7 @@ class histogram_plotter(plotter):
   def __init__(self, data, bins=OGS_C.NUM_BINS, xlabel=None,
                ylabel="Number of Events", title=None, fig=None, ax=None,
                color=OGS_C. OGS_BLUE, gs=111, label=None, legend=False,
-               xlim=None, edgecolor=None, facecolor=None,
+               xlim=None, edgecolor=None, facecolor=None, yscale=None,
                output=None) -> None:
     super().__init__(fig=fig, figsize=(10, 5))
     self.ax = self.fig.add_subplot(gs)
@@ -457,6 +447,8 @@ class histogram_plotter(plotter):
                       label="Standard Deviation")
       self.ax.axvline(x=mean - std, c='r', lw=1, alpha=0.5, ls='--')
       self.ax.legend()
+    if yscale is not None:
+      self.ax.set_yscale(yscale)
     if output is not None: self.savefig(output=output)
 
   def add_fit(self, func, p0=None, color=OGS_C.MEX_PINK, label=None,

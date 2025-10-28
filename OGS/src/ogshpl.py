@@ -177,6 +177,7 @@ class DataFileHPL(OGS_C.OGSDataFile):
               f".{result[OGS_C.STATION_STR]}.",
               OGS_C.SWAVE, result[OGS_C.S_WEIGHT_STR],
               None, None, None, None, 1.0
+              #OGS_C.diff_space(), None, None, None, 1.0
             ])
           continue
       else:

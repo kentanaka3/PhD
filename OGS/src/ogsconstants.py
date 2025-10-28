@@ -45,7 +45,7 @@ H71_OFFSET = {
     5: 25
 }
 EVENT_TIME_OFFSET = td(seconds=1.5)
-EVENT_DIST_OFFSET = 7  # km
+EVENT_DIST_OFFSET = 3  # km
 
 # Strings
 EMPTY_STR = ''
@@ -96,6 +96,8 @@ TN_STR = "TN"
 ACCURACY_STR = "AC"
 PRECISION_STR = "PC"
 RECALL_STR = "RC"
+NETCOLOR_STR = "NC"
+STACOLOR_STR = "SC"
 F1_STR = "F1"
 DISTANCE_STR = "Distance"
 
@@ -417,13 +419,19 @@ def is_dir_path(string: str) -> Path:
   else:
     raise NotADirectoryError(string)
 
+def decimeter(value, scale = 'normal') -> int:
+  base = np.floor(np.log10(abs(value)))
+  if scale == 'normal': return ((value // 10 ** base) + 1) * 10 ** base
+  elif scale == 'log': return int(10 ** (base + 1))
+  return np.ceil(value / 10) * 10
+
 def inventory(
     stations: Path
-  ) -> dict[str, tuple[float, float, float, str, str]]:
+  ) -> dict[str, tuple[float, float, float, str, str, str, str]]:
   import ogsplotter as OGS_P
   from matplotlib import pyplot as plt
   from obspy import Inventory, read_inventory
-  INVENTORY = Inventory()
+  myInventory = Inventory()
   for st in stations.glob("*.xml"):
     try:
       S = read_inventory(str(st))
@@ -431,24 +439,29 @@ def inventory(
       print(f"WARNING: Unable to read {st}")
       print(e)
       continue
-    INVENTORY.extend(S)
-  INVENTORY = {
+    myInventory.extend(S)
+  cmap = plt.get_cmap("turbo")
+  colors = cmap(np.linspace(0, 1, len(myInventory)))
+  INVENTORY: dict[str, tuple[float, float, float, str, str, str, str]] = {
     f"{net.code}.{sta.code}.": (sta.longitude, sta.latitude, sta.elevation,
-                                net.code, sta.code)
-    for net in INVENTORY.networks for sta in net.stations
+                                net.code, sta.code, colors[i], "")
+    for i, net in enumerate(sorted(myInventory.networks, key=lambda x: x.code))
+    for sta in net.stations
   }
+  colors = cmap(np.linspace(0, 1, len(INVENTORY)))
+  for i, (key, val) in enumerate(INVENTORY.items()):
+    INVENTORY[key] = (*val[:6], colors[i])
   inv = pd.DataFrame.from_dict(
     INVENTORY,
     orient='index',
-    columns=[LONGITUDE_STR, LATITUDE_STR, DEPTH_STR, NETWORK_STR, STATION_STR])
+    columns=[LONGITUDE_STR, LATITUDE_STR, DEPTH_STR, NETWORK_STR, STATION_STR,
+             NETCOLOR_STR, STACOLOR_STR])
   mystations = OGS_P.map_plotter(OGS_STUDY_REGION, legend=True,
-                                  marker='^', output="OGSStations.png")
-  cmap = plt.get_cmap("turbo")
-  colors = cmap(np.linspace(0, 1, inv[NETWORK_STR].nunique()))
+                                 marker='^', output="OGSStations.png")
   for i, (net, sta) in enumerate(inv.groupby(NETWORK_STR)):
     mystations.add_plot(sta[LONGITUDE_STR], sta[LATITUDE_STR],
                         label=net, color=None, facecolors='none',
-                        edgecolors=colors[i], legend=True)
+                        edgecolors=sta[NETCOLOR_STR], legend=True)
   mystations.savefig()
   plt.close()
   return INVENTORY
@@ -465,6 +478,7 @@ def waveforms(
   DAYS = [UTCDateTime(day).date for day in DAYS]
   for wf in directory.glob("**/*.mseed"):
     stid, dateinitid, _ = wf.stem.split(UNDERSCORE_STR + UNDERSCORE_STR)
+    stid = PERIOD_STR.join(stid.split(PERIOD_STR)[:3])
     dateinitid = UTCDateTime(dateinitid).date
     if dateinitid not in WAVEFORMS: WAVEFORMS[dateinitid] = dict()
     if stid not in WAVEFORMS[dateinitid]: WAVEFORMS[dateinitid][stid] = list()
@@ -475,10 +489,12 @@ def waveforms(
   OGS_P.line_plotter(
     x, y,
     xlabel="Date",
-    ylabel="Number of Waveforms",
+    ylabel="Number of Stations",
     title="Availability",
-    output="OGSAvailability.png"
+    output="OGSAvailability.png",
+    ylim=(0, decimeter(max(y)))
   )
+  plt.close()
   return WAVEFORMS
 
 class SortDatesAction(argparse.Action):
@@ -560,7 +576,7 @@ class OGSCatalog:
                polygon : mplPath = mplPath(OGS_POLY_REGION, closed=True),
                output : Path = THIS_FILE.parent / "data" / "OGSCatalog",
                name: str = EMPTY_STR) -> None:
-    assert filepath.exists(), f"Filepath {filepath} does not exist."
+    assert filepath.exists(follow_symlinks=True), f"Filepath {filepath} does not exist."
     self.name = output.name if name == EMPTY_STR else name
     self.filepath = filepath
     self.start = start
@@ -648,8 +664,12 @@ class OGSCatalog:
   def load(self):
     print(f"Loading picks from {self.filepath} files...")
 
-  def plot(self, other = None, waveforms: dict[datetime, dict[str, list[Path]]] = dict()):
+  def plot(self,
+        other = None,
+        waveforms: dict[str, dict[str, list[Path]]] = dict()
+      ) -> None:
     i = 0
+    self.waveforms = waveforms
     if not self.get("EVENTS").empty:
       self.plot_events()
       self.plot_events(other)
@@ -664,8 +684,43 @@ class OGSCatalog:
       i += 1
       self.plot_cumulative_picks(other)
     if i == 2:
-      if waveforms != {}:
-        print(self.EventsFN)
+      if self.waveforms != {}:
+        for idx, picks in self.PICKS[self.PICKS[IDX_PICKS_STR].isin(
+          self.EventsFN["idx"])].groupby([IDX_PICKS_STR,]): # type: ignore
+          event: pd.Series = self.EVENTS[
+            self.EVENTS[IDX_EVENTS_STR] == idx
+          ].iloc[0]
+          waveforms_day: dict[str, list[Path]] = self.waveforms.get(
+            event[TIME_STR].date(),
+            dict()
+          )
+          if waveforms_day != dict():
+            self.plot_events_fn_waveforms(picks, event, waveforms_day)
+
+  def plot_events_fn_waveforms(self,
+        picks: pd.DataFrame,
+        event: pd.Series,
+        waveforms: dict[str, list[Path]],
+      ) -> None:
+    import ogsplotter as OGS_P
+    from matplotlib import pyplot as plt
+    myfnplot = OGS_P.event_plotter(
+      picks=picks,
+      event=event,
+      waveforms=waveforms,
+      inventory=self.stations,
+      title=f"Type II Error (FN) Event {event[IDX_EVENTS_STR]} ({event[MAGNITUDE_L_STR] if MAGNITUDE_L_STR in event else EMPTY_STR}) | Type I Error (FP) Picks {event[TIME_STR] - td(seconds=1)}",
+    )
+    myfppicks = self.PicksFP[
+      self.PicksFP[TIME_STR].between( # type: ignore
+        event[TIME_STR] - td(seconds=1),
+        event[TIME_STR] + td(seconds=30)
+      )
+    ]
+    myfnplot.add_plot(picks=myfppicks, flip=True,
+      output=f"{self.filepath.name}_Event{event[IDX_EVENTS_STR]}_FNFP.png"
+    )
+    plt.close()
 
   def plot_cumulative_picks(self, other = None):
     import ogsplotter as OGS_P
@@ -1026,6 +1081,7 @@ class OGSCatalog:
       label=EVENTS_CFN_MTX.columns.tolist(),
       output=filepath
     )
+    plt.close()
     # Time Difference Histogram
     OGS_P.histogram_plotter(
       self.EventsTP[TIME_STR].apply(lambda x: x[0] - x[1]),
@@ -1124,17 +1180,47 @@ class OGSCatalog:
         output=f"{self.filepath.name}_{other.filepath.name}_MagDiff.png",
         legend=True)
         plt.close()
+        # Event Magnitude Histogram
+        mymags = OGS_P.histogram_plotter(
+          self.EventsFP[MAGNITUDE_L_STR].dropna(),
+          xlabel="Magnitude ($M_L$)",
+          title="Event Magnitude",
+          color=MEX_PINK,
+          yscale='log',
+          label="False Positive (SBC)",
+        )
+        mymags.add_plot(
+          self.EventsFN[MAGNITUDE_L_STR],
+          label="False Negative (OGS)",
+          color=OGS_BLUE,
+          legend=True,
+          output=f"{self.filepath.name}_{other.filepath.name}_FNFPMagDist.png",
+        )
+        plt.close()
+      else:
+        events = self.EventsFP[MAGNITUDE_L_STR].dropna()
+        if not events.empty:
+          # Event Magnitude Histogram
+          OGS_P.histogram_plotter(
+            events,
+            xlabel="Magnitude ($M_L$)",
+            title="Event Magnitude",
+            color=MEX_PINK,
+            label="False Positive (SBC)",
+            output=f"{other.filepath.name}_FPMagDist.png",
+          )
+          plt.close()
     self.EVENTS = self.get("EVENTS")
     other.EVENTS = other.get("EVENTS")
 
-  def bgmaPicks(self, other: "OGSCatalog", stations: Path) -> None:
+  def bgmaPicks(self, other: "OGSCatalog",) -> None:
     import ogsplotter as OGS_P
     from matplotlib import pyplot as plt
     if not isinstance(other, OGSCatalog):
       raise ValueError("Can only perform bgmaPicks on OGSCatalog")
     PICKS_CFN_MTX = pd.DataFrame(0, index=[PWAVE, SWAVE, NONE_STR],
                                  columns=[PWAVE, SWAVE, NONE_STR], dtype=int)
-    INVENTORY = [key.split(".")[1] for key in inventory(stations).keys()]
+    INVENTORY = [key.split(".")[1] for key in self.stations.keys()]
     self.PicksTP = list()
     self.PicksFN = list()
     self.PicksFP = list()
@@ -1229,6 +1315,7 @@ class OGSCatalog:
       label=PICKS_CFN_MTX.columns.tolist(),
       output=filepath
     )
+    plt.close()
     # Time Difference Histogram
     pickdiff = OGS_P.histogram_plotter(
       self.PicksTP[TIME_STR].apply(
@@ -1309,11 +1396,22 @@ class OGSCatalog:
     self.PICKS = self.get("PICKS")
     other.PICKS = other.get("PICKS")
 
-  def bpgma(self, other: "OGSCatalog", stations: Path) -> None:
+  def bpgma(self,
+        other: "OGSCatalog",
+        stations: dict[str, tuple[float, float, float, str, str]]) -> None:
     if not isinstance(other, OGSCatalog):
       raise ValueError("Can only perform bpgma on OGSCatalog")
-    if self.events_ != {}: self.bgmaEvents(other)
-    if self.picks_ != {}: self.bgmaPicks(other,  stations)
+    self.stations = stations
+    if self.events_ != {}:
+      if other.events_ == {} and other.get("EVENTS").empty:
+        print(f"{other.name} catalog has no events to compare.")
+      else:
+        self.bgmaEvents(other)
+    if self.picks_ != {}:
+      if other.picks_ == {} and other.get("PICKS").empty:
+        print(f"{other.name} catalog has no picks to compare.")
+      else:
+        self.bgmaPicks(other)
 
   def plotFNWaveforms(self, other: "OGSCatalog", output: Path) -> None:
     pass

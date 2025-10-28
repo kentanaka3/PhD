@@ -1,6 +1,6 @@
 _target_: dask.distributed.LocalCluster
 
 n_workers: 1
-threads_per_worker: 1
-processes: False
+threads_per_worker: 32
+processes: True
 dashboard_address: ":8989"
