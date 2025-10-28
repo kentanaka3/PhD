@@ -47,6 +47,8 @@ class line_plotter(plotter):
     if xlabel: self.ax.set_xlabel(xlabel)
     if ylabel: self.ax.set_ylabel(ylabel)
     if title: self.ax.set_title(title)
+    if xlim is not None: self.ax.set(xlim=xlim)
+    if ylim is not None: self.ax.set(ylim=ylim)
     self.ax.plot(x, y, color=color, label=label)
     if legend: self.ax.legend()
     if ylim is not None: self.ax.set(ylim=ylim)
