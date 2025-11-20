@@ -1,4 +1,5 @@
 import argparse
+import pandas as pd
 from pathlib import Path
 from matplotlib.path import Path as mplPath
 
@@ -28,6 +29,9 @@ def parse_arguments() -> argparse.Namespace:
     - None
   """
   parser = argparse.ArgumentParser(description="Parse OGS Manual Catalogs")
+  parser.add_argument(
+    "-m", "--merge", action='store_true', default=False,
+    help="Merge all data files into a single catalog")
   parser.add_argument(
     "-x", "--ext", default=OGS_C.ALL_WILDCHAR_STR, type=str,
     nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR,
@@ -110,6 +114,103 @@ class DataCatalog(OGS_C.OGSDataFile):
       f.read()
       f.log()
 
+  def merge_events(self) -> None:
+    print("Merging data files...")
+    for f in self.files:
+      if self.EVENTS.empty:
+        f.get("EVENTS")
+        self.EVENTS = pd.concat([self.EVENTS, f.EVENTS], ignore_index=True)
+      elif f.filepath.suffix == OGS_C.TXT_EXT:
+        """
+        IDX_EVENTS_STR, TIME_STR, LATITUDE_STR, LONGITUDE_STR, DEPTH_STR,
+        GAP_STR, ERZ_STR, ERH_STR, GROUPS_STR, NO_STR,
+        NUMBER_P_PICKS_STR, NUMBER_S_PICKS_STR, NUMBER_P_AND_S_PICKS_STR,
+        ML_STR, ML_MEDIAN_STR, ML_UNC_STR, ML_STATIONS_STR
+        """
+        print(f.EVENTS)
+        self.EVENTS = pd.merge(
+          self.EVENTS[[OGS_C.TIME_STR,
+            OGS_C.LATITUDE_STR,
+            OGS_C.LONGITUDE_STR,
+            OGS_C.DEPTH_STR,
+            OGS_C.GAP_STR,
+            OGS_C.ERZ_STR,
+            OGS_C.ERH_STR,
+            OGS_C.GROUPS_STR,
+            OGS_C.NO_STR,
+            OGS_C.NUMBER_P_PICKS_STR,
+            OGS_C.NUMBER_S_PICKS_STR,
+            OGS_C.NUMBER_P_AND_S_PICKS_STR,
+            OGS_C.ML_MEDIAN_STR,
+            OGS_C.ML_UNC_STR,
+            OGS_C.ML_STATIONS_STR
+          ]],
+          f.EVENTS[[OGS_C.TIME_STR,
+            OGS_C.IDX_EVENTS_STR,
+            OGS_C.MAGNITUDE_L_STR,
+          ]],
+          how="outer",
+          on=[OGS_C.TIME_STR])
+      elif f.filepath.suffix == OGS_C.PUN_EXT:
+        self.EVENTS = pd.merge(
+          self.EVENTS,
+          f.EVENTS,
+          how="outer",
+          on=[OGS_C.TIME_STR, OGS_C.LATITUDE_STR,
+              OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR])
+    
+    # Optimization: Vectorized aggregation instead of iterrows() loops
+    # This replaces nested loops with efficient groupby operations
+    
+    # Count P and S picks per event using groupby + pivot
+    if not self.PICKS.empty:
+      phase_counts = self.PICKS.groupby(
+        [OGS_C.IDX_PICKS_STR, OGS_C.PHASE_STR]
+      ).size().unstack(fill_value=0)
+      
+      # Map phase counts to events
+      for phase, column in [(OGS_C.PWAVE, OGS_C.NUMBER_P_PICKS_STR),
+                            (OGS_C.SWAVE, OGS_C.NUMBER_S_PICKS_STR)]:
+        if phase in phase_counts.columns:
+          self.EVENTS[column] = self.EVENTS[OGS_C.IDX_EVENTS_STR].map(
+            phase_counts[phase]
+          ).fillna(0).astype(int)
+        else:
+          self.EVENTS[column] = 0
+      
+      # Count stations with both P and S picks per event
+      station_phase_counts = self.PICKS.groupby(
+        [OGS_C.IDX_PICKS_STR, OGS_C.STATION_STR]
+      )[OGS_C.PHASE_STR].nunique()
+      
+      stations_with_both = station_phase_counts[station_phase_counts >= 2].groupby(
+        level=0
+      ).size()
+      
+      self.EVENTS[OGS_C.NUMBER_P_AND_S_PICKS_STR] = self.EVENTS[
+        OGS_C.IDX_EVENTS_STR
+      ].map(stations_with_both).fillna(0).astype(int)
+    else:
+      self.EVENTS[OGS_C.NUMBER_P_PICKS_STR] = 0
+      self.EVENTS[OGS_C.NUMBER_S_PICKS_STR] = 0
+      self.EVENTS[OGS_C.NUMBER_P_AND_S_PICKS_STR] = 0
+    
+    self.get("events")
+
+  def merge_picks(self) -> None:
+    for f in self.files:
+      if self.PICKS.empty:
+        f.get("PICKS")
+        self.PICKS = pd.concat([self.PICKS, f.PICKS], ignore_index=True)
+    self.get("picks")
+
+  def merge(self) -> None:
+    self.merge_picks()
+    self.merge_events()
+    print(self.filepath)
+    self.filepath = Path(self.filepath.__str__() + ".all")
+    self.log()
+
 def main(args: argparse.Namespace) -> None:
   """
   Parse the arguments provided by the user.
@@ -128,5 +229,7 @@ def main(args: argparse.Namespace) -> None:
   """
   OGS_Catalog = DataCatalog(args)
   OGS_Catalog.read()
+  if args.merge:
+    OGS_Catalog.merge()
 
 if __name__ == "__main__": main(parse_arguments())
