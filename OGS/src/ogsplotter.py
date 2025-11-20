@@ -41,7 +41,7 @@ class line_plotter(plotter):
   def __init__(
       self, x, y, xlabel=None, ylabel=None, title=None, fig=None, ax=None,
       color=OGS_C.OGS_BLUE, gs=111, label=None, legend=False, ylim=(-100, 100),
-      output=None) -> None:
+      output=None, xlim=None) -> None:
     super().__init__(fig=fig)
     self.ax = self.fig.add_subplot(gs)
     if xlabel: self.ax.set_xlabel(xlabel)
@@ -443,10 +443,11 @@ class histogram_plotter(plotter):
                  align='left')
     if legend:
       mean = float(np.mean(data))
-      self.ax.axvline(x=mean, c='k', lw=1, alpha=0.5, ls='--', label="Mean")
+      self.ax.axvline(x=mean, c='k', lw=1, alpha=0.5, ls='--',
+                      label=f"Mean: {mean:.3E}")
       std = float(np.std(data))
       self.ax.axvline(x=mean + std, c='r', lw=1, alpha=0.5, ls='--',
-                      label="Standard Deviation")
+                      label=f"Standard Deviation: {std:.3E}")
       self.ax.axvline(x=mean - std, c='r', lw=1, alpha=0.5, ls='--')
       self.ax.legend()
     if yscale is not None:

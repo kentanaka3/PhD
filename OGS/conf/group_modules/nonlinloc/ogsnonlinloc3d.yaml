@@ -4,8 +4,8 @@ mode_3d: true
 CONTROL: [1, 42]
 TRANS: [TRANS_MERC, WGS-84, 45.9,  12.25, 0.0]
 velocity_models_3d:
-  P: "OGS/data/NAC5.P.sim"
-  S: "OGS/data/NAC5.S.sim"
+  P: "OGS/data/VelocityModel/3D/NAC5.P.sim"
+  S: "OGS/data/VelocityModel/3D/NAC5.S.sim"
 VGGRID: [441, 363, 63, -220.0, -181.0, -5.0, 1.0, 1.0, 1.0, SLOW_LEN]
 GTMODE: [GRID3D, ANGLES_YES]
 GT_PLFD: [1.0e-3, 0]

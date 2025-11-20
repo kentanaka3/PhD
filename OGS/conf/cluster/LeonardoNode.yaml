@@ -2,4 +2,4 @@ _target_: dask.distributed.LocalCluster
 
 n_workers: 1
 threads_per_worker: 32
-processes: False
+processes: True

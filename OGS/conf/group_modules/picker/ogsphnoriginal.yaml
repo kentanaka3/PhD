@@ -1,0 +1,13 @@
+_target_: ml_catalog.modules.SeisBenchPicker
+
+model:
+  _target_: seisbench.models.PhaseNet.from_pretrained
+  name: original
+
+classify_args:
+  P_threshold: 0.1
+  S_threshold: 0.1
+  batch_size: 16384
+
+amplitude_extractor:
+  _target_: OGS.src.ogspicker.OGSAmplitudeExtractor

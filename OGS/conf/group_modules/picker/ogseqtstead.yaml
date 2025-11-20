@@ -1,7 +1,7 @@
 _target_: ml_catalog.modules.SeisBenchPicker
 
 model:
-  _target_: seisbench.models.EQTransfomer.from_pretrained
+  _target_: seisbench.models.EQTransformer.from_pretrained
   name: stead
 
 classify_args:
