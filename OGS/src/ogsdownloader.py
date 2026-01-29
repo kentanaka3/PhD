@@ -63,8 +63,6 @@ def parse_arguments() -> argparse.Namespace:
     type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
     default=[datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT),
              datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT)],
-    default=[datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT),
-             datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT)],
     help="Specify the beginning and ending (inclusive) Gregorian date " \
          "(YYYYMMDD) range to work with.")
   date_group.add_argument(
