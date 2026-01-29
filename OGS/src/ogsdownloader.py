@@ -46,14 +46,17 @@ def parse_arguments() -> argparse.Namespace:
     "--pyrocko", default=False, action='store_true',
     help="Enable PyRocko calls")
   parser.add_argument(
+    "--review", default=None, type=OGS_C.is_dir_path, required=False,
+    help="Review the downloaded data")
+  parser.add_argument(
     "--timing", default=False, action='store_true', required=False,
     help="Enable timing")
   date_group = parser.add_mutually_exclusive_group(required=False)
   date_group.add_argument(
     '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
     type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
-    default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
-             datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
+    default=[datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT),
+             datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT)],
     help="Specify the beginning and ending (inclusive) Gregorian date " \
          "(YYMMDD) range to work with.")
   date_group.add_argument(
@@ -102,6 +105,9 @@ def data_downloader(args: argparse.Namespace) -> None:
   notes:
 
   """
+  if args.review:
+    print("Reviewing the downloaded data in directory:", args.review)
+    return
   if args.pyrocko:
     # We enable the option to use the PyRocko module to download the data as it
     # is more efficient than the ObsPy module by multithreading the download.

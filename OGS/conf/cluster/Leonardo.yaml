@@ -1,1 +1,12 @@
-_target_: null
+_target_: dask_jobqueue.SLURMCluster
+
+n_workers: 1
+account: IscrC_AI2Seism
+queue: boost_usr_prod
+cores: 8
+memory: 490000MB
+processes: 1
+worker_extra_args:
+  - --nthreads 1
+walltime: '20:59:00'
+nanny: False

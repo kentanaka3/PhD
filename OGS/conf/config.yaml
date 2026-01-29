@@ -5,7 +5,7 @@ defaults:
   - merge_module: default.yaml
   - joint_modules: none.yaml
   - builder: default.yaml
-  - cluster: ktanaka.yaml
+  - cluster: LeonardoNode.yaml
 
 log_level: DEBUG
 output_path: catalog/OGS

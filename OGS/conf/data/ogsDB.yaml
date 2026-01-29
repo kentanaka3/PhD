@@ -5,8 +5,8 @@ persistent: v1
 check: false
 paths:
   #- /Users/admin/Desktop/OGS_Catalog/waveforms/
-  - /Volumes/Expansion/KEN/waveforms/
-  - /Users/admin/Desktop/OGS_Catalog/station/
+  - /leonardo/home/userexternal/ktanakah/AI2Seism/WORK/waveform/
+  - /leonardo/home/userexternal/ktanakah/AI2Seism/WORK/station/
 
 channel_priorities:
   - HH?
@@ -14,8 +14,8 @@ channel_priorities:
   - HN?
   - HG?
   - BH?
-starttime: "2024-03-20"
-endtime: "2024-06-20"
+starttime: "2022-01-01"
+endtime: "2022-12-31"
 
 velocity_model:
   _target_: pandas.read_csv
