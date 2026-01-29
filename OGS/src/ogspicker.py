@@ -5,10 +5,10 @@ from datetime import datetime, timedelta as td
 from ml_catalog.modules import AmplitudeExtractor
 
 OGS_WOOD_ANDERSON = {
-    "poles": [-5.49779 - 5.60886j, -5.49779 + 5.60886j],
-    "zeros": [0 + 0j],
-    "gain": 1.0,
-    "sensitivity": 2080,
+  "poles": [-5.49779 - 5.60886j, -5.49779 + 5.60886j],
+  "zeros": [0 + 0j],
+  "gain": 1.0,
+  "sensitivity": 2080,
 }
 
 WATER_LEVEL = 60

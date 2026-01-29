@@ -6,6 +6,7 @@ from matplotlib.path import Path as mplPath
 from datetime import datetime
 
 import ogsconstants as OGS_C
+from ogsdatafile import OGSDataFile
 from ogshpl import DataFileHPL
 from ogsdat import DataFileDAT
 from ogspun import DataFilePUN
@@ -13,8 +14,7 @@ from ogstxt import DataFileTXT
 
 DATA_PATH = Path(__file__).parent.parent.parent
 
-def is_polygon(points: str) -> mplPath:
-  return mplPath(points, closed=True)
+def is_polygon(points: str) -> mplPath: return mplPath(points, closed=True)
 
 def parse_arguments() -> argparse.Namespace:
   """
@@ -51,8 +51,7 @@ def parse_arguments() -> argparse.Namespace:
   date_group.add_argument(
     '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
     type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
-    default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
-             datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
+    default=[datetime.min, datetime.max - OGS_C.ONE_DAY],
     help="Specify the beginning and ending (inclusive) Gregorian date " \
          "(YYMMDD) range to work with.")
   date_group.add_argument(
@@ -61,8 +60,8 @@ def parse_arguments() -> argparse.Namespace:
     help="Specify the beginning and ending (inclusive) Julian date (YYMMDD) " \
          "range to work with.")
   parser.add_argument(
-    "-N", "--name", required=False, type=str,
-    default=DATA_PATH / "catalogs" / "OGSCatalog",
+    "-o", "--output", required=False, type=OGS_C.is_dir_path,
+    default=DATA_PATH / "catalog" / "OGSCatalog",
     help="Name of the catalog")
   parser.add_argument(
     "-P", "--polygon", required=False, type=is_polygon,
@@ -71,7 +70,7 @@ def parse_arguments() -> argparse.Namespace:
     help="Polygon string to filter events")
   return parser.parse_args()
 
-class DataCatalog(OGS_C.OGSDataFile):
+class DataCatalog(OGSDataFile):
   """
   Data catalog class for managing OGS data files. In order to add a new data
   file type, simply create a new class that inherits from OGSDataFile and add
@@ -85,10 +84,10 @@ class DataCatalog(OGS_C.OGSDataFile):
   }
   def __init__(self, args: argparse.Namespace) -> None:
     self.args = args
-    self.files : list[OGS_C.OGSDataFile] = list()
+    self.files : list[OGSDataFile] = list()
     super().__init__(
-      args.name, args.dates[0], args.dates[1], verbose=args.verbose,
-      polygon=args.polygon, output=DATA_PATH / "catalogs" / "OGSCatalog")
+      args.output, args.dates[0], args.dates[1], verbose=args.verbose,
+      polygon=args.polygon, output=args.output)
 
   def read(self) -> None:
     if self.args.directory is None:
@@ -98,7 +97,7 @@ class DataCatalog(OGS_C.OGSDataFile):
           self.files.append(self.DATAFILE_TYPES[ext](
             fr, self.args.dates[0], self.args.dates[1],
             verbose=self.args.verbose, polygon=self.args.polygon,
-            output=self.args.name))
+            output=self.args.output))
     else:
       for ext in self.args.ext:
         files = list(self.args.directory.rglob(f"*{ext}"))
@@ -109,65 +108,70 @@ class DataCatalog(OGS_C.OGSDataFile):
             self.files.append(self.DATAFILE_TYPES[fr.suffix](
               fr, self.args.dates[0], self.args.dates[1],
               verbose=self.args.verbose, polygon=self.args.polygon,
-              output=self.args.name))
+              output=self.args.output))
     for f in self.files:
       f.read()
       f.log()
 
-  def merge_events(self) -> None:
-    print("Merging data files...")
+  def merge_events(self) -> pd.DataFrame:
     for f in self.files:
+      self.logger.info(f"Processing EVENTS from file: {f.input}")
       if self.EVENTS.empty:
-        f.get("EVENTS")
-        self.EVENTS = pd.concat([self.EVENTS, f.EVENTS], ignore_index=True)
-      elif f.filepath.suffix == OGS_C.TXT_EXT:
+        self.EVENTS = f.get("EVENTS").copy()
+      elif f.input.suffix == OGS_C.TXT_EXT:
         """
         IDX_EVENTS_STR, TIME_STR, LATITUDE_STR, LONGITUDE_STR, DEPTH_STR,
         GAP_STR, ERZ_STR, ERH_STR, GROUPS_STR, NO_STR,
         NUMBER_P_PICKS_STR, NUMBER_S_PICKS_STR, NUMBER_P_AND_S_PICKS_STR,
         ML_STR, ML_MEDIAN_STR, ML_UNC_STR, ML_STATIONS_STR
         """
-        print(f.EVENTS)
         self.EVENTS = pd.merge(
-          self.EVENTS[[OGS_C.TIME_STR,
+          self.EVENTS[[
+            # TODO: Order alfabetically
+            OGS_C.TIME_STR,
             OGS_C.LATITUDE_STR,
             OGS_C.LONGITUDE_STR,
             OGS_C.DEPTH_STR,
-            OGS_C.GAP_STR,
-            OGS_C.ERZ_STR,
-            OGS_C.ERH_STR,
-            OGS_C.GROUPS_STR,
-            OGS_C.NO_STR,
             OGS_C.NUMBER_P_PICKS_STR,
             OGS_C.NUMBER_S_PICKS_STR,
             OGS_C.NUMBER_P_AND_S_PICKS_STR,
             OGS_C.ML_MEDIAN_STR,
             OGS_C.ML_UNC_STR,
-            OGS_C.ML_STATIONS_STR
-          ]],
-          f.EVENTS[[OGS_C.TIME_STR,
-            OGS_C.IDX_EVENTS_STR,
+            OGS_C.ML_STATIONS_STR,
             OGS_C.MAGNITUDE_L_STR,
+            OGS_C.GROUPS_STR,
+            OGS_C.NO_STR,
+          ]],
+          f.EVENTS[[
+            # TODO: Order alfabetically
+            OGS_C.TIME_STR,
+            OGS_C.GROUPS_STR,
+            OGS_C.IDX_EVENTS_STR,
+            OGS_C.MAGNITUDE_D_STR,
+            OGS_C.ERZ_STR,
+            OGS_C.ERH_STR,
+            OGS_C.GAP_STR,
           ]],
           how="outer",
-          on=[OGS_C.TIME_STR])
-      elif f.filepath.suffix == OGS_C.PUN_EXT:
+          on=[OGS_C.TIME_STR, OGS_C.GROUPS_STR]).copy()
+      elif f.input.suffix == OGS_C.PUN_EXT:
         self.EVENTS = pd.merge(
           self.EVENTS,
           f.EVENTS,
           how="outer",
           on=[OGS_C.TIME_STR, OGS_C.LATITUDE_STR,
-              OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR])
-    
+              OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR,
+              OGS_C.GROUPS_STR]).copy()
+
     # Optimization: Vectorized aggregation instead of iterrows() loops
     # This replaces nested loops with efficient groupby operations
-    
+
     # Count P and S picks per event using groupby + pivot
     if not self.PICKS.empty:
       phase_counts = self.PICKS.groupby(
         [OGS_C.IDX_PICKS_STR, OGS_C.PHASE_STR]
       ).size().unstack(fill_value=0)
-      
+
       # Map phase counts to events
       for phase, column in [(OGS_C.PWAVE, OGS_C.NUMBER_P_PICKS_STR),
                             (OGS_C.SWAVE, OGS_C.NUMBER_S_PICKS_STR)]:
@@ -177,16 +181,16 @@ class DataCatalog(OGS_C.OGSDataFile):
           ).fillna(0).astype(int)
         else:
           self.EVENTS[column] = 0
-      
+
       # Count stations with both P and S picks per event
       station_phase_counts = self.PICKS.groupby(
         [OGS_C.IDX_PICKS_STR, OGS_C.STATION_STR]
       )[OGS_C.PHASE_STR].nunique()
-      
+
       stations_with_both = station_phase_counts[station_phase_counts >= 2].groupby(
         level=0
       ).size()
-      
+
       self.EVENTS[OGS_C.NUMBER_P_AND_S_PICKS_STR] = self.EVENTS[
         OGS_C.IDX_EVENTS_STR
       ].map(stations_with_both).fillna(0).astype(int)
@@ -194,21 +198,25 @@ class DataCatalog(OGS_C.OGSDataFile):
       self.EVENTS[OGS_C.NUMBER_P_PICKS_STR] = 0
       self.EVENTS[OGS_C.NUMBER_S_PICKS_STR] = 0
       self.EVENTS[OGS_C.NUMBER_P_AND_S_PICKS_STR] = 0
-    
-    self.get("events")
+      self.EVENTS[OGS_C.GROUPS_STR] = \
+        self.EVENTS[OGS_C.TIME_STR].dt.date # type: ignore
+    return self.EVENTS
 
-  def merge_picks(self) -> None:
+  def merge_picks(self) -> pd.DataFrame:
     for f in self.files:
       if self.PICKS.empty:
-        f.get("PICKS")
-        self.PICKS = pd.concat([self.PICKS, f.PICKS], ignore_index=True)
-    self.get("picks")
+        self.PICKS = f.get("PICKS").copy()
+      else:
+        picks = f.get("PICKS").copy()
+        if not picks.empty:
+          self.PICKS = pd.concat([self.PICKS, picks], ignore_index=True)
+    return self.PICKS
 
   def merge(self) -> None:
-    self.merge_picks()
+    print(self.merge_picks())
     self.merge_events()
-    print(self.filepath)
-    self.filepath = Path(self.filepath.__str__() + ".all")
+    print(self.input)
+    self.input = Path(self.input.__str__() + ".all")
     self.log()
 
 def main(args: argparse.Namespace) -> None:
@@ -225,11 +233,10 @@ def main(args: argparse.Namespace) -> None:
     - None
 
   notes:
-
+    - None
   """
   OGS_Catalog = DataCatalog(args)
   OGS_Catalog.read()
-  if args.merge:
-    OGS_Catalog.merge()
+  if args.merge: OGS_Catalog.merge()
 
 if __name__ == "__main__": main(parse_arguments())

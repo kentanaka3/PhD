@@ -6,6 +6,7 @@ from obspy import UTCDateTime
 from datetime import datetime, timedelta as td
 
 import ogsconstants as OGS_C
+from ogsdatafile import OGSDataFile
 
 from matplotlib.cbook import flatten as flatten_list
 
@@ -13,8 +14,9 @@ DATA_PATH = Path(__file__).parent.parent.parent
 
 def parse_arguments():
   parser = argparse.ArgumentParser(description="Run OGS HPL quality checks")
-  parser.add_argument("-f", "--file", type=Path, required=True,
-                      help="Path to the input file")
+  parser.add_argument(
+    "-f", "--file", type=Path, required=True, nargs=OGS_C.ONE_MORECHAR_STR,
+    help="Path to the input file")
   parser.add_argument(
     '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
     type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
@@ -22,9 +24,12 @@ def parse_arguments():
              datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
     help="Specify the beginning and ending (inclusive) Gregorian date " \
           "(YYMMDD) range to work with.")
+  parser.add_argument(
+    '-v', "--verbose", action='store_true', default=False,
+    help="Enable verbose output")
   return parser.parse_args()
 
-class DataFileHPL(OGS_C.OGSDataFile):
+class DataFileHPL(OGSDataFile):
   RECORD_EXTRACTOR_LIST = [
     fr"^(?P<{OGS_C.INDEX_STR}>[\d\s]{{6}})\s",                    # Event
     fr"(?P<{OGS_C.STATION_STR}>[A-Z0-9\s]{{4}})\s",               # Station
@@ -111,14 +116,17 @@ class DataFileHPL(OGS_C.OGSDataFile):
   NOTES_EXTRACTOR = re.compile(OGS_C.EMPTY_STR.join(
     list(flatten_list(NOTES_EXTRACTOR_LIST))))
   def read(self):
-    assert self.filepath.suffix == OGS_C.HPL_EXT
-    assert self.filepath.exists()
+    assert self.input.exists(), \
+      f"File {self.input} does not exist"
+    assert self.input.suffix == OGS_C.HPL_EXT, \
+      f"File extension must be {OGS_C.HPL_EXT}"
     SOURCE = list()
     DETECT = list()
     event_notes: str = ""
     event_detect: int = 0
     event_spacetime = (datetime.min, 0, 0, 0)
-    with open(self.filepath, 'r') as fr: lines = fr.readlines()
+    with open(self.input, 'r') as fr: lines = fr.readlines()
+    self.logger.info(f"Reading HPL file: {self.input}")
     for line in [l.strip("\n") for l in lines]:
       if event_detect > 0:
         event_detect -= 1
@@ -127,7 +135,7 @@ class DataFileHPL(OGS_C.OGSDataFile):
           result : dict = match.groupdict()
           if (result[OGS_C.EVENT_LOCALIZATION_STR] != "D" and
               result[OGS_C.EVENT_TYPE_STR] != "L"):
-            # print("WARNING: (HPL) Ignoring line:", line)
+            self.logger.warning(f"WARNING: (HPL) Ignoring line: {line}")
             continue
           result[OGS_C.STATION_STR] = \
             result[OGS_C.STATION_STR].strip(OGS_C.SPACE_STR)
@@ -139,7 +147,7 @@ class DataFileHPL(OGS_C.OGSDataFile):
                 event_spacetime[0].year * OGS_C.MAX_PICKS_YEAR
             except ValueError as e:
               result[OGS_C.INDEX_STR] = None
-              print(e)
+              self.logger.error(e)
           result[OGS_C.P_WEIGHT_STR] = int(result[OGS_C.P_WEIGHT_STR])
           result[OGS_C.SECONDS_STR] = td(seconds=float(
             result[OGS_C.SECONDS_STR].replace(OGS_C.SPACE_STR,
@@ -154,6 +162,8 @@ class DataFileHPL(OGS_C.OGSDataFile):
           if (self.start is not None and
               result[OGS_C.P_TIME_STR] < self.start):
             event_detect = -1 # Error
+            self.logger.debug(f"Skipping event before start date: {self.start}")
+            self.logger.debug(line)
             continue
           if (self.end is not None and
               result[OGS_C.P_TIME_STR] >= self.end + OGS_C.ONE_DAY): break
@@ -192,9 +202,14 @@ class DataFileHPL(OGS_C.OGSDataFile):
             f"{OGS_C.YYMMDD_FMT}0%H%M") + result[OGS_C.SECONDS_STR]
           if self.start is not None and result[OGS_C.DATE_STR] < self.start:
             event_detect = 0
+            self.logger.debug("Skipping event before start date")
+            self.logger.debug(line)
             continue
           if (self.end is not None and
-              result[OGS_C.DATE_STR] >= self.end + OGS_C.ONE_DAY): break
+              result[OGS_C.DATE_STR] >= self.end + OGS_C.ONE_DAY):
+            self.logger.debug("Stopping read at event after end date")
+            self.logger.debug(line)
+            break
           # Event
           # # Index
           result[OGS_C.INDEX_STR] = int(int(result[OGS_C.INDEX_STR].replace(
@@ -253,7 +268,7 @@ class DataFileHPL(OGS_C.OGSDataFile):
             result[OGS_C.INDEX_STR], *event_spacetime, result[OGS_C.GAP_STR],
             result[OGS_C.ERZ_STR], result[OGS_C.ERH_STR],
             event_spacetime[0].strftime(OGS_C.DATE_FMT), result[OGS_C.NO_STR],
-            None, None, None, result[OGS_C.MAGNITUDE_D_STR], None, None, None
+            0, 0, None, result[OGS_C.MAGNITUDE_D_STR], None, None, None
           ])
           continue
         match = self.LOCATION_EXTRACTOR.match(line)
@@ -270,6 +285,7 @@ class DataFileHPL(OGS_C.OGSDataFile):
             continue
         if re.match(r"^\s*$", line): continue
       if event_detect < 0:
+        self.logger.error(f"ERROR: (HPL) Could not parse line: {line}")
         self.debug(line, self.EVENT_EXTRACTOR_LIST if event_detect == 0
                    else self.RECORD_EXTRACTOR_LIST)
     self.PICKS = pd.DataFrame(DETECT, columns=[
@@ -281,27 +297,46 @@ class DataFileHPL(OGS_C.OGSDataFile):
     for date, df in self.PICKS.groupby(OGS_C.GROUPS_STR):
       self.picks[UTCDateTime(date).date] = df
     self.EVENTS = pd.DataFrame(SOURCE, columns=[
-      OGS_C.IDX_EVENTS_STR, OGS_C.TIME_STR, OGS_C.LATITUDE_STR,
-      OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR, OGS_C.GAP_STR, OGS_C.ERZ_STR,
+      OGS_C.IDX_EVENTS_STR, OGS_C.TIME_STR, OGS_C.LONGITUDE_STR,
+      OGS_C.LATITUDE_STR, OGS_C.DEPTH_STR, OGS_C.GAP_STR, OGS_C.ERZ_STR,
       OGS_C.ERH_STR, OGS_C.GROUPS_STR, OGS_C.NO_STR,
       OGS_C.NUMBER_P_PICKS_STR, OGS_C.NUMBER_S_PICKS_STR,
       OGS_C.NUMBER_P_AND_S_PICKS_STR, OGS_C.ML_STR, OGS_C.ML_MEDIAN_STR,
       OGS_C.ML_UNC_STR, OGS_C.ML_STATIONS_STR
     ])
+    self.EVENTS[OGS_C.GROUPS_STR] = pd.to_datetime(
+      self.EVENTS[OGS_C.TIME_STR], format=OGS_C.DATE_FMT)
     self.EVENTS[OGS_C.ERH_STR] = \
       self.EVENTS[OGS_C.ERH_STR].replace(" " * 4, "NaN").apply(float)
     self.EVENTS[OGS_C.ERZ_STR] = \
       self.EVENTS[OGS_C.ERZ_STR].replace(" " * 5, "NaN").apply(float)
+    self.logger.info(f"Total events read: {len(self.EVENTS)}")
+    self.logger.info("Applying polygon filter...")
+    # Apply polygon filter if specified
     self.EVENTS = self.EVENTS[self.EVENTS[
       [OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR]].apply(
-        lambda x: self.polygon.contains_point(
-          (x[OGS_C.LONGITUDE_STR], x[OGS_C.LATITUDE_STR])), axis=1)]
-    for date, df in self.EVENTS.groupby(OGS_C.GROUPS_STR):
-      self.events[UTCDateTime(date).date] = df
+        lambda x: self.polygon.contains_point((
+          x[OGS_C.LONGITUDE_STR],
+          x[OGS_C.LATITUDE_STR]
+        )), axis=1)].reset_index(drop=True)
+    for idx, df in self.PICKS.groupby(OGS_C.IDX_PICKS_STR):
+      for phase, dataframe in df.groupby(OGS_C.PHASE_STR):
+        if idx in self.EVENTS[OGS_C.IDX_EVENTS_STR].values:
+          self.EVENTS.loc[
+            self.EVENTS[OGS_C.IDX_EVENTS_STR] == idx,
+            OGS_C.NUMBER_P_PICKS_STR if phase == OGS_C.PWAVE
+            else OGS_C.NUMBER_S_PICKS_STR
+          ] = len(dataframe.index)
+      # TODO: Compute NUMBER_P_AND_S_PICKS_STR
+    if not self.EVENTS.empty:
+      for date, df in self.EVENTS.groupby(OGS_C.GROUPS_STR):
+        self.events[UTCDateTime(date).date] = df
 
 def main(args):
-  datafile = DataFileHPL(args.file, args.dates[0], args.dates[1])
-  datafile.read()
-  datafile.log()
+  for file in args.file:
+    datafile = DataFileHPL(file, args.dates[0], args.dates[1],
+                           verbose=args.verbose)
+    datafile.read()
+    datafile.log()
 
 if __name__ == "__main__": main(parse_arguments())
