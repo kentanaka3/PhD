@@ -6,30 +6,34 @@ from obspy import UTCDateTime
 from datetime import datetime, timedelta as td
 
 import ogsconstants as OGS_C
+from ogsdatafile import OGSDataFile
 
 DATA_PATH = Path(__file__).parent.parent.parent
 
 def parse_arguments():
   parser = argparse.ArgumentParser(description="Run OGS HPL quality checks")
-  parser.add_argument("-f", "--file", type=Path, required=True,
-                      help="Path to the input file")
+  parser.add_argument(
+    "-f", "--file", type=Path, required=True, nargs=OGS_C.ONE_MORECHAR_STR,
+    help="Path to the input file")
   parser.add_argument(
     '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
     type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
-    default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
-              datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
+    default=[datetime.min, datetime.max - OGS_C.ONE_DAY],
     help="Specify the beginning and ending (inclusive) Gregorian date " \
          "(YYMMDD) range to work with.")
+  parser.add_argument(
+    '-v', "--verbose", default=False, action='store_true', required=False,
+    help="Enable verbose output")
   return parser.parse_args()
 
-class DataFileDAT(OGS_C.OGSDataFile):
+class DataFileDAT(OGSDataFile):
   RECORD_EXTRACTOR_LIST = [
     fr"^(?P<{OGS_C.STATION_STR}>[A-Z0-9\s]{{4}})",                # Station
     fr"(?P<{OGS_C.P_ONSET_STR}>[ei\s\?]){OGS_C.PWAVE}",           # P Onset
     fr"(?P<{OGS_C.P_POLARITY_STR}>[cC\+dD\-\s])",                 # P Polarity
     fr"(?P<{OGS_C.P_WEIGHT_STR}>[0-4\s])",                        # P Weight
     fr"1",                                                        # 1
-    fr"(?P<{OGS_C.DATE_STR}>\d{{10}})\s",                         # Date
+    fr"(?P<{OGS_C.DATE_STR}>\d{{10}})[\s0]",                         # Date
     fr"(?P<{OGS_C.P_TIME_STR}>[\s\d]{{4}})",                      # P Time
     fr".{{8}}",                                                   # Unknown
     [
@@ -61,11 +65,14 @@ class DataFileDAT(OGS_C.OGSDataFile):
     fr""
   ]
   def read(self):
-    assert self.filepath.suffix == OGS_C.DAT_EXT
-    assert self.filepath.exists()
+    assert self.input.exists(), \
+      f"File {self.input} does not exist"
+    assert self.input.suffix == OGS_C.DAT_EXT, \
+      f"File extension must be {OGS_C.DAT_EXT}"
     # TODO: Attemp restoration before SHUTDOWN
     DETECT = list()
-    with open(self.filepath, 'r') as fr: lines = fr.readlines()
+    with open(self.input, 'r') as fr: lines = fr.readlines()
+    self.logger.info(f"Reading DAT file: {self.input}")
     for line in [l.strip() for l in lines]:
       if self.EVENT_EXTRACTOR.match(line): continue
       match = self.RECORD_EXTRACTOR.match(line)
@@ -92,9 +99,14 @@ class DataFileDAT(OGS_C.OGSDataFile):
           continue
         # We only consider the picks from the date range (if specified)
         if self.start is not None and result[OGS_C.DATE_STR] < self.start:
+          self.logger.debug(f"Skipping pick before start date: {self.start}")
+          self.logger.debug(line)
           continue
         if (self.end is not None and
-            result[OGS_C.DATE_STR] >= self.end + OGS_C.ONE_DAY): break
+            result[OGS_C.DATE_STR] >= self.end + OGS_C.ONE_DAY):
+          self.logger.debug(f"Stopping read at pick after end date: {self.end}")
+          self.logger.debug(line)
+          break
         result[OGS_C.STATION_STR] = \
           result[OGS_C.STATION_STR].strip(OGS_C.SPACE_STR)
         date = result[OGS_C.DATE_STR].strftime(OGS_C.YYMMDD_FMT)
@@ -104,7 +116,7 @@ class DataFileDAT(OGS_C.OGSDataFile):
             td(seconds=float(result[OGS_C.P_TIME_STR].replace(
               OGS_C.SPACE_STR, OGS_C.ZERO_STR)) / 100.)
         except ValueError as e:
-          print(e)
+          self.logger.error(e)
           continue
         # Event
         if result[OGS_C.INDEX_STR]:
@@ -114,7 +126,7 @@ class DataFileDAT(OGS_C.OGSDataFile):
                 result[OGS_C.DATE_STR].year * OGS_C.MAX_PICKS_YEAR
           except ValueError as e:
             result[OGS_C.INDEX_STR] = None
-            print(e)
+            self.logger.error(e)
         DEFAULT_VALUE = 0
         # P Weight
         try:
@@ -123,7 +135,7 @@ class DataFileDAT(OGS_C.OGSDataFile):
           else:
             result[OGS_C.P_WEIGHT_STR] = int(result[OGS_C.P_WEIGHT_STR])
         except ValueError as e:
-          print(e)
+          self.logger.error(e)
           continue
         DETECT.append([
           result[OGS_C.INDEX_STR],
@@ -142,7 +154,7 @@ class DataFileDAT(OGS_C.OGSDataFile):
             else:
               result[OGS_C.S_WEIGHT_STR] = int(result[OGS_C.S_WEIGHT_STR])
           except ValueError as e:
-            print(e)
+            self.logger.error(e)
             continue
           # S Time
           try:
@@ -150,7 +162,7 @@ class DataFileDAT(OGS_C.OGSDataFile):
               td(seconds=float(result[OGS_C.S_TIME_STR].replace(
                 OGS_C.SPACE_STR, OGS_C.ZERO_STR)) / 100.)
           except ValueError as e:
-            print(e)
+            self.logger.error(e)
             continue
           DETECT.append([
             result[OGS_C.INDEX_STR],
@@ -161,8 +173,9 @@ class DataFileDAT(OGS_C.OGSDataFile):
             None, None, None, None, 1.0
           ])
         continue
-      if re.match(r"1\s+D$", line): continue
+      if re.match(r"1\s*D?\s*.?$", line): continue
       if line == OGS_C.EMPTY_STR: continue
+      self.logger.error(f"ERROR: (DAT) Could not parse line: {line}")
       self.debug(line, self.RECORD_EXTRACTOR_LIST)
     self.PICKS = pd.DataFrame(DETECT, columns=[
       OGS_C.IDX_PICKS_STR, OGS_C.GROUPS_STR, OGS_C.TIME_STR, OGS_C.STATION_STR,
@@ -175,10 +188,11 @@ class DataFileDAT(OGS_C.OGSDataFile):
     for date, df in self.PICKS.groupby(OGS_C.GROUPS_STR):
       self.picks[UTCDateTime(date).date] = df
 
-
 def main(args):
-  datafile = DataFileDAT(args.file, args.dates[0], args.dates[1])
-  datafile.read()
-  datafile.log()
+  for file in args.file:
+    datafile = DataFileDAT(file, args.dates[0], args.dates[1],
+                           verbose=args.verbose)
+    datafile.read()
+    datafile.log()
 
 if __name__ == "__main__": main(parse_arguments())

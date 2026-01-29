@@ -190,6 +190,18 @@ doc/UniTS/*
 doc/img/*
 doc/Post/*
 env/*
+catalog/
+OGS/data/manual/
+*.bbl
+*.bcf
+*.run.xml
+*.aux
+*.lof
+*.lot
+*.fls
+*.synctex.gz
+*.fdb_latexmk
+*.toc
 *.out
 *.err
 *.csv
@@ -201,6 +213,4 @@ env/*
 .vscode/*
 *.nsys-rep
 data/*
-*CP_*_*_*.png
-*FN_*_*.png
 *.hdf5
