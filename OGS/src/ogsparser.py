@@ -115,10 +115,18 @@ class DataCatalog(OGSDataFile):
 
   def merge_events(self) -> pd.DataFrame:
     for f in self.files:
+      if f.get("EVENTS").empty: continue
       self.logger.info(f"Processing EVENTS from file: {f.input}")
+      f.EVENTS[OGS_C.IDX_EVENTS_STR] = f.EVENTS[OGS_C.IDX_EVENTS_STR].apply(
+        pd.to_numeric, errors='coerce'
+      ).astype(int)
       if self.EVENTS.empty:
         self.EVENTS = f.get("EVENTS").copy()
-      elif f.input.suffix == OGS_C.TXT_EXT:
+        continue
+      self.EVENTS[OGS_C.IDX_EVENTS_STR] = self.EVENTS[OGS_C.IDX_EVENTS_STR].apply(
+        pd.to_numeric, errors='coerce'
+      ).astype(int)
+      if f.input.suffix == OGS_C.TXT_EXT:
         """
         IDX_EVENTS_STR, TIME_STR, LATITUDE_STR, LONGITUDE_STR, DEPTH_STR,
         GAP_STR, ERZ_STR, ERH_STR, GROUPS_STR, NO_STR,
@@ -126,9 +134,8 @@ class DataCatalog(OGSDataFile):
         ML_STR, ML_MEDIAN_STR, ML_UNC_STR, ML_STATIONS_STR
         """
         self.EVENTS = pd.merge(
-          self.EVENTS[[
+          self.EVENTS[[OGS_C.IDX_EVENTS_STR,
             # TODO: Order alfabetically
-            OGS_C.TIME_STR,
             OGS_C.LATITUDE_STR,
             OGS_C.LONGITUDE_STR,
             OGS_C.DEPTH_STR,
@@ -138,28 +145,26 @@ class DataCatalog(OGSDataFile):
             OGS_C.ML_MEDIAN_STR,
             OGS_C.ML_UNC_STR,
             OGS_C.ML_STATIONS_STR,
-            OGS_C.MAGNITUDE_L_STR,
-            OGS_C.GROUPS_STR,
-            OGS_C.NO_STR,
           ]],
-          f.EVENTS[[
+          f.EVENTS[[OGS_C.IDX_EVENTS_STR,
             # TODO: Order alfabetically
             OGS_C.TIME_STR,
-            OGS_C.GROUPS_STR,
-            OGS_C.IDX_EVENTS_STR,
-            OGS_C.MAGNITUDE_D_STR,
+            OGS_C.ERT_STR,
             OGS_C.ERZ_STR,
             OGS_C.ERH_STR,
             OGS_C.GAP_STR,
+            OGS_C.GROUPS_STR,
+            OGS_C.MAGNITUDE_L_STR,
+            OGS_C.MAGNITUDE_D_STR,
           ]],
           how="outer",
-          on=[OGS_C.TIME_STR, OGS_C.GROUPS_STR]).copy()
+          on=OGS_C.IDX_EVENTS_STR).copy()
       elif f.input.suffix == OGS_C.PUN_EXT:
         self.EVENTS = pd.merge(
           self.EVENTS,
           f.EVENTS,
           how="outer",
-          on=[OGS_C.TIME_STR, OGS_C.LATITUDE_STR,
+          on=[OGS_C.IDX_EVENTS_STR, OGS_C.TIME_STR, OGS_C.LATITUDE_STR,
               OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR,
               OGS_C.GROUPS_STR]).copy()
 
@@ -194,12 +199,6 @@ class DataCatalog(OGSDataFile):
       self.EVENTS[OGS_C.NUMBER_P_AND_S_PICKS_STR] = self.EVENTS[
         OGS_C.IDX_EVENTS_STR
       ].map(stations_with_both).fillna(0).astype(int)
-    else:
-      self.EVENTS[OGS_C.NUMBER_P_PICKS_STR] = 0
-      self.EVENTS[OGS_C.NUMBER_S_PICKS_STR] = 0
-      self.EVENTS[OGS_C.NUMBER_P_AND_S_PICKS_STR] = 0
-      self.EVENTS[OGS_C.GROUPS_STR] = \
-        self.EVENTS[OGS_C.TIME_STR].dt.date # type: ignore
     return self.EVENTS
 
   def merge_picks(self) -> pd.DataFrame:
