@@ -52,6 +52,9 @@ def parse_arguments() -> argparse.Namespace:
     "--pyrocko", default=False, action='store_true',
     help="Enable PyRocko calls")
   parser.add_argument(
+    "--review", default=None, type=OGS_C.is_dir_path, required=False,
+    help="Review the downloaded data")
+  parser.add_argument(
     "--timing", default=False, action='store_true', required=False,
     help="Enable timing")
   date_group = parser.add_mutually_exclusive_group(required=False)
@@ -131,6 +134,9 @@ def data_downloader(args: argparse.Namespace) -> None:
   # Initialize logger based on CLI flags
   logger = _setup_logger(args.verbose, args.silent)
 
+  if args.review:
+    print("Reviewing the downloaded data in directory:", args.review)
+    return
   if args.pyrocko:
     # We enable the option to use the PyRocko module to download the data as it
     # is more efficient than the ObsPy module by multithreading the download.
