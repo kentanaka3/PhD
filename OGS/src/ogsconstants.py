@@ -98,6 +98,7 @@ import argparse                            # Command-line argument parsing
 import itertools as it                     # Iterator utilities
 from pathlib import Path                   # Object-oriented filesystem paths
 from datetime import datetime, timedelta as td  # Date/time handling
+from typing import Dict, Optional          # Type hinting
 
 # =============================================================================
 # THIRD-PARTY LIBRARY IMPORTS
@@ -108,7 +109,7 @@ import pandas as pd                        # Data manipulation and analysis
 import networkx as nx                      # Graph algorithms (bipartite matching)
 from obspy import UTCDateTime              # Seismology-specific datetime
 from matplotlib.path import Path as mplPath  # Matplotlib path for polygon ops
-from obspy.geodetics import gps2dist_azimuth  # Geodetic distance calculation
+from obspy.geodetics import gps2dist_azimuth
 
 # =============================================================================
 # MODULE-LEVEL CONFIGURATION
@@ -506,7 +507,6 @@ PHASE_STR = "phase"                    # Phase type column
 EVENT_STR = "EVENT"                    # Event identifier (uppercase)
 MODEL_STR = "MODEL"                    # Model name column
 WEIGHT_STR = "WEIGHT"                  # Weight/pretrained weights
-GROUPS_STR = "GROUPS"                  # Group assignment column
 DIRECTORY_STR = "DIRECTORY"            # Directory path column
 JULIAN_STR = "JULIAN"                  # Julian day column
 DENOISER_STR = "DENOISER"              # Denoising model reference
@@ -1037,7 +1037,8 @@ def decimeter(value, scale='normal') -> int:
 
 
 def inventory(
-    stations: Path
+    stations: Path,
+    output : Path = THIS_FILE.parent / "data" / "OGSCatalog",
   ) -> dict[str, tuple[float, float, float, str, str, str, str]]:
   """
   Load and process station metadata from StationXML files.
@@ -1050,7 +1051,7 @@ def inventory(
     stations: Path to directory containing StationXML files.
 
   Returns:
-    Dictionary mapping station IDs (NETWORK.STATION.) to tuples of:
+    dict: Dictionary mapping station IDs (NETWORK.STATION.) to tuples of:
     (longitude, latitude, elevation, network, station, net_color, sta_color)
 
   Side Effects:
@@ -1100,8 +1101,12 @@ def inventory(
               NETCOLOR_STR, STACOLOR_STR])
 
   # Generate station map visualization
-  mystations = OGS_P.map_plotter(OGS_STUDY_REGION, legend=True,
-                                 marker='^', output="OGSStations.png")
+  mystations = OGS_P.map_plotter(
+    OGS_STUDY_REGION,
+    legend=True,
+    marker='^',
+    output=output / "OGSStations.png"
+  )
 
   # Plot each network with distinct color
   for i, (net, sta) in enumerate(inv.groupby(NETWORK_STR)):

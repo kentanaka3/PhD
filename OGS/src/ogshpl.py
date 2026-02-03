@@ -84,7 +84,7 @@ class DataFileHPL(OGSDataFile):
     fr"(?P<{OGS_C.NO_STR}>[\s\d]{{2}})",                          # NO
     fr"(?P<{OGS_C.DMIN_STR}>[\s\d]{{3}})\s",                      # DMIN
     fr"(?P<{OGS_C.GAP_STR}>[\s\d]{{3}})\s1\s",                    # GAP
-    fr"(?P<{OGS_C.RMS_STR}>[\s\d\.]{{4}})\s",                     # RMS
+    fr"(?P<{OGS_C.ERT_STR}>[\s\d\.]{{4}})\s",                     # ERT
     fr"(?P<{OGS_C.ERH_STR}>[\s\d\.]{{4}})",                       # ERH
     fr"(?P<{OGS_C.ERZ_STR}>[\s\d\.]{{5}})\s",                     # ERZ
     fr"(?P<{OGS_C.QM_STR}>[A-D\s])\s",                            # QM
@@ -150,19 +150,26 @@ class DataFileHPL(OGSDataFile):
               self.logger.error(e)
           result[OGS_C.P_WEIGHT_STR] = int(result[OGS_C.P_WEIGHT_STR])
           result[OGS_C.SECONDS_STR] = td(seconds=float(
-            result[OGS_C.SECONDS_STR].replace(OGS_C.SPACE_STR,
-                                              OGS_C.ZERO_STR)))
+            result[OGS_C.SECONDS_STR].replace(
+              OGS_C.SPACE_STR,
+              OGS_C.ZERO_STR
+            )
+          ))
           result[OGS_C.P_TIME_STR] = result[OGS_C.P_TIME_STR].replace(
-            OGS_C.SPACE_STR, OGS_C.ZERO_STR)
+            OGS_C.SPACE_STR,
+            OGS_C.ZERO_STR
+          )
           date = event_spacetime[0]
           min = td(minutes=int(result[OGS_C.P_TIME_STR][2:]))
           hrs = td(hours=int(result[OGS_C.P_TIME_STR][:2]))
           result[OGS_C.P_TIME_STR] = datetime(
-            date.year, date.month, date.day) + hrs + min
+            date.year, date.month, date.day
+          ) + hrs + min
           if (self.start is not None and
               result[OGS_C.P_TIME_STR] < self.start):
             event_detect = -1 # Error
-            self.logger.debug(f"Skipping event before start date: {self.start}")
+            self.logger.debug("Skipping event before start date:"
+                              f"{self.start}")
             self.logger.debug(line)
             continue
           if (self.end is not None and
@@ -243,23 +250,28 @@ class DataFileHPL(OGSDataFile):
               result[OGS_C.DATE_STR].minute
             ) + result[OGS_C.SECONDS_STR],
             result[OGS_C.LONGITUDE_STR], result[OGS_C.LATITUDE_STR],
-            result[OGS_C.DEPTH_STR])
+            result[OGS_C.DEPTH_STR]
+          )
           # # Number of Observations
           result[OGS_C.NO_STR] = int(result[OGS_C.NO_STR].replace(
-            OGS_C.SPACE_STR, OGS_C.ZERO_STR)) \
-              if result[OGS_C.NO_STR] else OGS_C.NONE_STR
+            OGS_C.SPACE_STR,
+            OGS_C.ZERO_STR
+          )) if result[OGS_C.NO_STR] else OGS_C.NONE_STR
           # # Gap
           result[OGS_C.GAP_STR] = int(result[OGS_C.GAP_STR].replace(
-            OGS_C.SPACE_STR, OGS_C.ZERO_STR)) \
-              if result[OGS_C.GAP_STR] else OGS_C.NONE_STR
+            OGS_C.SPACE_STR,
+            OGS_C.ZERO_STR
+          )) if result[OGS_C.GAP_STR] else OGS_C.NONE_STR
           # # DMIN
           result[OGS_C.DMIN_STR] = float(result[OGS_C.DMIN_STR].replace(
-            OGS_C.SPACE_STR, OGS_C.ZERO_STR)) \
-              if result[OGS_C.DMIN_STR] else OGS_C.NONE_STR
-          # # RMS
-          result[OGS_C.RMS_STR] = float(result[OGS_C.RMS_STR].replace(
-            OGS_C.SPACE_STR, OGS_C.ZERO_STR)) \
-              if result[OGS_C.RMS_STR] else OGS_C.NONE_STR
+            OGS_C.SPACE_STR,
+            OGS_C.ZERO_STR
+          )) if result[OGS_C.DMIN_STR] else OGS_C.NONE_STR
+          # # ERT
+          result[OGS_C.ERT_STR] = float(result[OGS_C.ERT_STR].replace(
+            OGS_C.SPACE_STR,
+            OGS_C.ZERO_STR
+          )) if result[OGS_C.ERT_STR] else OGS_C.NONE_STR
           # # Quality Metric
           result[OGS_C.QM_STR] = result[OGS_C.QM_STR].strip(OGS_C.SPACE_STR) \
             if result[OGS_C.QM_STR] else OGS_C.NONE_STR
@@ -268,7 +280,7 @@ class DataFileHPL(OGSDataFile):
             result[OGS_C.INDEX_STR], *event_spacetime, result[OGS_C.GAP_STR],
             result[OGS_C.ERZ_STR], result[OGS_C.ERH_STR],
             event_spacetime[0].strftime(OGS_C.DATE_FMT), result[OGS_C.NO_STR],
-            0, 0, None, result[OGS_C.MAGNITUDE_D_STR], None, None, None
+            0, 0, None, result[OGS_C.MAGNITUDE_D_STR], None, None, None, None
           ])
           continue
         match = self.LOCATION_EXTRACTOR.match(line)
@@ -301,8 +313,9 @@ class DataFileHPL(OGSDataFile):
       OGS_C.LATITUDE_STR, OGS_C.DEPTH_STR, OGS_C.GAP_STR, OGS_C.ERZ_STR,
       OGS_C.ERH_STR, OGS_C.GROUPS_STR, OGS_C.NO_STR,
       OGS_C.NUMBER_P_PICKS_STR, OGS_C.NUMBER_S_PICKS_STR,
-      OGS_C.NUMBER_P_AND_S_PICKS_STR, OGS_C.ML_STR, OGS_C.ML_MEDIAN_STR,
-      OGS_C.ML_UNC_STR, OGS_C.ML_STATIONS_STR
+      OGS_C.NUMBER_P_AND_S_PICKS_STR, OGS_C.MAGNITUDE_D_STR,
+      OGS_C.MAGNITUDE_L_STR, OGS_C.ML_MEDIAN_STR, OGS_C.ML_UNC_STR,
+      OGS_C.ML_STATIONS_STR
     ])
     self.EVENTS[OGS_C.GROUPS_STR] = pd.to_datetime(
       self.EVENTS[OGS_C.TIME_STR], format=OGS_C.DATE_FMT)

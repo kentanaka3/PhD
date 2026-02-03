@@ -11,7 +11,7 @@ def parse_arguments() -> argparse.Namespace:
     description="OGS Stations Module",
   )
   parser.add_argument(
-    "-d", "--directory", type=Path, required=True,
+    "-s", "--stations", type=Path, required=True,
     help="Directory containing station files",
   )
   parser.add_argument(
@@ -21,10 +21,10 @@ def parse_arguments() -> argparse.Namespace:
   parser.add_argument(
     "-D", "--dates", required=False, metavar=OGS_C.DATE_STD,
     type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
-    default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
-             datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
+    default=[datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT),
+             datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT)],
     help="Specify the beginning and ending (inclusive) Gregorian date " \
-          "(YYMMDD) range to work with."
+          "(YYYYMMDD) range to work with."
   )
   return parser.parse_args()
 

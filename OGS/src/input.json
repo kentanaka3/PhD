@@ -1,0 +1,31 @@
+{
+  "algorithms": [
+    "AdvancedDensityPeaks",
+    "HDBSCAN",
+    "KMeans"
+  ],
+  "angles_deg": [160],
+  "annotations": [
+    [13.20, 42.57, "Cittareale"],
+    [13.36, 42.56, "Campotosto"]
+  ],
+  "cross_km": [-10, 10, 15, 0],
+  "cluster_size_range": [25, 600, 75],
+  "directory": "/Users/admin/Desktop/Monica/PhD/catalog/unknown/.all",
+  "eval_metrics": [
+    "SilhouetteScore",
+    "DaviesBouldinScore"
+  ],
+  "map_km": [30, 55],
+  "map_deg": [13.09, 13.46, 42.44, 42.61],
+  "n_jobs": -1,
+  "num_clusters_range": [3, 10, 1],
+  "random_state": 42,
+  "ranges": [
+    ["2009-04-01", "2009-12-31"],
+    ["2010-01-01", "2016-08-23"],
+    ["2016-10-30", "2017-01-17"],
+    ["2017-01-18", "2017-08-30"]
+  ],
+  "z_range": [0.0, 10.0, 1.0]
+}

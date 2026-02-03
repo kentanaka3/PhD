@@ -204,13 +204,13 @@ def parse_arguments() -> argparse.Namespace:
     type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
     default=[datetime.min, datetime.max - OGS_C.ONE_DAY],
     help="Specify the beginning and ending (inclusive) Gregorian date " \
-         "(YYMMDD) range to work with.")
+         "(YYYYMMDD) range to work with.")
 
   # -J/--julian: Julian date range (YYDDD format)
   date_group.add_argument(
     '-J', "--julian", required=False, metavar=OGS_C.DATE_STD,
     action=OGS_C.SortDatesAction, type=OGS_C.is_julian, default=None, nargs=2,
-    help="Specify the beginning and ending (inclusive) Julian date (YYMMDD) " \
+    help="Specify the beginning and ending (inclusive) Julian date (YYYYDDD) "\
          "range to work with.")
 
   # -o/--output: Output directory for the merged catalog

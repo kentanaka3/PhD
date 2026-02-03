@@ -44,14 +44,14 @@ class OGSCatalogBuilderMPI(CatalogBuilder):
     self.data.populate_status(status)
 
     for module in (
-        list(self.group_modules.values())
-        + [self.merge_module]
-        + list(self.joint_modules.values())
+      list(self.group_modules.values())
+      + [self.merge_module]
+      + list(self.joint_modules.values())
     ):
-        logger.debug(f"Setting up {module.name}")
-        for param in module.output_keys():
-            status.register_parameter(param, duplicate=True)
-            module.setup(status)
+      logger.debug(f"Setting up {module.name}")
+      for param in module.output_keys():
+        status.register_parameter(param, duplicate=True)
+        module.setup(status)
 
     self._write_citations()
     self._write_versions()
@@ -62,53 +62,57 @@ class OGSCatalogBuilderMPI(CatalogBuilder):
     regrouped = self._regroup(groups)
 
     self._regrouped_to_df(regrouped).to_csv(
-        self.output_path / "groups.csv", index=False
+      self.output_path / "groups.csv", index=False
     )
 
     for group, subgroups in regrouped.items():
-        logger.debug(f"Setting up group {group}")
-        group_status = GroupStatus(group, self.output_path)
-        group_status.update(status, deepcopy=False)
+      logger.debug(f"Setting up group {group}")
+      group_status = GroupStatus(group, self.output_path)
+      group_status.update(status, deepcopy=False)
 
-        group_status.register_parameter("data_func")
-        group_status.set_param(
-            functools.partial(self._get_multigroup, self.data.get_group, subgroups),
-            "data_func",
-            None,
-        )
+      group_status.register_parameter("data_func")
+      group_status.set_param(
+        functools.partial(
+          self._get_multigroup,
+          self.data.get_group,
+          subgroups
+        ),
+        "data_func",
+        None,
+      )
 
-        for module in self.group_modules.values():
-            module.run(group_status)
+      for module in self.group_modules.values():
+        module.run(group_status)
 
-        group_statuses.append(group_status)
+      group_statuses.append(group_status)
 
     self.merge_module.run(status, group_statuses)
 
     for module in self.joint_modules.values():
-        module.run(status)
+      module.run(status)
 
     # Trigger computations and write outputs
     logger.debug("Starting computation")
     outputs = [status.get_param(out) for out in self.outputs]
     if self.adaptive_maximum is not None:
-        self.cluster.adapt(minimum=1, maximum=self.adaptive_maximum)
+      self.cluster.adapt(minimum=1, maximum=self.adaptive_maximum)
 
     with dask.config.set(delayed_optimize=self._optimize_dask_graph):
-        with dask.distributed.performance_report(
-            self.output_path / "dask-report.html"
-        ):
-            outputs = client.compute(outputs, sync=True)
+      with dask.distributed.performance_report(
+        self.output_path / "dask-report.html"
+      ):
+        outputs = client.compute(outputs, sync=True)
 
     logger.debug("Writing outputs")
     for param, output in zip(self.outputs, outputs):
-        for output_format in self.formats:
-            if output_format == "csv":
-                output.to_csv(self.output_path / (param + ".csv"), index=False)
-            elif output_format == "parquet":
-                output.to_parquet(
-                    self.output_path / (param + ".parquet"), index=False
-                )
-            else:
-                raise NotImplementedError(f"Unknown format '{output_format}'")
+      for output_format in self.formats:
+        if output_format == "csv":
+          output.to_csv(self.output_path / (param + ".csv"), index=False)
+        elif output_format == "parquet":
+          output.to_parquet(
+              self.output_path / (param + ".parquet"), index=False
+          )
+        else:
+          raise NotImplementedError(f"Unknown format '{output_format}'")
 
     client.shutdown()

@@ -32,7 +32,7 @@ class DataFileTXT(OGSDataFile):
     fr"^(?P<{OGS_C.INDEX_STR}>\d{{5}})\s"                           # Index
     fr"\d{{4}}_\d{{5}}\s"                                           # Unused
     fr"(?P<{OGS_C.TIME_STR}>\d{{4}}-\d{{2}}-\d{{2}}T"               # Date
-    fr"\d{{2}}:\d{{2}}:\d{{2}}\.\d{{2}})\d\s"                       # Time
+    fr"\d{{2}}:\d{{2}}:\d{{2}}\.\d{{3}})\s"                         # Time
     fr"(?P<{OGS_C.ERT_STR}>([\s\d]\d\.\d{{2}}|\-{{5}}))\s"          # ERT
     fr"(?P<{OGS_C.LATITUDE_STR}>(\d{{2}}\.\d{{4}}|\-{{7}}))\s"      # Latitude
     fr"(?P<{OGS_C.LONGITUDE_STR}>(\d{{2}}\.\d{{4}}|\-{{7}}))\s"     # Longitude
@@ -40,8 +40,8 @@ class DataFileTXT(OGSDataFile):
     fr"(?P<{OGS_C.DEPTH_STR}>([\s\d]{{2}}\d\.\d|\-{{5}}))\s"        # Depth
     fr"(?P<{OGS_C.ERZ_STR}>([\s\d]{{2}}\d\.\d|\-{{5}}))\s"          # ERZ
     fr"(?P<{OGS_C.GAP_STR}>([\s\d\-]{{3}}))\s"                      # GAP
-    fr"(?P<{OGS_C.MAGNITUDE_D_STR}>([\-\s\d]\d\.\d|\-{{4}}))\s"     # MD
     fr"(?P<{OGS_C.MAGNITUDE_L_STR}>([\-\s\d]\d\.\d|\-{{4}}))\s"     # ML
+    fr"(?P<{OGS_C.MAGNITUDE_D_STR}>([\-\s\d]\d\.\d|\-{{4}}))\s"     # MD
     fr"(?P<{OGS_C.LOC_NAME_STR}>[\w\s\(\)]+)\s"                     # Place
     fr"(?P<{OGS_C.EVENT_TYPE_STR}>\[.*\])$"                         # Unused
   ]
@@ -65,11 +65,41 @@ class DataFileTXT(OGSDataFile):
           continue
         if (self.end is not None and
             result[OGS_C.TIME_STR] > self.end + OGS_C.ONE_DAY):
-          self.logger.debug(f"Stopping read at event after end date: {self.end}")
+          self.logger.debug("Stopping read at event after end date:"
+                            f"{self.end}")
           self.logger.debug(line)
           break
-        SOURCE.append(result)
-    self.EVENTS = pd.DataFrame(SOURCE)
+        SOURCE.append([result[OGS_C.INDEX_STR],
+                       result[OGS_C.TIME_STR],
+                       result[OGS_C.ERT_STR],
+                       result[OGS_C.LATITUDE_STR],
+                       result[OGS_C.LONGITUDE_STR],
+                       result[OGS_C.ERH_STR],
+                       result[OGS_C.DEPTH_STR],
+                       result[OGS_C.ERZ_STR],
+                       result[OGS_C.GAP_STR],
+                       result[OGS_C.MAGNITUDE_L_STR],
+                       result[OGS_C.MAGNITUDE_D_STR],
+                       result[OGS_C.LOC_NAME_STR],
+                       result[OGS_C.EVENT_TYPE_STR]])
+    self.EVENTS = pd.DataFrame(SOURCE, columns=[
+      OGS_C.INDEX_STR,
+      OGS_C.TIME_STR,
+      OGS_C.ERT_STR,
+      OGS_C.LATITUDE_STR,
+      OGS_C.LONGITUDE_STR,
+      OGS_C.ERH_STR,
+      OGS_C.DEPTH_STR,
+      OGS_C.ERZ_STR,
+      OGS_C.GAP_STR,
+      OGS_C.MAGNITUDE_L_STR,
+      OGS_C.MAGNITUDE_D_STR,
+      OGS_C.LOC_NAME_STR,
+      OGS_C.EVENT_TYPE_STR,
+    ])
+    if self.EVENTS.empty:
+      self.logger.warning(f"No valid TXT records found in {self.input}")
+      return
     self.EVENTS[OGS_C.INDEX_STR] = \
       self.EVENTS[OGS_C.INDEX_STR].apply(int) + \
         self.EVENTS[OGS_C.TIME_STR].dt.year * OGS_C.MAX_PICKS_YEAR # type: ignore
@@ -101,10 +131,14 @@ class DataFileTXT(OGSDataFile):
       pd.to_datetime(self.EVENTS[OGS_C.TIME_STR])
     self.EVENTS[OGS_C.NOTES_STR] = None
     self.EVENTS = self.EVENTS.astype({ OGS_C.INDEX_STR: int})
-    self.EVENTS = self.EVENTS[
-      (self.EVENTS[OGS_C.TIME_STR].between(
-        self.start, self.end + OGS_C.ONE_DAY)) &
-      (self.EVENTS[OGS_C.EVENT_TYPE_STR] != "[suspected explosion]")]
+    self.EVENTS = self.EVENTS[(
+      self.EVENTS[OGS_C.TIME_STR].between(
+        self.start,
+        self.end + OGS_C.ONE_DAY
+      )
+    ) & (
+      self.EVENTS[OGS_C.EVENT_TYPE_STR] != "[suspected explosion]"
+    )]
     for date, df in self.EVENTS.groupby(OGS_C.GROUPS_STR):
       self.events[UTCDateTime(date).date] = df
 

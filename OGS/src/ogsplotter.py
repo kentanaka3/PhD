@@ -7,14 +7,12 @@ import cartopy.feature as cfeature
 import matplotlib.patches as mpatches
 from pathlib import Path
 from obspy import UTCDateTime
+from matplotlib.axes import Axes
 from obspy.geodetics import gps2dist_azimuth
 from datetime import datetime, timedelta as td
 from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 
 import ogsconstants as OGS_C
-
-IMG_PATH = Path(__file__).parent.parent / "img"
-IMG_PATH.mkdir(parents=True, exist_ok=True)
 
 def v_lat_long_to_distance(lng1, lat1, depth1, lng2, lat2, depth2, dim=2):
   return [np.sqrt((gps2dist_azimuth(lt1, lg1, lt2, lg2)[0] / 1000.0) ** 2 +
@@ -33,8 +31,7 @@ class plotter:
     if output is not None:
       self.output = output
     if self.output is not None:
-      plt.savefig(Path(IMG_PATH, self.output), bbox_inches='tight', dpi=300,
-                  **kwargs)
+      plt.savefig(Path(self.output), bbox_inches='tight', dpi=300, **kwargs)
       print(f"Figure saved to {self.output}")
 
 class line_plotter(plotter):
@@ -43,7 +40,7 @@ class line_plotter(plotter):
       color=OGS_C.OGS_BLUE, gs=111, label=None, legend=False, ylim=(-100, 100),
       output=None, xlim=None) -> None:
     super().__init__(fig=fig)
-    self.ax = self.fig.add_subplot(gs)
+    self.ax: Axes = self.fig.add_subplot(gs)
     if xlabel: self.ax.set_xlabel(xlabel)
     if ylabel: self.ax.set_ylabel(ylabel)
     if title: self.ax.set_title(title)
@@ -73,7 +70,7 @@ class event_plotter(plotter):
         output=None, ylabel="Epicentral Distance (km)", ylim=(-100, 100),
         center=None) -> None:
     super().__init__(fig=fig)
-    self.ax = self.fig.add_subplot(111)
+    self.ax: Axes = self.fig.add_subplot(111)
     self.pick_time = op.UTCDateTime(event[OGS_C.TIME_STR])
     self.event = event
     self.waveforms = waveforms
@@ -208,7 +205,7 @@ class stream_plotter(plotter):
                xlabel="Time (s)", ylabel="Amplitude", color=OGS_C.OGS_BLUE,
                output=None) -> None:
     super().__init__(fig=fig)
-    self.ax = self.fig.add_subplot(gs)
+    self.ax: Axes = self.fig.add_subplot(gs)
     if title:
       self.ax.set_title(title)
     if xlabel:
@@ -228,7 +225,7 @@ class day_plotter(plotter):
     x = picks.value_counts().sort_index()
     y = np.cumsum(x.values)
     x = [UTCDateTime(xx).date for xx in x.index]
-    self.ax = self.fig.add_subplot(111)
+    self.ax: Axes = self.fig.add_subplot(111)
     if ylabel:
       self.ax.set_ylabel(ylabel)
     if title:
@@ -257,7 +254,7 @@ class day_plotter(plotter):
                color=None, legend=None, savefig=False) -> None:
     x = picks.value_counts().sort_index()
     y = np.cumsum(x.values)
-    x = x.index
+    x = [UTCDateTime(xx).date for xx in x.index]
     if color == None:
       self.ax.plot(x, y, label=label)
     else:
@@ -283,7 +280,7 @@ class map_plotter(plotter):
     assert len(domain) == 4, "Domain must be a list of four floats: [min_lon, max_lon, min_lat, max_lat]"
     super().__init__(fig=fig)
     self.proj = proj
-    self.ax = self.fig.add_subplot(gs, projection=self.proj)
+    self.ax: Axes = self.fig.add_subplot(gs, projection=self.proj)
     self.marker = marker
     self.output = output
     self.s = s
@@ -383,7 +380,7 @@ class scatter_plotter(plotter):
                marker='o', aspect=None, edgecolors=OGS_C.OGS_BLUE,
                facecolors=OGS_C.OGS_BLUE, output=None) -> None:
     super().__init__(fig=fig)
-    self.ax = self.fig.add_subplot(gs)
+    self.ax: Axes = self.fig.add_subplot(gs)
     if xlabel:
       self.ax.set_xlabel(xlabel)
     if ylabel:
@@ -476,16 +473,14 @@ class histogram_plotter(plotter):
     if savefig: self.savefig(output=output)
 
   def add_plot(self, data, xlabel=None, ylabel=None, title=None, step=False,
-               color=OGS_C.MEX_PINK, label=None, legend=None, facecolor=None,
-               edgecolor=None, alpha=0.5, output=None, savefig=False,
-               xscale=None, yscale=None) -> None:
+               color=OGS_C.MEX_PINK, label=None, legend=None, alpha=0.5,
+               output=None, savefig=False, xscale=None, yscale=None) -> None:
+    y, _ = np.histogram(data, bins=self.bins)
     if step:
-      y, _ = np.histogram(data, bins=self.bins)
       self.ax.step(self.bins[:-1], y, color=color, label=label, where='mid')
     else:
       self.ax.hist(data, bins=self.bins[:-1], color=color, # type: ignore
-                   label=label, facecolor=facecolor, edgecolor=edgecolor,
-                   align='right', alpha=alpha)
+                   label=label, align='right', alpha=alpha)
     if xlabel:
       self.ax.set_xlabel(xlabel)
     if ylabel:
@@ -500,6 +495,7 @@ class histogram_plotter(plotter):
       self.ax.set_xscale(xscale)
     if yscale is not None:
       self.ax.set_yscale(yscale)
+    self.ax.step(self.bins[:-1], y, color=color, label=label, where='mid')
     if output is not None: savefig = True
     if savefig: self.savefig(output=output)
 
@@ -508,7 +504,7 @@ class ConfMtx_plotter(plotter):
                color=OGS_C.MEX_PINK, gs=111, label=None, legend=False,
                facecolor=None, edgecolor=None, output=None) -> None:
     super().__init__(fig=fig, figsize=(10, 5))
-    self.ax = self.fig.add_subplot(gs)
+    self.ax: Axes = self.fig.add_subplot(gs)
     if title: self.ax.set_title(title)
     disp = ConfMtxDisp(data, display_labels=label)
     disp.plot(values_format='d', colorbar=True, ax=self.ax)
