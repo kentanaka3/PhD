@@ -35,6 +35,8 @@ def parse_arguments():
          "(YYMMDD) range to work with.")
   parser.add_argument("-W", "--waveforms", type=Path, required=True,
                       help="Path to the waveforms directory")
+  parser.add_argument("-S", "--stations", type=Path, required=True,
+                      help="Directory containing station files")
   parser.add_argument("-b", "--batch_size", type=int, default=BATCH_SIZE,
                       help="Batch size for training")
   parser.add_argument("-d", "--download", action="store_true",
@@ -60,10 +62,10 @@ class OGSTrainer:
     self.metadata_path = Path(".") / "metadata.csv"
     self.waveforms_path = Path(".") / "waveforms.hdf5"
     self.start, self.end = args.dates
-    self.waveforms = OGS_C.waveforms(args.waveforms, self.start, self.end)
+    self.waveforms = OGS_C.waveforms(args.waveforms, args.stations, self.start, self.end)
     self.stations = {
-      station.split(".")[1] : station for date in self.waveforms.values()
-        for station in date.keys()
+      sta: f"{net}.{sta}."
+      for net, sta in self.waveforms[[OGS_C.NETWORK_STR, OGS_C.STATION_STR]].drop_duplicates().values
     }
     add = {}
     for key, val in self.stations.items():

@@ -1,0 +1,295 @@
+\documentclass[12pt, a4paper]{report}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{csquotes}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{a4paper, left=10mm, right=10mm, top=20mm, bottom=17mm,
+          bindingoffset=6mm, headheight=15pt}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{graphicx}
+\graphicspath{ {../img/} }
+\usepackage{amsmath, amssymb, amsfonts, amsthm}
+\usepackage[utf8]{inputenc}
+\usepackage[
+  style=authoryear,
+  backend=biber,
+  maxbibnames=99,
+  maxcitenames=2,
+  minnames=1,
+  sorting=nyt,
+  natbib=true,
+  url=true,
+  doi=true,
+  eprint=false,
+  isbn=false,
+]{biblatex}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{multicol}
+\usepackage{comment}
+\usepackage{hyperref}
+\usepackage{acro}
+\usepackage{pdflscape}
+\usepackage[none]{hyphenat}
+\usepackage{float}
+\usepackage{color}
+\usepackage[table]{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\addbibresource{lib.bib}
+\sloppy
+\newenvironment{absolutelynopagebreak}
+  {\par\nobreak\vfil\penalty0\vfilneg
+   \vtop\bgroup}
+  {\par\xdef\tpd{\the\prevdepth}\egroup
+   \prevdepth=\tpd}
+\DeclareAcronym{ML}{short = ML, long = Machine Learning}
+\DeclareAcronym{CNN}{short = CNN, long = Convolutional Neural Network}
+\DeclareAcronym{RNN}{short = RNN, long = Recurrent Neural Network}
+\DeclareAcronym{OGS}{short = OGS, long = Istituto Nazionale di Oceanografia e di Geofisica Sperimentale}
+\DeclareAcronym{PNRR}{short = PNRR, long = Piano Nazionale di Ripresa e Resilienza}
+\DeclareAcronym{TeRABIT}{short = TeRABIT, long = Terabit Network for Research and Academic Big Data in Italy}
+\DeclareAcronym{INGV}{short = INGV, long = Istituto Nazionale di Geofisica e Vulcanologia}
+\DeclareAcronym{INSTANCE}{short = INSTANCE, long = Italian Seismic Dataset for Machine Learning, cite=INSTANCE}
+\DeclareAcronym{SCEDC}{short = SCEDC, long = Southern California Earthquake Data Center, cite=SCEDC}
+\DeclareAcronym{STEAD}{short = STEAD, long = STanford EArthquake Dataset, cite=STEAD}
+\DeclareAcronym{GaMMA}{short = GaMMA, long = Gaussian Mixture Model Associator, cite=GaMMA}
+\DeclareAcronym{EQTransformer}{short = EQTransformer, long = Earthquake Transformer, cite=EQTransformer}
+\DeclareAcronym{KNN}{short = KNN, long = K-Nearest Neighbors}
+\DeclareAcronym{SVM}{short = SVM, long = Support Vector Machine}
+\DeclareAcronym{RF}{short = RF, long = Random Forest}
+\DeclareAcronym{LSTM}{short = LSTM, long = Long Short-Term Memory}
+\DeclareAcronym{GRU}{short = GRU, long = Gated Recurrent Unit}
+\DeclareAcronym{MLP}{short = MLP, long = Multilayer Perceptron}
+\DeclareAcronym{PCA}{short = PCA, long = Principal Component Analysis}
+\DeclareAcronym{SVD}{short = SVD, long = Singular Value Decomposition}
+\DeclareAcronym{FFT}{short = FFT, long = Fast Fourier Transform}
+\DeclareAcronym{STFT}{short = STFT, long = Short-Time Fourier transform}
+\DeclareAcronym{FN}{short = FN, long = False Negative}
+\DeclareAcronym{FP}{short = FP, long = False Positive}
+\DeclareAcronym{TN}{short = TN, long = True Negative}
+\DeclareAcronym{TP}{short = TP, long = True Positive}
+\DeclareAcronym{F1}{short = F1, long = F1 Score}
+\DeclareAcronym{SNR}{short = SNR, long = Signal-to-Noise Ratio}
+\DeclareAcronym{DL}{short = DL, long = Deep Learning}
+\DeclareAcronym{HPC}{short = HPC, long = High-Performance Computing}
+\DeclareAcronym{MPI}{short = MPI, long = Message Passing Interface}
+\DeclareAcronym{CUDA}{short = CUDA, long = Compute Unified Device Architecture}
+\DeclareAcronym{API}{short = API, long = Application Programming Interface}
+\DeclareAcronym{AIC}{short = AIC, long = Akaike Information Criterion}
+\DeclareAcronym{STA/LTA}{short = STA/LTA, long = Short-Time Average/Long-Time Average}
+\DeclareAcronym{GPU}{short = GPU, long = Graphics Processing Unit}
+\DeclareAcronym{CPU}{short = CPU, long = Central Processing Unit}
+\DeclareAcronym{RAM}{short = RAM, long = Random Access Memory}
+\DeclareAcronym{SSD}{short = SSD, long = Solid State Drive}
+\DeclareAcronym{HDD}{short = HDD, long = Hard Disk Drive}
+\DeclareAcronym{CM}{short = CM, long = Confusion Matrix}
+\DeclareAcronym{SMINO}{short = SMINO, long = Northeast Italy Monitoring System}
+\DeclareAcronym{FVG}{short = FVG, long = Friuli Venezia Giulia}
+\usepackage[onehalfspacing]{setspace}
+\begin{document}
+  \begin{titlepage}
+    \begin{singlespace}
+      \begin{center}
+        \includegraphics[height=2.1cm]{SISSA.png}\hfill
+        \includegraphics[height=2.7cm]{MHPC.png}\hfill
+        \includegraphics[height=2.1cm]{ICTP.jpg}
+        \vspace{1.5cm}
+
+        {\scshape\LARGE Master in High Performance Computing \par}
+        \vspace{1.5cm}
+        {\huge\bfseries Procedural Machine Learning Pipeline for Earthquake Pick 
+        Detection and\\ Phase Association using \par High-Performance and 
+        Cloud Computing infrastructures \par}
+      \end{center}
+      \vspace{2cm}
+      \vfill
+      \textit{Supervisor(s)}:\par
+      Dr. \textsc{Monica Sugan},\par
+      Dr. \textsc{Serafina Di Gioia}
+      \vspace{1cm}
+      \begin{flushright}
+        \textit{Candidate}:\par Ken \textsc{Tanaka Hernández}
+      \end{flushright}
+      \vfill
+      \centering
+      {\large\textsc{$10^{\mathrm{th}}$ edition}\\[0.1cm]2023 -- 2024}
+      \vfill
+      \includegraphics[height=2cm]{MHPC.png}
+    \end{singlespace}
+  \end{titlepage}
+  \pagenumbering{gobble}
+  \chapter*{Acknowledgements}
+  \input{chapters/acknowledgements.tex}
+  \newpage
+  \begin{abstract}
+    A rapid increase in continuous seismic data volumes demands automated 
+    solutions that can operate efficiently at regional scales. This work 
+    evaluates an end-to-end, scalable machine-learning (ML) pipeline for 
+    earthquake detection and characterization, designed for deployment in a 
+    high-performance computing (HPC) environment. The pipeline integrates 
+    publicly available models from the seismological community 
+    (\cite{SeisBench}) and addresses the challenges of large-scale seismic 
+    processing by combining advanced computational techniques with 
+    state-of-the-art ML methods. It is configured to process seismic data 
+    collected by the Northeast Italy Monitoring System (\cite{SMINO}), managed 
+    by the Istituto Nazionale di Oceanografia e di Geofisica Sperimentale - 
+    OGS, as well as data from other Italian and international seismic networks 
+    in neighboring region and countries. This enables a comprehensive regional 
+    analysis of seismic activity in northeastern Italy, allowing OGS to support 
+    civil protection by issuing alerts when earthquakes occur and providing 
+    rapid event solutions along with preliminary estimates of ground shaking.
+
+    The workflow includes specialized modules for phase picking (PhaseNet, 
+    \cite{PhaseNet}; EQTransformer, \cite{EQTransformer}), event association 
+    (GaMMA, \cite{GaMMA}; PyOcto, \cite{PyOcto}), hypocenter localization 
+    (NonLinLoc, \cite{NonLinLoc}), and magnitude estimation 
+    (@Jannes, can you  please add the proper reference for your code?). 
+    Deep-learning phase pickers for NE Italy are extensively evaluated using 
+    diverse training datasets, including INSTANCE (\cite{INSTANCE}), STEAD 
+    (\cite{STEAD}), SCEDC (\cite{SCEDC}), and the original PhaseNet training 
+    dataset, to determine the most effective combinations and ensure robust 
+    detection across the region. To rigorously validate the pipeline, a 
+    physically informed evaluation framework is introduced, based on a 
+    domain-specific confusion matrix that defines “matched,” “missed,” and 
+    “proposed” detections using strict criteria, including temporal tolerances 
+    of 0.5 s for picks and 1.5 s for events, and spatial constraints of 3 km 
+    for event locations. A bipartite optimization scheme based on weighted 
+    similarity scores is used to resolve ambiguities and ensure accurate 
+    one-to-one matching with the OGS reference catalogs (e.g. 
+    \cite{RSINO2020, RSINO2021}; \cite{Brondi2023, Brondi2025}). 
+    Performance is quantified through recall, complemented by detailed analyses 
+    of timing, spatial, and magnitude residuals to characterize systematic 
+    biases and uncertainties. Supported by a HPC infrastructure, this 
+    methodology establishes a robust, transparent, and reproducible standard 
+    for benchmarking automated seismic monitoring systems in modern, 
+    data-intensive seismology.
+
+    Results show that the pipeline achieves high fidelity in detecting P- and 
+    S-wave arrivals and in associating events, substantially outperforming 
+    traditional CPU-only implementations in both speed and scalability. The HPC 
+    architecture provides enhanced operational flexibility, enabling rapid 
+    near-real-time analysis as well as large-scale historical reprocessing on 
+    the same platform. Overall, the proposed framework offers a practical 
+    blueprint for next-generation regional earthquake monitoring in 
+    environments characterized by continuously growing data volumes.
+
+  \end{abstract}
+  \newpage
+  \pagenumbering{roman}
+  \tableofcontents
+  \begin{singlespace}
+    \listoffigures
+    \listoftables
+    \printacronyms
+  \end{singlespace}
+  \chapter{Introduction}
+  \pagenumbering{arabic}
+  In this thesis, we present a procedural \ac{ML} pipeline for
+  earthquake pick detection and phase association designed to operate across 
+  \ac{HPC} infrastructures. The objective is to enhance 
+  the accuracy, reproducibility, and operational readiness of seismic data 
+  processing workflows in the context of regional seismic monitoring. The 
+  motivation for this work arises from the increasing volume and complexity of 
+  continuous seismic waveform data recorded by dense seismic networks 
+  worldwide, which needs an automated, scalable solution for earthquake 
+  detection and characterization.
+
+  Earthquakes originate from the abrupt release of accumulated elastic strain 
+  within the Earth's lithosphere, producing seismic waves that propagate 
+  through both the interior and along the surface. The lithosphere itself is a 
+  mechanically heterogeneous and dynamically evolving system, continuously 
+  shaped by the interaction of tectonic plates driven by mantle convection. 
+  These interactions give rise to faulting, seismic activity, and other 
+  geodynamic phenomena. Seismometers are deployed on the surface to convert 
+  ground motion into continuous digital observations, enabling the extraction 
+  of diagnostic seismic phases (primarily P and S waves) that form the basis 
+  for earthquake location, magnitude estimation, and subsequent seismological 
+  analyses (\cite{lay1995modern}).
+
+  Classical automated picking procedures such as the short-term average to 
+  long-term average \ac{STA/LTA} method (\cite{STA/LTA}) and techniques based 
+  on the \ac{AIC} (\cite{LEONARD1999247}) provided foundational advancements in 
+  large-scale phase detection. However, their performance often deteriorates in 
+  low \ac{SNR} environments, or in the presence of complex wavefields commonly 
+  observed in tectonically active regions. Moreover, earthquake catalogs still 
+  rely on manual analyst revision, which introduces subjectivity and limits 
+  scalability when processing vast seismic archives. These limitations have 
+  motivated the search for more robust and generalizable detection strategies 
+  capable of handling heterogeneous, high-volume waveform datasets.
+
+  The increasing complexity and nonlinearity of seismic phenomena, together 
+  with the unprecedented growth of available continuous waveform archives, have 
+  stimulated significant interest in applying \ac{ML} methodologies to 
+  regional and global seismic monitoring. Recent advances in \ac{DL} 
+  have demonstrated compelling performance in phase picking, event detection, 
+  noise discrimination, and magnitude estimation, offering a transformative 
+  pathway toward fully automated seismic processing pipelines. In particular, 
+  ML algorithms excel at identifying subtle patterns embedded in large 
+  datasets, discovering latent structure, and generalizing across stations, 
+  networks, and tectonic settings.
+
+  Among modern ML frameworks, SeisBench \cite{SeisBench} provides a unified and 
+  extensible platform for deploying advanced DL models on seismic waveform 
+  data. It offers access to a diverse suite of pre-trained models, standardized 
+  APIs, and curated datasets, enabling systematic testing and benchmarking of 
+  model performance across different seismic contexts. At the same time, the 
+  evergrowing volume of data recorded by dense seismic networks, often reaching 
+  multiple terabytes per year, requires computational strategies that leverage 
+  parallel processing, GPU acceleration, and distributed data management. Such 
+  techniques are essential for enabling both large-scale retrospective 
+  reprocessing and near-real-time earthquake monitoring.
+
+  Against this backdrop, the present thesis investigates the application of ML 
+  techniques to automated P- and S-phase detection and subsequent event 
+  association using continuous seismic waveforms recorded by the North-East 
+  Italy Seismic Network (SMINO) \cite{Bragato2021}. The establishment of this 
+  network was motivated by the ML 6.4 Friuli earthquake of 1976, and it 
+  continues to serve as a fundamental instrument for civil protection activities 
+  in the region. By combining region-specific waveform characteristics with 
+  state-of-the-art ML models, this thesis aims to improve the timeliness and 
+  reliability of seismic monitoring in the northeastern Italian region.
+
+  The remainder of this thesis is structured as follows.
+
+  Chapter \ref{chap:dataDescription} provides a detailed overview of the 
+  seismic datasets used in this study, describes their acquisition by the 
+  North-East Italy Monitoring System, and outlines the data preparation and 
+  quality-control procedures.
+
+  Chapter \ref{chap:pipeline} introduces the complete preprocessing workflow 
+  and summarizes the state of the art in seismic phase picking and earthquake 
+  detection. It discusses the inherent challenges posed by complex waveform 
+  characteristics and highlights how ML-based approaches can address these 
+  limitations.
+
+  Chapter \ref{chap:performance} presents the HPC and cloud-computing 
+  environments used in this research, including the LEONARDO Cluster at CINECA 
+  and the Ada Cloud platform. The chapter details the hardware/software 
+  configurations, resource management strategies, and performance benefits 
+  associated with heterogeneous computational architectures. It also 
+  illustrates how the integration of HPC and cloud systems facilitates 
+  near-real-time processing capabilities essential for operational seismic 
+  monitoring.
+
+  Chapter \ref{chap:results} evaluates the performance of the ML models on 
+  regional seismic data using a suite of quantitative metrics, including 
+  cumulative pick counts, multi-class confusion matrices, true positives, false 
+  negatives, recall, and time residual analyses.
+
+  Finally, Chapter \ref{chap:conclusions} summarizes the principal findings, 
+  discusses the implications for automated regional seismic monitoring, and 
+  outlines future directions for research, including the potential integration 
+  of advanced associators, catalog-building methodologies, and real-time hazard 
+  assessment pipelines.
+
+  Through the combined use of cutting-edge ML methodologies, modern 
+  computational infrastructures, and a regionally focused case study, this 
+  thesis contributes to ongoing efforts to modernize seismic monitoring and to 
+  enhance the scientific understanding of seismic processes in northeastern 
+  Italy and beyond.
+  \input{chapters/dataDescription.tex}
+  \printbibliography
+\end{document}

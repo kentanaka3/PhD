@@ -3,7 +3,7 @@ _target_: dask_jobqueue.SLURMCluster
 n_workers: 1
 account: IscrC_AI2Seism
 queue: boost_usr_prod
-cores: 8
+cores: 32
 memory: 490000MB
 processes: 1
 worker_extra_args:

@@ -378,9 +378,8 @@ class OGSCatalog:
     plt.close()
 
   def plot(self,
-           others: list[OGSCatalog] = [],
-           waveforms: dict[str, dict[str, list[Path]]] = dict(),
-           output: Optional[Path] = None
+        others: list[OGSCatalog] = [],
+        vlines: list[tuple[datetime, str, str]] = []
       ) -> None:
     """Generate summary plots for events and picks.
 
@@ -393,44 +392,22 @@ class OGSCatalog:
     output : Optional[Path], optional
       Output path for plot files.
     """
-    i = 0
-    self.waveforms = waveforms
-    if not self.get("EVENTS").empty:
-      self.plot_events(others=others)
-      self.plot_erh_histogram(others=others)
-      self.plot_erz_histogram(others=others)
-      self.plot_ert_histogram(others=others)
-      self.plot_magnitude_histogram(others=others)
-      self.plot_depth_histogram(others=others)
-      self.plot_cumulative_events(others=others)
-      if others:
-        pass
-      i += 1
-    if not self.get("PICKS").empty:
-      i += 1
-      self.plot_cumulative_picks(others=others)
-    if i == 2:
-      if self.waveforms:
-        for idx, picks in self.PICKS[self.PICKS[OGS_C.IDX_PICKS_STR].isin(
-          self.EventsFN["idx"])].groupby([OGS_C.IDX_PICKS_STR,]): # type: ignore
-          event: pd.Series = self.EVENTS[
-            self.EVENTS[OGS_C.IDX_EVENTS_STR] == idx
-          ].iloc[0]
-          event[OGS_C.TIME_STR] = UTCDateTime(event[OGS_C.TIME_STR]).datetime
-          waveforms_day: dict[str, list[Path]] = self.waveforms.get(
-            event[OGS_C.TIME_STR].date(),
-            dict()
-          )
-          if waveforms_day:
-            self.plot_events_fn_waveforms(picks, event, waveforms_day)
+    self.plot_events(others=others)
+    self.plot_erh_histogram(others=others)
+    self.plot_erz_histogram(others=others)
+    self.plot_ert_histogram(others=others)
+    self.plot_magnitude_histogram(others=others)
+    self.plot_depth_histogram(others=others)
+    self.plot_cumulative_events(others=others, vlines=vlines)
+    self.plot_cumulative_picks(others=others, vlines=vlines)
 
-  def plot_events_fn_waveforms(self,
+  def plot_events_ms_waveforms(self,
         picks: pd.DataFrame,
         event: pd.Series,
         waveforms: dict[str, list[Path]],
         output: Optional[Path] = None
       ) -> None:
-    """Plot waveforms for false negative events.
+    """Plot waveforms for Missed (MS) events.
 
     Parameters
     ----------
@@ -448,24 +425,78 @@ class OGSCatalog:
     myfnplot = OGS_P.event_plotter(
       picks=picks,
       event=event,
+      stations=list(self.stations[OGS_C.STATION_STR].unique()),
       waveforms=waveforms,
       inventory=self.stations,
-      title=f"Missed (MS) Event {event[OGS_C.IDX_EVENTS_STR]} ({event[OGS_C.MAGNITUDE_L_STR] if OGS_C.MAGNITUDE_L_STR in event else OGS_C.EMPTY_STR}) | Proposed (PS) Picks {event[OGS_C.TIME_STR] - td(seconds=1)}",
+      title=(
+        f"Missed (MS) Event {event[OGS_C.IDX_EVENTS_STR]}" +
+        (f" ($M_L$ {event[OGS_C.MAGNITUDE_L_STR]})" \
+         if OGS_C.MAGNITUDE_L_STR in event else OGS_C.EMPTY_STR) +
+        f" | Proposed (PS) Picks {event[OGS_C.TIME_STR] - td(seconds=1)}"
+      ),
     )
-    myfppicks = self.PicksFP[
-      self.PicksFP[OGS_C.TIME_STR].between( # type: ignore
+    myfppicks = self.PICKS[
+      self.PICKS[OGS_C.TIME_STR].between( # type: ignore
         event[OGS_C.TIME_STR] - td(seconds=1),
         event[OGS_C.TIME_STR] + td(seconds=30)
       )
     ]
     myfnplot.add_plot(picks=myfppicks, flip=True,
-      output=output if output is not None else self.output / "img" / f"{self.input.name}_Event{event[OGS_C.IDX_EVENTS_STR]}_MSPS.png"
+      output=(output if output is not None else self.output / "img" /
+              f"{self.input.name}_MS{event[OGS_C.GROUPS_STR]}_{event[OGS_C.IDX_EVENTS_STR]}.png")
+    )
+    plt.close()
+
+  def plot_events_ps_waveforms(self,
+        picks: pd.DataFrame,
+        event: pd.Series,
+        waveforms: dict[str, list[Path]],
+        output: Optional[Path] = None
+      ) -> None:
+    """Plot waveforms for Proposed (PS) events.
+
+    Parameters
+    ----------
+    picks : pd.DataFrame
+      Picks to plot for the event.
+    event : pd.Series
+      Event row containing metadata.
+    waveforms : dict[str, list[Path]]
+      Waveform file paths grouped by station.
+    output : Optional[Path], optional
+      Output file path for the plot.
+    """
+    import ogsplotter as OGS_P
+    from matplotlib import pyplot as plt
+    mypsplot = OGS_P.event_plotter(
+      picks=picks,
+      event=event,
+      stations=list(self.stations[OGS_C.STATION_STR].unique()),
+      waveforms=waveforms,
+      inventory=self.stations,
+      title=(
+        f"Proposed (PS) Event {event[OGS_C.IDX_EVENTS_STR]}" +
+        (f" ($M_L$ {event[OGS_C.MAGNITUDE_L_STR]})" \
+          if OGS_C.MAGNITUDE_L_STR in event else OGS_C.EMPTY_STR) +
+        f" | Proposed (PS) Picks {event[OGS_C.TIME_STR] - td(seconds=1)}"
+      ),
+    )
+    mypspicks = self.PICKS[
+      self.PICKS[OGS_C.TIME_STR].between( # type: ignore
+        event[OGS_C.TIME_STR] - td(seconds=1),
+        event[OGS_C.TIME_STR] + td(seconds=30)
+      )
+    ]
+    mypsplot.add_plot(picks=mypspicks, flip=True,
+      output=(output if output is not None else self.output / "img" /
+              f"{self.input.name}_PS{event[OGS_C.GROUPS_STR]}_{event[OGS_C.IDX_EVENTS_STR]}.png")
     )
     plt.close()
 
   def plot_cumulative_picks(self,
                             others: list[OGSCatalog] = [],
-                            output: Optional[Path] = None):
+                            output: Optional[Path] = None,
+                            vlines: list[tuple[datetime, str, str]] = []):
     """Plot cumulative picks over time.
 
     Parameters
@@ -484,9 +515,11 @@ class OGSCatalog:
     cumulative = OGS_P.day_plotter(
       picks=picks.sort_values(OGS_C.GROUPS_STR)[OGS_C.GROUPS_STR],
       title=f"Cumulative Picks",
-      output=output if output is not None else self.output / "img" / f"{self.input.name}_CumulativePicks.png",
+      output=(output if output is not None else self.output / "img" /
+              f"{self.input.name}_CumulativePicks.png"),
       label=self.name,
       color=OGS_C.OGS_BLUE,
+      vlines=vlines
     )
     for other, color in zip(others, OGS_C.PLOT_COLORS[1:]):
       if not isinstance(other, OGSCatalog):
@@ -498,14 +531,18 @@ class OGSCatalog:
       cumulative.add_plot(
         picks=picks.sort_values(OGS_C.GROUPS_STR)[OGS_C.GROUPS_STR],
         title=f"Cumulative Picks",
-        output=output if output is not None else self.output / "img" / f"{self.input.name}_{other.input.name}_CumulativePicks.png",
+        output=(output if output is not None else self.output / "img" /
+                f"{self.input.name}_{other.input.name}_CumulativePicks.png"),
         label=other.name,
         legend=True,
         color=color,
       )
     plt.close()
 
-  def plot_cumulative_events(self, others: list[OGSCatalog] = [], output: Optional[Path] = None):
+  def plot_cumulative_events(self,
+                             others: list[OGSCatalog] = [],
+                             output: Optional[Path] = None,
+                             vlines: list[tuple[datetime, str, str]] = []):
     """Plot cumulative events over time.
 
     Parameters
@@ -524,9 +561,11 @@ class OGSCatalog:
     hist = OGS_P.day_plotter(
       picks=events.sort_values(OGS_C.GROUPS_STR)[OGS_C.GROUPS_STR],
       title=f"Cumulative Events",
-      output=output if output is not None else self.output / "img" / f"{self.input.name}_CumulativeEvents.png",
+      output=(output if output is not None else self.output / "img" /
+              f"{self.input.name}_CumulativeEvents.png"),
       label=self.name,
       color=OGS_C.OGS_BLUE,
+      vlines=vlines,
     )
     for other, color in zip(others, OGS_C.PLOT_COLORS[1:]):
       if not isinstance(other, OGSCatalog):
@@ -538,7 +577,8 @@ class OGSCatalog:
       hist.add_plot(
         picks=events.sort_values(OGS_C.GROUPS_STR)[OGS_C.GROUPS_STR],
         title=f"Cumulative Events",
-        output=output if output is not None else self.output / "img" / f"{self.input.name}_{other.input.name}_CumulativeEvents.png",
+        output=(output if output is not None else self.output / "img" /
+                f"{self.input.name}_{other.input.name}_CumulativeEvents.png"),
         label=other.name,
         legend=True,
         color=color,
@@ -572,7 +612,8 @@ class OGSCatalog:
       xlabel="ERZ (km)",
       ylabel="Number of Events",
       title=f"ERZ Histogram",
-      output=output if output is not None else self.output / "img" / f"{self.input.name}_ERZ.png",
+      output=(output if output is not None else self.output / "img" /
+              f"{self.input.name}_ERZ.png"),
       label=self.name,
       color=OGS_C.OGS_BLUE,
     )
@@ -592,7 +633,8 @@ class OGSCatalog:
         alpha=0.5,
         label=other.name,
         color=color,
-        output=output if output is not None else self.output / "img" / f"{self.input.name}_{other.input.name}_ERZ.png"
+        output=(output if output is not None else self.output / "img" /
+                f"{self.input.name}_{other.input.name}_ERZ.png")
       )
     plt.close()
 
@@ -625,7 +667,8 @@ class OGSCatalog:
       xlabel="ERH (km)",
       ylabel="Number of Events",
       title=f"ERH Histogram",
-      output=output if output is not None else self.output / "img" / f"{self.input.name}_ERH.png",
+      output=(output if output is not None else self.output / "img" /
+              f"{self.input.name}_ERH.png"),
       label=self.name,
       color=OGS_C.OGS_BLUE,
     )
@@ -645,7 +688,8 @@ class OGSCatalog:
         alpha=0.5,
         label=other.name,
         color=color,
-        output=output if output is not None else self.output / "img" / f"{self.input.name}_{other.input.name}_ERH.png"
+        output=(output if output is not None else self.output / "img" /
+                f"{self.input.name}_{other.input.name}_ERH.png")
       )
     plt.close()
 
@@ -678,7 +722,8 @@ class OGSCatalog:
       ylabel="Number of Events",
       title=f"ERT Histogram",
       label=self.name,
-      output=output if output is not None else self.output / "img" / f"{self.input.name}_ERT.png"
+      output=(output if output is not None else self.output / "img" /
+              f"{self.input.name}_ERT.png")
     )
     for other, color in zip(others, OGS_C.PLOT_COLORS[1:]):
       if not isinstance(other, OGSCatalog):
@@ -696,7 +741,8 @@ class OGSCatalog:
         alpha=0.5,
         label=other.name,
         color=color,
-        output=output if output is not None else self.output / "img" / f"{self.input.name}_{other.input.name}_ERT.png"
+        output=(output if output is not None else self.output / "img" /
+                f"{self.input.name}_{other.input.name}_ERT.png")
       )
     plt.close()
 
@@ -728,7 +774,8 @@ class OGSCatalog:
       xlabel="Depth (km)",
       ylabel="Number of Events",
       title=f"Depth Histogram",
-      output=output if output is not None else self.output / "img" / f"{self.input.name}_Depth.png",
+      output=(output if output is not None else self.output / "img" /
+              f"{self.input.name}_Depth.png"),
       label=self.name,
     )
 
@@ -744,7 +791,8 @@ class OGSCatalog:
         alpha=0.5,
         label=other.name,
         color=color,
-        output=output if output is not None else self.output / "img" / f"{self.input.name}_{other.input.name}_Depth.png"
+        output=(output if output is not None else self.output / "img" /
+                f"{self.input.name}_{other.input.name}_Depth.png")
       )
     plt.close()
 
@@ -779,7 +827,8 @@ class OGSCatalog:
       xlabel="Magnitude ($M_L$)",
       ylabel="Number of Events",
       title=f"Magnitude Histogram",
-      output=output if output is not None else self.output / "img" / f"{self.input.name}_Magnitude.png",
+      output=(output if output is not None else self.output / "img" /
+              f"{self.input.name}_MagL.png"),
       yscale='log',
       label=self.name,
     )
@@ -800,7 +849,8 @@ class OGSCatalog:
         alpha=0.5,
         label=other.name,
         color=color,
-        output=output if output is not None else self.output / "img" / f"{self.input.name}_{other.input.name}_Mag.png"
+        output=(output if output is not None else self.output / "img" /
+                f"{self.input.name}_{other.input.name}_MagL.png")
       )
     plt.close()
 
@@ -818,12 +868,13 @@ class OGSCatalog:
       raise ValueError("Can only perform bgmaEvents on OGSCatalog")
     EVENTS_CFN_MTX = pd.DataFrame(0, index=[OGS_C.EVENT_STR, OGS_C.NONE_STR],
                     columns=[OGS_C.EVENT_STR, OGS_C.NONE_STR], dtype=int)
-    self.EventsTP = list()
-    self.EventsFN = list()
-    self.EventsFP = list()
+    EventsTP: list[list] = list()
+    EventsFN: list[list] = list()
+    EventsFP: list[list] = list()
     columns = [OGS_C.INDEX_STR, OGS_C.TIME_STR, OGS_C.LATITUDE_STR,
                OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR, OGS_C.ERH_STR,
-               OGS_C.ERZ_STR, OGS_C.GAP_STR, OGS_C.MAGNITUDE_L_STR]
+               OGS_C.ERZ_STR, OGS_C.GAP_STR, OGS_C.MAGNITUDE_L_STR,
+               OGS_C.GROUPS_STR]
     for date, _ in self.events_.items():
       BASE = self.load("events")[date].reset_index(drop=True)
       TARGET = other.load("events")[date].reset_index(drop=True)
@@ -838,14 +889,14 @@ class OGSCatalog:
         baseIDs.remove(a)
         targetIDs.remove(b)
 
-        self.EventsTP.append([
-          (BASE.at[a, col] if col in BASE.columns else None,
-           TARGET.at[b, col] if col in TARGET.columns else None)
+        EventsTP.append([
+          [BASE.at[a, col] if col in BASE.columns else None,
+           TARGET.at[b, col] if col in TARGET.columns else None]
            for col in columns
         ])
       for i in baseIDs:
         EVENTS_CFN_MTX.at[OGS_C.EVENT_STR, OGS_C.NONE_STR] += 1 # type: ignore
-        self.EventsFN.append([
+        EventsFN.append([
           BASE.at[i, col] if col in BASE.columns else None for col in columns
         ])
       if not TARGET.empty:
@@ -857,7 +908,7 @@ class OGSCatalog:
         for j in targetIDs:
           if j not in fp_target.index: continue
           EVENTS_CFN_MTX.at[OGS_C.NONE_STR, OGS_C.EVENT_STR] += 1 # type: ignore
-          self.EventsFP.append([
+          EventsFP.append([
             fp_target.at[j, col] if col in fp_target.columns else None
             for col in columns
           ])
@@ -869,15 +920,18 @@ class OGSCatalog:
       )
     self.logger.info("Recall: %s", recall)
     self.logger.info("MH: %s PS: %s MS: %s",
-                EVENTS_CFN_MTX.at[OGS_C.EVENT_STR, OGS_C.EVENT_STR],
-                EVENTS_CFN_MTX.at[OGS_C.NONE_STR, OGS_C.EVENT_STR],
-                EVENTS_CFN_MTX.at[OGS_C.EVENT_STR, OGS_C.NONE_STR])
+      EVENTS_CFN_MTX.at[OGS_C.EVENT_STR, OGS_C.EVENT_STR],
+      EVENTS_CFN_MTX.at[OGS_C.NONE_STR, OGS_C.EVENT_STR],
+      EVENTS_CFN_MTX.at[OGS_C.EVENT_STR, OGS_C.NONE_STR]
+    )
     self.logger.info("\n%s", EVENTS_CFN_MTX)
-    self.EventsTP = pd.DataFrame(self.EventsTP, columns=columns)
-    self.EventsFN = pd.DataFrame(self.EventsFN, columns=columns).sort_values(
-      by=OGS_C.TIME_STR)
-    self.EventsFP = pd.DataFrame(self.EventsFP, columns=columns).sort_values(
-      by=OGS_C.TIME_STR)
+    self.EventsTP = pd.DataFrame(EventsTP, columns=columns)
+    self.EventsFN = pd.DataFrame(EventsFN, columns=columns).sort_values(
+      by=OGS_C.TIME_STR
+    )
+    self.EventsFP = pd.DataFrame(EventsFP, columns=columns).sort_values(
+      by=OGS_C.TIME_STR
+    )
     filepath = (self.output /
                 f"{self.input.name}_{other.input.name}_EventsMH.csv")
     self.EventsTP.to_csv(filepath, index=False)
@@ -896,7 +950,9 @@ class OGSCatalog:
       EVENTS_CFN_MTX.values,
       title="Recall: {:.4f}".format(recall),
       label=EVENTS_CFN_MTX.columns.tolist(),
-      output=filepath
+      output=filepath,
+      basename=self.name,
+      targetname=other.name
     )
     plt.close()
     # Time Difference Histogram
@@ -933,12 +989,14 @@ class OGSCatalog:
       domain=OGS_C.OGS_STUDY_REGION,
       x=self.EventsFN[OGS_C.LONGITUDE_STR],
       y=self.EventsFN[OGS_C.LATITUDE_STR],
-      label=f"Missed (MS) [OGS] {len(self.EventsFN.index)}", legend=True,
+      label=f"Missed (MS) [{self.name}] {len(self.EventsFN.index)}",
+      legend=True,
     )
     myplot.add_plot(
       self.EventsFP[OGS_C.LONGITUDE_STR], self.EventsFP[OGS_C.LATITUDE_STR],
-        color=None, label=f"Proposed (PS) [SBC] {len(self.EventsFP.index)}",
-        legend=True, facecolors="none", edgecolors=OGS_C.MEX_PINK,
+        color=None, facecolors="none", edgecolors=OGS_C.MEX_PINK,
+        label=f"Proposed (PS) [{other.name}] {len(self.EventsFP.index)}",
+        legend=True, 
         output=(self.output / "img" /
                 f"{self.input.name}_{other.input.name}_EventsFalse.png")
     )
@@ -946,7 +1004,7 @@ class OGSCatalog:
     # Depth Difference Histogram
     OGS_P.histogram_plotter(
       self.EventsTP[OGS_C.DEPTH_STR].apply(lambda x: x[1] - x[0]),
-      xlabel="Depth Difference (km) [OGS - SBC]",
+      xlabel=f"Depth Difference (km) [{self.name} - {other.name}]",
       title="Event Depth Difference",
       xlim=(-OGS_C.EVENT_DIST_OFFSET, OGS_C.EVENT_DIST_OFFSET),
       output=(self.output / "img" /
@@ -965,7 +1023,7 @@ class OGSCatalog:
         dim=2
       ),
       xlim=(0, OGS_C.EVENT_DIST_OFFSET),
-      xlabel="Epicentral Distance Difference (km)",
+      xlabel=f"Epicentral Distance Difference (km) [{self.name} - {other.name}]",
       title="Event Epicentral Distance Difference",
       output=(self.output / "img" /
               f"{self.input.name}_{other.input.name}_EpiDistDiff.png"),
@@ -976,8 +1034,8 @@ class OGSCatalog:
       mymags = OGS_P.scatter_plotter(
         self.EventsTP[OGS_C.MAGNITUDE_L_STR].apply(lambda x: x[1]),
         self.EventsTP[OGS_C.MAGNITUDE_L_STR].apply(lambda x: x[0]),
-        xlabel="SBC Magnitude ($M_L$)",
-        ylabel="OGS Magnitude ($M_L$)",
+        xlabel=f"{other.name} Magnitude ($M_L$)",
+        ylabel=f"{self.name} Magnitude ($M_L$)",
         title="Magnitude Prediction",
         color=OGS_C.OGS_BLUE,
         legend=True
@@ -996,7 +1054,7 @@ class OGSCatalog:
       mymags.ax.grid(True)
       mymags.savefig(
         self.output / "img" /
-        f"{self.input.name}_{other.input.name}_MagDist.png"
+        f"{self.input.name}_{other.input.name}_MagLDist.png"
       )
       plt.close()
       if (self.input.name in (OGS_C.TXT_EXT, ".all") and \
@@ -1005,13 +1063,13 @@ class OGSCatalog:
         data = self.EventsTP[OGS_C.MAGNITUDE_L_STR].apply(lambda x: x[1] - x[0])
         OGS_P.histogram_plotter(
           data,
-          xlabel="Magnitude Difference ($M_L$) [OGS - SBC]",
-          title=f"RMSE = {np.sqrt(np.mean(data ** 2)):.4f}, " +
-                f"MAE = {data.abs().mean():.4f}",
+          xlabel=f"Magnitude Difference ($M_L$) [{self.name} - {other.name}]",
+          title=(f"RMSE = {np.sqrt(np.mean(data ** 2)):.4f}, " +
+                 f"MAE = {data.abs().mean():.4f}"),
           xlim=(-1, 1),
           bins=21,
           output=(self.output / "img" /
-                  f"{self.input.name}_{other.input.name}_MagDiff.png"),
+                  f"{self.input.name}_{other.input.name}_MagLDiff.png"),
           legend=True
         )
         plt.close()
@@ -1022,16 +1080,16 @@ class OGSCatalog:
           title="Event Magnitude",
           color=OGS_C.MEX_PINK,
           yscale='log',
-          label="Proposed (PS) [SBC]",
-          xlim=[-0.5, 3.0],
+          label=f"Proposed (PS) [{other.name}]",
+          xlim=[-1., 5.0],
         )
         mymags.add_plot(
           self.EventsFN[OGS_C.MAGNITUDE_L_STR].dropna(),
-          label="Missed (MS) [OGS]",
+          label=f"Missed (MS) [{self.name}]",
           color=OGS_C.OGS_BLUE,
           legend=True,
           output=(self.output / "img" /
-                  f"{self.input.name}_{other.input.name}_MSPSMagDist.png"),
+                  f"{self.input.name}_{other.input.name}_MSPSMagLDist.png"),
         )
         plt.close()
       else:
@@ -1043,8 +1101,8 @@ class OGSCatalog:
             xlabel="Magnitude ($M_L$)",
             title="Event Magnitude",
             color=OGS_C.MEX_PINK,
-            label="Proposed (PS) [SBC]",
-            output=self.output / "img" / f"{other.input.name}_PSMagDist.png",
+            label=f"Proposed (PS) [{other.name}]",
+            output=self.output / "img" / f"{other.input.name}_PSMagLDist.png",
           )
           plt.close()
     self.EVENTS = self.get("EVENTS")
@@ -1062,9 +1120,11 @@ class OGSCatalog:
     from matplotlib import pyplot as plt
     if not isinstance(other, OGSCatalog):
       raise ValueError("Can only perform bgmaPicks on OGSCatalog")
-    PICKS_CFN_MTX = pd.DataFrame(0, index=[OGS_C.PWAVE, OGS_C.SWAVE, OGS_C.NONE_STR],
-                   columns=[OGS_C.PWAVE, OGS_C.SWAVE, OGS_C.NONE_STR], dtype=int)
-    INVENTORY = [key.split(".")[1] for key in self.stations.keys()]
+    PICKS_CFN_MTX = pd.DataFrame(
+      0, index=[OGS_C.PWAVE, OGS_C.SWAVE, OGS_C.NONE_STR],
+      columns=[OGS_C.PWAVE, OGS_C.SWAVE, OGS_C.NONE_STR], dtype=int
+    )
+    INVENTORY = self.stations[OGS_C.STATION_STR].unique()
     self.PicksTP = list()
     self.PicksFN = list()
     self.PicksFP = list()
@@ -1165,7 +1225,9 @@ class OGSCatalog:
         recall, p_recall, s_recall
       ),
       label=PICKS_CFN_MTX.columns.tolist(),
-      output=filepath
+      output=filepath,
+      basename=self.name,
+      targetname=other.name
     )
     plt.close()
     # Time Difference Histogram
@@ -1175,7 +1237,8 @@ class OGSCatalog:
     pickdiff = OGS_P.histogram_plotter(
       data,
       xlabel="Time Difference (s)",
-      title=f"RMSE = {np.sqrt((data**2).mean()):.4f} s, MAE = {data.abs().mean():.4f} s",
+      title=(f"RMSE = {np.sqrt((data**2).mean()):.4f} s, "
+             f"MAE = {data.abs().mean():.4f} s"),
       legend=True,
       label="Matched (MH)",
       color=OGS_C.MEX_PINK,
@@ -1207,7 +1270,8 @@ class OGSCatalog:
       step=True,
       label=f"S Picks: $\mu$ = {data.mean():.3E}, $\sigma$ = {data.std():.3E}",
       legend=True,
-      output=self.output / "img" / f"{self.input.name}_{other.input.name}_PicksTimeDiff.png",
+      output=(self.output / "img" /
+              f"{self.input.name}_{other.input.name}_PicksTimeDiff.png"),
     )
     plt.close()
     # Confidence Histogram
@@ -1246,7 +1310,8 @@ class OGSCatalog:
       label="Proposed (PS)",
       legend=True,
       yscale='log',
-      output=self.output / "img" / f"{self.input.name}_{other.input.name}_PicksConfDist.png",
+      output=(self.output / "img" /
+              f"{self.input.name}_{other.input.name}_PicksConfDist.png"),
     )
     plt.close()
     self.PICKS = self.get("PICKS")
@@ -1254,7 +1319,9 @@ class OGSCatalog:
 
   def bpgma(self,
         other: "OGSCatalog",
-        stations: dict[str, tuple[float, float, float, str, str, str, str]]
+        stations: Optional[Path] = None,
+        waveforms: Optional[Path] = None,
+        vlines: list[tuple[datetime, str, str]] = []
       ) -> None:
     """Run BGMA comparisons for events and picks.
 
@@ -1262,12 +1329,23 @@ class OGSCatalog:
     ----------
     other : OGSCatalog
       Catalog to compare against.
-    stations : dict[str, tuple[float, float, float, str, str, str, str]]
-      Station metadata mapping.
+    stations : Optional[Path]
+      Path to station metadata file.
+    waveforms : Optional[Path]
+      Path to waveform data file with NETWORK, STATION, DATE, FILENAME columns.
+    vlines : list[tuple[datetime, str, str]]
+      Vertical lines for plotting.
     """
     if not isinstance(other, OGSCatalog):
       raise ValueError("Can only perform bpgma on OGSCatalog")
-    self.stations = stations
+    self.waveforms, self.stations = OGS_C.waveforms(
+      waveforms,
+      stations,
+      self.start,
+      self.end,
+      vlines=vlines,
+      output=self.output
+    ) if waveforms is not None and stations is not None else (None, None)
     if self.events_:
       if (other.events_ == {} and other.load("events") == {} and
           other.get("EVENTS").empty):
@@ -1284,18 +1362,6 @@ class OGSCatalog:
         self.logger.info("Starting BGMA pick comparison between %s and %s.",
                          self.name, other.name)
         self.bgmaPicks(other)
-
-  def plotFNWaveforms(self, other: "OGSCatalog", output: Path) -> None:
-    """Plot waveforms for false negative events.
-
-    Parameters
-    ----------
-    other : OGSCatalog
-      Catalog used for comparison.
-    output : Path
-      Output path for the plot(s).
-    """
-    pass
 
   def __iadd__(self, other):
     """In-place merge of another catalog.
@@ -1371,13 +1437,10 @@ def main():
     verbose=True,
     output=Path("/Users/admin/Desktop/Monica/PhD/comparison/OGSCatalog/OGSBackup")
   )
-  #BaseCatalog.plot(others=[TargetCatalog])
+  BaseCatalog.plot(others=[TargetCatalog])
   BaseCatalog.bpgma(
     TargetCatalog,
-    stations=OGS_C.inventory(
-      stations,
-      output=BaseCatalog.output / "img"
-    )
+    stations=stations,
   )
 
 

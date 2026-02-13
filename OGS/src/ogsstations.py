@@ -29,7 +29,7 @@ def parse_arguments() -> argparse.Namespace:
   return parser.parse_args()
 
 def main(args: argparse.Namespace) -> None:
-  INVENTORY = OGS_C.inventory(args.directory)
-  waveform = OGS_C.waveforms(args.waveform, args.dates[0], args.dates[1])
+  INVENTORY = OGS_C.inventory(args.stations, output=Path("."))
+  waveform = OGS_C.waveforms(args.waveform, args.stations, args.dates[0], args.dates[1])
 
 if __name__ == "__main__": main(parse_arguments())

@@ -1,0 +1,104 @@
+\chapter{Data Description}
+\label{chap:dataDescription}
+This chapter provides a detailed overview of the seismic datasets used in this 
+study, describes their acquisition by the North-East Italy Monitoring System, 
+and outlines the data preparation and quality-control procedures. We describe 
+the physical characteristics of seismic waveforms, the acquisition 
+infrastructure in northeastern Italy, and the composition and structure of the 
+datasets used for machine-learning model evaluation. In addition, we present 
+the external ML training datasets employed to benchmark model generalization 
+and cross-regional robustness. Finally, we discuss the data preprocessing 
+steps implemented to ensure data quality and consistency prior to model
+training and evaluation.
+
+\section{Seismic Waveform Data}
+Earthquakes originate from the abrupt release of accumulated elastic strain in 
+the lithosphere, generating seismic waves that propagate through the Earth's 
+interior and along its surface. These waves encode information about the source 
+process, subsurface structure, and propagation path, making them fundamental 
+for earthquake detection and characterization. Seismic waveform data consist of 
+continuous time series recordings of ground motion captured by seismometers 
+deployed at various locations. Each waveform represents the ground 
+displacement, velocity, or acceleration as a function of time. The waveforms 
+are typically sampled at high frequencies (e.g., 100 Hz or higher) to capture 
+the rapid variations associated with seismic events. The data are stored in 
+standard formats such as SEED or SAC, which include metadata about the 
+recording station, instrument response, and event information.
+
+\subsection{Types of Seismic Waves}
+Seismic waves can be broadly classified into \textbf{body waves} and 
+\textbf{surface waves}, each characterized by distinct propagation mechanisms 
+and velocities.
+\begin{itemize}
+  \item Body waves are seismic waves that travel through the Earth's interior 
+        and are the fastest seismic waves. Body waves are further divided into 
+        two types: P waves and S waves.
+        \begin{itemize}
+          \item P waves or Primary waves are the fastest seismic waves and 
+                travel through solids, liquids, and gases. P waves are also 
+                known as compressional (longitudinal) waves because they 
+                compress and expand the material through which they travel.
+          \item S waves are secondary waves that are slower than P waves and 
+                travel only through solids. S waves are also known as shear 
+                (transversal) waves because they move the material through 
+                which they travel from side to side.
+        \end{itemize}
+  \item Surface waves are seismic waves that travel along the Earth's surface 
+        and are the slowest seismic waves. Surface waves are further divided
+        into two types: Love waves and Rayleigh waves.
+\end{itemize}
+The velocities of these phases, strictly depend on the properties of the 
+material they are traveling through, in particular the rock's density, 
+compressibility and shear modulus of the material. Variations in these 
+properties result in measurable differences in travel-time patterns, waveform 
+shapes, and frequency content, which are essential for inversion and event 
+localization.
+
+\subsection{Data Acquisition}
+The seismic waveform data are recorded using a network of seismometers deployed 
+across northeastern Italy. Each instrument has their own advantages and 
+disadvantages, and is used for different purposes. Seismometers are instruments 
+that measure the velocity of the ground motion, while accelerometers are 
+instruments that measure the acceleration of the ground motion. Each sensor 
+records the ground motion in three orthogonal components: vertical (Z), 
+north-south (N), and east-west (E). The data are transmitted in real-time to a 
+central data acquisition system, where they are stored and processed for 
+earthquake detection and analysis. The waveforms are archived in standardized 
+formats such as MiniSEED or SAC, which include metadata about the recording 
+station, instrument response, and event information. We utilize publicly 
+available algorithms and tools such as ObsPy (\cite{ObsPy}) and SeisBench 
+(\cite{SeisBench}) to access, process, and analyze the seismic waveform data.
+ObsPy is an open-source Python library for seismology that provides a wide 
+range of tools for processing and analyzing seismic data. ObsPy includes 
+modules for downloading data from various data centers called \textbf{Mass 
+Downloader}, filtering, resampling, and visualization. SeisBench is an 
+open-source Python library that provides a standardized interface for accessing
+and processing seismic waveform data. SeisBench includes a wide range of 
+predefined datasets, as well as tools for data augmentation, preprocessing, and
+model evaluation.
+
+\section{Datasets}
+\subsection{Case Study}
+In this study, we use continuous waveforms recorded by 147 \ac{SMINO} and 
+surrounding seismic stations located at the North-Eastern Italy region (Fig. 
+\ref{fig:AdriaArray}). The \ac{SMINO} is managed by OGS also on behalf of the 
+\ac{FVG} and Veneto Regions. The stations are installed in \ac{FVG}, Veneto 
+(in most cases), Emilia Romagna and Lombardy. The data recorded by all the 
+stations are acquired in real time at the OGS Centre for Seismological Research 
+in Udine. The network also provides data to the national seismic surveillance 
+system, with real-time data exchange with the Civil Protection Department and 
+the National Institute of Geophysics and Volcanology (\ac{INGV}). Moreover, in 
+order to improve the quality of localizations and magnitude estimation in 
+border regions, the network exchanges real-time data with the seismic networks 
+of Austria, Slovenia, Switzerland, and the Autonomous Provinces of Trento and 
+Bolzano. The waveforms are recorded in three components (Z, N, and E, which 
+represent the vertical, north-south, and east-west components of the seismic 
+wave respectively), and different sampling rate (100Hz, 200Hz the most 
+represented). Data are stored in MSEED format and daily files for each seismic 
+station and component. The analyzed timeframe is from 20/03/2024 to 20/06/2024.
+During this period, a total of 428 earthquakes were recorded by the network, 
+with 7152 manually reviewed picks (P and S phases) available in the catalog. 
+The dataset includes a diverse range of seismic events with magnitudes ranging 
+from 0 to above 4.5, with depths ranging from shallow (a few kilometers) to 
+intermediate depths (up to 70 km), providing a comprehensive representation of 
+the seismic activity in northeastern Italy.

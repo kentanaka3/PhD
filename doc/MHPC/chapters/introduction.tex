@@ -1,0 +1,169 @@
+\doublespacing
+\label{chap:introduction}
+In this thesis, we present a Procedural Machine Learning Pipeline for 
+Earthquake Pick Detection and Phase Association, leveraging both \ac{HPC} and 
+Cloud Computing Infrastructures to enhance the accuracy and efficiency of 
+seismic data analysis.\\
+
+Earthquakes are caused by the sudden release of energy within the Earth's 
+lithosphere. This energy is released in the form of seismic waves that travel 
+through the Earth's interior and surface. The lithosphere itself is a highly 
+dynamic and complex system that is constantly deformed by the interplay of 
+tectonic forces related to mantle convection. It consists of the crust and the
+uppermost mantle and is fragmented into tectonic plates that interact along 
+their boundaries, leading to geophysical phenomena such as seismic activity and 
+volcanic eruptions. Earthquakes are recorded by seismometers, which are 
+instruments that measure the ground motion. The identification and detection of 
+seismic phases associated with earthquakes are fundamental processes for 
+accurate earthquake localization and subsequent seismological analysis 
+(\cite{lay1995modern}). Over the years, several automated methods have been 
+developed to identify the arrival times of primary (P) and secondary (S) waves 
+over the past decades, such as the \ac{STA/LTA} method (\cite{STA/LTA}) and the 
+\ac{AIC} approach (\cite{LEONARD1999247}). These methods have significantly 
+advanced our capability to detect P and S seismic phases associated with 
+earthquakes. However, they also have some limitations, \textit{e.g.} their 
+performance often diminishes when analyzing complex or low \ac{SNR} signals. 
+Furthermore, localization of earthquakes often relies on a supervised expert 
+revision of the seismic pick, which can be time-consuming and present biases 
+related to the subjective sensitivity of the human operator.\\
+
+The inherent complexity, nonlinearity, and variability of seismic phenomena
+have motivated the exploration of new methodologies that can handle large
+amounts of data and uncover patterns that are difficult to detect using
+conventional techniques.\\
+
+Recently, there has been increasing interest in the use of \ac{ML} techniques 
+to analyze seismic data and to improve the accuracy and efficiency of seismic 
+wave phase picking and earthquake detection. \ac{ML} algorithms, particularly 
+\ac{DL} models, have shown remarkable success in detecting seismic events, 
+classifying seismic signals, and estimating the magnitude and location of 
+earthquakes, opening new opportunities for improving seismic phase detection. 
+By integrating \ac{ML} methods with large-scale computational frameworks, this 
+study aims to refine seismic phase identification and association in North-East
+Italy, ultimately contributing to more accurate earthquake monitoring and 
+hazard assessment.\\
+
+Among the \ac{ML}-based tools available for seismic analysis, SeisBench
+\cite{SeisBench} stands out as a comprehensive and open-source platform. 
+SeisBench provides a unified \ac{API} for applying state-of-the-art \ac{DL} 
+models to seismic waveform data. This platform facilitates the deployment of 
+pre-trained models for seismic phase picking, offering access to a variety of 
+seismic datasets and model architectures tailored to detect phase arrivals. The 
+ability of \ac{ML} models to recognize patterns, make inferences, and 
+generalize from data makes them well-suited for the complex and data-rich field 
+of seismology. Seismological datasets are often vast and multidimensional, 
+which presents a significant computational "\textit{Big Data}" challenge. 
+Networks of seismic stations continuously record digital waveforms that 
+collectively reach storage volumes on the order of terabytes annually. The 
+efficient processing of these datasets, achieved by advanced high performant 
+computational techniques, including parallel processing and \acs{GPU} 
+computing, has become indispensable.\\
+
+In this thesis, we explore the application of \ac{ML} techniques to the
+detection of P and S arrival times and the subsequent association of a seismic
+event. Specifically, we focus on the analysis of seismic waveforms recorded by 
+the \ac{SMINO} in the North-East of Italy \cite{Bragato2021}. The 
+infrastructure was consituted in response to the ML 6.4 Friuli destructive 
+earthquake in 1976, with the main mandate of supporting civil protection 
+emergency activities.
+
+The Master's thesis goal is to test \ac{ML} models capable of automatically
+detecting earthquakes, predicting seismic wave arrival times to be used also in 
+real-time. This research aims to enhance the efficiency and accuracy of seismic 
+monitoring systems in North-East of Italy Fig. \ref{fig:AdriaArray}. We aim to 
+deepen the understanding of seismic phenomena through digital innovation. 
+Furthermore, we develop a publicly available cloud-based platform 
+infrastructure provided by the \acf{OGS}. The cloud service is meant for the 
+scientific community to access, analyze, train \ac{ML} models, and share the 
+results of the analysis. This cloud service is provided under the \acf{TeRABIT} 
+project. By integrating cutting-edge \ac{ML} methodologies and advanced 
+computational resources, this well-rounded research advances the field of 
+seismology and contributes to the global effort to mitigate seismic risks.\\
+
+The thesis is organized as follows. In Chapter \ref{chap:data_description}, we 
+provide an overview of the diverse datasets used in this study, including the 
+seismic waveforms recorded in the North-East of Italy. We describe the data
+collection process and the data cleaning procedures. In Chapter 
+\ref{chap:pipeline}, we describe the data preprocessing steps, present the 
+variety of methods and techniques used in the literature for seismic phase 
+picking and earthquake detection. We discuss the challenges of analyzing 
+seismic data and the potential of \ac{ML} techniques for addressing these 
+challenges. In Chapter \ref{chap:performance}, we describe the high performance 
+computing and cloud computing infrastructure provided by CINECA on LEONARDO 
+Cluster and Ada Cloud, respectively, under the research project 
+IscrC\_AI4Seism\_C. We provide details on the hardware and software 
+configuration of the high performance computing infrastructure and discuss the 
+benefits of using high performance computing. By combining high performance 
+computing and cloud computing, we are able to exploit the computational 
+resources of both infrastructures to reach the capabilities of urgent computing 
+infrastructure, which is essential for real-time seismic monitoring. In Chapter 
+\ref{chap:results}, we present the results of the \ac{ML} models on the seismic 
+waveforms recorded in the North-East of Italy. We evaluate the performance of 
+the models using various metrics, including the cumulative number of picks, the 
+multi-class classification results, \ac{TP}, \ac{FN}, recall, and the time 
+displacement. Finally, in Chapter \ref{chap:conclusions}, we summarize the main 
+findings of this thesis and discuss the implications of the results for the 
+field of seismology. We also provide recommendations for future research and 
+discuss the potential impact of this work on the development of seismic 
+monitoring systems in North-East of Italy and beyond.
+
+\begin{comment}
+Earth's lithosphere is a complex and dynamic system constantly subject to 
+stresses and deformations due to the forces and rheological properties of the 
+materials acting upon it. The lithosphere is composed of the crust and the 
+uppermost part of the mantle and it is divided into tectonic plates that float 
+on the semi-fluid asthenosphere. The motion of these plates is responsible for 
+shaping Earth's surface, giving rise to mountain ranges, ocean basins, 
+earthquakes and volcanic activity. The study of the lithosphere and its 
+dynamics is of great importance as it helps us to understand the processes that 
+take place on the Earth, allowing to predict natural hazards extit{e.g.} 
+earthquakes and volcanic eruptions, which continuously reshape our planet.\\
+
+Traditional methods consist of collecting vast amounts of data from 
+seismometers, which are instruments that measure the ground motion caused by
+seismic waves. Seismologists have been analyzing this data using physics-based 
+models and empirical relationships to study the propagation of seismic waves 
+through the Earth's crust. Historically, seismic \textbf{phase picking}, which 
+identifies the arrival times of primary (P) and secondary (S) waves, and 
+\textbf{earthquake detection}, which localizes earthquakes, have been performed 
+manually by seismologists as a fundamental step in the process of understanding 
+the dynamics of seismic events and their underlying processes.\\
+
+The inherent complexity, nonlinearity, and variability of seismic phenomena 
+have motivated the exploration of new methodologies that can handle large 
+amounts of data and uncover patterns that are difficult to detect using 
+conventional techniques. Several automated methods have been developed over the
+past decades such as, the \ac{STA/LTA} method (Allen, 1978) and the \acf{AIC} 
+approach (Leonard \& Kennett, 1999). These methods have significantly advanced 
+our understanding of earthquake processes and have proven effective in many 
+cases. However, they also have some limitations, \textit{e.g.} the need for 
+simplifications or assumptions to the inherent complexity of the lithosphere or 
+their performance often diminishes when analyzing complex or low \ac{SNR} 
+signals. Furthermore, the detection and localization of earthquakes often rely 
+on the manual (subjective) inspection of seismic data, which can be 
+time-consuming.\\
+
+In this thesis, we explore the application of \ac{ML} techniques to the 
+detection and prediction of seismic waves. Specifically, we focus on the 
+analysis of seismic waveforms recorded at the region of North-East of Italy. 
+Our goal is to develop \ac{ML} models capable of automatically detecting 
+earthquakes and predicting seismic wave arrival times in real-time. This 
+research aligns with the objectives of the \acf{PNRR} and aims to enhance the
+efficiency and accuracy of seismic monitoring systems in Italy. We aim to 
+deepen the understanding of seismic phenomena through digital innovation. 
+Furthermore, we develop a publicly available cloud-based platform 
+infrastructure provided by the \acf{OGS}. The cloud service is meant for the 
+scientific community to access, analyze, train \ac{ML} models, and share the 
+results of the analysis. This cloud service is provided under the \acf{TeRABIT} 
+project. By integrating cutting-edge \ac{ML} methodologies and advanced 
+computational resources, this well-rounded research advances the field of 
+seismology and contributes to the global effort to mitigate seismic risks.\\
+
+\begin{comment}
+After the earthquake in L'Aquila, Italy, in 2009, which caused 309 deaths and
+left 65,000 people homeless, the Italian government decided to establish the
+\acf{INGV} to monitor and study seismic activity in the country. The \ac{INGV}
+has deployed a network of over 400 seismometers throughout Italy to detect and 
+locate earthquakes and to study the propagation of seismic waves through the 
+Earth's crust.
+\end{comment}
