@@ -472,7 +472,6 @@ ML_STATIONS_STR = "ML_stations"        # Number of stations for ML
 # Event identification columns
 IDX_EVENTS_STR = "idx"                 # Event index identifier
 INDEX_STR = "idx"                      # Generic index column
-TIME_STR = "time"                      # Time column (redefined for clarity)
 METADATA_STR = "metadata"              # Metadata container column
 TYPE_STR = "type"                      # Type classification column
 
@@ -489,7 +488,6 @@ MAGNITUDE_STR = "magnitude"            # Generic magnitude column
 MAGNITUDE_L_STR = "ML"                 # Local magnitude type
 MAGNITUDE_D_STR = "MD"                 # Duration magnitude type
 PLACE_STR = "place"                    # Location description
-AMPLITUDE_STR = "amplitude"            # Amplitude measurement
 VELOCITY_STR = "vel"                   # Velocity model reference
 METHOD_STR = "method"                  # Processing method used
 DIMENSIONS_STR = "dims"                # Dimensionality (2D/3D)
@@ -517,7 +515,6 @@ TARGET_STR = "Target"                  # Comparison/predicted dataset
 # =============================================================================
 # Uppercase versions for header rows and configuration files
 
-PHASE_STR = "phase"                    # Phase type column
 EVENT_STR = "EVENT"                    # Event identifier (uppercase)
 MODEL_STR = "MODEL"                    # Model name column
 WEIGHT_STR = "WEIGHT"                  # Weight/pretrained weights
@@ -530,7 +527,6 @@ RESULTS_STR = "RESULTS"                # Results directory
 FILENAME_STR = "FILENAME"              # Filename column
 THRESHOLD_STR = "THRESHOLD"            # Probability threshold column
 NETWORK_STR = "NETWORK"                # Seismic network code
-STATION_STR = "station"                # Station code (lowercase)
 CHANNEL_STR = "CHANNEL"                # Channel code
 DATE_STR = "DATE"                      # Date column
 
@@ -854,8 +850,9 @@ def diff_space(
       B[LATITUDE_STR], B[LONGITUDE_STR],
       T[LATITUDE_STR], T[LONGITUDE_STR])[0] / 1000.
 
-  # Add vertical component if 3D distance requested
-  vertical_component = ((B[DEPTH_STR] - T[DEPTH_STR]) / 1000.) ** p if ndim == 3 else 0.
+  # Add vertical component if 3D distance requested (depth in m)
+  vertical_component = ((B[DEPTH_STR] - T[DEPTH_STR]) / 1000.) ** p \
+    if ndim == 3 else 0.
 
   # Compute Lp norm distance
   return float(format(np.sqrt(horizontal_dist_km ** p + vertical_component), ".4f"))
@@ -964,8 +961,7 @@ def is_julian(string: str) -> datetime:
     NotImplementedError: This function is not yet implemented.
   """
   # TODO: Define and convert Julian date to Gregorian date
-  raise NotImplementedError
-  return datetime.strptime(string, YYMMDD_FMT)._set_julday(string)
+  raise NotImplementedError("Julian date parsing is not yet implemented.")
 
 
 def is_file_path(string: str) -> Path:

@@ -63,8 +63,14 @@ from obspy import UTCDateTime
 # Matplotlib: Path object for polygon-based geographic containment tests
 from matplotlib.path import Path as mplPath
 
-# Matplotlib: Utility to flatten nested lists (for regex pattern assembly)
-from matplotlib.cbook import flatten as flatten_list
+# Utility to flatten nested lists (for regex pattern assembly)
+def _flatten(iterable):
+  """Recursively flatten nested iterables of strings into a flat generator."""
+  for item in iterable:
+    if isinstance(item, str):
+      yield item
+    else:
+      yield from _flatten(item)
 
 # Local module: OGS-specific constants (strings, default paths, regions)
 import ogsconstants as OGS_C
@@ -134,13 +140,13 @@ class OGSDataFile(OGSCatalog):
     super().__init__(input, start, end, verbose, polygon, output)
 
     # Compile the record extractor regex from the list of pattern fragments
-    # flatten_list handles nested lists, join concatenates all fragments
+    # _flatten handles nested lists, join concatenates all fragments
     self.RECORD_EXTRACTOR : re.Pattern = re.compile(OGS_C.EMPTY_STR.join(
-      list(flatten_list(self.RECORD_EXTRACTOR_LIST))))  # TBD in subclasses
+      list(_flatten(self.RECORD_EXTRACTOR_LIST))))  # TBD in subclasses
 
     # Compile the event extractor regex from the list of pattern fragments
     self.EVENT_EXTRACTOR : re.Pattern = re.compile(OGS_C.EMPTY_STR.join(
-      list(flatten_list(self.EVENT_EXTRACTOR_LIST))))   # TBD in subclasses
+      list(_flatten(self.EVENT_EXTRACTOR_LIST))))   # TBD in subclasses
 
     # Extract file format name from extension (e.g., ".hyp" -> "HYP")
     self.name = self.input.suffix.lstrip(OGS_C.PERIOD_STR).upper()
@@ -245,7 +251,7 @@ class OGSDataFile(OGSCatalog):
     RECORD_EXTRACTOR_DEBUG = list(reversed(list(it.accumulate(
       EXTRACTOR_LIST[:-1],
       lambda x, y: x + (y if isinstance(y, str) else
-                        OGS_C.EMPTY_STR.join(list(flatten_list(y))))))))
+                        OGS_C.EMPTY_STR.join(list(_flatten(y))))))))
 
     # Default to first group as the suspected failure point
     bug = self.GROUP_PATTERN.findall(EXTRACTOR_LIST[0])
@@ -266,7 +272,7 @@ class OGSDataFile(OGSCatalog):
         bug = match_group[-1][match_group[-1][1] != match_compare[-1][1]]
 
         # Log the failure for debugging purposes
-        print(f"{self.input.suffix} {bug} : {line}")
+        self.logger.warning(f"{self.input.suffix} {bug} : {line}")
         break
 
     return bug

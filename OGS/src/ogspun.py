@@ -45,10 +45,10 @@ class DataFilePUN(OGSDataFile):
     fr"(?P<{OGS_C.QM_STR}>[A-Z][0-9])"                              # QM
   ]
   def read(self):
-    assert self.input.exists(), \
-      f"File {self.input} does not exist"
-    assert self.input.suffix == OGS_C.PUN_EXT, \
-      f"File extension must be {OGS_C.PUN_EXT}"
+    if not self.input.exists():
+      raise FileNotFoundError(f"File {self.input} does not exist")
+    if self.input.suffix != OGS_C.PUN_EXT:
+      raise ValueError(f"File extension must be {OGS_C.PUN_EXT}")
     SOURCE = list()
     event: int = 0
     with open(self.input, 'r') as fr: lines = fr.readlines()[1:]

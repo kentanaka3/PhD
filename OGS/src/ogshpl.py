@@ -6,9 +6,7 @@ from obspy import UTCDateTime
 from datetime import datetime, timedelta as td
 
 import ogsconstants as OGS_C
-from ogsdatafile import OGSDataFile
-
-from matplotlib.cbook import flatten as flatten_list
+from ogsdatafile import OGSDataFile, _flatten
 
 DATA_PATH = Path(__file__).parent.parent.parent
 
@@ -109,17 +107,17 @@ class DataFileHPL(OGSDataFile):
     fr"^\^(?P<{OGS_C.LOC_NAME_STR}>[A-Z\s\.']+(\s\([A-Z\-\s]+\))?)"
   ]
   LOCATION_EXTRACTOR = re.compile(OGS_C.EMPTY_STR.join(
-    list(flatten_list(LOCATION_EXTRACTOR_LIST))))
+    list(_flatten(LOCATION_EXTRACTOR_LIST))))
   NOTES_EXTRACTOR_LIST = [
     fr"^\*\s+(?P<{OGS_C.NOTES_STR}>.*)"
   ]
   NOTES_EXTRACTOR = re.compile(OGS_C.EMPTY_STR.join(
-    list(flatten_list(NOTES_EXTRACTOR_LIST))))
+    list(_flatten(NOTES_EXTRACTOR_LIST))))
   def read(self):
-    assert self.input.exists(), \
-      f"File {self.input} does not exist"
-    assert self.input.suffix == OGS_C.HPL_EXT, \
-      f"File extension must be {OGS_C.HPL_EXT}"
+    if not self.input.exists():
+      raise FileNotFoundError(f"File {self.input} does not exist")
+    if self.input.suffix != OGS_C.HPL_EXT:
+      raise ValueError(f"File extension must be {OGS_C.HPL_EXT}")
     SOURCE = list()
     DETECT = list()
     event_notes: str = ""
@@ -160,11 +158,11 @@ class DataFileHPL(OGSDataFile):
             OGS_C.ZERO_STR
           )
           date = event_spacetime[0]
-          min = td(minutes=int(result[OGS_C.P_TIME_STR][2:]))
+          min_td = td(minutes=int(result[OGS_C.P_TIME_STR][2:]))
           hrs = td(hours=int(result[OGS_C.P_TIME_STR][:2]))
           result[OGS_C.P_TIME_STR] = datetime(
             date.year, date.month, date.day
-          ) + hrs + min
+          ) + hrs + min_td
           if (self.start is not None and
               result[OGS_C.P_TIME_STR] < self.start):
             event_detect = -1 # Error

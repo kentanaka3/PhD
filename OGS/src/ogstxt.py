@@ -1,6 +1,5 @@
 import argparse
 from pathlib import Path
-from unittest import result
 from obspy import UTCDateTime
 from datetime import datetime
 import pandas as pd
@@ -18,8 +17,8 @@ def parse_arguments():
   parser.add_argument(
     '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
     type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
-    default=[datetime.strptime("20240320", OGS_C.YYMMDD_FMT),
-             datetime.strptime("20240620", OGS_C.YYMMDD_FMT)],
+    default=[datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT),
+             datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT)],
     help="Specify the beginning and ending (inclusive) Gregorian date " \
           "(YYYYMMDD) range to work with.")
   parser.add_argument(
@@ -46,10 +45,10 @@ class DataFileTXT(OGSDataFile):
     fr"(?P<{OGS_C.EVENT_TYPE_STR}>\[.*\])$"                         # Unused
   ]
   def read(self):
-    assert self.input.exists(), \
-      f"File {self.input} does not exist"
-    assert self.input.suffix == OGS_C.TXT_EXT, \
-      f"File extension must be {OGS_C.TXT_EXT}"
+    if not self.input.exists():
+      raise FileNotFoundError(f"File {self.input} does not exist")
+    if self.input.suffix != OGS_C.TXT_EXT:
+      raise ValueError(f"File extension must be {OGS_C.TXT_EXT}")
     SOURCE = list()
     with open(self.input, 'r') as fr: lines = fr.readlines()[1:]
     self.logger.info(f"Reading TXT file: {self.input}")

@@ -11,12 +11,6 @@ import ogsconstants as OGS_C
 # Project root (three levels above this file)
 DATA_PATH = Path(__file__).parent.parent.parent
 
-def is_path(string: str) -> Path:
-  # Validate that a path exists and return it as an absolute Path
-  if os.path.isfile(string) or os.path.isdir(string):
-    return Path(os.path.abspath(string))
-  else: raise FileNotFoundError(string)
-
 def parse_arguments() -> argparse.Namespace:
   # Parse command-line arguments for dataset download
   parser = argparse.ArgumentParser(description="Process AdriaArray Dataset")
@@ -135,7 +129,7 @@ def data_downloader(args: argparse.Namespace) -> None:
   logger = _setup_logger(args.verbose, args.silent)
 
   if args.review:
-    print("Reviewing the downloaded data in directory:", args.review)
+    logger.info("Reviewing the downloaded data in directory: %s", args.review)
     return
   if args.pyrocko:
     # We enable the option to use the PyRocko module to download the data as it
@@ -155,6 +149,7 @@ def data_downloader(args: argparse.Namespace) -> None:
         latitude=args.circdomain[0], longitude=args.circdomain[1],
         minradius=args.circdomain[2], maxradius=args.circdomain[3])
     from obspy.clients.fdsn.mass_downloader import Restrictions, MassDownloader
+    from obspy.clients.fdsn import Client
     # Expand the requested date range into a list of day start times
     start, end = args.dates
     DAYS = np.arange(start, end + OGS_C.ONE_DAY, OGS_C.ONE_DAY,
@@ -165,6 +160,20 @@ def data_downloader(args: argparse.Namespace) -> None:
       "month": "{:02}",
       "day": "{:02}",
     }
+    # Instantiate all requested FDSN clients
+    CLIENTS: dict[str, Client] = dict()
+    for client in args.client:
+      try: CLIENTS[client] = Client(client)
+      except Exception as e:
+        logger.error("Error creating client %s: %s", client, e)
+        continue
+      if args.key and client in [
+        OGS_C.INGV_CLIENT_STR,
+        OGS_C.GFZ_CLIENT_STR
+      ]:
+        try: CLIENTS[client].set_eida_token(args.key, validate=True)
+        except Exception as e:
+          logger.error("Error setting token for %s: %s", client, e)
     # Download day by day to keep file sizes manageable
     for d_ in DAYS:
       # Compute the time window centered at the optional clip time
@@ -196,29 +205,12 @@ def data_downloader(args: argparse.Namespace) -> None:
         location_priorities=["", "00", "01", "02", "10"],
         chunklength_in_sec=86400
       )
-      from obspy.clients.fdsn import Client
-      # Instantiate all requested FDSN clients
-      CLIENTS: dict[str, Client] = dict()
-      for client in args.client:
-        try: CLIENTS[client] = Client(client)
-        except Exception as e:
-          logger.error("Error creating client %s: %s", client, e)
-          continue
-        if args.key and client in [
-          OGS_C.INGV_CLIENT_STR,
-          OGS_C.GFZ_CLIENT_STR
-        ]:
-          # NOTE: It is assumed a single token file is applicable for all
-          #       clients
-          try: CLIENTS[client].set_eida_token(args.key, validate=True)
-          except Exception as e:
-            logger.error("Error setting token for %s: %s", client, e)
       # Execute the mass download for the day
       mdl = MassDownloader(providers=CLIENTS.values())
       try:
-        mdl.download(domain, restrictions, mseed_storage=D_FILE.__str__(),
-                     stationxml_storage=Path(args.directory.parent,
-                                             OGS_C.STATION_STR).__str__())
+        mdl.download(domain, restrictions, mseed_storage=str(D_FILE),
+                     stationxml_storage=str(Path(args.directory.parent,
+                                             OGS_C.STATION_STR)))
       except Exception as e:
         logger.error("Error downloading data: %s", e)
       # Report completion per-day

@@ -121,13 +121,15 @@ class OGSCatalog:
     return logger
 
   def __init__(self,
-               input: Path,
-               start: datetime = datetime.max,
-               end: datetime = datetime.min,
-               verbose: bool = False,
-               polygon : mplPath = mplPath(OGS_C.OGS_POLY_REGION, closed=True),
-               output : Path = OGS_C.THIS_FILE.parent / "data" / "OGSCatalog",
-               name: str = OGS_C.EMPTY_STR) -> None:
+        input: Path,
+        start: datetime = datetime.max,
+        end: datetime = datetime.min,
+        verbose: bool = False,
+        polygon : Optional[mplPath] = mplPath(OGS_C.OGS_POLY_REGION,
+                                              closed=True),
+        output : Path = OGS_C.THIS_FILE.parent / "data" / "OGSCatalog",
+        name: str = OGS_C.EMPTY_STR
+      ) -> None:
     """Initialize the catalog container.
 
     Parameters
@@ -147,13 +149,13 @@ class OGSCatalog:
     name : str, optional
       Catalog display name.
     """
-    assert input.exists(), \
-           f"Input path {input} does not exist."
+    if not input.exists():
+      raise FileNotFoundError(f"Input path {input} does not exist.")
     self.name = output.name if name == OGS_C.EMPTY_STR else name
     self.input = input
     self.start = start
     self.end = end
-    self.polygon : mplPath = polygon
+    self.polygon : Optional[mplPath] = polygon
     self.logger = self._setup_logger(verbose)
     self.output = output
     if not self.output.exists():
@@ -175,7 +177,7 @@ class OGSCatalog:
       OGS_C.ERH_STR, OGS_C.ERT_STR, OGS_C.GROUPS_STR, OGS_C.NO_STR,
       OGS_C.NUMBER_P_PICKS_STR, OGS_C.NUMBER_S_PICKS_STR,
       OGS_C.NUMBER_P_AND_S_PICKS_STR, OGS_C.ML_STR, OGS_C.ML_MEDIAN_STR,
-      OGS_C.ML_UNC_STR, OGS_C.ML_STATIONS_STR, OGS_C.GROUPS_STR
+      OGS_C.ML_UNC_STR, OGS_C.ML_STATIONS_STR
     ])
     self.preload()
 
@@ -585,274 +587,110 @@ class OGSCatalog:
       )
     plt.close()
 
-  def plot_erz_histogram(self,
-                         others: list[OGSCatalog] = [],
-                         bins: int = OGS_C.NUM_BINS,
-                         output: Optional[Path] = None):
-    """Plot ERZ histogram for this catalog and optional comparisons.
+  def _plot_histogram(self,
+        column: str,
+        xlabel: str,
+        title: str,
+        file_suffix: str,
+        others: list[OGSCatalog] = [],
+        bins: int = OGS_C.NUM_BINS,
+        output: Optional[Path] = None,
+        **plotter_kwargs
+      ) -> None:
+    """Generic histogram plotter for any event column.
 
     Parameters
     ----------
+    column : str
+      DataFrame column name to histogram.
+    xlabel : str
+      X-axis label.
+    title : str
+      Plot title.
+    file_suffix : str
+      Suffix for the output filename (e.g., "ERZ", "MagL").
     others : list[OGSCatalog], optional
       Additional catalogs for comparison.
     bins : int, optional
       Number of histogram bins.
     output : Optional[Path], optional
       Output path for the plot.
+    **plotter_kwargs
+      Additional keyword arguments passed to ``histogram_plotter()``.
     """
     import ogsplotter as OGS_P
     from matplotlib import pyplot as plt
     events = self.get("EVENTS")
-    if events.empty or OGS_C.ERZ_STR not in events.columns:
-      self.logger.info("No ERZ data available for histogram.")
+    if events.empty or column not in events.columns:
+      self.logger.info(f"No {title} data available for histogram.")
       return
     hist = OGS_P.histogram_plotter(
-      data=events[OGS_C.ERZ_STR].dropna(),
+      data=events[column].dropna(),
       bins=bins,
-      xlabel="ERZ (km)",
+      xlabel=xlabel,
       ylabel="Number of Events",
-      title=f"ERZ Histogram",
+      title=title,
       output=(output if output is not None else self.output / "img" /
-              f"{self.input.name}_ERZ.png"),
+              f"{self.input.name}_{file_suffix}.png"),
       label=self.name,
-      color=OGS_C.OGS_BLUE,
+      **plotter_kwargs,
     )
     for other, color in zip(others, OGS_C.PLOT_COLORS[1:]):
       if not isinstance(other, OGSCatalog):
-        raise ValueError("Can only perform ERZ histogram with OGSCatalog")
-      events = other.get("EVENTS")
-      if events.empty or OGS_C.ERZ_STR not in events.columns:
-        self.logger.info(f"No ERZ data available for histogram for {other.name}.")
+        raise ValueError(f"Can only perform {title} with OGSCatalog")
+      other_events = other.get("EVENTS")
+      if other_events.empty or column not in other_events.columns:
+        self.logger.info(
+          f"No {title} data available for histogram for {other.name}.")
         continue
       hist.add_plot(
-        data=events[OGS_C.ERZ_STR].dropna(),
-        xlabel="ERZ (km)",
+        data=other_events[column].dropna(),
+        xlabel=xlabel,
         ylabel="Number of Events",
-        title=f"ERZ Histogram",
+        title=title,
         legend=True,
         alpha=0.5,
         label=other.name,
         color=color,
         output=(output if output is not None else self.output / "img" /
-                f"{self.input.name}_{other.input.name}_ERZ.png")
+                f"{self.input.name}_{other.input.name}_{file_suffix}.png")
       )
     plt.close()
 
-  def plot_erh_histogram(self,
-        others: list[OGSCatalog] = [],
-        bins: int = OGS_C.NUM_BINS,
-        output: Optional[Path] = None
-      ) -> None:
-    """Plot ERH histogram for this catalog and optional comparisons.
+  def plot_erz_histogram(self, others=[], bins=OGS_C.NUM_BINS, output=None):
+    """Plot ERZ histogram for this catalog and optional comparisons."""
+    self._plot_histogram(
+      OGS_C.ERZ_STR, "ERZ (km)", "ERZ Histogram", "ERZ",
+      others=others, bins=bins, output=output, color=OGS_C.OGS_BLUE)
 
-    Parameters
-    ----------
-    others : list[OGSCatalog], optional
-      Additional catalogs for comparison.
-    bins : int, optional
-      Number of histogram bins.
-    output : Optional[Path], optional
-      Output path for the plot.
-    """
-    import ogsplotter as OGS_P
-    from matplotlib import pyplot as plt
+  def plot_erh_histogram(self, others=[], bins=OGS_C.NUM_BINS, output=None):
+    """Plot ERH histogram for this catalog and optional comparisons."""
+    self._plot_histogram(
+      OGS_C.ERH_STR, "ERH (km)", "ERH Histogram", "ERH",
+      others=others, bins=bins, output=output, color=OGS_C.OGS_BLUE)
+
+  def plot_ert_histogram(self, others=[], bins=OGS_C.NUM_BINS, output=None):
+    """Plot ERT histogram for this catalog and optional comparisons."""
+    self._plot_histogram(
+      OGS_C.ERT_STR, "ERT (s)", "ERT Histogram", "ERT",
+      others=others, bins=bins, output=output)
+
+  def plot_depth_histogram(self, others=[], bins=OGS_C.NUM_BINS, output=None):
+    """Plot depth histogram for this catalog and optional comparisons."""
+    self._plot_histogram(
+      OGS_C.DEPTH_STR, "Depth (km)", "Depth Histogram", "Depth",
+      others=others, bins=bins, output=output)
+
+  def plot_magnitude_histogram(self, others=[], bins=OGS_C.NUM_BINS,
+                               output=None):
+    """Plot magnitude histogram for this catalog and optional comparisons."""
     events = self.get("EVENTS")
-    if events.empty or OGS_C.ERH_STR not in events.columns:
-      self.logger.info("No ERH data available for histogram.")
-      print(events)
-      return
-    hist = OGS_P.histogram_plotter(
-      data=events[OGS_C.ERH_STR].dropna(),
-      bins=bins,
-      xlabel="ERH (km)",
-      ylabel="Number of Events",
-      title=f"ERH Histogram",
-      output=(output if output is not None else self.output / "img" /
-              f"{self.input.name}_ERH.png"),
-      label=self.name,
-      color=OGS_C.OGS_BLUE,
-    )
-    for other, color in zip(others, OGS_C.PLOT_COLORS[1:]):
-      if not isinstance(other, OGSCatalog):
-        raise ValueError("Can only perform ERH histogram with OGSCatalog")
-      events = other.get("EVENTS")
-      if events.empty or OGS_C.ERH_STR not in events.columns:
-        self.logger.info(f"No ERH data available for histogram for {other.name}.")
-        continue
-      hist.add_plot(
-        data=events[OGS_C.ERH_STR].dropna(),
-        xlabel="ERH (km)",
-        ylabel="Number of Events",
-        title=f"ERH Histogram",
-        legend=True,
-        alpha=0.5,
-        label=other.name,
-        color=color,
-        output=(output if output is not None else self.output / "img" /
-                f"{self.input.name}_{other.input.name}_ERH.png")
-      )
-    plt.close()
-
-  def plot_ert_histogram(self,
-        others: list[OGSCatalog] = [],
-        bins: int = OGS_C.NUM_BINS,
-        output: Optional[Path] = None
-      ) -> None:
-    """Plot ERT histogram for this catalog and optional comparisons.
-
-    Parameters
-    ----------
-    others : list[OGSCatalog], optional
-      Additional catalogs for comparison.
-    bins : int, optional
-      Number of histogram bins.
-    output : Optional[Path], optional
-      Output path for the plot.
-    """
-    import ogsplotter as OGS_P
-    from matplotlib import pyplot as plt
-    events = self.get("EVENTS")
-    if events.empty or OGS_C.ERT_STR not in events.columns:
-      self.logger.info("No ERT data available for histogram.")
-      return
-    hist = OGS_P.histogram_plotter(
-      data=events[OGS_C.ERT_STR].dropna(),
-      bins=bins,
-      xlabel="ERT (s)",
-      ylabel="Number of Events",
-      title=f"ERT Histogram",
-      label=self.name,
-      output=(output if output is not None else self.output / "img" /
-              f"{self.input.name}_ERT.png")
-    )
-    for other, color in zip(others, OGS_C.PLOT_COLORS[1:]):
-      if not isinstance(other, OGSCatalog):
-        raise ValueError("Can only perform ERT histogram with OGSCatalog")
-      events = other.get("EVENTS")
-      if events.empty or OGS_C.ERT_STR not in events.columns:
-        self.logger.info(f"No ERT data available for histogram for {other.name}.")
-        continue
-      hist.add_plot(
-        data=events[OGS_C.ERT_STR].dropna(),
-        xlabel="ERT (s)",
-        ylabel="Number of Events",
-        title=f"ERT Histogram",
-        legend=True,
-        alpha=0.5,
-        label=other.name,
-        color=color,
-        output=(output if output is not None else self.output / "img" /
-                f"{self.input.name}_{other.input.name}_ERT.png")
-      )
-    plt.close()
-
-  def plot_depth_histogram(self,
-        others: list[OGSCatalog] = [],
-        bins: int = OGS_C.NUM_BINS,
-        output: Optional[Path] = None
-      ) -> None:
-    """Plot depth histogram for this catalog and optional comparisons.
-
-    Parameters
-    ----------
-    others : list[OGSCatalog], optional
-      Additional catalogs for comparison.
-    bins : int, optional
-      Number of histogram bins.
-    output : Optional[Path], optional
-      Output path for the plot.
-    """
-    import ogsplotter as OGS_P
-    from matplotlib import pyplot as plt
-    events = self.get("EVENTS")
-    if events.empty or OGS_C.DEPTH_STR not in events.columns:
-      self.logger.info("No depth data available for histogram.")
-      return
-    hist = OGS_P.histogram_plotter(
-      data=events[OGS_C.DEPTH_STR].dropna(),
-      bins=bins,
-      xlabel="Depth (km)",
-      ylabel="Number of Events",
-      title=f"Depth Histogram",
-      output=(output if output is not None else self.output / "img" /
-              f"{self.input.name}_Depth.png"),
-      label=self.name,
-    )
-
-    for other, color in zip(others, OGS_C.PLOT_COLORS[1:]):
-      if not isinstance(other, OGSCatalog):
-        raise ValueError("Can only perform Depth histogram with OGSCatalog")
-      hist.add_plot(
-        data=other.get("EVENTS")[OGS_C.DEPTH_STR].dropna(),
-        xlabel="Depth (km)",
-        ylabel="Number of Events",
-        title=f"Depth Histogram",
-        legend=True,
-        alpha=0.5,
-        label=other.name,
-        color=color,
-        output=(output if output is not None else self.output / "img" /
-                f"{self.input.name}_{other.input.name}_Depth.png")
-      )
-    plt.close()
-
-  def plot_magnitude_histogram(self,
-        others: list[OGSCatalog] = [],
-        bins: int = OGS_C.NUM_BINS,
-        output: Optional[Path] = None
-      ) -> None:
-    """Plot magnitude histogram for this catalog and optional comparisons.
-
-    Parameters
-    ----------
-    others : list[OGSCatalog], optional
-      Additional catalogs for comparison.
-    bins : int, optional
-      Number of histogram bins.
-    output : Optional[Path], optional
-      Output path for the plot.
-    """
-    import ogsplotter as OGS_P
-    from matplotlib import pyplot as plt
-    events = self.get("EVENTS")
-    if events.empty or OGS_C.MAGNITUDE_L_STR not in events.columns:
-      self.logger.info("No Magnitude data available for histogram.")
-      return
-    events[OGS_C.MAGNITUDE_L_STR] = pd.to_numeric(
-      events[OGS_C.MAGNITUDE_L_STR], errors='coerce'
-    )
-    hist = OGS_P.histogram_plotter(
-      data=events[OGS_C.MAGNITUDE_L_STR].dropna(),
-      bins=bins,
-      xlabel="Magnitude ($M_L$)",
-      ylabel="Number of Events",
-      title=f"Magnitude Histogram",
-      output=(output if output is not None else self.output / "img" /
-              f"{self.input.name}_MagL.png"),
-      yscale='log',
-      label=self.name,
-    )
-    for other, color in zip(others, OGS_C.PLOT_COLORS[1:]):
-      if not isinstance(other, OGSCatalog):
-        raise ValueError("Can only perform Magnitude histogram with OGSCatalog")
-      events = other.get("EVENTS")
-      if events.empty or OGS_C.MAGNITUDE_L_STR not in events.columns:
-        self.logger.info("No Magnitude data available for histogram.")
-        print(events.head().to_string())
-        return
-      hist.add_plot(
-        data=events[OGS_C.MAGNITUDE_L_STR].dropna(),
-        xlabel="Magnitude ($M_L$)",
-        ylabel="Number of Events",
-        title=f"Magnitude Histogram",
-        legend=True,
-        alpha=0.5,
-        label=other.name,
-        color=color,
-        output=(output if output is not None else self.output / "img" /
-                f"{self.input.name}_{other.input.name}_MagL.png")
-      )
-    plt.close()
+    if OGS_C.MAGNITUDE_L_STR in events.columns:
+      events[OGS_C.MAGNITUDE_L_STR] = pd.to_numeric(
+        events[OGS_C.MAGNITUDE_L_STR], errors='coerce')
+    self._plot_histogram(
+      OGS_C.MAGNITUDE_L_STR, "Magnitude ($M_L$)", "Magnitude Histogram",
+      "MagL", others=others, bins=bins, output=output, yscale='log')
 
   def bgmaEvents(self, other: "OGSCatalog") -> None:
     """Match events between catalogs using BGMA.
@@ -902,9 +740,14 @@ class OGSCatalog:
       if not TARGET.empty:
         fp_target = TARGET[TARGET[
           [OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR]
-        ].apply(lambda x: self.polygon.contains_point(
-          (x[OGS_C.LONGITUDE_STR], x[OGS_C.LATITUDE_STR])), axis=1)
-        ].reset_index(drop=True)
+        ]]
+        if isinstance(self.polygon, mplPath):
+          fp_target = fp_target[fp_target.apply(
+            lambda x: self.polygon.contains_point(
+              (x[OGS_C.LONGITUDE_STR], x[OGS_C.LATITUDE_STR])
+            ), axis=1
+          )]
+        fp_target = fp_target.reset_index(drop=True)
         for j in targetIDs:
           if j not in fp_target.index: continue
           EVENTS_CFN_MTX.at[OGS_C.NONE_STR, OGS_C.EVENT_STR] += 1 # type: ignore

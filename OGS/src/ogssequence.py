@@ -417,12 +417,23 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     # =========================================================================
     # Process each time range independently
 
+    # Cache catalogs to avoid redundant disk I/O and re-computation in Phase 2
+    cached_catalogs: list = [None] * n
+
     for range_idx, range_ in enumerate(ranges):
       # Load catalog for this time window
       myCatalog = self._load_catalog(range_idx, range_)
 
+      # Skip empty catalogs
+      if myCatalog.EVENTS.empty:
+        self.logger.warning("Window #%s has no events; skipping.", range_idx + 1)
+        continue
+
       # Prepare features: Cartesian coordinates, inter-event times
       self._prepare_events(myCatalog)
+
+      # Cache the prepared catalog for Phase 2
+      cached_catalogs[range_idx] = myCatalog
 
       # Extract and standardize feature matrix
       # Features: X_KM (E-W position), Y_KM (N-S position), DEPTH, INTEREVENT
@@ -450,8 +461,14 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
           # Store optimized parameters
           self.best_params[range_idx][algo_name][metric_name] = params
 
-          # Assign cluster labels to events
-          myCatalog.EVENTS["cluster"] = params.get("labels")
+          # Assign cluster labels to events (skip if optimization failed)
+          labels = params.get("labels")
+          if labels is None:
+            self.logger.warning(
+              "No valid clustering found for %s/%s in window #%s; skipping.",
+              algo_name, metric_name, range_idx + 1)
+            continue
+          myCatalog.EVENTS["cluster"] = labels
 
           # Persist per-cluster CSV files
           self._save_clusters(myCatalog, algo_name, metric_name)
@@ -469,13 +486,19 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
 
           # Plot each time range in its column
           for range_idx, range_ in enumerate(ranges):
-            # Reload catalog for this range (needed for plotting)
-            myCatalog = self._load_catalog(range_idx, range_)
-            self._prepare_events(myCatalog)
+            # Reuse cached catalog from Phase 1
+            myCatalog = cached_catalogs[range_idx]
+
+            # Skip ranges that had no events
+            if myCatalog is None or range_idx not in self.best_params:
+              continue
 
             # Retrieve stored cluster labels
             params = self.best_params[range_idx][algo_name][metric_name]
-            myCatalog.EVENTS["cluster"] = params.get("labels")
+            labels = params.get("labels")
+            if labels is None:
+              continue
+            myCatalog.EVENTS["cluster"] = labels
 
             # Draw map view (top row) and cross-section (bottom row)
             self._plot_results(ax, range_idx, angle_deg, myCatalog)
@@ -569,12 +592,21 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     # Log the time window being processed
     self.logger.info("Window #%s: %s to %s", range_idx + 1, range_[0], range_[1])
 
+    # Build polygon from map_deg bounds if available
+    from matplotlib.path import Path as mplPath
+    lon_min, lon_max, lat_min, lat_max = self.metadata_map_bounds
+    polygon = mplPath([
+      (lon_min, lat_min), (lon_min, lat_max),
+      (lon_max, lat_max), (lon_max, lat_min)
+    ], closed=True)
+
     # Create catalog instance with time bounds
     myCatalog = OGSCatalog(
       input=Path(self._metadata["directory"]),
       start=datetime.strptime(range_[0], OGS_C.DATE_FMT),
       end=datetime.strptime(range_[1], OGS_C.DATE_FMT),
       verbose=self.verbose,
+      polygon=polygon,
       output=Path(OGS_C.UNDERSCORE_STR.join(range_)),
       name=f"Catalog_Range_{range_idx + 1}"
     )
@@ -985,6 +1017,9 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     # Construct output filename
     output_filepath = Path("Clusters") / \
       f"{algo_name}_{metric_name}_{angle_deg:.1f}.png"
+
+    # Ensure output directory exists
+    output_filepath.parent.mkdir(parents=True, exist_ok=True)
 
     # Save figure to file
     plt.savefig(output_filepath)

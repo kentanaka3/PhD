@@ -535,16 +535,16 @@ class DataCatalog(OGSDataFile):
     Output is written to {input}.all/ directory structure.
     """
     # Merge picks first (events depend on pick statistics)
-    print(self.merge_picks())
+    self.logger.info(self.merge_picks())
 
     # Merge events and compute statistics
     self.merge_events()
 
     # Log output path for debugging
-    print(self.input)
+    self.logger.info(self.input)
 
     # Append ".all" suffix to output path for merged catalog
-    self.input = Path(self.input.__str__() + ".all")
+    self.input = Path(str(self.input) + ".all")
 
     # Write merged catalog to Parquet files
     self.log()

@@ -270,12 +270,12 @@ class DataFileDAT(OGSDataFile):
     # -------------------------------------------------------------------------
 
     # Verify input file exists on filesystem
-    assert self.input.exists(), \
-      f"File {self.input} does not exist"
+    if not self.input.exists():
+      raise FileNotFoundError(f"File {self.input} does not exist")
 
     # Verify correct file extension (.dat)
-    assert self.input.suffix == OGS_C.DAT_EXT, \
-      f"File extension must be {OGS_C.DAT_EXT}"
+    if self.input.suffix != OGS_C.DAT_EXT:
+      raise ValueError(f"File extension must be {OGS_C.DAT_EXT}")
 
     # TODO: Attemp restoration before SHUTDOWN
 
