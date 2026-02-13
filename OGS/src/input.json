@@ -1,6 +1,7 @@
 {
   "algorithms": [
-    "AdvancedDensityPeaks"
+    "AdvancedDensityPeaks",
+    "KMeans"
   ],
   "angles_deg": [160],
   "annotations": [

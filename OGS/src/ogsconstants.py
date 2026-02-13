@@ -108,6 +108,8 @@ AUTHOR: AI2Seism Project
 # =============================================================================
 import os                                  # Operating system interface
 import re                                  # Regular expression operations
+import sys                                 # System-specific parameters
+import logging                             # Logging facility
 import argparse                            # Command-line argument parsing
 import itertools as it                     # Iterator utilities
 from pathlib import Path                   # Object-oriented filesystem paths
@@ -124,6 +126,83 @@ import networkx as nx                      # Graph algorithms (bipartite matchin
 from obspy import UTCDateTime              # Seismology-specific datetime
 from matplotlib.path import Path as mplPath  # Matplotlib path for polygon ops
 from obspy.geodetics import gps2dist_azimuth
+
+# =============================================================================
+# LOGGING
+# =============================================================================
+
+
+class ColorFormatter(logging.Formatter):
+  """Logging formatter with ANSI colors and step-tracing symbols.
+
+  Produces output like:
+    >>> 2026-02-13 19:30:08 | OGSSequence          | INFO     | Window #1 ...
+    /!\\ 2026-02-13 19:30:08 | ogscatalog.OGSCatalog | WARNING  | Loading ...
+    ... 2026-02-13 19:30:08 | ogscatalog.OGSCatalog | DEBUG    | Skipping ...
+    [X] 2026-02-13 19:30:08 | ogsdat.OGSdat        | ERROR    | Could not ...
+  """
+
+  COLORS = {
+    logging.DEBUG:    "\033[36m",    # Cyan
+    logging.INFO:     "\033[32m",    # Green
+    logging.WARNING:  "\033[33m",    # Yellow
+    logging.ERROR:    "\033[31m",    # Red
+    logging.CRITICAL: "\033[1;31m",  # Bold Red
+  }
+  SYMBOLS = {
+    logging.DEBUG:    "...",   # trace detail
+    logging.INFO:     ">>>",   # step progress
+    logging.WARNING:  "/!\\",  # caution
+    logging.ERROR:    "[X]",   # failure
+    logging.CRITICAL: "!!!",   # critical failure
+  }
+  RESET = "\033[0m"
+  BASE_FMT = "%(asctime)s | %(name)-30s | %(levelname)-8s | %(message)s"
+
+  def format(self, record: logging.LogRecord) -> str:
+    color = self.COLORS.get(record.levelno, "")
+    symbol = self.SYMBOLS.get(record.levelno, "   ")
+    formatted = super().format(record)
+    return f"{color}{symbol} {formatted}{self.RESET}"
+
+
+def setup_logger(
+  name: str,
+  verbose: bool = False,
+  silent: bool = False,
+) -> logging.Logger:
+  """Create and configure a logger with colored, step-tracing output.
+
+  Parameters
+  ----------
+  name : str
+    Logger name (typically ``__name__`` or a class-qualified name).
+  verbose : bool
+    If True, set log level to DEBUG.
+  silent : bool
+    If True, set log level to WARNING (overrides *verbose*).
+
+  Returns
+  -------
+  logging.Logger
+    Configured logger instance.
+  """
+  logger = logging.getLogger(name)
+  if not logger.handlers:
+    handler = logging.StreamHandler(sys.stderr)
+    formatter = ColorFormatter(
+      fmt=ColorFormatter.BASE_FMT,
+      datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+  if silent:
+    logger.setLevel(logging.WARNING)
+  else:
+    logger.setLevel(logging.DEBUG if verbose else logging.INFO)
+  logger.propagate = False
+  return logger
+
 
 # =============================================================================
 # MODULE-LEVEL CONFIGURATION

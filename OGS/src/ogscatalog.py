@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from datetime import datetime, timedelta as td
 from typing import Dict, Optional
-import logging
 
 import numpy as np
 import pandas as pd
@@ -95,30 +94,6 @@ class OGSCatalog:
 
 
   """
-  def _setup_logger(self, verbose: bool) -> logging.Logger:
-    """Create and configure the instance logger.
-
-    Parameters
-    ----------
-    verbose : bool
-      If True, set log level to DEBUG; otherwise INFO.
-
-    Returns
-    -------
-    logging.Logger
-      Configured logger instance.
-    """
-    logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-    if not logger.handlers:
-      handler = logging.StreamHandler()
-      formatter = logging.Formatter(
-        "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-      )
-      handler.setFormatter(formatter)
-      logger.addHandler(handler)
-    logger.setLevel(logging.DEBUG if verbose else logging.INFO)
-    logger.propagate = False
-    return logger
 
   def __init__(self,
         input: Path,
@@ -156,7 +131,7 @@ class OGSCatalog:
     self.start = start
     self.end = end
     self.polygon : Optional[mplPath] = polygon
-    self.logger = self._setup_logger(verbose)
+    self.logger = OGS_C.setup_logger(f"{__name__}.{self.__class__.__name__}", verbose)
     self.output = output
     if not self.output.exists():
       self.output.mkdir(parents=True, exist_ok=True)

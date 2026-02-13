@@ -98,9 +98,6 @@ import json
 # Standard library: Command-line argument parsing
 import argparse
 
-# Standard library: Logging framework for status messages
-import logging
-
 # NumPy: Numerical computing for array operations and trigonometry
 import numpy as np
 
@@ -267,45 +264,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     self.best_params: dict[int, dict[str, dict[str, Any]]] = {}
 
     # Configure module-level logger
-    self.logger = self._setup_logger()
-
-  # -------------------------------------------------------------------------
-  # HELPER: Logger Setup
-  # -------------------------------------------------------------------------
-
-  def _setup_logger(self) -> logging.Logger:
-    """
-    Configure and return a module-level logger with formatted output.
-
-    Creates a StreamHandler with timestamp, class name, level, and message.
-    Sets level to DEBUG if verbose mode enabled, otherwise INFO.
-
-    Returns:
-        logging.Logger: Configured logger instance
-    """
-    # Get or create logger with class name
-    logger = logging.getLogger(self.__class__.__name__)
-
-    # Only add handler if none exist (avoid duplicate handlers)
-    if not logger.handlers:
-      # Create console handler for stdout output
-      handler = logging.StreamHandler()
-
-      # Define log format: timestamp | class | level | message
-      formatter = logging.Formatter(
-        fmt="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-      )
-      handler.setFormatter(formatter)
-      logger.addHandler(handler)
-
-    # Set logging level based on verbosity flag
-    logger.setLevel(logging.DEBUG if self.verbose else logging.INFO)
-
-    # Prevent propagation to root logger (avoid duplicate messages)
-    logger.propagate = False
-
-    return logger
+    self.logger = OGS_C.setup_logger(self.__class__.__name__, self.verbose)
 
   # -------------------------------------------------------------------------
   # PROPERTIES: Metadata Accessors

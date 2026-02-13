@@ -1,6 +1,5 @@
 import os
 import argparse
-import logging
 import numpy as np
 import obspy as op
 from pathlib import Path
@@ -86,27 +85,6 @@ def parse_arguments() -> argparse.Namespace:
   # print(vars(args))
   return args
 
-def _setup_logger(verbose: bool, silent: bool) -> logging.Logger:
-  """Configure and return a module logger."""
-  logger = logging.getLogger(__name__)
-  # Avoid duplicate handlers when the module is imported multiple times
-  if not logger.handlers:
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-      fmt="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
-      datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-  # Choose verbosity level from CLI flags
-  if silent:
-    logger.setLevel(logging.WARNING)
-  else:
-    logger.setLevel(logging.DEBUG if verbose else logging.INFO)
-  # Keep logs local to this module
-  logger.propagate = False
-  return logger
-
 def data_downloader(args: argparse.Namespace) -> None:
   """
   Download the data from the server based on the specified arguments. If the
@@ -126,7 +104,7 @@ def data_downloader(args: argparse.Namespace) -> None:
 
   """
   # Initialize logger based on CLI flags
-  logger = _setup_logger(args.verbose, args.silent)
+  logger = OGS_C.setup_logger(__name__, args.verbose, args.silent)
 
   if args.review:
     logger.info("Reviewing the downloaded data in directory: %s", args.review)

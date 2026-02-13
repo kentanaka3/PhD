@@ -1,5 +1,4 @@
 import numpy as np
-import logging
 import obspy as op
 import pandas as pd
 import cartopy.crs as ccrs
@@ -24,38 +23,13 @@ def v_lat_long_to_distance(lng1, lat1, depth1, lng2, lat2, depth2, dim=2):
             lng1, lat1, depth1, lng2, lat2, depth2)]
 
 class plotter:
-  def _setup_logger(self, verbose: bool = False) -> logging.Logger:
-    """Create and configure the instance logger.
-
-    Parameters
-    ----------
-    verbose : bool
-      If True, set log level to DEBUG; otherwise INFO.
-
-    Returns
-    -------
-    logging.Logger
-      Configured logger instance.
-    """
-    logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-    if not logger.handlers:
-      handler = logging.StreamHandler()
-      formatter = logging.Formatter(
-        "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-      )
-      handler.setFormatter(formatter)
-      logger.addHandler(handler)
-    logger.setLevel(logging.DEBUG if verbose else logging.INFO)
-    logger.propagate = False
-    return logger
-
   def __init__(self, figsize=(20, 10), fig=None, verbose: bool = False,
                **kwargs) -> None:
     plt.rcParams.update({'font.size': 12})
     self.figsize = figsize
     self.fig = fig if fig else plt.figure(figsize=figsize,
                                           layout="compressed")
-    self.logger = self._setup_logger(verbose)
+    self.logger = OGS_C.setup_logger(f"{__name__}.{self.__class__.__name__}", verbose)
 
   def savefig(self, output=None, **kwargs) -> None:
     if output is not None:
