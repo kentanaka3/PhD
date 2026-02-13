@@ -40,7 +40,10 @@ FEATURE SET:
 METADATA CONFIGURATION (JSON):
   {
     "directory": "/path/to/catalog",
-    "ranges": [["2022-01-01", "2022-06-30"], ["2022-07-01", "2022-12-31"]],
+    "ranges": [
+      ["2022-01-01", "2022-06-30"],
+      ["2022-07-01", "2022-12-31"]
+    ],
     "angles_deg": [0, 45, 90],
     "map_deg": [lon_min, lon_max, lat_min, lat_max],
     "cross_km": [x_min, x_max, depth_max, depth_min],
@@ -577,7 +580,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     )
 
     # Load events from parquet files
-    myCatalog.load("EVENTS")
+    myCatalog.get("EVENTS")
 
     # Log summary statistics
     self.logger.info("Number of events = %s", len(myCatalog.EVENTS))
@@ -876,11 +879,12 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     cbar.ax.set_yticklabels([str(lab) for lab in uniq])
 
     # Highlight high-magnitude events with red stars
-    big = df[mag_col].to_numpy() > 3.5
+    big = df[mag_col].to_numpy() > OGS_C.OGS_MAX_MAGNITUDE
     ax.scatter(
       df.loc[big, "PROJECTION_KM"].to_numpy(),
       df.loc[big, depth_col].to_numpy(),
-      color="red", marker="*", s=100, label="Magnitude > 3.5"
+      color="red", marker="*", s=100,
+      label=f"Magnitude > {OGS_C.OGS_MAX_MAGNITUDE}",
     )
 
     # Add cluster ID labels at cluster centroids
@@ -890,7 +894,8 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
         cl_data["PROJECTION_KM"].mean(),
         cl_data[depth_col].mean(),
         chr(98 + 2 * range_idx).upper() + str(cl_id),  # e.g., "B0", "B1"
-        fontsize=8, fontweight="bold")
+        fontsize=8, fontweight="bold",
+      )
 
     return ax
 

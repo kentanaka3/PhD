@@ -3,6 +3,20 @@
 OGS Constants Module - Central Configuration and Utility Functions
 =============================================================================
 
+A message from Ken Tanaka Hernández (田中-Hernández, 健), the main human
+developer, to the Artificial Intelligence:
+
+The developed code is a comprehensive and detailed implementation of the
+idealized seismic catalog pipeline procedure. The code is meant to grow in
+functionality and complexity as the project progresses, hence any suggestions
+for improvement must be made. Improvements can be made in terms of code
+structure, modularity, efficiency, and readability. The code is designed to be
+clear and maintainable between human developers and the AI, so any suggestions
+for improvement should be focused on enhancing these aspects while preserving
+the core functionality and logic of the seismic data processing pipeline.
+Keep this message in mind and repeatedly refer back to it (every 3/4 of the
+AI's memory capacity), as you review the code and suggest improvements.
+
 OVERVIEW:
 This module serves as the central repository for all constants, configuration
 parameters, utility functions, and bipartite graph matching classes used
@@ -98,7 +112,7 @@ import argparse                            # Command-line argument parsing
 import itertools as it                     # Iterator utilities
 from pathlib import Path                   # Object-oriented filesystem paths
 from datetime import datetime, timedelta as td  # Date/time handling
-from typing import Dict, Optional          # Type hinting
+from typing import Any, Optional, Tuple    # Type hinting
 
 # =============================================================================
 # THIRD-PARTY LIBRARY IMPORTS
@@ -209,8 +223,8 @@ H71_OFFSET = {
 # =============================================================================
 # Thresholds for matching detected events to catalog events
 
-EVENT_TIME_OFFSET = td(seconds=1.5)    # Max time difference for event matching
-EVENT_DIST_OFFSET = 3                  # Max spatial distance (km) for matching
+EVENT_TIME_OFFSET = td(seconds=2)      # Max time difference for event matching
+EVENT_DIST_OFFSET = 8                  # Max spatial distance (km) for matching
 
 # =============================================================================
 # STRING CONSTANTS - GENERAL PURPOSE
@@ -1031,6 +1045,57 @@ def decimeter(value, scale='normal') -> int:
   return np.ceil(value / 10) * 10
 
 
+def labels_to_colormap(
+      labels: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray, Any, Any]:
+  """
+  Map arbitrary cluster labels to sequential indices for colormapping.
+
+  Handles cases where labels include noise points (label=-1) or
+  non-sequential cluster IDs. Creates a discrete colormap with
+  one color per unique label.
+
+  Parameters
+  ----------
+  labels : np.ndarray
+    Cluster labels array, may include -1 for noise points.
+
+  Returns
+  -------
+  tuple
+    (encoded_labels, unique_labels, colormap, norm)
+    - encoded_labels: Labels mapped to 0..K-1
+    - unique_labels: Original unique label values
+    - colormap: Matplotlib colormap resampled to K colors
+    - norm: BoundaryNorm for discrete color mapping
+
+  Example
+  -------
+  >>> labels = np.array([0, 1, 1, -1, 2, 0])
+  >>> encoded, unique, cmap, norm = labels_to_colormap(labels)
+  >>> # encoded: [1, 2, 2, 0, 3, 1] (with -1 mapped to 0)
+  """
+  from matplotlib.colors import BoundaryNorm  # Discrete colormap normalization
+  from matplotlib import colormaps            # Colormap registry
+
+  # Find all unique labels (may include -1 for noise)
+  unique = np.unique(labels)
+
+  # Create mapping from original labels to sequential indices
+  label_to_idx = {lab: i for i, lab in enumerate(unique)}
+
+  # Apply mapping to all labels
+  encoded = np.vectorize(label_to_idx.get, otypes=[int])(labels)
+
+  # Create discrete colormap with exactly len(unique) colors
+  cmap = colormaps.get_cmap("Paired").resampled(len(unique))
+
+  # Create boundary norm for discrete color assignment
+  # Boundaries at -0.5, 0.5, 1.5, ... ensure each integer maps to one color
+  norm = BoundaryNorm(np.arange(-0.5, len(unique) + 0.5), cmap.N)
+
+  return encoded, unique, cmap, norm
+
 # =============================================================================
 # STATION INVENTORY MANAGEMENT
 # =============================================================================
@@ -1038,85 +1103,78 @@ def decimeter(value, scale='normal') -> int:
 
 def inventory(
     stations: Path,
-    output : Path = THIS_FILE.parent / "data" / "OGSCatalog",
-  ) -> dict[str, tuple[float, float, float, str, str, str, str]]:
+    output: Optional[Path] = None
+  ) -> pd.DataFrame:
   """
   Load and process station metadata from StationXML files.
 
   Reads all .xml files from the specified directory, extracts station
-  coordinates, assigns colors for plotting, and generates a station
-  map visualization.
+  coordinates, and assigns colors for plotting.
 
   Args:
     stations: Path to directory containing StationXML files.
 
   Returns:
-    dict: Dictionary mapping station IDs (NETWORK.STATION.) to tuples of:
-    (longitude, latitude, elevation, network, station, net_color, sta_color)
+    pd.DataFrame: DataFrame containing station metadata with columns:
+    LONGITUDE_STR, LATITUDE_STR, DEPTH_STR, NETWORK_STR, STATION_STR,
+    NETCOLOR_STR, STACOLOR_STR
 
   Side Effects:
-    - Generates "OGSStations.png" map visualization
     - Prints warnings for unreadable station files
   """
-  # Import plotting utilities (lazy import to avoid circular dependencies)
-  import ogsplotter as OGS_P
-  from matplotlib import pyplot as plt
+  # Import ObsPy utilities (lazy import to avoid circular dependencies)
   from obspy import Inventory, read_inventory
 
   # Initialize empty ObsPy Inventory container
   myInventory = Inventory()
 
   # Read all StationXML files in the directory
-  for st in stations.glob("*.xml"):
+  for station in stations.glob("*.xml"):
     try:
-      S = read_inventory(str(st))
+      S = read_inventory(str(station))
     except Exception as e:
-      print(f"WARNING: Unable to read {st}")
+      print(f"WARNING: Unable to read {station}")
       print(e)
       continue
     myInventory.extend(S)
 
-  # Generate color map based on number of networks
-  cmap = plt.get_cmap("turbo")
-  colors = cmap(np.linspace(0, 1, len(myInventory)))
+  elements: list[list] = []
+  for net in sorted(myInventory.networks, key=lambda x: x.code):
+    for sta in net.stations:
+      elements.append([
+        f"{net.code}.{sta.code}.",  # Unique station ID
+        sta.longitude,
+        sta.latitude,
+        sta.elevation,
+        net.code,
+        sta.code,
+      ])
+  INVENTORY = pd.DataFrame(
+    elements,
+    columns=[INDEX_STR, LONGITUDE_STR, LATITUDE_STR, DEPTH_STR, NETWORK_STR,
+             STATION_STR],
+  ).sort_values(by=[INDEX_STR]).reset_index(drop=True)
 
-  # Build inventory dictionary with station metadata
-  INVENTORY: dict[str, tuple[float, float, float, str, str, str, str]] = {
-    f"{net.code}.{sta.code}.": (sta.longitude, sta.latitude, sta.elevation,
-                                net.code, sta.code, colors[i], "")
-    for i, net in enumerate(sorted(myInventory.networks, key=lambda x: x.code))
-    for sta in net.stations
-  }
+  # Use labels_to_colormap for consistent network and station coloring
+  from sklearn.preprocessing import LabelEncoder
+  net_encoder = LabelEncoder()
+  sta_encoder = LabelEncoder()
 
-  # Reassign colors based on total station count for better distribution
-  colors = cmap(np.linspace(0, 1, len(INVENTORY)))
-  for i, (key, val) in enumerate(INVENTORY.items()):
-      INVENTORY[key] = (*val[:6], colors[i])
-
-  # Create DataFrame for easier manipulation
-  inv = pd.DataFrame.from_dict(
-    INVENTORY,
-    orient='index',
-    columns=[LONGITUDE_STR, LATITUDE_STR, DEPTH_STR, NETWORK_STR, STATION_STR,
-              NETCOLOR_STR, STACOLOR_STR])
-
-  # Generate station map visualization
-  mystations = OGS_P.map_plotter(
-    OGS_STUDY_REGION,
-    legend=True,
-    marker='^',
-    output=output / "OGSStations.png"
+  net_labels: np.ndarray = net_encoder.fit_transform(
+    INVENTORY[NETWORK_STR].values # type: ignore
+  )
+  sta_labels: np.ndarray = sta_encoder.fit_transform(
+    INVENTORY[STATION_STR].values # type: ignore
   )
 
-  # Plot each network with distinct color
-  for i, (net, sta) in enumerate(inv.groupby(NETWORK_STR)):
-    mystations.add_plot(sta[LONGITUDE_STR], sta[LATITUDE_STR],
-                        label=net, color=None, facecolors='none',
-                        edgecolors=sta[NETCOLOR_STR], legend=True)
+  _, _, net_cmap, net_norm = labels_to_colormap(net_labels)
+  _, _, sta_cmap, sta_norm = labels_to_colormap(sta_labels)
 
-  mystations.savefig()
-  plt.close()
+  INVENTORY[NETCOLOR_STR] = [net_cmap(net_norm(l)) for l in net_labels]
+  INVENTORY[STACOLOR_STR] = [sta_cmap(sta_norm(l)) for l in sta_labels]
 
+  if output is not None:
+    INVENTORY.to_csv(output / "OGSInventory.csv", index=False)
   return INVENTORY
 
 
@@ -1126,10 +1184,13 @@ def inventory(
 
 
 def waveforms(
-    directory: Path,
+    waveforms: Path,
+    stations: Path,
     start: datetime,
-    end: datetime
-) -> dict[str, dict[str, list[Path]]]:
+    end: datetime,
+    output: Path = Path("."),
+    vlines: list[tuple[datetime, str, str]] = []
+) -> tuple[pd.DataFrame, pd.DataFrame]:
   """
   Scan directory for waveform files within a specified date range.
 
@@ -1137,20 +1198,18 @@ def waveforms(
   station, and generates a data availability plot.
 
   Args:
-    directory: Path to the waveforms directory to scan.
+    waveforms: Path to the waveforms directory to scan.
+    stations: Path to directory containing StationXML files.
     start: Start date (inclusive) of the date range.
     end: End date (inclusive) of the date range.
+    output: Path to directory where availability plot will be saved.
+    vlines: List of tuples containing datetime objects, labels, and colors
+            to mark with vertical lines on the plot.
 
   Returns:
-    Nested dictionary structure:
-    {
-        date1: {
-            "NET.STA.": [path1, path2, ...],
-            ...
-        },
-        date2: {...},
-        ...
-    }
+    pd.DataFrame: DataFrame containing waveform file information with columns:
+    NETWORK_STR, STATION_STR, LOC_NAME_STR, CHANNEL_STR, DATE_STR, FILENAME_STR
+    Each row represents a waveform file.
 
   Side Effects:
     Generates "OGSAvailability.png" showing station count over time.
@@ -1163,49 +1222,68 @@ def waveforms(
   import ogsplotter as OGS_P
   from matplotlib import pyplot as plt
 
-  # Initialize output dictionary
-  WAVEFORMS: dict[str, dict[str, list[Path]]] = dict()
-
-  # Generate list of all dates in the range
-  DAYS = np.arange(start, end + ONE_DAY, ONE_DAY,
-                    dtype='datetime64[D]').tolist()
-  DAYS = [UTCDateTime(day).date for day in DAYS]
-
+  elements = []
   # Scan all MiniSEED files recursively
-  for wf in directory.glob("**/*.mseed"):
+  for wf in waveforms.glob("**/*.mseed"):
+    if wf.name.startswith("."): continue  # Skip hidden files
     # Parse filename: NET.STA.LOC.CHA__YYYYMMDDTHHMMSS__suffix.mseed
     stid, dateinitid, _ = wf.stem.split(UNDERSCORE_STR + UNDERSCORE_STR)
 
-    # Extract station ID (NET.STA.LOC format, truncated to NET.STA.)
-    stid = PERIOD_STR.join(stid.split(PERIOD_STR)[:3])
-
     # Parse date from filename
     dateinitid = UTCDateTime(dateinitid).date
+    if dateinitid < start.date() or dateinitid > end.date():
+      continue  # Skip files outside date range
+    elements.append([*stid.split(PERIOD_STR), dateinitid, wf])
 
-    # Build nested dictionary structure
-    if dateinitid not in WAVEFORMS:
-      WAVEFORMS[dateinitid] = dict()
-    if stid not in WAVEFORMS[dateinitid]:
-      WAVEFORMS[dateinitid][stid] = list()
-    WAVEFORMS[dateinitid][stid].append(wf)
-
-  # Extract dates and station counts for plotting
-  x, y = zip(*sorted([
-    (date, len(WAVEFORMS[date].keys())) for date in DAYS if date in WAVEFORMS
-  ], key=lambda x: x[0]))
-
-  # Generate availability plot
-  OGS_P.line_plotter(
-    x, y,
-    xlabel="Date",
-    ylabel="Number of Stations",
-    title="Availability",
-    output="OGSAvailability.png",
-    ylim=(0, decimeter(max(y)))  # Use decimeter for nice axis limit
+  WAVEFORMS = pd.DataFrame(elements,
+                           columns=[NETWORK_STR, STATION_STR, LOC_NAME_STR,
+                                    CHANNEL_STR, DATE_STR, FILENAME_STR])
+  WAVEFORMS.to_csv(output / "OGSWaveforms.csv", index=False)
+  print(f"Saved file to {output / 'OGSWaveforms.csv'}")
+  INVENTORY = inventory(stations)
+  INVENTORY = INVENTORY.merge(
+    WAVEFORMS[[NETWORK_STR, STATION_STR]],
+    how="inner",
+    on=[NETWORK_STR, STATION_STR]
+  ).drop_duplicates()
+  INVENTORY.to_csv(output / "OGSInventory.csv", index=False)
+  print(f"Saved file to {output / 'OGSInventory.csv'}")
+  mystations = OGS_P.map_plotter(
+    OGS_STUDY_REGION,
+    legend=True,
+    marker="^",
   )
+  for net, df in INVENTORY.groupby(NETWORK_STR):
+    mystations.add_plot(
+      df[LONGITUDE_STR], df[LATITUDE_STR], label=net,
+      color=None, facecolors="none", edgecolors=df[NETCOLOR_STR],
+      legend=True, output=output / "img" / "OGSStations.png",
+    )
   plt.close()
 
-  return WAVEFORMS
+  NET_COLORS = INVENTORY[
+    [NETWORK_STR, NETCOLOR_STR]
+  ].drop_duplicates().set_index(NETWORK_STR)[NETCOLOR_STR].to_dict()
+  DAYS = np.arange(start, end + ONE_DAY, ONE_DAY, # type: ignore
+                   dtype='datetime64[D]').tolist() # type: ignore
+  DAYS = [UTCDateTime(day).date for day in DAYS]
+  counts = {
+    day: {net: 0 for net in WAVEFORMS[NETWORK_STR].unique()} for day in DAYS
+  }
+  for (date, net), group in WAVEFORMS.groupby([DATE_STR, NETWORK_STR]):
+    counts[date][net] = len(group[STATION_STR].unique())
+  df = pd.DataFrame(counts).sort_index().T
+  x, y = [UTCDateTime(xx).date for xx in df.index], df.values.T
+  OGS_P.stack_plotter(
+    x, y, labels=df.columns.tolist(),
+    colors=[NET_COLORS.get(net, "gray") for net in df.columns],
+    xlabel="Date", ylabel="Station Count",
+    output=output / "img" / "OGSAvailability.png",
+    vlines=vlines,
+    legend=True
+  )
+  plt.close()
+  return WAVEFORMS, INVENTORY
 
 
 # =============================================================================

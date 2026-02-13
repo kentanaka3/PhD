@@ -136,12 +136,12 @@ import pandas as pd                          # DataFrame operations (unused but 
 import matplotlib.pyplot as plt              # Main plotting interface
 from matplotlib.axes import Axes             # 2D axes type for type hints
 from mpl_toolkits.mplot3d.axes3d import Axes3D  # 3D axes for 3D scatter plots
-from matplotlib.colors import BoundaryNorm  # Discrete colormap normalization
-from matplotlib.figure import Figure        # Figure type for type hints
-from matplotlib import colormaps            # Colormap registry
+from matplotlib.figure import Figure         # Figure type for type hints
 
 # Advanced density-based clustering (DADApy library)
 import dadapy as ddpy                        # Density peak clustering algorithms
+
+from ogsconstants import labels_to_colormap  # Utility for mapping cluster labels to colors
 
 # =============================================================================
 # SCIKIT-LEARN CLUSTERING ALGORITHMS
@@ -197,54 +197,6 @@ from sklearn.metrics import (
 # =============================================================================
 
 
-def labels_to_colormap(
-  labels: np.ndarray) -> Tuple[np.ndarray, np.ndarray, Any, Any]:
-  """
-  Map arbitrary cluster labels to sequential indices for colormapping.
-
-  Handles cases where labels include noise points (label=-1) or
-  non-sequential cluster IDs. Creates a discrete colormap with
-  one color per unique label.
-
-  Parameters
-  ----------
-  labels : np.ndarray
-    Cluster labels array, may include -1 for noise points.
-
-  Returns
-  -------
-  tuple
-    (encoded_labels, unique_labels, colormap, norm)
-    - encoded_labels: Labels mapped to 0..K-1
-    - unique_labels: Original unique label values
-    - colormap: Matplotlib colormap resampled to K colors
-    - norm: BoundaryNorm for discrete color mapping
-
-  Example
-  -------
-  >>> labels = np.array([0, 1, 1, -1, 2, 0])
-  >>> encoded, unique, cmap, norm = labels_to_colormap(labels)
-  >>> # encoded: [1, 2, 2, 0, 3, 1] (with -1 mapped to 0)
-  """
-  # Find all unique labels (may include -1 for noise)
-  unique = np.unique(labels)
-
-  # Create mapping from original labels to sequential indices
-  label_to_idx = {lab: i for i, lab in enumerate(unique)}
-
-  # Apply mapping to all labels
-  encoded = np.vectorize(label_to_idx.get, otypes=[int])(labels)
-
-  # Create discrete colormap with exactly len(unique) colors
-  cmap = colormaps.get_cmap("Paired").resampled(len(unique))
-
-  # Create boundary norm for discrete color assignment
-  # Boundaries at -0.5, 0.5, 1.5, ... ensure each integer maps to one color
-  norm = BoundaryNorm(np.arange(-0.5, len(unique) + 0.5), cmap.N)
-
-  return encoded, unique, cmap, norm
-
-
 def iter_range(values: Any) -> List[Any]:
   """
   Convert range specification to list of values for parameter sweeps.
@@ -267,7 +219,7 @@ def iter_range(values: Any) -> List[Any]:
   Example
   -------
   >>> iter_range((0.1, 0.5, 0.1))  # Returns [0.1, 0.2, 0.3, 0.4]
-  >>> iter_range([1, 2, 5])         # Returns [1, 2, 5]
+  >>> iter_range([1, 2, 5])        # Returns [1, 2, 5]
   """
   # Handle (start, stop, step) tuple -> numpy arange
   if isinstance(values, tuple) and len(values) == 3:
