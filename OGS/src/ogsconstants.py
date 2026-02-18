@@ -521,6 +521,14 @@ OGS_PROJECTION = "+proj=sterea +lon_0={lon} +lat_0={lat} +units=km"
 
 # Maximum magnitude threshold for OGS catalog (filter out larger events)
 OGS_MAX_MAGNITUDE = 3.5
+OGS_MAGNITUDE_SIZE = {
+  # Magnitude : [Marker Size]
+  (-1., 0.) : 10,
+  ( 0., 1.) : 20,
+  ( 1., 2.) : 40,
+  ( 2., 3.) : 80,
+  ( 3., OGS_MAX_MAGNITUDE) : 160,
+}
 
 # =============================================================================
 # DATAFRAME COLUMN NAME CONSTANTS
@@ -1332,8 +1340,9 @@ def waveforms(
     mystations.add_plot(
       df[LONGITUDE_STR], df[LATITUDE_STR], label=net,
       color=None, facecolors="none", edgecolors=df[NETCOLOR_STR],
-      legend=True, output=output / "img" / "OGSStations.png",
+      legend=True,
     )
+  mystations.savefig(output / "img" / "OGSStations.png")
   plt.close()
 
   NET_COLORS = INVENTORY[
@@ -1348,16 +1357,19 @@ def waveforms(
   for (date, net), group in WAVEFORMS.groupby([DATE_STR, NETWORK_STR]):
     counts[date][net] = len(group[STATION_STR].unique())
   df = pd.DataFrame(counts).sort_index().T
-  x, y = [UTCDateTime(xx).date for xx in df.index], df.values.T
-  OGS_P.stack_plotter(
-    x, y, labels=df.columns.tolist(),
-    colors=[NET_COLORS.get(net, "gray") for net in df.columns],
-    xlabel="Date", ylabel="Station Count",
-    output=output / "img" / "OGSAvailability.png",
-    vlines=vlines,
-    legend=True
-  )
-  plt.close()
+  if not df.empty and df.values.size > 0:
+    x, y = [UTCDateTime(xx).date for xx in df.index], df.values.T
+    OGS_P.stack_plotter(
+      x, y, labels=df.columns.tolist(),
+      colors=[NET_COLORS.get(net, "gray") for net in df.columns],
+      xlabel="Date", ylabel="Station Count",
+      output=output / "img" / "OGSAvailability.png",
+      vlines=vlines,
+      legend=True
+    )
+    plt.close()
+  else:
+    logging.warning("No waveform data available for availability plot.")
   return WAVEFORMS, INVENTORY
 
 

@@ -12,6 +12,84 @@ from matplotlib.path import Path as mplPath
 import ogsconstants as OGS_C
 
 
+def contains_points(
+      polygon: np.ndarray,
+      points: np.ndarray
+    ) -> np.ndarray:
+  """Vectorized ray-casting point-in-polygon test.
+
+  Determines which points lie inside a polygon using the ray-casting
+  algorithm. For each point, a horizontal ray is cast to the right
+  and the number of polygon edge crossings is counted. An odd number
+  of crossings means the point is inside.
+
+  Parameters
+  ----------
+  polygon : np.ndarray
+    Polygon vertices as an (N, 2) array of (x, y) coordinates.
+    The polygon is automatically closed (last vertex connects to first).
+  points : np.ndarray
+    Query points as an (M, 2) array of (x, y) coordinates.
+
+  Returns
+  -------
+  np.ndarray
+    Boolean array of shape (M,) where True indicates the point is
+    inside the polygon.
+
+  Notes
+  -----
+  Uses fully vectorized NumPy operations (no Python loops over points),
+  making it efficient for large point sets. Points exactly on an edge
+  may be classified as either inside or outside.
+
+  Examples
+  --------
+  >>> poly = [(0, 0), (1, 0), (1, 1), (0, 1)]
+  >>> pts = [(0.5, 0.5), (2.0, 2.0)]
+  >>> contains_points(poly, np.array(pts))
+  array([ True, False])
+  """
+  polygon = np.asarray(polygon)
+  n_edges = len(polygon)
+  # Polygon edge start and end vertices: (M, 2) each
+  v1 = polygon
+  v2 = np.roll(polygon, -1, axis=0)
+
+  # Extract coordinates: (M,) arrays for edges, (N,) arrays for points
+  x1, y1 = v1[:, 0], v1[:, 1]  # edge start
+  x2, y2 = v2[:, 0], v2[:, 1]  # edge end
+  px, py = points[:, 0], points[:, 1]  # query points
+
+  # Broadcast to (M, N): edge i × point j
+  # Whether point j's y-coordinate is between edge i's y-endpoints
+  # One endpoint must be strictly above, the other at or below
+  y1_mn = y1[:, None]  # (M, 1)
+  y2_mn = y2[:, None]  # (M, 1)
+  py_mn = py[None, :]  # (1, N)
+
+  cond_a = (y1_mn <= py_mn) & (y2_mn > py_mn)   # upward crossing
+  cond_b = (y1_mn > py_mn) & (y2_mn <= py_mn)    # downward crossing
+  crosses = cond_a | cond_b  # (M, N)
+
+  # Compute x-coordinate where the ray y=py intersects edge i
+  # x_intersect = x1 + (py - y1) * (x2 - x1) / (y2 - y1)
+  dy = y2_mn - y1_mn  # (M, 1)
+  # Avoid division by zero (horizontal edges never cross a horizontal ray)
+  dy_safe = np.where(dy == 0, 1.0, dy)
+  t = (py_mn - y1_mn) / dy_safe  # (M, N)
+  x_intersect = x1[:, None] + t * (x2 - x1)[:, None]  # (M, N)
+
+  # Point is to the left of the intersection (ray goes rightward)
+  right_of_point = x_intersect > px[None, :]  # (M, N)
+
+  # Count crossings: edge crosses the ray if it spans py AND intersects
+  # to the right of the point
+  inside = np.sum(crosses & right_of_point, axis=0) % 2 == 1  # (N,)
+
+  return inside
+
+
 class OGSCatalog:
   """
   Optimized catalog container for OGS events and picks.
@@ -199,16 +277,64 @@ class OGSCatalog:
     pd.DataFrame
       Loaded DataFrame or empty on failure.
     """
-    if filepath.suffix == OGS_C.CSV_EXT: return pd.read_csv(filepath)
+    try:
+      if filepath.suffix == OGS_C.CSV_EXT:
+        return pd.read_csv(filepath)
+      else:
+        return pd.read_parquet(filepath)
+    except Exception:
+      self.logger.exception(f"Error loading {filepath}")
+      return pd.DataFrame(columns=[])
+
+  def _load_day(self, key: str, date) -> pd.DataFrame:
+    """Lazily load a single day's data from disk into the daily cache.
+
+    If the day is already cached, returns immediately without disk I/O.
+    For events, applies the polygon filter when ``self.polygon`` is set.
+
+    Parameters
+    ----------
+    key : str
+      Either "events" or "picks".
+    date : datetime.date
+      The date whose data to load.
+
+    Returns
+    -------
+    pd.DataFrame
+      The loaded (and possibly polygon-filtered) DataFrame for this day.
+    """
+    if key == "events":
+      if date in self.events:
+        return self.events[date]
+      events = self.load_(self.events_[date])
+      if not events.empty:
+        if self.polygon is not None:
+          mask = contains_points(
+            self.polygon.vertices, # type: ignore
+            events[[OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR]].to_numpy()
+          )
+          events = events[mask]
+        if events.empty:
+          self.logger.warning(f"All events for {date} filtered out by polygon from {self.events_[date]}")
+      else:
+        self.logger.warning(f"No events loaded for {date} from {self.events_[date]}")
+      self.events[date] = events
+      return self.events[date]
+    elif key == "picks":
+      if date in self.picks:
+        return self.picks[date]
+      self.picks[date] = self.load_(self.picks_[date])
+      return self.picks[date]
     else:
-      try: return pd.read_parquet(filepath)
-      except Exception as e:
-        self.logger.exception(f"Error loading {filepath}")
-        return pd.DataFrame(columns=[])
+      raise ValueError(f"Unknown key: {key}")
 
   def load(self, key: str,
   ) -> Dict[datetime, pd.DataFrame]:
     """Load daily data for the provided key.
+
+    Delegates to :meth:`_load_day` for each date not yet cached, so
+    previously loaded days are skipped.
 
     Parameters
     ----------
@@ -221,26 +347,18 @@ class OGSCatalog:
       Mapping of date to DataFrame.
     """
     if key == "events":
-      if not self.events:
+      missing = set(self.events_.keys()) - set(self.events.keys())
+      if missing:
         self.logger.warning(f"Loading {self.name} events data...")
-        for date in self.events_.keys():
-          events = self.load_(self.events_[date])
-          if not events.empty:
-            events = events[events[
-              [OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR]
-            ].apply(lambda x: self.polygon.contains_point(
-              (x[OGS_C.LONGITUDE_STR], x[OGS_C.LATITUDE_STR])
-            ), axis=1)].reset_index(drop=True)
-          else:
-            self.logger.warning(f"No events loaded for {date} from {self.events_[date]}")
-          self.events[date] = events
+        for date in missing:
+          self._load_day("events", date)
       return self.events
     elif key == "picks":
-      if not self.picks:
+      missing = set(self.picks_.keys()) - set(self.picks.keys())
+      if missing:
         self.logger.warning(f"Loading {self.name} picks data...")
-        for date in self.picks_.keys():
-          picks = self.load_(self.picks_[date])
-          self.picks[date] = picks
+        for date in missing:
+          self._load_day("picks", date)
       return self.picks
     else:
       raise ValueError(f"Unknown key: {key}")
@@ -265,7 +383,6 @@ class OGSCatalog:
       return self.events
     elif key == "picks":
       if not update and not self.PICKS.empty:
-        df = pd.DataFrame()
         for date, df in self.PICKS.groupby(OGS_C.GROUPS_STR):
           self.picks[UTCDateTime(date).date] = df
       return self.picks
@@ -332,7 +449,8 @@ class OGSCatalog:
       facecolors='none',
       edgecolors=OGS_C.OGS_BLUE,
       label=self.name,
-      output=output if output is not None else self.output / "img" / f"{self.input.name}_EventsMap.png"
+      output=output if output is not None else self.output / "img" / f"{self.input.name}_EventsMap.png",
+      magnitude=events[OGS_C.MAGNITUDE_L_STR] if OGS_C.MAGNITUDE_L_STR in events.columns else None
     )
     for other, color in zip(others, OGS_C.PLOT_COLORS[1:len(others)+1]):
       events = other.get("EVENTS")
@@ -350,7 +468,8 @@ class OGSCatalog:
         facecolors='none',
         edgecolors=color,
         label=other.name,
-        output=output if output is not None else self.output / "img" / f"{self.input.name}_{other.input.name}_EventsMap.png"
+        output=output if output is not None else self.output / "img" / f"{self.input.name}_{other.input.name}_EventsMap.png",
+        magnitude=events[OGS_C.MAGNITUDE_L_STR] if OGS_C.MAGNITUDE_L_STR in events.columns else None
       )
     plt.close()
 
@@ -636,13 +755,15 @@ class OGSCatalog:
     """Plot ERZ histogram for this catalog and optional comparisons."""
     self._plot_histogram(
       OGS_C.ERZ_STR, "ERZ (km)", "ERZ Histogram", "ERZ",
-      others=others, bins=bins, output=output, color=OGS_C.OGS_BLUE)
+      others=others, bins=bins, output=output, color=OGS_C.OGS_BLUE,
+      xlim=(0, 20))
 
   def plot_erh_histogram(self, others=[], bins=OGS_C.NUM_BINS, output=None):
     """Plot ERH histogram for this catalog and optional comparisons."""
     self._plot_histogram(
       OGS_C.ERH_STR, "ERH (km)", "ERH Histogram", "ERH",
-      others=others, bins=bins, output=output, color=OGS_C.OGS_BLUE)
+      others=others, bins=bins, output=output, color=OGS_C.OGS_BLUE,
+      xlim=(0, 20), yscale='log')
 
   def plot_ert_histogram(self, others=[], bins=OGS_C.NUM_BINS, output=None):
     """Plot ERT histogram for this catalog and optional comparisons."""
@@ -654,18 +775,15 @@ class OGSCatalog:
     """Plot depth histogram for this catalog and optional comparisons."""
     self._plot_histogram(
       OGS_C.DEPTH_STR, "Depth (km)", "Depth Histogram", "Depth",
-      others=others, bins=bins, output=output)
+      others=others, bins=bins, output=output, xlim=(0, 50))
 
   def plot_magnitude_histogram(self, others=[], bins=OGS_C.NUM_BINS,
                                output=None):
     """Plot magnitude histogram for this catalog and optional comparisons."""
-    events = self.get("EVENTS")
-    if OGS_C.MAGNITUDE_L_STR in events.columns:
-      events[OGS_C.MAGNITUDE_L_STR] = pd.to_numeric(
-        events[OGS_C.MAGNITUDE_L_STR], errors='coerce')
     self._plot_histogram(
       OGS_C.MAGNITUDE_L_STR, "Magnitude ($M_L$)", "Magnitude Histogram",
-      "MagL", others=others, bins=bins, output=output, yscale='log')
+      "MagL", others=others, bins=bins, output=output, yscale='log',
+      xlim=(-1, 5))
 
   def bgmaEvents(self, other: "OGSCatalog") -> None:
     """Match events between catalogs using BGMA.
@@ -689,8 +807,10 @@ class OGSCatalog:
                OGS_C.ERZ_STR, OGS_C.GAP_STR, OGS_C.MAGNITUDE_L_STR,
                OGS_C.GROUPS_STR]
     for date, _ in self.events_.items():
-      BASE = self.load("events")[date].reset_index(drop=True)
-      TARGET = other.load("events")[date].reset_index(drop=True)
+      BASE = self._load_day("events", date).reset_index(drop=True)
+      if date not in other.events_:
+        continue
+      TARGET = other._load_day("events", date).reset_index(drop=True)
       I = len(BASE)
       bpgEvents = OGS_C.OGSBPGraphEvents(BASE, TARGET)
       baseIDs = set(range(I))
@@ -713,16 +833,14 @@ class OGSCatalog:
           BASE.at[i, col] if col in BASE.columns else None for col in columns
         ])
       if not TARGET.empty:
-        fp_target = TARGET[TARGET[
-          [OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR]
-        ]]
-        if isinstance(self.polygon, mplPath):
-          fp_target = fp_target[fp_target.apply(
-            lambda x: self.polygon.contains_point(
-              (x[OGS_C.LONGITUDE_STR], x[OGS_C.LATITUDE_STR])
-            ), axis=1
-          )]
-        fp_target = fp_target.reset_index(drop=True)
+        if self.polygon is not None:
+          mask = contains_points(
+            self.polygon.vertices, # type: ignore
+            TARGET[[OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR]].to_numpy()
+          )
+          fp_target = TARGET[mask].reset_index(drop=True)
+        else:
+          fp_target = TARGET
         for j in targetIDs:
           if j not in fp_target.index: continue
           EVENTS_CFN_MTX.at[OGS_C.NONE_STR, OGS_C.EVENT_STR] += 1 # type: ignore
@@ -787,36 +905,51 @@ class OGSCatalog:
       legend=True)
     plt.close()
     # Matched (MH) Map
+    magnitude = self.EventsTP[OGS_C.MAGNITUDE_L_STR].apply(lambda x: x[0]) \
+      if OGS_C.MAGNITUDE_L_STR in self.EventsTP.columns else None
+    magnitude = magnitude if magnitude is not None and magnitude.notna().any() else None
     myplot = OGS_P.map_plotter(
       domain=OGS_C.OGS_STUDY_REGION,
       x=self.EventsTP[OGS_C.LONGITUDE_STR].apply(lambda x: x[0]),
       y=self.EventsTP[OGS_C.LATITUDE_STR].apply(lambda x: x[0]),
       facecolors="none", edgecolors=OGS_C.OGS_BLUE, legend=True,
-      label=self.name)
+      label=self.name,
+      magnitude=magnitude,
+    )
+    magnitude = self.EventsTP[OGS_C.MAGNITUDE_L_STR].apply(lambda x: x[1]) \
+      if OGS_C.MAGNITUDE_L_STR in self.EventsTP.columns else None
+    magnitude = magnitude if magnitude is not None and magnitude.notna().any() else None
     myplot.add_plot(
       self.EventsTP[OGS_C.LONGITUDE_STR].apply(lambda x: x[1]),
       self.EventsTP[OGS_C.LATITUDE_STR].apply(lambda x: x[1]), color=None,
-        label=other.name, legend=True, facecolors="none",
-        edgecolors=OGS_C.MEX_PINK,
-        output=(self.output / "img" /
-                f"{self.input.name}_{other.input.name}_EventsMH.png")
+      label=other.name, legend=True, facecolors="none",
+      edgecolors=OGS_C.MEX_PINK,
+      magnitude=magnitude,
+      output=(self.output / "img" /
+              f"{self.input.name}_{other.input.name}_EventsMH.png")
     )
     plt.close()
     # Missed (MS) and Proposed (PS) Map
+    magnitude = self.EventsFN[OGS_C.MAGNITUDE_L_STR] if OGS_C.MAGNITUDE_L_STR in self.EventsFN.columns else None
+    magnitude = magnitude if magnitude is not None and magnitude.notna().any() else None
     myplot = OGS_P.map_plotter(
       domain=OGS_C.OGS_STUDY_REGION,
       x=self.EventsFN[OGS_C.LONGITUDE_STR],
       y=self.EventsFN[OGS_C.LATITUDE_STR],
       label=f"Missed (MS) [{self.name}] {len(self.EventsFN.index)}",
       legend=True,
+      magnitude=magnitude,
     )
+    magnitude = self.EventsFP[OGS_C.MAGNITUDE_L_STR] if OGS_C.MAGNITUDE_L_STR in self.EventsFP.columns else None
+    magnitude = magnitude if magnitude is not None and magnitude.notna().any() else None
     myplot.add_plot(
       self.EventsFP[OGS_C.LONGITUDE_STR], self.EventsFP[OGS_C.LATITUDE_STR],
-        color=None, facecolors="none", edgecolors=OGS_C.MEX_PINK,
+        color=None, facecolors="none", edgecolors=OGS_C.MEX_PINK, legend=True,
         label=f"Proposed (PS) [{other.name}] {len(self.EventsFP.index)}",
-        legend=True, 
-        output=(self.output / "img" /
-                f"{self.input.name}_{other.input.name}_EventsFalse.png")
+        magnitude=magnitude, output=(
+          self.output / "img" /
+          f"{self.input.name}_{other.input.name}_EventsFalse.png"
+        )
     )
     plt.close()
     # Depth Difference Histogram
@@ -824,7 +957,7 @@ class OGSCatalog:
       self.EventsTP[OGS_C.DEPTH_STR].apply(lambda x: x[1] - x[0]),
       xlabel=f"Depth Difference (km) [{self.name} - {other.name}]",
       title="Event Depth Difference",
-      xlim=(-OGS_C.EVENT_DIST_OFFSET, OGS_C.EVENT_DIST_OFFSET),
+      xlim=(-20, 20),
       output=(self.output / "img" /
               f"{self.input.name}_{other.input.name}_DepthDiff.png"),
       legend=True)
@@ -884,7 +1017,7 @@ class OGSCatalog:
           xlabel=f"Magnitude Difference ($M_L$) [{self.name} - {other.name}]",
           title=(f"RMSE = {np.sqrt(np.mean(data ** 2)):.4f}, " +
                  f"MAE = {data.abs().mean():.4f}"),
-          xlim=(-1, 1),
+          xlim=(-1.5, 1.5),
           bins=21,
           output=(self.output / "img" /
                   f"{self.input.name}_{other.input.name}_MagLDiff.png"),
@@ -949,11 +1082,13 @@ class OGSCatalog:
     columns = [OGS_C.IDX_PICKS_STR, OGS_C.TIME_STR, OGS_C.PHASE_STR,
            OGS_C.STATION_STR, OGS_C.PROBABILITY_STR]
     for date, _ in self.picks_.items():
-      BASE = self.load("picks")[date].reset_index(drop=True)
+      BASE = self._load_day("picks", date).reset_index(drop=True)
       BASE[OGS_C.NETWORK_STR] = BASE[OGS_C.STATION_STR].str.split(".").str[0]
       BASE[OGS_C.STATION_STR] = BASE[OGS_C.STATION_STR].str.split(".").str[1]
       BASE = BASE[BASE[OGS_C.STATION_STR].isin(INVENTORY)].reset_index(drop=True)
-      TARGET = other.load("picks")[date].reset_index(drop=True)
+      if date not in other.picks_:
+        continue
+      TARGET = other._load_day("picks", date).reset_index(drop=True)
       I = len(BASE)
       bpgPicks = OGS_C.OGSBPGraphPicks(BASE, TARGET)
       baseIDs = set(range(I))
@@ -1163,7 +1298,7 @@ class OGSCatalog:
       self.end,
       vlines=vlines,
       output=self.output
-    ) if waveforms is not None and stations is not None else (None, None)
+    ) if waveforms is not None and stations is not None else (None, OGS_C.inventory(stations, output=self.output) if stations is not None else (None, None))
     if self.events_:
       if (other.events_ == {} and other.load("events") == {} and
           other.get("EVENTS").empty):

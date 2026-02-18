@@ -565,7 +565,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
       start=datetime.strptime(range_[0], OGS_C.DATE_FMT),
       end=datetime.strptime(range_[1], OGS_C.DATE_FMT),
       verbose=self.verbose,
-      polygon=polygon,
+      polygon=None,
       output=Path(OGS_C.UNDERSCORE_STR.join(range_)),
       name=f"Catalog_Range_{range_idx + 1}"
     )

@@ -356,10 +356,10 @@ class map_plotter(plotter):
 
   def __init__(self, domain : list[float], x=None, y=None, text=None,
                xlabel=None, ylabel=None, title=None, fig=None, ax=None, s=20,
-               proj=ccrs.PlateCarree(), color=OGS_C.OGS_BLUE, gs=111, label=None,
-               legend=False, marker='o', facecolors=OGS_C.OGS_BLUE,
+               proj=ccrs.PlateCarree(), color=OGS_C.OGS_BLUE, gs=111,
+               label=None, legend=False, marker='o', facecolors=OGS_C.OGS_BLUE,
                edgecolors=OGS_C.OGS_BLUE, output=None, scale: float = 50,
-               verbose: bool = False) -> None:
+               verbose: bool = False, magnitude=None) -> None:
     assert len(domain) == 4, "Domain must be a list of four floats: [min_lon, max_lon, min_lat, max_lat]"
     super().__init__(fig=fig, verbose=verbose)
     self.proj = proj
@@ -411,17 +411,18 @@ class map_plotter(plotter):
       if legend:
         self.ax.legend()
       return
-    if type(x) in [tuple, list]:
-      if type(x) == pd.Series:
-        self.ax.scatter(x.apply(lambda i: i[0]), y.apply(lambda i: i[0]),
-                        s=self.s, marker=self.marker, facecolors=facecolors,
-                        edgecolors=OGS_C.OGS_BLUE, label="OGS Catalog")
-        self.ax.scatter(x.apply(lambda i: i[1]), y.apply(lambda i: i[1]),
-                        s=self.s, marker=self.marker, label=label,
-                        facecolors=facecolors, edgecolors=OGS_C.MEX_PINK)
-        for a, b in zip(x, y):
-          self.ax.plot([a[0], a[1]], [b[0], b[1]], color='gray',
-                       linewidth=1.5)
+    if magnitude is not None:
+      for (m_min, m_max), size in OGS_C.OGS_MAGNITUDE_SIZE.items():
+        mask = (m_min <= magnitude) & (magnitude < m_max)
+        self.ax.scatter(x[mask], y[mask], s=size, marker=self.marker,
+                        label=f"{m_min} $\\leq M_L$ < {m_max}",
+                        facecolors=facecolors,
+                        edgecolors=edgecolors,
+        )
+      mask = magnitude >= OGS_C.OGS_MAX_MAGNITUDE
+      self.ax.scatter(x[mask], y[mask], s=320, marker="*",
+                      label=f"$M_L \\geq$ {OGS_C.OGS_MAX_MAGNITUDE}",
+                      facecolors=OGS_C.LIP_ORANGE, edgecolors=OGS_C.LIP_ORANGE)
     else:
       self.ax.scatter(x, y, s=self.s, marker=self.marker, label=label,
                       facecolors=facecolors, edgecolors=edgecolors)
@@ -438,11 +439,25 @@ class map_plotter(plotter):
   def add_plot(self, x, y, xlabel=None, ylabel=None,
                color: str | None = OGS_C.MEX_PINK,
                label=None, facecolors=None, edgecolors=None, legend=None,
-               s=None, output=None, savefig=False, marker=None) -> None:
+               s=None, output=None, savefig=False, marker=None,
+               magnitude=None) -> None:
     if marker is not None: self.marker = marker
-    self.ax.scatter(x, y, s=self.s if s is None else s, c=color,
-                    marker=self.marker, label=label, facecolors=facecolors,
-                    edgecolors=edgecolors)
+    if magnitude is not None:
+      for (m_min, m_max), size in OGS_C.OGS_MAGNITUDE_SIZE.items():
+        mask = (m_min <= magnitude) & (magnitude < m_max)
+        self.ax.scatter(x[mask], y[mask], s=size, marker=self.marker,
+                        label=f"{m_min} ≤ $M_L$ < {m_max}",
+                        facecolors=facecolors,
+                        edgecolors=edgecolors,
+        )
+      mask = magnitude >= OGS_C.OGS_MAX_MAGNITUDE
+      self.ax.scatter(x[mask], y[mask], s=320, marker="*",
+                      label=f"$M_L \\geq$ {OGS_C.OGS_MAX_MAGNITUDE}",
+                      facecolors=OGS_C.SUN_YELLOW, edgecolors=OGS_C.SUN_YELLOW)
+    else:
+      self.ax.scatter(x, y, s=self.s if s is None else s, c=color,
+                      marker=self.marker, label=label, facecolors=facecolors,
+                      edgecolors=edgecolors)
     if xlabel:
       self.ax.set_xlabel(xlabel)
     if ylabel:
@@ -453,8 +468,8 @@ class map_plotter(plotter):
     if savefig: self.savefig(output=output)
 
   def add_text(self, text, x, y, color=OGS_C.OGS_BLUE, fontsize=12,
-                horizontalalignment='center', verticalalignment='center',
-                output=None, savefig=False) -> None:
+               horizontalalignment='center', verticalalignment='center',
+               output=None, savefig=False) -> None:
     for t, pos_x, pos_y in zip(text, x, y):
       self.ax.text(pos_x, pos_y, t, color=color, fontsize=fontsize,
                    horizontalalignment=horizontalalignment,
@@ -522,6 +537,11 @@ class histogram_plotter(plotter):
       if xlim[0] >= xlim[1]:
         raise ValueError("xlim[0] must be less than xlim[1].")
       self.bins = np.linspace(xlim[0], xlim[1], bins + 1)
+      if max(data) > xlim[1] or min(data) < xlim[0]:
+        self.logger.warning(
+          "Data contains values outside of xlim. These values will be ignored,"
+          f" data range = [{min(data), max(data)}]"
+        )
     else:
       _, self.bins = np.histogram(data, bins=bins)
     y, _, _ = self.ax.hist(
@@ -568,6 +588,12 @@ class histogram_plotter(plotter):
   def add_plot(self, data, xlabel=None, ylabel=None, title=None, step=False,
                color=OGS_C.MEX_PINK, label=None, legend=None, alpha=0.5,
                output=None, savefig=False, xscale=None, yscale=None) -> None:
+    if max(data) > self.bins[-1] or min(data) < self.bins[0]:
+      self.logger.warning(
+        "Data contains values outside of the histogram bins. These values will"
+        f" be ignored, data range = [{min(data), max(data)}], bins range = "
+        f"[{self.bins[0], self.bins[-1]}]"
+      )
     if step:
       y, _ = np.histogram(data, bins=self.bins)
       self.ax.step(self.bins[:-1], y, color=color, label=label, where='post')

@@ -382,13 +382,17 @@ class DataCatalog(OGSDataFile):
       f.EVENTS[OGS_C.IDX_EVENTS_STR] = f.EVENTS[OGS_C.IDX_EVENTS_STR].apply(
         pd.to_numeric, errors='coerce'
       ).astype(int)
-      if self.EVENTS.empty:
-        self.EVENTS = f.get("EVENTS").copy()
-
+      if self.EVENTS[self.EVENTS[OGS_C.IDX_EVENTS_STR].isin(
+        f.EVENTS[OGS_C.IDX_EVENTS_STR]
+      )].empty:
+        if self.EVENTS.empty:
+          self.EVENTS = f.EVENTS.copy()
+        else:
+          self.EVENTS = pd.concat([self.EVENTS, f.EVENTS], ignore_index=True)
         continue
-      self.EVENTS[OGS_C.IDX_EVENTS_STR] = self.EVENTS[OGS_C.IDX_EVENTS_STR].apply(
-        pd.to_numeric, errors='coerce'
-      ).astype(int)
+      self.EVENTS[OGS_C.IDX_EVENTS_STR] = self.EVENTS[
+        OGS_C.IDX_EVENTS_STR
+      ].apply(pd.to_numeric, errors='coerce').astype(int)
       # TXT files: Contribute magnitude and error information
       if f.input.suffix == OGS_C.TXT_EXT:
         """

@@ -1,7 +1,8 @@
 {
   "algorithms": [
     "AdvancedDensityPeaks",
-    "KMeans"
+    "KMeans",
+    "HDBSCAN"
   ],
   "angles_deg": [160],
   "annotations": [
