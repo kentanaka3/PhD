@@ -349,14 +349,14 @@ class OGSCatalog:
     if key == "events":
       missing = set(self.events_.keys()) - set(self.events.keys())
       if missing:
-        self.logger.warning(f"Loading {self.name} events data...")
+        self.logger.info(f"Loading {self.name} events data...")
         for date in missing:
           self._load_day("events", date)
       return self.events
     elif key == "picks":
       missing = set(self.picks_.keys()) - set(self.picks.keys())
       if missing:
-        self.logger.warning(f"Loading {self.name} picks data...")
+        self.logger.info(f"Loading {self.name} picks data...")
         for date in missing:
           self._load_day("picks", date)
       return self.picks
@@ -404,7 +404,7 @@ class OGSCatalog:
     """
     if key == "EVENTS":
       if self.EVENTS.empty:
-        self.logger.warning(f"Loading {self.name} EVENTS data...")
+        self.logger.info(f"Loading {self.name} EVENTS data...")
         events = self.load(key.lower())
         if events:
           self.EVENTS = pd.concat(events.values()).reset_index(drop=True)
@@ -413,7 +413,7 @@ class OGSCatalog:
       return self.EVENTS
     if key == "PICKS":
       if self.PICKS.empty:
-        self.logger.warning(f"Loading {self.name} PICKS data...")
+        self.logger.info(f"Loading {self.name} PICKS data...")
         picks = self.load(key.lower())
         if picks:
           self.PICKS = pd.concat(picks.values()).reset_index(drop=True)
@@ -793,6 +793,7 @@ class OGSCatalog:
     other : OGSCatalog
       Catalog to compare against.
     """
+    self.logger.info("Starting bgmaEvents: %s vs %s", self.name, other.name)
     import ogsplotter as OGS_P
     from matplotlib import pyplot as plt
     if not isinstance(other, OGSCatalog):
@@ -809,9 +810,12 @@ class OGSCatalog:
     for date, _ in self.events_.items():
       BASE = self._load_day("events", date).reset_index(drop=True)
       if date not in other.events_:
+        self.logger.debug("Date %s not in other catalog, skipping.", date)
         continue
       TARGET = other._load_day("events", date).reset_index(drop=True)
       I = len(BASE)
+      self.logger.debug("Date %s: BASE=%d events, TARGET=%d events.",
+                        date, I, len(TARGET))
       bpgEvents = OGS_C.OGSBPGraphEvents(BASE, TARGET)
       baseIDs = set(range(I))
       targetIDs = set(range(len(TARGET)))
@@ -855,6 +859,12 @@ class OGSCatalog:
         EVENTS_CFN_MTX.at[OGS_C.EVENT_STR, OGS_C.NONE_STR]
       )
     self.logger.info("Recall: %s", recall)
+    fdr = \
+      EVENTS_CFN_MTX.at[OGS_C.NONE_STR, OGS_C.EVENT_STR] / ( # type: ignore
+        EVENTS_CFN_MTX.at[OGS_C.NONE_STR, OGS_C.EVENT_STR] +
+        EVENTS_CFN_MTX.at[OGS_C.EVENT_STR, OGS_C.EVENT_STR]
+      )
+    self.logger.info("False Discovery Rate: %s", fdr)
     self.logger.info("MH: %s PS: %s MS: %s",
       EVENTS_CFN_MTX.at[OGS_C.EVENT_STR, OGS_C.EVENT_STR],
       EVENTS_CFN_MTX.at[OGS_C.NONE_STR, OGS_C.EVENT_STR],
@@ -884,7 +894,7 @@ class OGSCatalog:
                 f"{self.input.name}_{other.input.name}_EventsConfMtx.png")
     OGS_P.ConfMtx_plotter(
       EVENTS_CFN_MTX.values,
-      title="Recall: {:.4f}".format(recall),
+      title="Recall: {:.4f}, FDR: {:.4f}".format(recall, fdr),
       label=EVENTS_CFN_MTX.columns.tolist(),
       output=filepath,
       basename=self.name,
@@ -1087,9 +1097,13 @@ class OGSCatalog:
       BASE[OGS_C.STATION_STR] = BASE[OGS_C.STATION_STR].str.split(".").str[1]
       BASE = BASE[BASE[OGS_C.STATION_STR].isin(INVENTORY)].reset_index(drop=True)
       if date not in other.picks_:
+        self.logger.debug("Date %s not in other picks catalog, skipping.",
+                          date)
         continue
       TARGET = other._load_day("picks", date).reset_index(drop=True)
       I = len(BASE)
+      self.logger.debug("Date %s: BASE=%d picks, TARGET=%d picks.",
+                        date, I, len(TARGET))
       bpgPicks = OGS_C.OGSBPGraphPicks(BASE, TARGET)
       baseIDs = set(range(I))
       targetIDs = set(range(len(TARGET)))
@@ -1100,11 +1114,14 @@ class OGSCatalog:
                          TARGET.at[b, OGS_C.PHASE_STR]] += 1 # type: ignore
         if BASE.at[a, OGS_C.PHASE_STR] == TARGET.at[b, OGS_C.PHASE_STR]:
           self.PicksTP.append([
-            (BASE.at[a, OGS_C.IDX_PICKS_STR], TARGET.at[b, OGS_C.IDX_PICKS_STR]),
-            (str(BASE.at[a, OGS_C.TIME_STR]), str(TARGET.at[b, OGS_C.TIME_STR])),
+            (BASE.at[a, OGS_C.IDX_PICKS_STR],
+             TARGET.at[b, OGS_C.IDX_PICKS_STR]),
+            (str(BASE.at[a, OGS_C.TIME_STR]),
+             str(TARGET.at[b, OGS_C.TIME_STR])),
             (BASE.at[a, OGS_C.PHASE_STR]),
             (TARGET.at[b, OGS_C.STATION_STR]),
-            (BASE.at[a, OGS_C.PROBABILITY_STR], TARGET.at[b, OGS_C.PROBABILITY_STR])
+            (BASE.at[a, OGS_C.PROBABILITY_STR],
+             TARGET.at[b, OGS_C.PROBABILITY_STR])
           ])
         baseIDs.remove(a)
         targetIDs.remove(b)
@@ -1123,7 +1140,7 @@ class OGSCatalog:
         ])
     recall = \
       (PICKS_CFN_MTX.at[OGS_C.PWAVE, OGS_C.PWAVE] + # type: ignore
-      PICKS_CFN_MTX.at[OGS_C.SWAVE, OGS_C.SWAVE]) / (
+       PICKS_CFN_MTX.at[OGS_C.SWAVE, OGS_C.SWAVE]) / (
         PICKS_CFN_MTX.at[OGS_C.PWAVE, OGS_C.PWAVE] + # type: ignore
         PICKS_CFN_MTX.at[OGS_C.SWAVE, OGS_C.SWAVE] +
         PICKS_CFN_MTX.at[OGS_C.PWAVE, OGS_C.SWAVE] +
@@ -1132,18 +1149,41 @@ class OGSCatalog:
         PICKS_CFN_MTX.at[OGS_C.SWAVE, OGS_C.NONE_STR]
       )
     self.logger.info("Recall: %s", recall)
+    fdr = \
+      (PICKS_CFN_MTX.at[OGS_C.NONE_STR, OGS_C.PWAVE] + # type: ignore
+       PICKS_CFN_MTX.at[OGS_C.NONE_STR, OGS_C.SWAVE]) / (
+        PICKS_CFN_MTX.at[OGS_C.NONE_STR, OGS_C.PWAVE] + # type: ignore
+        PICKS_CFN_MTX.at[OGS_C.NONE_STR, OGS_C.SWAVE] +
+        PICKS_CFN_MTX.at[OGS_C.PWAVE, OGS_C.PWAVE] +
+        PICKS_CFN_MTX.at[OGS_C.SWAVE, OGS_C.SWAVE] +
+        PICKS_CFN_MTX.at[OGS_C.PWAVE, OGS_C.SWAVE] +
+        PICKS_CFN_MTX.at[OGS_C.SWAVE, OGS_C.PWAVE]
+      )
+    self.logger.info("False Discovery Rate: %s", fdr)
     p_recall = PICKS_CFN_MTX.at[OGS_C.PWAVE, OGS_C.PWAVE] / ( # type: ignore
       PICKS_CFN_MTX.at[OGS_C.PWAVE, OGS_C.PWAVE] + # type: ignore
       PICKS_CFN_MTX.at[OGS_C.PWAVE, OGS_C.SWAVE] +
       PICKS_CFN_MTX.at[OGS_C.PWAVE, OGS_C.NONE_STR]
     )
     self.logger.info("Recall P-wave: %s", p_recall)
+    p_fdr = PICKS_CFN_MTX.at[OGS_C.NONE_STR, OGS_C.PWAVE] / ( # type: ignore
+      PICKS_CFN_MTX.at[OGS_C.NONE_STR, OGS_C.PWAVE] + # type: ignore
+      PICKS_CFN_MTX.at[OGS_C.PWAVE, OGS_C.PWAVE] +
+      PICKS_CFN_MTX.at[OGS_C.SWAVE, OGS_C.PWAVE]
+    )
+    self.logger.info("False Discovery Rate P-wave: %s", p_fdr)
     s_recall = PICKS_CFN_MTX.at[OGS_C.SWAVE, OGS_C.SWAVE] / ( # type: ignore
       PICKS_CFN_MTX.at[OGS_C.SWAVE, OGS_C.SWAVE] + # type: ignore
       PICKS_CFN_MTX.at[OGS_C.SWAVE, OGS_C.PWAVE] +
       PICKS_CFN_MTX.at[OGS_C.SWAVE, OGS_C.NONE_STR]
     )
     self.logger.info("Recall S-wave: %s", s_recall)
+    s_fdr = PICKS_CFN_MTX.at[OGS_C.NONE_STR, OGS_C.SWAVE] / ( # type: ignore
+      PICKS_CFN_MTX.at[OGS_C.NONE_STR, OGS_C.SWAVE] + # type: ignore
+      PICKS_CFN_MTX.at[OGS_C.PWAVE, OGS_C.SWAVE] +
+      PICKS_CFN_MTX.at[OGS_C.SWAVE, OGS_C.SWAVE]
+    )
+    self.logger.info("False Discovery Rate S-wave: %s", s_fdr)
     self.logger.info("\n%s", PICKS_CFN_MTX)
     self.logger.info("MH: %s PS: %s MS: %s",
                 PICKS_CFN_MTX.at[OGS_C.PWAVE, OGS_C.PWAVE] + # type: ignore
@@ -1177,6 +1217,9 @@ class OGSCatalog:
       title="Recall: {:.4f}, Recall P: {:.4f}, Recall S: {:.4f}".format(
         recall, p_recall, s_recall
       ),
+      subtitle=" FDR: {:.4f}, FDR P: {:.4f}, FDR S: {:.4f}".format(
+        fdr, p_fdr, s_fdr
+      ),
       label=PICKS_CFN_MTX.columns.tolist(),
       output=filepath,
       basename=self.name,
@@ -1185,7 +1228,7 @@ class OGSCatalog:
     plt.close()
     # Time Difference Histogram
     data = self.PicksTP[OGS_C.TIME_STR].apply(
-      lambda x: UTCDateTime(x[1]) - UTCDateTime(x[0]) # type: ignore
+      lambda x: UTCDateTime(x[1]) - UTCDateTime(x[0])
     )
     pickdiff = OGS_P.histogram_plotter(
       data,
@@ -1208,7 +1251,8 @@ class OGSCatalog:
       alpha=1,
       step=True,
       color=OGS_C.OGS_BLUE,
-      label=f"P Picks: $\mu$ = {data.mean():.3E}, $\sigma$ = {data.std():.3E}",
+      label=f"P Picks: $\mu$ = {data.mean():.3E}, $\sigma$ = {data.std():.3E},\n"
+            f"RMSE = {np.sqrt((data**2).mean()):.4f} s, MAE = {data.abs().mean():.4f} s",
     )
     data = self.PicksTP.loc[
       self.PicksTP[OGS_C.PHASE_STR] == OGS_C.SWAVE,
@@ -1221,7 +1265,8 @@ class OGSCatalog:
       alpha=1,
       color=OGS_C.ALN_GREEN,
       step=True,
-      label=f"S Picks: $\mu$ = {data.mean():.3E}, $\sigma$ = {data.std():.3E}",
+      label=f"S Picks: $\mu$ = {data.mean():.3E}, $\sigma$ = {data.std():.3E},\n"
+            f"RMSE = {np.sqrt((data**2).mean()):.4f} s, MAE = {data.abs().mean():.4f} s",
       legend=True,
       output=(self.output / "img" /
               f"{self.input.name}_{other.input.name}_PicksTimeDiff.png"),

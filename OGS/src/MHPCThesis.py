@@ -33,16 +33,14 @@ def main():
       Path(f"/Users/admin/Desktop/Monica/PhD/catalog/OGSCatalog/.all"),
       start=start,
       end=end,
-      name="OGS Catalog",
+      name="OGS NLL 1D",
       output=Path(f"/Users/admin/Desktop/MHPCThesis/imgs/OGSCatalog/{target}"),
-      verbose=True,
     )
     TargetCatalog = OGSCatalog(
       Path(f"/Users/admin/Desktop/Monica/PhD/catalog/{target}/SeisBenchPicker"),
       start=start,
       end=end,
       name=model,
-      verbose=True,
     )
     BaseCatalog.bpgma(
       TargetCatalog,
@@ -51,7 +49,7 @@ def main():
       vlines=special_days,
     )
   for target in [
-    #"OGSBackup", "TP0.2S0.2", "TP0.3S0.3",
+    "OGSBackup", "TP0.2S0.2", "TP0.3S0.3",
   ]:
     print(f"Processing target: {target}")
     for name, path in [
@@ -64,16 +62,14 @@ def main():
         Path(f"/Users/admin/Desktop/Monica/PhD/catalog/OGSCatalog/.all"),
         start=start,
         end=end,
-        name="OGS Catalog",
+        name="OGS NLL 1D",
         output=Path(f"/Users/admin/Desktop/MHPCThesis/imgs/OGSCatalog/{target}"),
-        verbose=True,
       )
       TargetCatalog = OGSCatalog(
         path,
         start=start,
         end=end,
         name=name,
-        verbose=True,
       )
       BaseCatalog.plot([TargetCatalog], vlines=special_days)
       BaseCatalog.bpgma(
@@ -96,16 +92,14 @@ def main():
         Path(f"/Users/admin/Desktop/Monica/PhD/catalog/OGSCatalog/.all"),
         start=start,
         end=end,
-        name="OGS Catalog",
+        name="OGS NLL 1D",
         output=Path(f"/Users/admin/Desktop/MHPCThesis/imgs/OGSCatalog/{target}"),
-        verbose=True,
       )
       TargetCatalog = OGSCatalog(
         path,
         start=start,
         end=end,
         name=name,
-        verbose=True,
       )
       BaseCatalog.plot([TargetCatalog], vlines=special_days)
       BaseCatalog.bpgma(

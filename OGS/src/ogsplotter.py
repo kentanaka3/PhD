@@ -607,8 +607,7 @@ class histogram_plotter(plotter):
         alpha=alpha
       )
     self.ax.set_ylim(bottom=0.9,
-                     top=OGS_C.decimeter(max(*y, self.ax.get_ylim()[1]),
-                                         "ken"))
+                     top=OGS_C.decimeter(max(*y, self.ax.get_ylim()[1]), "健"))
     if xlabel:
       self.ax.set_xlabel(xlabel)
     if ylabel:
@@ -630,15 +629,23 @@ class ConfMtx_plotter(plotter):
   def __init__(self, data, title=None, fig=None, ax=None,
                color=OGS_C.MEX_PINK, gs=111, label=None, legend=False,
                facecolor=None, edgecolor=None, output=None,
-               basename=None, targetname=None, verbose: bool = False) -> None:
+               basename=None, targetname=None, verbose: bool = False,
+               subtitle=None) -> None:
     super().__init__(fig=fig, figsize=(10, 5), verbose=verbose)
     self.ax: Axes = self.fig.add_subplot(gs)
     if title: self.ax.set_title(title)
+    if subtitle:
+      self.ax.text(1.05, 0.5, subtitle, transform=self.ax.transAxes,
+                   rotation=-90, ha='left', va='center', fontsize=14)
     disp = ConfMtxDisp(data, display_labels=label)
     disp.plot(values_format='d', colorbar=True, ax=self.ax)
     for labels in disp.text_.ravel():
       labels.set(color=OGS_C.MEX_PINK, fontsize=12, fontweight="bold")
-    disp.im_.set(clim=(0, max(data.flatten())), cmap="Blues", norm="log")
+    # Set the color limits to the range of the data (i.e., 0 to max value in
+    # the confusion matrix). This approach emphasizes the relative differences
+    # between the values in the confusion matrix, making it easier to see which
+    # values are more significant.
+    disp.im_.set(clim=(1, data.max().max()), cmap="Blues", norm="log")
     if basename:
       disp.ax_.set_ylabel(f"{basename}")
     if targetname:
