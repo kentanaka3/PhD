@@ -477,7 +477,9 @@ class DataCatalog(OGSDataFile):
 
       # Step 2: Filter to stations with 2+ phase types (both P and S)
       # Step 3: Count such stations per event
-      stations_with_both = station_phase_counts[station_phase_counts >= 2].groupby(
+      stations_with_both = station_phase_counts[
+        station_phase_counts >= 2
+      ].groupby(
         level=0  # Group by event_id (first level of MultiIndex)
       ).size()
 

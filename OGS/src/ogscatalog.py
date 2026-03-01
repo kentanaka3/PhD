@@ -11,6 +11,7 @@ from matplotlib.path import Path as mplPath
 
 import ogsconstants as OGS_C
 
+IMAGE_EXT = OGS_C.PDF_EXT
 
 def contains_points(
       polygon: np.ndarray,
@@ -167,7 +168,8 @@ class OGSCatalog:
   bgmaPicks(other: OGSCatalog) -> None
     Perform BGMA pick matching with another catalog.
   bpgma(other: OGSCatalog,
-        stations: dict[str, tuple[float, float, float, str, str, str, str]]) -> None
+        stations: dict[str,
+                       tuple[float, float, float, str, str, str, str]]) -> None
     Perform BGMA matching on events and picks.
 
 
@@ -209,7 +211,8 @@ class OGSCatalog:
     self.start = start
     self.end = end
     self.polygon : Optional[mplPath] = polygon
-    self.logger = OGS_C.setup_logger(f"{__name__}.{self.__class__.__name__}", verbose)
+    self.logger = OGS_C.setup_logger(f"{__name__}.{self.__class__.__name__}",
+                                     verbose)
     self.output = output
     if not self.output.exists():
       self.output.mkdir(parents=True, exist_ok=True)
@@ -316,9 +319,11 @@ class OGSCatalog:
           )
           events = events[mask]
         if events.empty:
-          self.logger.warning(f"All events for {date} filtered out by polygon from {self.events_[date]}")
+          self.logger.warning(f"All events for {date} filtered out by polygon "
+                              f"from {self.events_[date]}")
       else:
-        self.logger.warning(f"No events loaded for {date} from {self.events_[date]}")
+        self.logger.warning(f"No events loaded for {date} from "
+                            f"{self.events_[date]}")
       self.events[date] = events
       return self.events[date]
     elif key == "picks":
@@ -363,7 +368,8 @@ class OGSCatalog:
     else:
       raise ValueError(f"Unknown key: {key}")
 
-  def postload(self, key: str, update: bool = False) -> Dict[datetime, pd.DataFrame]:
+  def postload(self, key: str,
+               update: bool = False) -> Dict[datetime, pd.DataFrame]:
     """Build daily caches from in-memory DataFrames.
 
     Parameters
@@ -449,8 +455,15 @@ class OGSCatalog:
       facecolors='none',
       edgecolors=OGS_C.OGS_BLUE,
       label=self.name,
-      output=output if output is not None else self.output / "img" / f"{self.input.name}_EventsMap.png",
-      magnitude=events[OGS_C.MAGNITUDE_L_STR] if OGS_C.MAGNITUDE_L_STR in events.columns else None
+      output=(
+        output if output is not None else
+        self.output / "img" / (
+          f"{self.input.name}_EventsMap" +
+          IMAGE_EXT
+        )
+      ),
+      magnitude=events[OGS_C.MAGNITUDE_L_STR] \
+        if OGS_C.MAGNITUDE_L_STR in events.columns else None
     )
     for other, color in zip(others, OGS_C.PLOT_COLORS[1:len(others)+1]):
       events = other.get("EVENTS")
@@ -468,8 +481,15 @@ class OGSCatalog:
         facecolors='none',
         edgecolors=color,
         label=other.name,
-        output=output if output is not None else self.output / "img" / f"{self.input.name}_{other.input.name}_EventsMap.png",
-        magnitude=events[OGS_C.MAGNITUDE_L_STR] if OGS_C.MAGNITUDE_L_STR in events.columns else None
+        output=(
+          output if output is not None else
+          self.output / "img" / (
+            f"{self.input.name}_{other.input.name}_EventsMap" +
+            IMAGE_EXT
+          )
+        ),
+        magnitude=events[OGS_C.MAGNITUDE_L_STR] \
+          if OGS_C.MAGNITUDE_L_STR in events.columns else None
       )
     plt.close()
 
@@ -538,8 +558,13 @@ class OGSCatalog:
       )
     ]
     myfnplot.add_plot(picks=myfppicks, flip=True,
-      output=(output if output is not None else self.output / "img" /
-              f"{self.input.name}_MS{event[OGS_C.GROUPS_STR]}_{event[OGS_C.IDX_EVENTS_STR]}.png")
+      output=(
+        output if output is not None else
+        self.output / "img" / (
+          f"{self.input.name}_MS{event[OGS_C.GROUPS_STR]}_{event[OGS_C.IDX_EVENTS_STR]}" +
+          IMAGE_EXT
+        )
+      )
     )
     plt.close()
 
@@ -584,8 +609,13 @@ class OGSCatalog:
       )
     ]
     mypsplot.add_plot(picks=mypspicks, flip=True,
-      output=(output if output is not None else self.output / "img" /
-              f"{self.input.name}_PS{event[OGS_C.GROUPS_STR]}_{event[OGS_C.IDX_EVENTS_STR]}.png")
+      output=(
+        output if output is not None else
+        self.output / "img" / (
+          f"{self.input.name}_PS{event[OGS_C.GROUPS_STR]}_{event[OGS_C.IDX_EVENTS_STR]}" +
+          IMAGE_EXT
+        )
+      )
     )
     plt.close()
 
@@ -611,8 +641,13 @@ class OGSCatalog:
     cumulative = OGS_P.day_plotter(
       picks=picks.sort_values(OGS_C.GROUPS_STR)[OGS_C.GROUPS_STR],
       title=f"Cumulative Picks",
-      output=(output if output is not None else self.output / "img" /
-              f"{self.input.name}_CumulativePicks.png"),
+      output=(
+        output if output is not None else
+        self.output / "img" / (
+          f"{self.input.name}_CumulativePicks" +
+          IMAGE_EXT
+        )
+      ),
       label=self.name,
       color=OGS_C.OGS_BLUE,
       vlines=vlines
@@ -627,8 +662,13 @@ class OGSCatalog:
       cumulative.add_plot(
         picks=picks.sort_values(OGS_C.GROUPS_STR)[OGS_C.GROUPS_STR],
         title=f"Cumulative Picks",
-        output=(output if output is not None else self.output / "img" /
-                f"{self.input.name}_{other.input.name}_CumulativePicks.png"),
+        output=(
+          output if output is not None else
+          self.output / "img" / (
+            f"{self.input.name}_{other.input.name}_CumulativePicks" +
+            IMAGE_EXT
+          )
+        ),
         label=other.name,
         legend=True,
         color=color,
@@ -657,8 +697,13 @@ class OGSCatalog:
     hist = OGS_P.day_plotter(
       picks=events.sort_values(OGS_C.GROUPS_STR)[OGS_C.GROUPS_STR],
       title=f"Cumulative Events",
-      output=(output if output is not None else self.output / "img" /
-              f"{self.input.name}_CumulativeEvents.png"),
+      output=(
+        output if output is not None else
+        self.output / "img" / (
+          f"{self.input.name}_CumulativeEvents" +
+          IMAGE_EXT
+        )
+      ),
       label=self.name,
       color=OGS_C.OGS_BLUE,
       vlines=vlines,
@@ -673,8 +718,13 @@ class OGSCatalog:
       hist.add_plot(
         picks=events.sort_values(OGS_C.GROUPS_STR)[OGS_C.GROUPS_STR],
         title=f"Cumulative Events",
-        output=(output if output is not None else self.output / "img" /
-                f"{self.input.name}_{other.input.name}_CumulativeEvents.png"),
+        output=(
+          output if output is not None else
+          self.output / "img" / (
+            f"{self.input.name}_{other.input.name}_CumulativeEvents" +
+            IMAGE_EXT
+          )
+        ),
         label=other.name,
         legend=True,
         color=color,
@@ -724,8 +774,13 @@ class OGSCatalog:
       xlabel=xlabel,
       ylabel="Number of Events",
       title=title,
-      output=(output if output is not None else self.output / "img" /
-              f"{self.input.name}_{file_suffix}.png"),
+      output=(
+        output if output is not None else
+        self.output / "img" / (
+          f"{self.input.name}_{file_suffix}" +
+          IMAGE_EXT
+        )
+      ),
       label=self.name,
       **plotter_kwargs,
     )
@@ -746,8 +801,13 @@ class OGSCatalog:
         alpha=0.5,
         label=other.name,
         color=color,
-        output=(output if output is not None else self.output / "img" /
-                f"{self.input.name}_{other.input.name}_{file_suffix}.png")
+        output=(
+          output if output is not None else
+          self.output / "img" / (
+            f"{self.input.name}_{other.input.name}_{file_suffix}" +
+            IMAGE_EXT
+          )
+        ),
       )
     plt.close()
 
@@ -785,13 +845,16 @@ class OGSCatalog:
       "MagL", others=others, bins=bins, output=output, yscale='log',
       xlim=(-1, 5))
 
-  def bgmaEvents(self, other: "OGSCatalog") -> None:
+  def bgmaEvents(self, other: "OGSCatalog", output=None) -> None:
     """Match events between catalogs using BGMA.
 
     Parameters
     ----------
     other : OGSCatalog
       Catalog to compare against.
+    output : Optional[Path], optional
+      Output path for the results. If None, defaults to a file in the output
+      directory named "{self.input.name}_{other.input.name}_EventsMH.csv".
     """
     self.logger.info("Starting bgmaEvents: %s vs %s", self.name, other.name)
     import ogsplotter as OGS_P
@@ -890,8 +953,13 @@ class OGSCatalog:
                 f"{self.input.name}_{other.input.name}_EventsPS.csv")
     self.EventsFP.to_csv(filepath, index=False)
     self.logger.info("%s written.", filepath)
-    filepath = (self.output / "img" /
-                f"{self.input.name}_{other.input.name}_EventsConfMtx.png")
+    filepath = (
+      output if output is not None else
+      self.output / "img" / (
+        f"{self.input.name}_{other.input.name}_EventsConfMtx" +
+        IMAGE_EXT
+      )
+    )
     OGS_P.ConfMtx_plotter(
       EVENTS_CFN_MTX.values,
       title="Recall: {:.4f}, FDR: {:.4f}".format(recall, fdr),
@@ -910,8 +978,13 @@ class OGSCatalog:
             f"MAE = {data.abs().mean():.4f} s",
       xlim=(-OGS_C.EVENT_TIME_OFFSET.total_seconds(),
             OGS_C.EVENT_TIME_OFFSET.total_seconds()),
-      output=(self.output / "img" /
-              f"{self.input.name}_{other.input.name}_EventsTimeDiff.png"),
+      output=(
+        output if output is not None else
+        self.output / "img" / (
+          f"{self.input.name}_{other.input.name}_EventsTimeDiff" +
+          IMAGE_EXT
+        )
+      ),
       legend=True)
     plt.close()
     # Matched (MH) Map
@@ -935,8 +1008,13 @@ class OGSCatalog:
       label=other.name, legend=True, facecolors="none",
       edgecolors=OGS_C.MEX_PINK,
       magnitude=magnitude,
-      output=(self.output / "img" /
-              f"{self.input.name}_{other.input.name}_EventsMH.png")
+      output=(
+        output if output is not None else
+        self.output / "img" / (
+          f"{self.input.name}_{other.input.name}_EventsMH" +
+          IMAGE_EXT
+        )
+      ),
     )
     plt.close()
     # Missed (MS) and Proposed (PS) Map
@@ -954,12 +1032,15 @@ class OGSCatalog:
     magnitude = magnitude if magnitude is not None and magnitude.notna().any() else None
     myplot.add_plot(
       self.EventsFP[OGS_C.LONGITUDE_STR], self.EventsFP[OGS_C.LATITUDE_STR],
-        color=None, facecolors="none", edgecolors=OGS_C.MEX_PINK, legend=True,
-        label=f"Proposed (PS) [{other.name}] {len(self.EventsFP.index)}",
-        magnitude=magnitude, output=(
-          self.output / "img" /
-          f"{self.input.name}_{other.input.name}_EventsFalse.png"
+      color=None, facecolors="none", edgecolors=OGS_C.MEX_PINK, legend=True,
+      label=f"Proposed (PS) [{other.name}] {len(self.EventsFP.index)}",
+      magnitude=magnitude, output=(
+        output if output is not None else
+        self.output / "img" / (
+          f"{self.input.name}_{other.input.name}_EventsFalse" +
+          IMAGE_EXT
         )
+      ),
     )
     plt.close()
     # Depth Difference Histogram
@@ -968,9 +1049,15 @@ class OGSCatalog:
       xlabel=f"Depth Difference (km) [{self.name} - {other.name}]",
       title="Event Depth Difference",
       xlim=(-20, 20),
-      output=(self.output / "img" /
-              f"{self.input.name}_{other.input.name}_DepthDiff.png"),
-      legend=True)
+      output=(
+        output if output is not None else
+        self.output / "img" / (
+          f"{self.input.name}_{other.input.name}_DepthDiff" +
+          IMAGE_EXT
+        )
+      ),
+      legend=True
+    )
     plt.close()
     # Event Location Scatter Plot
     OGS_P.histogram_plotter(
@@ -986,8 +1073,13 @@ class OGSCatalog:
       xlim=(0, OGS_C.EVENT_DIST_OFFSET),
       xlabel=f"Epicentral Distance Difference (km) [{self.name} - {other.name}]",
       title="Event Epicentral Distance Difference",
-      output=(self.output / "img" /
-              f"{self.input.name}_{other.input.name}_EpiDistDiff.png"),
+      output=(
+        output if output is not None else
+        self.output / "img" / (
+          f"{self.input.name}_{other.input.name}_EpiDistDiff" +
+          IMAGE_EXT
+        )
+      ),
       legend=True)
     plt.close()
     if OGS_C.MAGNITUDE_L_STR in self.EventsTP.columns:
@@ -1014,10 +1106,14 @@ class OGSCatalog:
       mymags.ax.set_aspect('equal', adjustable='box')
       mymags.ax.grid(True)
       mymags.savefig(
-        self.output / "img" /
-        f"{self.input.name}_{other.input.name}_MagLDist.png"
+        output if output is not None else
+        self.output / "img" / (
+          f"{self.input.name}_{other.input.name}_MagLDist" +
+          IMAGE_EXT
+        )
       )
       plt.close()
+      print(self.input.name, other.input.name)
       if (self.input.name in (OGS_C.TXT_EXT, ".all") and \
           other.input.name in ("OGSLocalMagnitude")):
         # Magnitude Difference Histogram
@@ -1029,8 +1125,13 @@ class OGSCatalog:
                  f"MAE = {data.abs().mean():.4f}"),
           xlim=(-1.5, 1.5),
           bins=21,
-          output=(self.output / "img" /
-                  f"{self.input.name}_{other.input.name}_MagLDiff.png"),
+          output=(
+            output if output is not None else
+            self.output / "img" / (
+              f"{self.input.name}_{other.input.name}_MagLDiff" +
+              IMAGE_EXT
+            )
+          ),
           legend=True
         )
         plt.close()
@@ -1049,8 +1150,13 @@ class OGSCatalog:
           label=f"Missed (MS) [{self.name}]",
           color=OGS_C.OGS_BLUE,
           legend=True,
-          output=(self.output / "img" /
-                  f"{self.input.name}_{other.input.name}_MSPSMagLDist.png"),
+          output=(
+            output if output is not None else
+            self.output / "img" / (
+              f"{self.input.name}_{other.input.name}_MSPSMagLDist" +
+              IMAGE_EXT
+            )
+          ),
         )
         plt.close()
       else:
@@ -1063,19 +1169,28 @@ class OGSCatalog:
             title="Event Magnitude",
             color=OGS_C.MEX_PINK,
             label=f"Proposed (PS) [{other.name}]",
-            output=self.output / "img" / f"{other.input.name}_PSMagLDist.png",
+            output=(
+              output if output is not None else
+              self.output / "img" / (
+                f"{other.input.name}_PSMagLDist" +
+                IMAGE_EXT
+              )
+            )
           )
           plt.close()
     self.EVENTS = self.get("EVENTS")
     other.EVENTS = other.get("EVENTS")
 
-  def bgmaPicks(self, other: "OGSCatalog",) -> None:
+  def bgmaPicks(self, other: "OGSCatalog", output=None) -> None:
     """Match picks between catalogs using BGMA.
 
     Parameters
     ----------
     other : OGSCatalog
       Catalog to compare against.
+    output : Optional[Path], optional
+      Output path for the results. If None, defaults to a file in the output
+      directory named "{self.input.name}_{other.input.name}_PicksMH.csv".
     """
     import ogsplotter as OGS_P
     from matplotlib import pyplot as plt
@@ -1210,8 +1325,13 @@ class OGSCatalog:
     filepath = self.output / f"{self.input.name}_{other.input.name}_PicksPS.csv"
     self.PicksFP.to_csv(filepath, index=False)
     self.logger.info("%s written.", filepath)
-    filepath = self.output / "img" / (f"{self.input.name}_" + \
-               f"{other.input.name}_PicksConfMtx.png")
+    filepath = (
+      output if output is not None else
+      self.output / "img" / (
+        f"{self.input.name}_{other.input.name}_PicksConfMtx" +
+        IMAGE_EXT
+      )
+    )
     OGS_P.ConfMtx_plotter(
       PICKS_CFN_MTX.values,
       title="Recall: {:.4f}, Recall P: {:.4f}, Recall S: {:.4f}".format(
@@ -1268,8 +1388,13 @@ class OGSCatalog:
       label=f"S Picks: $\mu$ = {data.mean():.3E}, $\sigma$ = {data.std():.3E},\n"
             f"RMSE = {np.sqrt((data**2).mean()):.4f} s, MAE = {data.abs().mean():.4f} s",
       legend=True,
-      output=(self.output / "img" /
-              f"{self.input.name}_{other.input.name}_PicksTimeDiff.png"),
+      output=(
+        output if output is not None else
+        self.output / "img" / (
+          f"{self.input.name}_{other.input.name}_PicksTimeDiff" +
+          IMAGE_EXT
+        )
+      ),
     )
     plt.close()
     # Confidence Histogram
@@ -1308,8 +1433,13 @@ class OGSCatalog:
       label="Proposed (PS)",
       legend=True,
       yscale='log',
-      output=(self.output / "img" /
-              f"{self.input.name}_{other.input.name}_PicksConfDist.png"),
+      output=(
+        output if output is not None else
+        self.output / "img" / (
+          f"{self.input.name}_{other.input.name}_PicksConfDist" +
+          IMAGE_EXT
+        )
+      ),
     )
     plt.close()
     self.PICKS = self.get("PICKS")

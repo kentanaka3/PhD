@@ -1,6 +1,6 @@
 {
   "algorithms": [
-    "AdvancedDensityPeaks",
+    "AdvancedDensityPeaksPP",
     "KMeans",
     "HDBSCAN"
   ],
@@ -13,6 +13,7 @@
   "cluster_size_range": [25, 600, 75],
   "directory": "/Users/admin/Desktop/Monica/PhD/catalog/unknown/.all",
   "eval_metrics": [
+    "PAkDensitySeparationScore",
     "SilhouetteScore",
     "DaviesBouldinScore"
   ],
@@ -27,5 +28,5 @@
     ["2016-10-30", "2017-01-17"],
     ["2017-01-18", "2017-08-30"]
   ],
-  "Z_range": [0.0, 10.0, 1.0]
+  "Z_range": [0.0, 3.0, 0.3]
 }

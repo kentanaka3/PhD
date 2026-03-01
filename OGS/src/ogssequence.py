@@ -1,13 +1,14 @@
 """
-=============================================================================
+===============================================================================
 OGS Sequence Clustering Pipeline - Seismic Event Cluster Analysis
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module implements an automated seismic sequence clustering pipeline for
 analyzing spatiotemporal patterns in earthquake catalogs. It identifies and
 visualizes clusters of seismic events using machine learning algorithms,
-enabling the detection of earthquake sequences, swarms, and aftershock patterns.
+enabling the detection of earthquake sequences, swarms, and aftershock
+patterns.
 
 KEY FEATURES:
   - Multi-algorithm clustering: Supports multiple clustering algorithms
@@ -64,7 +65,7 @@ USAGE:
 
 OUTPUT:
   - Clusters/{algorithm}/{metric}/{range}/cluster_id.csv  (per-cluster CSVs)
-  - Clusters/{algorithm}_{metric}_{angle}.png            (visualization plots)
+  - Clusters/{algorithm}_{metric}_{angle}.png             (visualization plots)
 
 VISUALIZATION:
   Each plot contains:
@@ -82,7 +83,7 @@ DEPENDENCIES:
   - ogsclustering: Custom clustering algorithms and utilities
   - ogscatalog: Catalog loading and management
 
-=============================================================================
+===============================================================================
 """
 
 # -----------------------------------------------------------------------------
@@ -144,9 +145,9 @@ def parse_arguments() -> argparse.Namespace:
   Parse command-line arguments for the sequence clustering tool.
 
   Returns:
-      argparse.Namespace with:
-        - input: Path to JSON metadata configuration file
-        - verbose: Boolean flag for debug output
+    argparse.Namespace with:
+      - input: Path to JSON metadata configuration file
+      - verbose: Boolean flag for debug output
   """
   parser = argparse.ArgumentParser(
     description="OGS Sequence Clustering Tool")
@@ -210,7 +211,8 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
       **common_kwargs)
     Execute the clustering pipeline and generate plots.
 
-  _init_figure(figsize=(16, 12), **kwargs) -> dict[str, Tuple[Figure, np.ndarray]]
+  _init_figure(figsize=(16, 12), **kwargs) -> dict[str,
+                                                   Tuple[Figure, np.ndarray]]
     Initialize the figure and axes grid for plotting.
 
   _load_catalog(range_idx: int, range_: list) -> OGSCatalog
@@ -220,7 +222,8 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     Compute the Cartesian and geographic centers of catalog events.
 
   _prepare_events(myCatalog: OGSCatalog, R: float = 6371.0) -> None
-    Prepare event features including Cartesian coordinates and inter-event times.
+    Prepare event features including Cartesian coordinates and inter-event
+    times.
 
   _save_clusters(myCatalog: OGSCatalog, algo_name: str,
                  metric_name: Optional[str] = None) -> None
@@ -276,8 +279,8 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     Configured catalog time windows as list of [start, end] date strings.
 
     Returns:
-        list: List of [start_date, end_date] pairs, e.g.,
-              [["2022-01-01", "2022-06-30"], ["2022-07-01", "2022-12-31"]]
+      list: List of [start_date, end_date] pairs, e.g.,
+            [["2022-01-01", "2022-06-30"], ["2022-07-01", "2022-12-31"]]
     """
     return self._metadata.get("ranges", [])
 
@@ -287,7 +290,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     Configured azimuth angles (degrees) for cross-section projections.
 
     Returns:
-        list: List of angles in degrees, e.g., [0, 45, 90]
+      list: List of angles in degrees, e.g., [0, 45, 90]
     """
     return self._metadata.get("angles_deg", [])
 
@@ -297,7 +300,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     Geographic map bounds for plot axes.
 
     Returns:
-        Tuple: (lon_min, lon_max, lat_min, lat_max) in degrees
+      Tuple: (lon_min, lon_max, lat_min, lat_max) in degrees
     """
     return tuple(self._metadata.get("map_deg", [13.09, 13.46, 42.44, 42.61]))
 
@@ -307,8 +310,8 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     Cross-section plot bounds for depth vs projection axes.
 
     Returns:
-        Tuple: (x_min, x_max, depth_max, depth_min) in kilometers
-               Note: depth axis is inverted (positive downward)
+      Tuple: (x_min, x_max, depth_max, depth_min) in kilometers
+              Note: depth axis is inverted (positive downward)
     """
     return tuple(self._metadata.get("cross_km", [-10.0, 10.0, 15.0, 0.0]))
 
@@ -318,7 +321,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     Map window size for cross-section filtering.
 
     Returns:
-        Tuple: (width_km, height_km) defining the region to include
+      Tuple: (width_km, height_km) defining the region to include
     """
     return tuple(self._metadata.get("map_km", [30.0, 50.0]))
 
@@ -345,12 +348,12 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     are accepted for API compatibility with the parent clustering zoo.
 
     Args:
-        X: Ignored (features computed internally from catalog)
-        figsize: Ignored (computed from number of ranges)
-        feature_x: Ignored (not used in this implementation)
-        feature_y: Ignored (not used in this implementation)
-        y_true: Ignored (unsupervised clustering)
-        **common_kwargs: Additional keyword arguments (passed through)
+      X: Ignored (features computed internally from catalog)
+      figsize: Ignored (computed from number of ranges)
+      feature_x: Ignored (not used in this implementation)
+      feature_y: Ignored (not used in this implementation)
+      y_true: Ignored (unsupervised clustering)
+      **common_kwargs: Additional keyword arguments (passed through)
     """
     # Get configured algorithms from parent class
     algorithms = self._algorithms
@@ -385,7 +388,8 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
 
       # Skip empty catalogs
       if myCatalog.EVENTS.empty:
-        self.logger.warning("Window #%s has no events; skipping.", range_idx + 1)
+        self.logger.warning("Window #%s has no events; skipping.",
+                            range_idx + 1)
         continue
 
       # Prepare features: Cartesian coordinates, inter-event times
@@ -440,7 +444,8 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     for angle_deg in self.metadata_angles:
       for metric_name, _ in self._metrics.items():
         for algo_idx, (algo_name, _) in enumerate(algorithms.items()):
-          # Create figure with subplot grid: 2 rows (map, cross) × n columns (ranges)
+          # Create figure with subplot grid: 2 rows (map, cross) × n columns
+          # (ranges)
           fig, ax = self._init_figure()[""]
 
           # Plot each time range in its column
@@ -466,6 +471,30 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
           self._finalize_figure(fig, ax, n_cols=n, angle_deg=angle_deg,
                                 algo_name=algo_name, metric_name=metric_name)
 
+          fig_noise, ax_noise = self._init_figure()[""]
+          # Plot each time range in its column
+          for range_idx, range_ in enumerate(ranges):
+            # Reuse cached catalog from Phase 1
+            myCatalog = cached_catalogs[range_idx]
+
+            # Skip ranges that had no events
+            if myCatalog is None or range_idx not in self.best_params:
+              continue
+
+            # Retrieve stored cluster labels
+            params = self.best_params[range_idx][algo_name][metric_name]
+            labels = params.get("labels")
+            if labels is None:
+              continue
+            myCatalog.EVENTS["cluster"] = labels
+
+            # Draw noise-only plots (cluster = -1) for this range
+            self._plot_noise(ax_noise, range_idx, angle_deg, myCatalog)
+          # Save noise figure and close
+          self._finalize_figure(fig_noise, ax_noise, n_cols=n,
+                                angle_deg=angle_deg, algo_name=algo_name,
+                                metric_name=metric_name + "_noise")
+
   # -------------------------------------------------------------------------
   # HELPER: Initialize Figure
   # -------------------------------------------------------------------------
@@ -481,11 +510,11 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
       - Row 1: Cross-sections (projection vs depth) for each range
 
     Args:
-        figsize: Figure size (overridden by computed size)
-        **kwargs: Additional arguments (unused)
+      figsize: Figure size (overridden by computed size)
+      **kwargs: Additional arguments (unused)
 
     Returns:
-        dict: {"": (fig, ax)} where ax is 2D array of Axes objects
+      dict: {"": (fig, ax)} where ax is 2D array of Axes objects
     """
     # Get number of columns (one per time range)
     n_cols = len(self.metadata_ranges)
@@ -542,11 +571,11 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     Load a catalog window and report summary statistics.
 
     Args:
-        range_idx: Index of the time range (for logging)
-        range_: [start_date, end_date] strings in DATE_FMT format
+      range_idx: Index of the time range (for logging)
+      range_: [start_date, end_date] strings in DATE_FMT format
 
     Returns:
-        OGSCatalog: Loaded catalog with EVENTS DataFrame populated
+      OGSCatalog: Loaded catalog with EVENTS DataFrame populated
     """
     # Log the time window being processed
     self.logger.info("Window #%s: %s to %s", range_idx + 1, range_[0], range_[1])
@@ -575,7 +604,8 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
 
     # Log summary statistics
     self.logger.info("Number of events = %s", len(myCatalog.EVENTS))
-    self.logger.info("Max magnitude    = %s", myCatalog.EVENTS[OGS_C.ML_STR].max())
+    self.logger.info("Max magnitude    = %s",
+                     myCatalog.EVENTS[OGS_C.ML_STR].max())
 
     return myCatalog
 
@@ -591,10 +621,10 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     Compute Cartesian and geographic centers for a catalog.
 
     Args:
-        myCatalog: Catalog with X_KM, Y_KM, lon, lat columns
+      myCatalog: Catalog with X_KM, Y_KM, lon, lat columns
 
     Returns:
-        Tuple: (center_x_km, center_y_km, center_lon, center_lat)
+      Tuple: (center_x_km, center_y_km, center_lon, center_lat)
     """
     # Compute mean Cartesian coordinates (km)
     center_x, center_y = myCatalog.EVENTS[["X_KM", "Y_KM"]].mean().to_numpy()
@@ -620,14 +650,14 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     and computes inter-event times for temporal clustering.
 
     Args:
-        myCatalog: Catalog to prepare (modified in place)
-        R: Earth radius in km (default: 6371.0)
+      myCatalog: Catalog to prepare (modified in place)
+      R: Earth radius in km (default: 6371.0)
 
     Computed columns:
-        - TIMESTAMP: Unix timestamp (seconds since epoch)
-        - X_KM: East-West position in km (from longitude)
-        - Y_KM: North-South position in km (from latitude)
-        - INTEREVENT: Seconds since previous event
+      - TIMESTAMP: Unix timestamp (seconds since epoch)
+      - X_KM: East-West position in km (from longitude)
+      - Y_KM: North-South position in km (from latitude)
+      - INTEREVENT: Seconds since previous event
     """
     # Ensure timestamp column exists and is datetime type
     myCatalog.EVENTS[OGS_C.TIME_STR] = pd.to_datetime(
@@ -684,9 +714,9 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
       Clusters/{algorithm}/{metric}/{range}/{cluster_id}.csv
 
     Args:
-        myCatalog: Catalog with 'cluster' column assigned
-        algo_name: Name of the clustering algorithm
-        metric_name: Name of the optimization metric (optional)
+      myCatalog: Catalog with 'cluster' column assigned
+      algo_name: Name of the clustering algorithm
+      metric_name: Name of the optimization metric (optional)
     """
     # Build output directory path
     dir_path = Path("Clusters") / algo_name
@@ -728,17 +758,17 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
       - Cluster centroid labels
 
     Args:
-        ax: Matplotlib Axes object to plot on
-        df: DataFrame with event data
-        lon_col: Column name for longitude
-        lat_col: Column name for latitude
-        mag_col: Column name for magnitude (used for marker size)
-        range_idx: Time range index (for labeling)
-        center: (center_lon, center_lat) for projection line
-        angle_rad: Cross-section azimuth in radians
+      ax: Matplotlib Axes object to plot on
+      df: DataFrame with event data
+      lon_col: Column name for longitude
+      lat_col: Column name for latitude
+      mag_col: Column name for magnitude (used for marker size)
+      range_idx: Time range index (for labeling)
+      center: (center_lon, center_lat) for projection line
+      angle_rad: Cross-section azimuth in radians
 
     Returns:
-        Axes: The modified axes object
+      Axes: The modified axes object
     """
     # Filter out noise points (cluster = -1)
     df = df[df["cluster"] != -1].copy()
@@ -814,16 +844,16 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
       - Cluster centroid labels
 
     Args:
-        ax: Matplotlib Axes object to plot on
-        df: DataFrame with event data (must have X_KM, Y_KM columns)
-        depth_col: Column name for depth
-        mag_col: Column name for magnitude
-        range_idx: Time range index (for labeling)
-        center: (center_x_km, center_y_km) for projection origin
-        angle_rad: Cross-section azimuth in radians
+      ax: Matplotlib Axes object to plot on
+      df: DataFrame with event data (must have X_KM, Y_KM columns)
+      depth_col: Column name for depth
+      mag_col: Column name for magnitude
+      range_idx: Time range index (for labeling)
+      center: (center_x_km, center_y_km) for projection origin
+      angle_rad: Cross-section azimuth in radians
 
     Returns:
-        Axes: The modified axes object
+      Axes: The modified axes object
     """
     # Filter out noise points (cluster = -1)
     df = df[df["cluster"] != -1].copy()
@@ -891,8 +921,77 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     return ax
 
   # -------------------------------------------------------------------------
-  # HELPER: Plot Results
+  # PLOTTING: Noise Cluster
   # -------------------------------------------------------------------------
+
+  def _plot_noise(self,
+                  ax: np.ndarray,
+                  range_idx: int,
+                  angle_deg: float,
+                  myCatalog: OGSCatalog) -> None:
+    """
+    Plot noise cluster (label = -1) as gray background markers.
+
+    Renders noise points on both the map view and cross-section view with
+    small, semi-transparent gray markers so they are visible but do not obscure
+    the actual clusters.
+
+    Args:
+      ax: 2D array of Axes (2 rows × n_cols)
+      range_idx: Column index for this time range
+      angle_deg: Cross-section azimuth in degrees
+      myCatalog: OGSCatalog object with event data and cluster labels
+    """
+    # Filter noise points (cluster = -1)
+    noise_df = myCatalog.EVENTS[myCatalog.EVENTS["cluster"] == -1].copy()
+    if noise_df.empty:
+      self.logger.warning("No noise points to plot.")
+      return
+
+    self.logger.info("Plotting %d noise points.", len(noise_df))
+
+    # Compute centers in both coordinate systems
+    center_x, center_y, center_lon, center_lat = \
+      self._compute_centers(myCatalog)
+
+    # Convert angle to radians
+    angle_rad = np.radians(angle_deg)
+
+    # ----- Map view: plot noise as small gray dots (top row) -----
+    ax[0, range_idx].scatter(
+      noise_df[OGS_C.LONGITUDE_STR].to_numpy(),
+      noise_df[OGS_C.LATITUDE_STR].to_numpy(),
+      s=5, color="gray", alpha=0.4, marker=".",
+      linewidths=0.0, label="Noise", zorder=1
+    )
+
+    # ----- Cross-section view: project noise onto the section plane -----
+    sin_angle = np.sin(angle_rad)
+    cos_angle = np.cos(angle_rad)
+
+    x_km = noise_df["X_KM"].to_numpy() - center_x
+    y_km = noise_df["Y_KM"].to_numpy() - center_y
+    noise_df["PROJECTION_KM"] = x_km * sin_angle + y_km * cos_angle
+
+    # Filter to events within the map window
+    mask = (
+      (noise_df["PROJECTION_KM"] >= -0.5 * self.metadata_map_size[1]) &
+      (noise_df["PROJECTION_KM"] <= 0.5 * self.metadata_map_size[1]) &
+      (noise_df["X_KM"] >= center_x - 0.5 * self.metadata_map_size[0]) &
+      (noise_df["X_KM"] <= center_x + 0.5 * self.metadata_map_size[0])
+    )
+    noise_df = noise_df[mask]
+
+    ax[1, range_idx].scatter(
+      noise_df["PROJECTION_KM"].to_numpy(),
+      noise_df[OGS_C.DEPTH_STR].to_numpy(),
+      s=5, color="gray", alpha=0.4, marker=".",
+      linewidths=0.0, label="Noise", zorder=1
+    )
+
+  # ---------------------------------------------------------------------------
+  # HELPER: Plot Results
+  # ---------------------------------------------------------------------------
 
   def _plot_results(self,
                     ax: np.ndarray,
@@ -906,10 +1005,10 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     range, using the appropriate axes from the subplot grid.
 
     Args:
-        ax: 2D array of Axes (2 rows × n_cols)
-        range_idx: Column index for this time range
-        angle_deg: Cross-section azimuth in degrees
-        myCatalog: Catalog with cluster labels assigned
+      ax: 2D array of Axes (2 rows × n_cols)
+      range_idx: Column index for this time range
+      angle_deg: Cross-section azimuth in degrees
+      myCatalog: Catalog with cluster labels assigned
     """
     # Compute centers in both coordinate systems
     center_x, center_y, center_lon, center_lat = \
@@ -941,9 +1040,9 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
       angle_rad=angle_rad
     )
 
-  # -------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
   # HELPER: Finalize Figure
-  # -------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
 
   def _finalize_figure(self,
                        fig: Any,
@@ -953,13 +1052,13 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     Finalize layout, save the figure, and close the plot.
 
     Args:
-        fig: Matplotlib Figure object
-        ax: Array of Axes objects
-        **kwargs: Must include:
-          - n_cols: Number of columns (for legend placement)
-          - angle_deg: Azimuth angle (for filename)
-          - algo_name: Algorithm name (for filename)
-          - metric_name: Metric name (for filename)
+      fig: Matplotlib Figure object
+      ax: Array of Axes objects
+      **kwargs: Must include:
+        - n_cols: Number of columns (for legend placement)
+        - angle_deg: Azimuth angle (for filename)
+        - algo_name: Algorithm name (for filename)
+        - metric_name: Metric name (for filename)
     """
     # Extract required kwargs
     n_cols = kwargs["n_cols"]
@@ -999,7 +1098,7 @@ def main(args: argparse.Namespace) -> None:
   Loads JSON metadata configuration and executes the full clustering pipeline.
 
   Args:
-      args: Parsed command-line arguments with 'input' and 'verbose' fields
+    args: Parsed command-line arguments with 'input' and 'verbose' fields
   """
   # Load metadata configuration from JSON file
   with open(args.input, 'r') as infile: metadata = json.load(infile)
