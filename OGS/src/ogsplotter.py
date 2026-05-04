@@ -3,18 +3,49 @@ import obspy as op
 import pandas as pd
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import cartopy.feature as cfeature
 import matplotlib.patches as mpatches
 from pathlib import Path
 from obspy import UTCDateTime
 from matplotlib.axes import Axes
+from numpy.typing import NDArray
 from obspy.geodetics import gps2dist_azimuth
 from datetime import datetime, timedelta as td
+from typing import Protocol, Sequence, TypedDict, cast
 from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 from matplotlib_scalebar.scalebar import ScaleBar
 from matplotlib_map_utils.core.north_arrow import north_arrow
 
 import ogsconstants as OGS_C
+import ogsutils as OGS_U
+
+class _LabelKwargs(TypedDict, total=False):
+  label: str
+
+class _GridlinerLike(Protocol):
+  left_labels: bool
+  top_labels: bool
+
+class _CartopyAxesLike(Protocol):
+  def add_feature(self, feature: object, **kwargs: object) -> object:
+    ...
+
+  def set_extent(self, extents: Sequence[float], crs: object | None = None) -> None:
+    ...
+
+  def gridlines(self) -> _GridlinerLike:
+    ...
+
+def _label_kwargs(label: str) -> _LabelKwargs:
+  return {"label": label} if label else {}
+
+def _as_cartopy_axes(ax: Axes) -> _CartopyAxesLike:
+  return cast(_CartopyAxesLike, ax)
+
+def _plot_vline(ax: Axes, x: datetime, color: str, label: str) -> None:
+  ax.axvline(x=float(mdates.date2num(x)), color=color, linestyle='--',
+             **_label_kwargs(label))
 
 def v_lat_long_to_distance(lng1, lat1, depth1, lng2, lat2, depth2, dim=2):
   return [np.sqrt((gps2dist_azimuth(lt1, lg1, lt2, lg2)[0] / 1000.0) ** 2 +
@@ -29,7 +60,9 @@ class plotter:
     self.figsize = figsize
     self.fig = fig if fig else plt.figure(figsize=figsize,
                                           layout="compressed")
-    self.logger = OGS_C.setup_logger(f"{__name__}.{self.__class__.__name__}", verbose)
+    self.logger = OGS_U.setup_logger(
+      f"{__name__}.{self.__class__.__name__}", verbose
+    )
 
   def savefig(self, output=None, **kwargs) -> None:
     if output is not None:
@@ -51,10 +84,9 @@ class stack_plotter(plotter):
     if title: self.ax.set_title(title)
     self.ax.stackplot(x, y, labels=labels, colors=colors)
     self.ax.set_xlim(x[0], x[-1])
-    self.ax.set_ylim(0, OGS_C.decimeter(self.ax.get_ylim()[1]))
+    self.ax.set_ylim(0, OGS_U.decimeter(self.ax.get_ylim()[1]))
     for vline in vlines:
-      self.ax.axvline(x=vline[0], label=vline[1] or None, # type: ignore
-                      color=vline[2] or OGS_C.ALN_GREEN, linestyle='--')
+      _plot_vline(self.ax, vline[0], vline[2] or OGS_C.ALN_GREEN, vline[1])
     if legend: self.ax.legend()
     self.ax.grid()
     if output is not None: self.savefig(output=output)
@@ -77,8 +109,7 @@ class line_plotter(plotter):
     if legend: self.ax.legend()
     if ylim is not None: self.ax.set(ylim=ylim)
     for date, label, color in vlines:
-      self.ax.axvline(x=date, label=label or None, # type: ignore
-                      color=color or OGS_C.ALN_GREEN, linestyle='--')
+      _plot_vline(self.ax, date, color or OGS_C.ALN_GREEN, label)
     for y, label, color in hlines:
       self.ax.axhline(y=y, label=label or None,
                       color=color or OGS_C.ALN_GREEN, linestyle='--')
@@ -94,6 +125,22 @@ class line_plotter(plotter):
     if savefig: self.savefig(output=output)
 
 class event_plotter(plotter):
+  def _resolve_station_plot_data(
+        self, sta: object
+      ) -> tuple[str, Path, pd.Series] | None:
+    if not isinstance(sta, str):
+      return None
+    station_key = self.sta2sta.get(sta)
+    if station_key is None:
+      return None
+    waveform_paths = self.waveforms.get(station_key)
+    if waveform_paths is None:
+      return None
+    station_row = self.inventory.loc[station_key]
+    if isinstance(station_row, pd.DataFrame):
+      station_row = station_row.iloc[0]
+    return station_key, waveform_paths[0], station_row
+
   def __init__(self,
         picks: pd.DataFrame,
         event: pd.Series,
@@ -112,31 +159,31 @@ class event_plotter(plotter):
     self.waveforms = waveforms
     self.window = td(seconds=30)
     self.inventory = inventory.set_index(OGS_C.INDEX_STR)
-    self.sta2sta = dict(zip(
+    self.sta2sta: dict[str, str] = dict(zip(
       inventory[OGS_C.STATION_STR], inventory[OGS_C.INDEX_STR]
     ))
     self.t = event[OGS_C.TIME_STR]
     self.offset = td(seconds=1)
     self.antis2c = {}
     for sta, df in picks.groupby(OGS_C.STATION_STR):
-      if sta not in stations: continue
-      if self.sta2sta[sta] not in self.waveforms: continue # type: ignore
+      if not isinstance(sta, str) or sta not in stations: continue
+      station_plot_data = self._resolve_station_plot_data(sta)
+      if station_plot_data is None: continue
+      station_key, waveform_path, station_row = station_plot_data
       self.stream: op.Stream = op.read(
-        self.waveforms[self.sta2sta[sta]][0], # type: ignore
+        waveform_path,
         starttime=self.pick_time - self.offset,
         endtime=self.pick_time + self.window
       )
       self.stream.detrend()
       self.stream.filter("highpass", freq=2)
       trace = self.stream.select(
-        station=self.sta2sta[sta].split(OGS_C.PERIOD_STR)[1]) # type: ignore
+        station=station_key.split(OGS_C.PERIOD_STR)[1])
       if len(trace) == 0:
         self.logger.warning("No trace found for station %s. Skipping.", sta)
         continue
       trace = trace[0]
-      station_x, station_y, station_z, _, _, color, _ = self.inventory.loc[
-        self.sta2sta[sta] # type: ignore
-      ]
+      station_x, station_y, station_z, _, _, color, _ = station_row
       y_ = np.sqrt((gps2dist_azimuth(
         event[OGS_C.LATITUDE_STR], event[OGS_C.LONGITUDE_STR],
         station_y, station_x)[0] / 1000.0) ** 2 +
@@ -182,23 +229,22 @@ class event_plotter(plotter):
   def add_plot(self, picks, color=None, label=None, output=None, savefig=False,
                alpha=1., flip=False, ylim=(-100, 100)) -> None:
     for sta, df in picks.groupby(OGS_C.STATION_STR):
-      if sta not in self.sta2sta: continue
-      if self.sta2sta[sta] not in self.waveforms: continue
+      station_plot_data = self._resolve_station_plot_data(sta)
+      if station_plot_data is None: continue
+      station_key, waveform_path, station_row = station_plot_data
       self.stream: op.Stream = op.read(
-        self.waveforms[self.sta2sta[sta]][0], # type: ignore
+        waveform_path,
         starttime=self.pick_time - self.offset,
         endtime=self.pick_time + self.window
       )
       self.stream.detrend()
       self.stream.filter("highpass", freq=2)
-      trace = self.stream.select(station=self.sta2sta[sta].split('.')[1])
+      trace = self.stream.select(station=station_key.split('.')[1])
       if len(trace) == 0:
         self.logger.warning("No trace found for station %s. Skipping.", sta)
         continue
       trace = trace[0]
-      station_x, station_y, station_z, _, _, color, _ = self.inventory.loc[
-        self.sta2sta[sta] # type: ignore
-      ]
+      station_x, station_y, station_z, _, _, color, _ = station_row
       y_ = np.sqrt((gps2dist_azimuth(
         self.event[OGS_C.LATITUDE_STR], self.event[OGS_C.LONGITUDE_STR],
         station_y, station_x)[0] / 1000.0) ** 2 +
@@ -229,7 +275,6 @@ class event_plotter(plotter):
           ls = '--'
           lc = "blue"
         self.ax.plot(np.array([x_, x_]), [y_ - 3, y_ + 3], ls=ls, color=lc)
-      if not sta in self.sta2color: self.ax.text(31.3, y_, sta, fontsize=8,)
     if flip:
       self.ax.set_ylim(-self.ylim, self.ylim)
       ticks = self.ax.get_yticks()
@@ -261,7 +306,7 @@ class day_plotter(plotter):
     for label in self.ax.get_xticklabels():
       label.set(rotation=30, horizontalalignment='right')
     self.ax.set_xlim(x[0], x[-1])
-    self.ax.set_ylim(0, OGS_C.decimeter(max(y)))
+    self.ax.set_ylim(0, OGS_U.decimeter(max(y)))
     if ylim is not None:
       self.ax.set_ylim(ylim)
     if legend is not None:
@@ -274,8 +319,7 @@ class day_plotter(plotter):
     if grid:
       self.ax.grid()
     for date, label, color in vlines:
-      self.ax.axvline(x=date, label=label or None, # type: ignore
-                      color=color or OGS_C.ALN_GREEN, linestyle='--')
+      _plot_vline(self.ax, date, color or OGS_C.ALN_GREEN, label)
     for y, label, color in hlines:
       self.ax.axhline(y=y, label=label or None,
                       color=color or OGS_C.ALN_GREEN, linestyle='--')
@@ -300,7 +344,7 @@ class day_plotter(plotter):
         self.ax.get_legend().remove()
       else:
         self.ax.legend()
-    self.ax.set_ylim(0, OGS_C.decimeter(max(y[-1], self.ax.get_ylim()[1])))
+    self.ax.set_ylim(0, OGS_U.decimeter(max(y[-1], self.ax.get_ylim()[1])))
     if output is not None: savefig = True
     if savefig: self.savefig(output=output)
 
@@ -364,6 +408,7 @@ class map_plotter(plotter):
     super().__init__(fig=fig, verbose=verbose)
     self.proj = proj
     self.ax: Axes = self.fig.add_subplot(gs, projection=self.proj)
+    map_ax = _as_cartopy_axes(self.ax)
     self.marker = marker
     self.output = output
     self.s = s
@@ -377,15 +422,17 @@ class map_plotter(plotter):
     self.ax.add_patch(mpatches.Polygon(
       OGS_C.OGS_POLY_REGION, closed=True, linewidth=1, color='red', fill=False,
       label="Bulletin Area"))
-    rgAx = self.fig.add_axes((.74, 0.01, 0.15, 0.27), projection=self.proj)
+    rgAx: Axes = self.fig.add_axes((.74, 0.01, 0.15, 0.27),
+                                   projection=self.proj)
+    rg_map_ax = _as_cartopy_axes(rgAx)
     rgAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
                                       fill=False))
-    rgAx.add_feature(cfeature.OCEAN, facecolor=("lightblue")) # type: ignore
-    rgAx.add_feature(cfeature.BORDERS, linewidth=0.5, # type: ignore
+    rg_map_ax.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
+    rg_map_ax.add_feature(cfeature.BORDERS, linewidth=0.5,
                      edgecolor=OGS_C.MEX_PINK)
-    rgAx.add_feature(cfeature.COASTLINE, linewidth=0.5, # type: ignore
+    rg_map_ax.add_feature(cfeature.COASTLINE, linewidth=0.5,
                      edgecolor='black')
-    rgAx.set_extent([6, 19, 36, 48], crs=self.proj) # type: ignore
+    rg_map_ax.set_extent([6, 19, 36, 48], crs=self.proj)
     rgAx.set_aspect('equal', adjustable='box')
     ita = rgAx.annotate("Italy", xy=(0.5, 0.55), xycoords='axes fraction',
                         ha='center', va='center', fontsize=20,
@@ -393,14 +440,14 @@ class map_plotter(plotter):
     ita.set(rotation=-30)
     self.ax.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
                                          fill=False, label="Station Area"))
-    self.ax.add_feature(cfeature.OCEAN, facecolor=("lightblue")) # type: ignore
-    self.ax.add_feature(cfeature.BORDERS, linewidth=0.5, # type: ignore
+    map_ax.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
+    map_ax.add_feature(cfeature.BORDERS, linewidth=0.5,
                         edgecolor=OGS_C.MEX_PINK)
-    self.ax.add_feature(cfeature.COASTLINE, linewidth=0.5, # type: ignore
+    map_ax.add_feature(cfeature.COASTLINE, linewidth=0.5,
                         edgecolor='black')
-    self.ax.set_extent(extent, crs=proj) # type: ignore
+    map_ax.set_extent(extent, crs=proj)
     self.ax.set_aspect('equal', adjustable='box')
-    gl = self.ax.gridlines() # type: ignore
+    gl = map_ax.gridlines()
     gl.left_labels = True
     gl.top_labels = True
     # Scale bar (using matplotlib-scalebar)
@@ -522,6 +569,7 @@ class histogram_plotter(plotter):
                output=None, verbose: bool = False) -> None:
     super().__init__(fig=fig, figsize=(10, 5), verbose=verbose)
     self.ax = self.fig.add_subplot(gs)
+    self.bins: NDArray[np.float64]
     if xlabel:
       self.ax.set_xlabel(xlabel)
     if ylabel:
@@ -536,17 +584,20 @@ class histogram_plotter(plotter):
         raise ValueError("xlim must be a list or tuple of two floats.")
       if xlim[0] >= xlim[1]:
         raise ValueError("xlim[0] must be less than xlim[1].")
-      self.bins = np.linspace(xlim[0], xlim[1], bins + 1)
-      if max(data) > xlim[1] or min(data) < xlim[0]:
+      self.bins = np.asarray(
+        np.linspace(xlim[0], xlim[1], bins + 1), dtype=np.float64
+      )
+      if len(data) > 0 and (max(data) > xlim[1] or min(data) < xlim[0]):
         self.logger.warning(
           "Data contains values outside of xlim. These values will be ignored,"
           f" data range = [{min(data), max(data)}]"
         )
     else:
-      _, self.bins = np.histogram(data, bins=bins)
+      _, histogram_bins = np.histogram(data, bins=bins)
+      self.bins = np.asarray(histogram_bins, dtype=np.float64)
     y, _, _ = self.ax.hist(
       data,
-      bins=self.bins, # type: ignore
+      bins=self.bins.tolist(),
       color=color,
       label=label,
       align='mid',
@@ -600,14 +651,14 @@ class histogram_plotter(plotter):
     else:
       y, _, _ = self.ax.hist(
         data,
-        bins=self.bins, # type: ignore
+        bins=self.bins.tolist(),
         color=color,
         label=label,
         align='mid',
         alpha=alpha
       )
     self.ax.set_ylim(bottom=0.9,
-                     top=OGS_C.decimeter(max(*y, self.ax.get_ylim()[1]), "健"))
+                     top=OGS_U.decimeter(max(*y, self.ax.get_ylim()[1]), "健"))
     if xlabel:
       self.ax.set_xlabel(xlabel)
     if ylabel:

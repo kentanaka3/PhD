@@ -494,8 +494,12 @@ class DataCatalog(OGSDataFile):
       self.EVENTS[OGS_C.NUMBER_S_PICKS_STR] = 0
       self.EVENTS[OGS_C.NUMBER_P_AND_S_PICKS_STR] = 0
       # Extract date from timestamp for grouping
-      self.EVENTS[OGS_C.GROUPS_STR] = \
-        self.EVENTS[OGS_C.TIME_STR].dt.date  # type: ignore
+      time_series = self.EVENTS[OGS_C.TIME_STR]
+      if not isinstance(time_series, pd.Series):
+        raise TypeError(
+          f"Expected {OGS_C.TIME_STR!r} to resolve to a pandas Series"
+        )
+      self.EVENTS[OGS_C.GROUPS_STR] = time_series.dt.date
 
     return self.EVENTS
 

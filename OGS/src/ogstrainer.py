@@ -12,6 +12,7 @@ from datetime import datetime
 from torch.utils.data import DataLoader
 
 import ogsconstants as OGS_C
+import ogsutils as OGS_U
 
 LEARNING_RATE = 1e-2
 EPOCHS = 5
@@ -28,7 +29,7 @@ def parse_arguments():
   date_group = parser.add_mutually_exclusive_group(required=False)
   date_group.add_argument(
     '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
-    type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
+    type=OGS_U.is_date, nargs=2, action=OGS_U.SortDatesAction,
     default=[datetime.strptime("240320", OGS_C.YYMMDD_FMT),
              datetime.strptime("240620", OGS_C.YYMMDD_FMT)],
     help="Specify the beginning and ending (inclusive) Gregorian date " \
@@ -51,7 +52,7 @@ def parse_arguments():
 class OGSTrainer:
   def __init__(self, args):
     self.args = args
-    self.catalog: OGS_C.OGSCatalog = OGS_C.OGSCatalog(
+    self.catalog: OGS_U.OGSCatalog = OGS_U.OGSCatalog(
       args.catalog,
       start=args.dates[0],
       end=args.dates[1],
@@ -60,7 +61,8 @@ class OGSTrainer:
     self.metadata_path = Path(".") / "metadata.csv"
     self.waveforms_path = Path(".") / "waveforms.hdf5"
     self.start, self.end = args.dates
-    self.waveforms = OGS_C.waveforms(args.waveforms, self.start, self.end)
+    self.waveforms_dir = Path(args.waveforms)
+    self.waveforms = OGS_U.waveforms(self.waveforms_dir, self.start, self.end)
     self.stations = {
       station.split(".")[1] : station for date in self.waveforms.values()
         for station in date.keys()

@@ -85,11 +85,11 @@ ARCHITECTURE:
 
 USAGE:
   from ogsconstants import (
-      PWAVE, SWAVE,           # Phase identifiers
-      DATE_FMT, TIME_FMT,     # Format strings
-      HEADER_PICKS,           # Column headers
-      dist_pick, dist_event,  # Matching functions
-      OGSBPGraphPicks         # Bipartite matching
+    PWAVE, SWAVE,           # Phase identifiers
+    DATE_FMT, TIME_FMT,     # Format strings
+    HEADER_PICKS,           # Column headers
+    dist_pick, dist_event,  # Matching functions
+    OGSBPGraphPicks         # Bipartite matching
   )
 
 DEPENDENCIES:
@@ -106,102 +106,14 @@ AUTHOR: AI2Seism Project
 # =============================================================================
 # STANDARD LIBRARY IMPORTS
 # =============================================================================
-import os                                  # Operating system interface
-import re                                  # Regular expression operations
-import sys                                 # System-specific parameters
-import logging                             # Logging facility
-import argparse                            # Command-line argument parsing
-import itertools as it                     # Iterator utilities
-from pathlib import Path                   # Object-oriented filesystem paths
-from datetime import datetime, timedelta as td  # Date/time handling
-from typing import Any, Optional, Tuple    # Type hinting
+import re                                 # Regular expression operations
+from pathlib import Path                  # Object-oriented filesystem paths
+from datetime import timedelta as td      # Time handling
 
 # =============================================================================
 # THIRD-PARTY LIBRARY IMPORTS
 # =============================================================================
-import numpy as np                         # Numerical computing
-import obspy as op                         # Seismological toolkit
-import pandas as pd                        # Data manipulation and analysis
-import networkx as nx                      # Graph algorithms (bipartite matching)
-from obspy import UTCDateTime              # Seismology-specific datetime
-from matplotlib.path import Path as mplPath  # Matplotlib path for polygon ops
-from obspy.geodetics import gps2dist_azimuth
-
-# =============================================================================
-# LOGGING
-# =============================================================================
-
-
-class ColorFormatter(logging.Formatter):
-  """Logging formatter with ANSI colors and step-tracing symbols.
-
-  Produces output like:
-    >>> 2026-02-13 19:30:08 | OGSSequence          | INFO     | Window #1 ...
-    /!\\ 2026-02-13 19:30:08 | ogscatalog.OGSCatalog | WARNING  | Loading ...
-    ... 2026-02-13 19:30:08 | ogscatalog.OGSCatalog | DEBUG    | Skipping ...
-    [X] 2026-02-13 19:30:08 | ogsdat.OGSdat        | ERROR    | Could not ...
-  """
-
-  COLORS = {
-    logging.DEBUG:    "\033[36m",    # Cyan
-    logging.INFO:     "\033[32m",    # Green
-    logging.WARNING:  "\033[33m",    # Yellow
-    logging.ERROR:    "\033[31m",    # Red
-    logging.CRITICAL: "\033[1;31m",  # Bold Red
-  }
-  SYMBOLS = {
-    logging.DEBUG:    "...",   # trace detail
-    logging.INFO:     ">>>",   # step progress
-    logging.WARNING:  "/!\\",  # caution
-    logging.ERROR:    "[X]",   # failure
-    logging.CRITICAL: "!!!",   # critical failure
-  }
-  RESET = "\033[0m"
-  BASE_FMT = "%(asctime)s | %(name)-30s | %(levelname)-8s | %(message)s"
-
-  def format(self, record: logging.LogRecord) -> str:
-    color = self.COLORS.get(record.levelno, "")
-    symbol = self.SYMBOLS.get(record.levelno, "   ")
-    formatted = super().format(record)
-    return f"{color}{symbol} {formatted}{self.RESET}"
-
-
-def setup_logger(
-  name: str,
-  verbose: bool = False,
-  silent: bool = False,
-) -> logging.Logger:
-  """Create and configure a logger with colored, step-tracing output.
-
-  Parameters
-  ----------
-  name : str
-    Logger name (typically ``__name__`` or a class-qualified name).
-  verbose : bool
-    If True, set log level to DEBUG.
-  silent : bool
-    If True, set log level to WARNING (overrides *verbose*).
-
-  Returns
-  -------
-  logging.Logger
-    Configured logger instance.
-  """
-  logger = logging.getLogger(name)
-  if not logger.handlers:
-    handler = logging.StreamHandler(sys.stderr)
-    formatter = ColorFormatter(
-      fmt=ColorFormatter.BASE_FMT,
-      datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-  if silent:
-    logger.setLevel(logging.WARNING)
-  else:
-    logger.setLevel(logging.DEBUG if verbose else logging.INFO)
-  logger.propagate = False
-  return logger
+import numpy as np                        # Numerical computing
 
 
 # =============================================================================
@@ -250,45 +162,34 @@ THRESHOLDS: list[str] = ["{:.1f}".format(t) for t in np.linspace(0.1, 0.9, 9)]
 # Standard format strings for parsing and formatting dates/times throughout
 # the OGS pipeline. Uses Python strftime/strptime conventions.
 
-DATE_STD = "YYMMDD"                    # Standard date representation string
-DATE_FMT = "%Y-%m-%d"                  # ISO date format (2022-01-15)
-TIME_FMT = "%H%M%S"                    # Compact time format (143052)
-YYMMDD_FMT = "%y%m%d"                  # 2-digit year date (220115)
-YYYYMMDD_FMT = "%Y%m%d"                # 4-digit year date (20220115)
-DATETIME_FMT = YYMMDD_FMT + TIME_FMT   # Combined datetime (220115143052)
-DATETIME_STR = "DATETIME"              # Column name for datetime fields
-TIMESTAMP_STR = "TIMESTAMP"            # Column name for Unix timestamps
+DATE_STD = "YYMMDD"                   # Standard date representation string
+DATE_FMT = "%Y-%m-%d"                 # ISO date format (2022-01-15)
+TIME_FMT = "%H%M%S"                   # Compact time format (143052)
+YYMMDD_FMT = "%y%m%d"                 # 2-digit year date (220115)
+YYYYMMDD_FMT = "%Y%m%d"               # 4-digit year date (20220115)
+DATETIME_FMT = YYMMDD_FMT + TIME_FMT  # Combined datetime (220115143052)
+DATETIME_STR = "DATETIME"             # Column name for datetime fields
+TIMESTAMP_STR = "TIMESTAMP"           # Column name for Unix timestamps
 
 # =============================================================================
 # TIME DELTA CONSTANTS
 # =============================================================================
 # Time intervals used for event detection, pick matching, and data segmentation
 
-ONE_DAY = td(days=1)                   # One day interval for date iteration
+ONE_DAY = td(days=1)                  # One day interval for date iteration
 
 # Maximum time difference for matching predicted picks to manual picks
 # Picks within this window are considered potential matches
-PICK_TIME_OFFSET = td(seconds=.5)      # 0.5 second tolerance for pick matching
+PICK_TIME_OFFSET = td(seconds=.5)     # 0.5 second tolerance for pick matching
 
 # Time window for training data extraction around picks
-PICK_TRAIN_OFFSET = td(seconds=60)     # 60 second window for ML training
+PICK_TRAIN_OFFSET = td(seconds=60)    # 60 second window for ML training
 
 # =============================================================================
 # H71 WEIGHT CONVERSION TABLE
-# =============================================================================
-# Hypo71 standard weight codes mapped to uncertainty in seconds
-# These represent picking precision: 0 = most precise, 5 = least precise
-#
-# Weight | Uncertainty (sec) | Interpretation
-# -------|-------------------|----------------
-#   0    |       0.01        | Impulsive onset, very clear
-#   1    |       0.04        | Clear onset
-#   2    |       0.2         | Fairly clear onset
-#   3    |       1.0         | Emergent onset
-#   4    |       5.0         | Poor quality pick
-#   5    |      25.0         | Very uncertain (often unused)
-
-H71_OFFSET = {
+# Mapping of H71 weight classes to numerical offsets for event matching
+# Used in the dist_event() function to convert H71 weights to time offsets
+H71_OFFSET: dict[int, float] = {
   0: 0.01,
   1: 0.04,
   2: 0.2,
@@ -296,30 +197,61 @@ H71_OFFSET = {
   4: 5,
   5: 25
 }
+"""
+===============================================================================
+H71 WEIGHT CONVERSION TABLE
+===============================================================================
+Hypo71 standard weight codes mapped to uncertainty in seconds
+These represent picking precision: 0 = most precise, 5 = least precise
+Weight | Uncertainty (sec) | Interpretation
+-------|-------------------|----------------
+  0    |       0.01        | Impulsive onset, very clear
+  1    |       0.04        | Clear onset
+  2    |       0.2         | Fairly clear onset
+  3    |       1.0         | Emergent onset
+  4    |       5.0         | Poor quality pick
+  5    |      25.0         | Very uncertain (often unused)
+"""
 
 # =============================================================================
 # EVENT MATCHING TOLERANCES
 # =============================================================================
 # Thresholds for matching detected events to catalog events
 
-EVENT_TIME_OFFSET = td(seconds=2)      # Max time difference for event matching
-EVENT_DIST_OFFSET = 8                  # Max spatial distance (km) for matching
+EVENT_TIME_OFFSET = td(seconds=2)     # Maximum time difference for matching
+                                      # detected events to catalog events
+"""
+Max time difference for event matching: 2 seconds\n
+This is used in the dist_event() function to determine if a detected event is
+close enough in time to a catalog event to be considered a match. This
+threshold accounts for uncertainties in pick timing, association, and event
+location.
+"""
+EVENT_DIST_OFFSET = 8                 # Max spatial distance (km) for matching
+"""
+Max spatial distance for event matching: 8 km\n
+This is used in the dist_event() function to determine if a detected event is
+close enough to a catalog event to be considered a match.
+"""
 
-# =============================================================================
-# STRING CONSTANTS - GENERAL PURPOSE
-# =============================================================================
 # Commonly used string literals to ensure consistency and avoid typos
-
-EMPTY_STR = ''                         # Empty string for initialization
-ALL_WILDCHAR_STR = '*'                 # Wildcard for glob patterns (any chars)
-ONE_MORECHAR_STR = '+'                 # Regex: one or more characters
-PERIOD_STR = '.'                       # Period (used in SEED IDs, extensions)
-UNDERSCORE_STR = '_'                   # Underscore (filename separator)
-DASH_STR = '-'                         # Dash (date separator)
-SPACE_STR = ' '                        # Space character
-COMMA_STR = ','                        # Comma (CSV separator)
-SEMICOL_STR = ';'                      # Semicolon (alternative separator)
-ZERO_STR = "0"                         # Zero string for padding
+EMPTY_STR = ''                        # Empty string for initialization
+ALL_WILDCHAR_STR = '*'                # Wildcard for glob patterns (any chars)
+ONE_MORECHAR_STR = '+'                # Regex: one or more characters
+PERIOD_STR = '.'                      # Period (used in SEED IDs, extensions)
+UNDERSCORE_STR = '_'                  # Underscore (filename separator)
+DASH_STR = '-'                        # Dash (used in date formats, separators)
+"""Dash"""
+SPACE_STR = ' '                       # Space character
+"""Space character"""
+COMMA_STR = ','                       # Comma character
+"""Comma (CSV separator)"""
+SEMICOL_STR = ';'                     # Semicolon character
+"""Semicolon (alternative separator)"""
+ZERO_STR = "0"                        # String representation of zero
+"""Zero string for padding"""
+NAN_STR = "NaN"                       # String representation of Not-a-Number
+""" Not-a-Number string representation"""
 NONE_STR = "None"                      # String representation of None
 
 # =============================================================================
@@ -433,11 +365,11 @@ TIME_DSPLCMT_STR = "TD"                # Time displacement output
 # =============================================================================
 # Hex color codes for consistent visualization across the project
 
-MEX_PINK = "#E4007C"                   # Bright pink (accent color)
-OGS_BLUE = "#163771"                   # OGS institutional blue (primary)
-ALN_GREEN = "#00e468"                  # Bright green (positive/success)
-LIP_ORANGE = "#FF8C00"                 # Orange (warning/highlight)
-SUN_YELLOW = "#e4da00"                 # Yellow (tertiary accent)
+MEX_PINK = "#E4007C"                  # Bright pink (accent color)
+OGS_BLUE = "#163771"                  # OGS institutional blue (primary)
+ALN_GREEN = "#00e468"                 # Bright green (positive/success)
+LIP_ORANGE = "#FF8C00"                # Orange (warning/highlight)
+SUN_YELLOW = "#e4da00"                # Yellow (tertiary accent)
 
 # Standard color sequence for multi-series plots
 PLOT_COLORS = [OGS_BLUE, MEX_PINK, ALN_GREEN, LIP_ORANGE, SUN_YELLOW]
@@ -779,14 +711,37 @@ OGS_POLY_REGION = [
   (12.5, 44.5),                      # S edge (Emilia-Romagna)
   (11.5, 44.5)                       # SW return (Veneto/Emilia)
 ]
+"""
+Polygon vertices defining the OGS operational region in NE Italy:
+- (10.0, 45.5): Southwest corner near Trentino
+- (10.0, 46.5): Northwest corner near Alto Adige (South Tyrol)
+- (11.5, 47.0): Northern edge along Austria border
+- (12.5, 47.0): Northeast corner in Austria
+- (14.5, 46.5): Eastern edge along Slovenia border
+- (14.5, 45.5): Southeast corner in Friuli-Venezia Giulia
+- (12.5, 44.5): Southern edge along Emilia-Romagna
+- (11.5, 44.5): Southwest return point near Veneto/Emilia border
+"""
 
-# Bounding box for the extended study region [lon_min, lon_max, lat_min, lat_max]
+# Bounding box for the extended study region
+# [lon_min, lon_max, lat_min, lat_max]
 # Slightly larger than the polygon to include border areas
 OGS_STUDY_REGION = [9.5, 15.0, 44.3, 47.5]
+"""
+Bounding box for OGS study region: [lon_min, lon_max, lat_min, lat_max]
+- lon_min: 9.5 (western boundary)
+- lon_max: 15.0 (eastern boundary)
+- lat_min: 44.3 (southern boundary)
+- lat_max: 47.5 (northern boundary)
+
+This box encompasses the polygon defined by OGS_POLY_REGION and includes border
+areas of interest in NE Italy, Austria, Slovenia, and Croatia.
+"""
 
 # Place name strings
 OGS_ITALY_STR = "Italy"                # Country identifier
 DESCRIPTION_STR = "Description"        # Description field label
+
 
 # =============================================================================
 # OGS EVENT LABEL FORMAT
@@ -813,6 +768,23 @@ OGS_GEO_ZONES = {
   "T": "Trentino",                   # Trentino region
   "V": "Veneto"                      # Veneto region
 }
+"""
+===============================================================================
+GEOGRAPHIC ZONE CODE MAPPING
+===============================================================================
+Single-letter codes used in OGS catalog to identify geographic regions:
+- A: Alto Adige (South Tyrol)
+- C: Croatia (cross-border events)
+- E: Emilia region
+- F: Friuli region (main OGS focus)
+- G: Venezia Giulia region
+- L: Lombardy region
+- O: Austria (cross-border events)
+- R: Romagna region
+- S: Slovenia (cross-border events)
+- T: Trentino region
+- V: Veneto region
+"""
 
 # =============================================================================
 # EVENT TYPE CODE MAPPING
@@ -826,6 +798,17 @@ OGS_EVENT_TYPES = {
   "L": EVENT_LOCAL_EQ_STR,           # Local tectonic earthquake
   "U": EVENT_UNKNOWN_STR             # Unknown/unclassified source
 }
+"""
+===============================================================================
+EVENT TYPE CODE MAPPING
+===============================================================================
+Single-letter codes used in OGS catalog to classify event types:
+- B: Military detonation (historical)
+- E: Industrial explosion/quarry blast
+- F: Landslide-induced seismic event
+- L: Local tectonic earthquake
+- U: Unknown/unclassified source
+"""
 
 # =============================================================================
 # CATALOG OUTPUT HEADER DEFINITIONS
@@ -835,813 +818,30 @@ OGS_EVENT_TYPES = {
 # Event catalog header (8 columns: ID, time, location, uncertainties, gap)
 HEADER_EVENTS = [INDEX_STR, TIME_STR, LATITUDE_STR, LONGITUDE_STR,
                  DEPTH_STR, ERH_STR, ERZ_STR, GAP_STR]
+"""
+EVENT CATALOG HEADER DEFINITIONS\n
+Standard column order for event output files:
+- idx: Unique event identifier
+- time: Origin time of the event
+- latitude: Event latitude in degrees
+- longitude: Event longitude in degrees
+- depth: Event depth in kilometers
+- ERH: Maximum horizontal uncertainty in kilometers
+- ERZ: Vertical uncertainty in kilometers
+- GAP: Azimuthal gap in degrees (measure of station coverage)
+"""
 
 # Pick catalog header (7 columns: ID, time, phase info, quality)
 HEADER_PICKS = [INDEX_STR, TIME_STR, PHASE_STR, STATION_STR, ONSET_STR,
                 POLARITY_STR, WEIGHT_STR]
-
-# =============================================================================
-# DISTANCE AND SIMILARITY FUNCTIONS
-# =============================================================================
-# Functions for computing distances and similarity scores between picks/events
-
-
-def dist_prob(B: pd.Series, T: pd.Series) -> float:
-  """
-  Calculate probability ratio between target and base picks.
-
-  Used as a component in the weighted pick matching score.
-  Higher target probability relative to base yields higher score.
-
-  Args:
-    B: Base pick (ground truth) as pandas Series with PROBABILITY_STR.
-    T: Target pick (prediction) as pandas Series with PROBABILITY_STR.
-
-  Returns:
-    Ratio of target probability to base probability.
-  """
-  return T[PROBABILITY_STR] / B[PROBABILITY_STR]
-
-
-def dist_phase(B: pd.Series, T: pd.Series) -> float:
-  """
-  Check if phase types match between base and target picks.
-
-  Args:
-    B: Base pick as pandas Series with PHASE_STR.
-    T: Target pick as pandas Series with PHASE_STR.
-
-  Returns:
-    1.0 if phases match (both P or both S), 0.0 otherwise.
-  """
-  return int(T[PHASE_STR] == B[PHASE_STR])
-
-
-def diff_time(B: pd.Series, T: pd.Series) -> float:
-  """
-  Calculate absolute time difference between two picks/events.
-
-  Args:
-    B: Base record as pandas Series with TIME_STR (UTCDateTime).
-    T: Target record as pandas Series with TIME_STR (UTCDateTime).
-
-  Returns:
-    Absolute time difference in seconds.
-  """
-  return abs(T[TIME_STR] - B[TIME_STR])
-
-
-def dist_time(B: pd.Series, T: pd.Series,
-              offset: td = PICK_TIME_OFFSET) -> float:
-  """
-  Calculate normalized time similarity score.
-
-  Converts time difference to a similarity score between 0 and 1,
-  where 1 means perfect match and 0 means at the tolerance limit.
-
-  Args:
-    B: Base record as pandas Series with TIME_STR.
-    T: Target record as pandas Series with TIME_STR.
-    offset: Maximum time tolerance (default: PICK_TIME_OFFSET).
-
-  Returns:
-    Similarity score: 1 - (time_diff / tolerance).
-  """
-  return 1. - (diff_time(B, T) / offset.total_seconds())
-
-
-def diff_space(
-    B: pd.Series,
-    T: pd.Series,
-    ndim: int = 2,
-    p: float = 2.
-  ) -> float:
-  """
-  Calculate spatial distance between two locations using geodetic formulas.
-
-  Uses ObsPy's gps2dist_azimuth for accurate great-circle distance.
-  Optionally includes depth difference for 3D distance calculation.
-
-  Args:
-      B: Base location as pandas Series with LATITUDE_STR, LONGITUDE_STR,
-          and optionally DEPTH_STR.
-      T: Target location as pandas Series with same columns.
-      ndim: Number of dimensions (2 for epicentral, 3 for hypocentral).
-      p: Power for distance metric (2 = Euclidean).
-
-  Returns:
-      Distance in kilometers, rounded to 4 decimal places.
-  """
-  # Calculate horizontal distance using geodetic formula (returns meters)
-  horizontal_dist_km = gps2dist_azimuth(
-      B[LATITUDE_STR], B[LONGITUDE_STR],
-      T[LATITUDE_STR], T[LONGITUDE_STR])[0] / 1000.
-
-  # Add vertical component if 3D distance requested (depth in m)
-  vertical_component = ((B[DEPTH_STR] - T[DEPTH_STR]) / 1000.) ** p \
-    if ndim == 3 else 0.
-
-  # Compute Lp norm distance
-  return float(format(np.sqrt(horizontal_dist_km ** p + vertical_component), ".4f"))
-
-
-def dist_space(B: pd.Series, T: pd.Series,
-              offset: float = EVENT_DIST_OFFSET) -> float:
-  """
-  Calculate normalized spatial similarity score.
-
-  Converts spatial distance to a similarity score between 0 and 1.
-
-  Args:
-      B: Base location as pandas Series.
-      T: Target location as pandas Series.
-      offset: Maximum distance tolerance in km (default: EVENT_DIST_OFFSET).
-
-  Returns:
-      Similarity score: 1 - (distance / tolerance).
-  """
-  return 1. - diff_space(B, T) / offset
-
-
-def dist_pick(B: pd.Series, T: pd.Series,
-              time_offset_sec: td = PICK_TIME_OFFSET) -> float:
-  """
-  Calculate weighted similarity score for pick matching.
-
-  Combines time similarity (97%), phase match (2%), and probability
-  ratio (1%) into a single matching score for bipartite graph edges.
-
-  Args:
-      B: Base pick (ground truth) as pandas Series.
-      T: Target pick (prediction) as pandas Series.
-      time_offset_sec: Time tolerance for matching.
-
-  Returns:
-      Weighted similarity score between 0 and 1.
-  """
-  return (
-    97. * dist_time(T, B, time_offset_sec) +  # Time dominates (97%)
-    2. * dist_phase(T, B) +                    # Phase type (2%)
-    1. * dist_prob(T, B)                       # Probability ratio (1%)
-  ) / 100.
-
-
-def dist_event(T: pd.Series, P: pd.Series,
-               time_offset_sec: td = EVENT_TIME_OFFSET,
-               space_offset_km: float = EVENT_DIST_OFFSET) -> float:
-  """
-  Calculate weighted similarity score for event matching.
-
-  Combines time similarity (99%) and spatial similarity (1%) for
-  matching detected events to catalog events.
-
-  Args:
-    T: Target event as pandas Series.
-    P: Predicted/reference event as pandas Series.
-    time_offset_sec: Time tolerance for matching.
-    space_offset_km: Spatial tolerance in km.
-
-  Returns:
-    Weighted similarity score between 0 and 1.
-  """
-  return (99. * dist_time(T, P, time_offset_sec) +   # Time dominates (99%)
-          1. * dist_space(T, P, space_offset_km)) / 100.  # Space (1%)
-
-
-# =============================================================================
-# ARGUMENT PARSING UTILITY FUNCTIONS
-# =============================================================================
-# Functions for validating and converting command-line arguments
-
-
-def is_date(string: str) -> datetime:
-  """
-  Parse a date string in YYYYMMDD format.
-
-  Used as argparse type converter for date arguments.
-
-  Args:
-    string: Date string in YYYYMMDD format (e.g., "20220115").
-
-  Returns:
-    datetime object representing the parsed date.
-
-  Raises:
-    ValueError: If string doesn't match expected format.
-  """
-  return datetime.strptime(string, YYYYMMDD_FMT)
-
-
-def is_julian(string: str) -> datetime:
-  """
-  Parse a Julian day number to datetime (NOT IMPLEMENTED).
-
-  TODO: Define and convert Julian date to Gregorian date.
-
-  Args:
-    string: Julian day string.
-
-  Returns:
-    datetime object.
-
-  Raises:
-    NotImplementedError: This function is not yet implemented.
-  """
-  # TODO: Define and convert Julian date to Gregorian date
-  raise NotImplementedError("Julian date parsing is not yet implemented.")
-
-
-def is_file_path(string: str) -> Path:
-  """
-  Validate and convert a string to an absolute file path.
-
-  Used as argparse type converter for file arguments.
-
-  Args:
-    string: Path string to validate.
-
-  Returns:
-    Absolute Path object if file exists.
-
-  Raises:
-    FileNotFoundError: If the file does not exist.
-  """
-  if os.path.isfile(string):
-    return Path(os.path.abspath(string))
-  else:
-    raise FileNotFoundError(string)
-
-
-def is_dir_path(string: str) -> Path:
-  """
-  Validate and convert a string to an absolute directory path.
-
-  Used as argparse type converter for directory arguments.
-
-  Args:
-    string: Path string to validate.
-
-  Returns:
-    Absolute Path object if directory exists.
-
-  Raises:
-    NotADirectoryError: If the directory does not exist.
-  """
-  if os.path.isdir(string):
-    return Path(os.path.abspath(string))
-  else:
-    raise NotADirectoryError(string)
-
-
-def decimeter(value, scale='normal') -> int:
-  """
-  Round a value up to a "nice" number for axis limits.
-
-  Computes the next aesthetically pleasing round number above the input,
-  useful for setting plot axis limits.
-
-  Args:
-    value: Numeric value to round up.
-    scale: Rounding mode:
-        - 'normal': Round to next multiple of leading digit + 1
-        - 'log': Round to next power of 10
-        - other: Round to next multiple of 10
-
-  Returns:
-    Rounded integer value.
-
-  Example:
-    >>> decimeter(47)  # Returns 50
-    >>> decimeter(123, 'log')  # Returns 1000
-  """
-  # Find the order of magnitude (number of digits - 1)
-  base = np.floor(np.log10(abs(value)))
-
-  if scale == 'normal':
-    # Round up to next "nice" number (e.g., 47 -> 50, 123 -> 200)
-    return ((value // 10 ** base) + 1) * 10 ** base
-  elif scale == 'log':
-    # Round up to next power of 10
-    return int(10 ** (base + 1))
-
-  # Default: round up to next multiple of 10
-  return np.ceil(value / 10) * 10
-
-
-def labels_to_colormap(
-      labels: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray, Any, Any]:
-  """
-  Map arbitrary cluster labels to sequential indices for colormapping.
-
-  Handles cases where labels include noise points (label=-1) or
-  non-sequential cluster IDs. Creates a discrete colormap with
-  one color per unique label.
-
-  Parameters
-  ----------
-  labels : np.ndarray
-    Cluster labels array, may include -1 for noise points.
-
-  Returns
-  -------
-  tuple
-    (encoded_labels, unique_labels, colormap, norm)
-    - encoded_labels: Labels mapped to 0..K-1
-    - unique_labels: Original unique label values
-    - colormap: Matplotlib colormap resampled to K colors
-    - norm: BoundaryNorm for discrete color mapping
-
-  Example
-  -------
-  >>> labels = np.array([0, 1, 1, -1, 2, 0])
-  >>> encoded, unique, cmap, norm = labels_to_colormap(labels)
-  >>> # encoded: [1, 2, 2, 0, 3, 1] (with -1 mapped to 0)
-  """
-  from matplotlib.colors import BoundaryNorm  # Discrete colormap normalization
-  from matplotlib import colormaps            # Colormap registry
-
-  # Find all unique labels (may include -1 for noise)
-  unique = np.unique(labels)
-
-  # Create mapping from original labels to sequential indices
-  label_to_idx = {lab: i for i, lab in enumerate(unique)}
-
-  # Apply mapping to all labels
-  encoded = np.vectorize(label_to_idx.get, otypes=[int])(labels)
-
-  # Create discrete colormap with exactly len(unique) colors
-  cmap = colormaps.get_cmap("Paired").resampled(len(unique))
-
-  # Create boundary norm for discrete color assignment
-  # Boundaries at -0.5, 0.5, 1.5, ... ensure each integer maps to one color
-  norm = BoundaryNorm(np.arange(-0.5, len(unique) + 0.5), cmap.N)
-
-  return encoded, unique, cmap, norm
-
-# =============================================================================
-# STATION INVENTORY MANAGEMENT
-# =============================================================================
-
-
-def inventory(
-    stations: Path,
-    output: Optional[Path] = None
-  ) -> pd.DataFrame:
-  """
-  Load and process station metadata from StationXML files.
-
-  Reads all .xml files from the specified directory, extracts station
-  coordinates, and assigns colors for plotting.
-
-  Args:
-    stations: Path to directory containing StationXML files.
-
-  Returns:
-    pd.DataFrame: DataFrame containing station metadata with columns:
-    LONGITUDE_STR, LATITUDE_STR, DEPTH_STR, NETWORK_STR, STATION_STR,
-    NETCOLOR_STR, STACOLOR_STR
-
-  Side Effects:
-    - Prints warnings for unreadable station files
-  """
-  # Import ObsPy utilities (lazy import to avoid circular dependencies)
-  from obspy import Inventory, read_inventory
-
-  # Initialize empty ObsPy Inventory container
-  myInventory = Inventory()
-
-  # Read all StationXML files in the directory
-  for station in stations.glob("*.xml"):
-    try:
-      S = read_inventory(str(station))
-    except Exception as e:
-      print(f"WARNING: Unable to read {station}")
-      print(e)
-      continue
-    myInventory.extend(S)
-
-  elements: list[list] = []
-  for net in sorted(myInventory.networks, key=lambda x: x.code):
-    for sta in net.stations:
-      elements.append([
-        f"{net.code}.{sta.code}.",  # Unique station ID
-        sta.longitude,
-        sta.latitude,
-        sta.elevation,
-        net.code,
-        sta.code,
-      ])
-  INVENTORY = pd.DataFrame(
-    elements,
-    columns=[INDEX_STR, LONGITUDE_STR, LATITUDE_STR, DEPTH_STR, NETWORK_STR,
-             STATION_STR],
-  ).sort_values(by=[INDEX_STR]).reset_index(drop=True)
-
-  # Use labels_to_colormap for consistent network and station coloring
-  from sklearn.preprocessing import LabelEncoder
-  net_encoder = LabelEncoder()
-  sta_encoder = LabelEncoder()
-
-  net_labels: np.ndarray = net_encoder.fit_transform(
-    INVENTORY[NETWORK_STR].values # type: ignore
-  )
-  sta_labels: np.ndarray = sta_encoder.fit_transform(
-    INVENTORY[STATION_STR].values # type: ignore
-  )
-
-  _, _, net_cmap, net_norm = labels_to_colormap(net_labels)
-  _, _, sta_cmap, sta_norm = labels_to_colormap(sta_labels)
-
-  INVENTORY[NETCOLOR_STR] = [net_cmap(net_norm(l)) for l in net_labels]
-  INVENTORY[STACOLOR_STR] = [sta_cmap(sta_norm(l)) for l in sta_labels]
-
-  if output is not None:
-    INVENTORY.to_csv(output / "OGSInventory.csv", index=False)
-  return INVENTORY
-
-
-# =============================================================================
-# WAVEFORM FILE DISCOVERY
-# =============================================================================
-
-
-def waveforms(
-    waveforms: Path,
-    stations: Path,
-    start: datetime,
-    end: datetime,
-    output: Path = Path("."),
-    vlines: list[tuple[datetime, str, str]] = []
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-  """
-  Scan directory for waveform files within a specified date range.
-
-  Recursively searches for MiniSEED files, organizes them by date and
-  station, and generates a data availability plot.
-
-  Args:
-    waveforms: Path to the waveforms directory to scan.
-    stations: Path to directory containing StationXML files.
-    start: Start date (inclusive) of the date range.
-    end: End date (inclusive) of the date range.
-    output: Path to directory where availability plot will be saved.
-    vlines: List of tuples containing datetime objects, labels, and colors
-            to mark with vertical lines on the plot.
-
-  Returns:
-    pd.DataFrame: DataFrame containing waveform file information with columns:
-    NETWORK_STR, STATION_STR, LOC_NAME_STR, CHANNEL_STR, DATE_STR, FILENAME_STR
-    Each row represents a waveform file.
-
-  Side Effects:
-    Generates "OGSAvailability.png" showing station count over time.
-
-  Note:
-    Expects waveform filenames in format:
-    NET.STA.LOC.CHA__YYYYMMDDTHHMMSS__...mseed
-  """
-  # Import plotting utilities (lazy import)
-  import ogsplotter as OGS_P
-  from matplotlib import pyplot as plt
-
-  elements = []
-  # Scan all MiniSEED files recursively
-  for wf in waveforms.glob("**/*.mseed"):
-    if wf.name.startswith("."): continue  # Skip hidden files
-    # Parse filename: NET.STA.LOC.CHA__YYYYMMDDTHHMMSS__suffix.mseed
-    stid, dateinitid, _ = wf.stem.split(UNDERSCORE_STR + UNDERSCORE_STR)
-
-    # Parse date from filename
-    dateinitid = UTCDateTime(dateinitid).date
-    if dateinitid < start.date() or dateinitid > end.date():
-      continue  # Skip files outside date range
-    elements.append([*stid.split(PERIOD_STR), dateinitid, wf])
-
-  WAVEFORMS = pd.DataFrame(elements,
-                           columns=[NETWORK_STR, STATION_STR, LOC_NAME_STR,
-                                    CHANNEL_STR, DATE_STR, FILENAME_STR])
-  WAVEFORMS.to_csv(output / "OGSWaveforms.csv", index=False)
-  print(f"Saved file to {output / 'OGSWaveforms.csv'}")
-  INVENTORY = inventory(stations)
-  INVENTORY = INVENTORY.merge(
-    WAVEFORMS[[NETWORK_STR, STATION_STR]],
-    how="inner",
-    on=[NETWORK_STR, STATION_STR]
-  ).drop_duplicates()
-  INVENTORY.to_csv(output / "OGSInventory.csv", index=False)
-  print(f"Saved file to {output / 'OGSInventory.csv'}")
-  mystations = OGS_P.map_plotter(
-    OGS_STUDY_REGION,
-    legend=True,
-    marker="^",
-  )
-  for net, df in INVENTORY.groupby(NETWORK_STR):
-    mystations.add_plot(
-      df[LONGITUDE_STR], df[LATITUDE_STR], label=net,
-      color=None, facecolors="none", edgecolors=df[NETCOLOR_STR],
-      legend=True,
-    )
-  mystations.savefig(output / "img" / "OGSStations.png")
-  plt.close()
-
-  NET_COLORS = INVENTORY[
-    [NETWORK_STR, NETCOLOR_STR]
-  ].drop_duplicates().set_index(NETWORK_STR)[NETCOLOR_STR].to_dict()
-  DAYS = np.arange(start, end + ONE_DAY, ONE_DAY, # type: ignore
-                   dtype='datetime64[D]').tolist() # type: ignore
-  DAYS = [UTCDateTime(day).date for day in DAYS]
-  counts = {
-    day: {net: 0 for net in WAVEFORMS[NETWORK_STR].unique()} for day in DAYS
-  }
-  for (date, net), group in WAVEFORMS.groupby([DATE_STR, NETWORK_STR]):
-    counts[date][net] = len(group[STATION_STR].unique())
-  df = pd.DataFrame(counts).sort_index().T
-  if not df.empty and df.values.size > 0:
-    x, y = [UTCDateTime(xx).date for xx in df.index], df.values.T
-    OGS_P.stack_plotter(
-      x, y, labels=df.columns.tolist(),
-      colors=[NET_COLORS.get(net, "gray") for net in df.columns],
-      xlabel="Date", ylabel="Station Count",
-      output=output / "img" / "OGSAvailability.png",
-      vlines=vlines,
-      legend=True
-    )
-    plt.close()
-  else:
-    logging.warning("No waveform data available for availability plot.")
-  return WAVEFORMS, INVENTORY
-
-
-# =============================================================================
-# ARGPARSE CUSTOM ACTIONS
-# =============================================================================
-
-
-class SortDatesAction(argparse.Action):
-  """
-  Custom argparse action to sort date arguments chronologically.
-
-  When multiple dates are provided as command-line arguments, this action
-  ensures they are stored in sorted order.
-
-  Example:
-      parser.add_argument('-D', nargs=2, action=SortDatesAction)
-      # Args "-D 20220115 20220101" will be stored as [20220101, 20220115]
-  """
-
-  def __call__(self, parser, namespace, values, option_string=None):
-    """Sort and store the values."""
-    setattr(namespace, self.dest, sorted(values))  # type: ignore
-
-
-# =============================================================================
-# BIPARTITE GRAPH MATCHING CLASSES
-# =============================================================================
-# Classes for optimal assignment between ground truth and predicted data
-# using maximum weight bipartite matching via NetworkX
-
-
-class OGSBPGraph():
-  """
-  Base class for bipartite graph matching between two datasets.
-
-  Provides the framework for constructing bipartite graphs where nodes
-  represent data records and edges represent potential matches with
-  associated similarity weights.
-
-  Attributes:
-    Base: DataFrame containing reference/ground truth records.
-    Target: DataFrame containing records to match against Base.
-    G: NetworkX Graph representing the bipartite structure.
-    E: Set of matched edge pairs (base_idx, target_idx + len(base)).
-
-  Architecture:
-    Base nodes: indices 0 to len(Base)-1
-    Target nodes: indices len(Base) to len(Base)+len(Target)-1
-    Edges: Connect Base[i] to Target[j] if they are potential matches
-
-  Note:
-    This is an abstract base class. Subclasses must implement makeMatch().
-  """
-
-  def __init__(self, Base: pd.DataFrame, Target: pd.DataFrame):
-    """
-    Initialize bipartite graph with Base and Target datasets.
-
-    Args:
-        Base: Reference dataset (ground truth picks or events).
-        Target: Dataset to match against Base (predictions).
-    """
-    # Reset indices to ensure consistent node numbering
-    self.Base = Base.reset_index(drop=True)
-    self.Target = Target.reset_index(drop=True)
-
-    # Initialize empty graph and edge set
-    self.G = nx.Graph()
-    self.E: set[tuple[int, int]] = set()
-
-    # Build graph and compute matching if both datasets are non-empty
-    if not self.Base.empty and not self.Target.empty:
-        self.makeMatch()
-
-  def makeMatch(self) -> None:
-    """
-    Construct the bipartite graph and compute maximum weight matching.
-
-    Must be implemented by subclasses to define edge construction logic.
-
-    Raises:
-        NotImplementedError: If called on base class.
-    """
-    raise NotImplementedError
-
-
-class OGSBPGraphPicks(OGSBPGraph):
-  """
-  Bipartite graph for optimal pick assignment between datasets.
-
-  Implements maximum weight bipartite matching to find the optimal
-  one-to-one correspondence between manual (Base) and predicted (Target)
-  phase picks. Uses NetworkX's max_weight_matching algorithm.
-
-  The matching considers:
-  - Time proximity: Picks must be within PICK_TIME_OFFSET
-  - Station matching: Only same-station picks can match
-  - Phase type: P-P and S-S matches preferred
-  - Probability: Higher confidence picks weighted more
-
-  Attributes:
-    Inherited from OGSBPGraph.
-
-  Example:
-    >>> matcher = OGSBPGraphPicks(manual_picks_df, predicted_picks_df)
-    >>> matched_pairs = matcher.E  # Set of (base_idx, target_idx+I) tuples
-
-  Note:
-    - Base DataFrame should have: TIME_STR, STATION_STR, PHASE_STR
-    - Target DataFrame should have: TIME_STR, STATION_STR, PHASE_STR,
-      PROBABILITY_STR
-    - Uses station-based pre-filtering for O(n) improvement
-  """
-
-  def __init__(self, Base: pd.DataFrame, Target: pd.DataFrame):
-    """
-    Initialize pick matcher with optional probability column creation.
-
-    Args:
-      Base: Manual picks DataFrame (ground truth).
-      Target: Predicted picks DataFrame from ML model.
-    """
-    # Ensure PROBABILITY_STR column exists, defaulting to 1.0 if absent
-    # (manual picks often don't have probability values)
-    if PROBABILITY_STR not in Base.columns:
-      Base[PROBABILITY_STR] = 1.0
-
-    # Optimization: Vectorized UTCDateTime conversion using list comprehension
-    # Faster than apply(lambda) for large datasets
-    if TIME_STR in Base.columns:
-      Base[TIME_STR] = [UTCDateTime(x) for x in Base[TIME_STR]]
-    if TIME_STR in Target.columns:
-      Target[TIME_STR] = [UTCDateTime(x) for x in Target[TIME_STR]]
-
-    # Call parent constructor (triggers makeMatch)
-    super().__init__(Base, Target)
-
-  def makeMatch(self) -> None:
-    """
-    Build bipartite graph and compute maximum weight matching for picks.
-
-    Algorithm:
-    1. Group target picks by station for O(1) lookup
-    2. For each base pick, find target picks at same station
-    3. Add edge if time difference <= PICK_TIME_OFFSET
-    4. Edge weight = dist_pick() similarity score
-    5. Compute max weight matching (not max cardinality)
-
-    Result stored in self.E as set of matched index pairs.
-    """
-    I = len(self.Base)  # Offset for target node indices
-    J = len(self.Target)
-    self.G = nx.Graph()
-
-    # Parse station from SEED ID format (NET.STA.LOC.CHA -> extract STA)
-    self.Target[NETWORK_STR] = self.Target[STATION_STR].str.split(".").str[0]
-    self.Target[STATION_STR] = self.Target[STATION_STR].str.split(".").str[1]
-    self.Base[STATION_STR] = self.Base[STATION_STR].astype(str)
-
-    # Pre-group targets by station for efficient lookup
-    target_by_station = {
-      station: group for station, group in self.Target.groupby(STATION_STR)
-    }
-
-    # Build edges between matching picks
-    for idxBase, rowBase in self.Base.iterrows():
-      station = rowBase[STATION_STR]
-
-      # Only iterate over targets at the same station
-      if station not in target_by_station:
-        continue
-
-      target_candidates = target_by_station[station]
-
-      for idxTarget, rowTarget in target_candidates.iterrows():
-        # Check time proximity constraint
-        if diff_time(rowBase, rowTarget) <= PICK_TIME_OFFSET.total_seconds():
-          # Add edge with similarity weight
-          self.G.add_edge(
-            idxBase, int(idxTarget) + I,  # Target offset by I
-            weight=dist_pick(rowBase, rowTarget)
-          )
-
-    # Compute maximum weight matching (optimal assignment)
-    self.E = nx.max_weight_matching(self.G, maxcardinality=False, weight='weight')
-
-
-class OGSBPGraphEvents(OGSBPGraph):
-  """
-  Bipartite graph for optimal event assignment between datasets.
-
-  Implements maximum weight bipartite matching to find the optimal
-  one-to-one correspondence between manual (Base) and detected (Target)
-  seismic events. Uses both temporal and spatial constraints.
-
-  The matching considers:
-  - Time proximity: Events must be within EVENT_TIME_OFFSET (1.5 sec)
-  - Spatial proximity: Events must be within EVENT_DIST_OFFSET (3 km)
-  - Weight: 99% time similarity + 1% spatial similarity
-
-  Attributes:
-    Inherited from OGSBPGraph.
-
-  Example:
-    >>> matcher = OGSBPGraphEvents(catalog_events_df, detected_events_df)
-    >>> matched_pairs = matcher.E
-
-  Note:
-    - Requires: TIME_STR, LATITUDE_STR, LONGITUDE_STR columns
-    - Optional: DEPTH_STR for 3D distance calculation
-    - Uses time-based pre-filtering for efficiency
-  """
-
-  def __init__(self, Base: pd.DataFrame, Target: pd.DataFrame):
-    """
-    Initialize event matcher with time column normalization.
-
-    Handles different time column names from various sources
-    (e.g., "event_time" from some associators, "time" from others).
-
-    Args:
-      Base: Catalog events DataFrame (ground truth).
-      Target: Detected events DataFrame from associator.
-    """
-    # Handle "event_time" column name variant
-    if "event_time" in Target.columns:
-      Target[TIME_STR] = UTCDateTime(Target["event_time"])
-
-    # Vectorized UTCDateTime conversion
-    if TIME_STR in Base.columns:
-      Base[TIME_STR] = [UTCDateTime(x) for x in Base[TIME_STR]]
-    if "time" in Target.columns:
-      Target[TIME_STR] = [UTCDateTime(x) for x in Target["time"]]
-
-    # Call parent constructor (triggers makeMatch)
-    super().__init__(Base, Target)
-
-  def makeMatch(self):
-    """
-    Build bipartite graph and compute maximum weight matching for events.
-
-    Algorithm:
-    1. Vectorize time values for efficient filtering
-    2. For each base event, pre-filter targets by time window
-    3. Check spatial distance for time-proximate candidates
-    4. Add edge if both constraints met, weight = dist_event()
-    5. Compute max weight matching
-
-    Optimization: Pre-filtering by time significantly reduces the
-    O(n*m) comparison space, especially for sparse event catalogs.
-    """
-    I = len(self.Base)  # Offset for target node indices
-
-    # Optimization: Vectorized time values for efficient filtering
-    base_times = self.Base[TIME_STR].values
-    target_times = self.Target[TIME_STR].values
-
-    # Build edges between matching events
-    for idxBase, rowBase in self.Base.iterrows():
-      # Pre-filter targets by time window (reduces candidates significantly)
-      time_mask = np.abs(target_times - rowBase[TIME_STR]) <= EVENT_TIME_OFFSET.total_seconds()
-      target_candidates = self.Target[time_mask]
-
-      for idxTarget, rowTarget in target_candidates.iterrows():
-        # Only check spatial distance if time constraint is met
-        if diff_space(rowBase, rowTarget) <= EVENT_DIST_OFFSET:
-          # Add edge with similarity weight
-          self.G.add_edge(
-            idxBase, int(idxTarget) + I,
-            weight=dist_event(rowBase, rowTarget)
-          )
-
-    # Compute maximum weight matching
-    self.E = nx.max_weight_matching(self.G, maxcardinality=False, weight='weight')
+"""
+PICK CATALOG HEADER DEFINITIONS\n
+Standard column order for pick output files:
+- idx: Unique pick identifier
+- time: Pick arrival time
+- phase: Seismic phase type (e.g., P, S)
+- station: Station code where pick was made
+- onset: Onset quality (I=impulsive, E=emergent)
+- polarity: First motion polarity (U=up, D=down)
+- weight: Pick weight (0-4, with 0 being most precise)
+"""

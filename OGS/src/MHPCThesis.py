@@ -1,5 +1,3 @@
-import os
-import shutil
 from pathlib import Path
 from datetime import datetime
 
@@ -15,29 +13,66 @@ def main():
     (datetime.strptime("20240327", OGS_C.YYYYMMDD_FMT), "$M_L$ 4.6", "r"),
     (datetime.strptime("20240522", OGS_C.YYYYMMDD_FMT), "IT", OGS_C.ALN_GREEN),
   ]
-  # Parse the files
+  pre = Path("/Users/admin/Desktop/OGS_Catalog/catalogs/")
+  for target in [
+    "Config1", "Config2", "Config3",
+  ]:
+    print(f"Processing target: {target}")
+    BaseCatalog = OGSCatalog(
+      pre / "OGSCatalog" / ".all",
+      start=start,
+      end=end,
+      name="OGS NLL 1D",
+      output=pre / target,
+    )
+    for name, path in [
+      ("PhaseNet[INSTANCE, 0.1]", pre / target / "SeisBenchPicker"),
+      ("PhaseNet[INSTANCE, 0.1] | PyOcto", pre / target / "OGSPickStatQC"),
+      ("PhaseNet[INSTANCE, 0.1] | PyOcto | NLL 1D", pre / target / "OGSLocalMagnitude"),
+    ]:
+      print(f"Processing catalog: {name}")
+      TargetCatalog = OGSCatalog(
+        path,
+        start=start,
+        end=end,
+        name=name,
+        output= pre / target.replace("Config", "OGS")
+      )
+      BaseCatalog.plot([TargetCatalog], vlines=special_days)
+      BaseCatalog.bpgma(
+        TargetCatalog,
+        stations=stations,
+        waveforms=waveforms,
+        vlines=special_days,
+      )
+      #TargetCatalog.bpgma(
+      #  BaseCatalog,
+      #  stations=stations,
+      #  waveforms=waveforms,
+      #  vlines=special_days,
+      #)
   for model, target in [
-    ("PhaseNet[Original]", "OGSPhaseNet_ORIGINAL"),
-    ("PhaseNet[SCEDC]", "OGSPhaseNet_SCEDC"),
-    ("PhaseNet[STEAD]", "OGSPhaseNet_STEAD"),
-    ("EQTransformer[Original]", "OGSEQTransformer_ORIGINAL"),
-    ("EQTransformer[SCEDC]", "OGSEQTransformer_SCEDC"),
-    ("EQTransformer[STEAD]", "OGSEQTransformer_STEAD"),
-    ("EQTransformer[INSTANCE]", "OGSEQTransformer_INSTANCE"),
-    ("EQTransformer[INSTANCE]", "OGSEQTransformer_INSTANCE_TP0.2S0.2"),
-    ("EQTransformer[INSTANCE]", "OGSEQTransformer_INSTANCE_TP0.3S0.3"),
+    ("PhaseNet[SCEDC, 0.1]", "PhaseNet[SCEDC,0.1]"),
+    ("PhaseNet[STEAD, 0.1]", "PhaseNet[STEAD,0.1]"),
+    ("PhaseNet[Original, 0.1]", "PhaseNet[Original,0.1]"),
+    ("EQTransformer[SCEDC, 0.1]", "EQTransformer[SCEDC,0.1]"),
+    ("EQTransformer[STEAD, 0.1]", "EQTransformer[STEAD,0.1]"),
+    ("EQTransformer[Original, 0.1]", "EQTransformer[Original,0.1]"),
+    ("EQTransformer[INSTANCE, 0.1]", "EQTransformer[INSTANCE,0.1]"),
+    ("EQTransformer[INSTANCE, 0.2]", "EQTransformer[INSTANCE,0.2]"),
+    ("EQTransformer[INSTANCE, 0.3]", "EQTransformer[INSTANCE,0.3]"),
   ]:
     print(f"Processing target: {target}")
     print(f"Processing catalog: SeisBench Picker")
     BaseCatalog = OGSCatalog(
-      Path(f"/Users/admin/Desktop/Monica/PhD/catalog/OGSCatalog/.all"),
+      pre / "OGSCatalog" / ".all",
       start=start,
       end=end,
       name="OGS NLL 1D",
-      output=Path(f"/Users/admin/Desktop/MHPCThesis/imgs/OGSCatalog/{target}"),
+      output=pre / target,
     )
     TargetCatalog = OGSCatalog(
-      Path(f"/Users/admin/Desktop/Monica/PhD/catalog/{target}/SeisBenchPicker"),
+      pre / target / "SeisBenchPicker",
       start=start,
       end=end,
       name=model,
@@ -49,22 +84,22 @@ def main():
       vlines=special_days,
     )
   for target in [
-    "OGSBackup", "TP0.2S0.2", "TP0.3S0.3",
+    "GaMMA0.1", "GaMMA0.2", "GaMMA0.3",
   ]:
     print(f"Processing target: {target}")
+    BaseCatalog = OGSCatalog(
+      pre / "OGSCatalog" / ".all",
+      start=start,
+      end=end,
+      name="OGS NLL 1D",
+      output=pre / target,
+    )
     for name, path in [
-      ("PhaseNet[INSTANCE]", Path(f"/Users/admin/Desktop/Monica/PhD/catalog/{target}/SeisBenchPicker")),
-      ("PhaseNet[INSTANCE] | GaMMA", Path(f"/Users/admin/Desktop/Monica/PhD/catalog/{target}/OGSPickStatQC")),
-      ("PhaseNet[INSTANCE] | GaMMA | NLL 1D", Path(f"/Users/admin/Desktop/Monica/PhD/catalog/{target}/OGSLocalMagnitude")),
+      ("PhaseNet[INSTANCE, 0.1]", pre / target / "SeisBenchPicker"),
+      ("PhaseNet[INSTANCE, 0.1] | GaMMA", pre / target / "OGSPickStatQC"),
+      ("PhaseNet[INSTANCE, 0.1] | GaMMA | NLL 1D", pre / target / "OGSLocalMagnitude"),
     ]:
       print(f"Processing catalog: {name}")
-      BaseCatalog = OGSCatalog(
-        Path(f"/Users/admin/Desktop/Monica/PhD/catalog/OGSCatalog/.all"),
-        start=start,
-        end=end,
-        name="OGS NLL 1D",
-        output=Path(f"/Users/admin/Desktop/MHPCThesis/imgs/OGSCatalog/{target}"),
-      )
       TargetCatalog = OGSCatalog(
         path,
         start=start,
@@ -79,27 +114,30 @@ def main():
         vlines=special_days,
       )
   for target in [
-    "OGSPyOcto", "OGSPyOcto_TP0.2S0.2", "OGSPyOcto_TP0.3S0.3",
+    "PyOcto0.1", "PyOcto0.2", "PyOcto0.3",
   ]:
+    print(f"Processing target: {target}")
+    BaseCatalog = OGSCatalog(
+      pre / "OGSCatalog" / ".all",
+      start=start,
+      end=end,
+      name="OGS NLL 1D",
+      output=pre / target,
+      verbose=False,
+    )
     for name, path in [
-      ("PhaseNet[INSTANCE]", Path(f"/Users/admin/Desktop/Monica/PhD/catalog/{target}/SeisBenchPicker")),
-      ("PhaseNet[INSTANCE] | PyOcto", Path(f"/Users/admin/Desktop/Monica/PhD/catalog/{target}/OGSPickStatQC")),
-      ("PhaseNet[INSTANCE] | PyOcto | NLL 1D", Path(f"/Users/admin/Desktop/Monica/PhD/catalog/{target}/OGSLocalMagnitude")),
+      ("PhaseNet[INSTANCE, 0.1]", pre / target / "SeisBenchPicker"),
+      ("PhaseNet[INSTANCE, 0.1] | PyOcto", pre / target / "OGSPickStatQC"),
+      ("PhaseNet[INSTANCE, 0.1] | PyOcto | NLL 1D", pre / target / "OGSLocalMagnitude"),
     ]:
-      print(f"Processing target: {target}")
       print(f"Processing catalog: {name}")
-      BaseCatalog = OGSCatalog(
-        Path(f"/Users/admin/Desktop/Monica/PhD/catalog/OGSCatalog/.all"),
-        start=start,
-        end=end,
-        name="OGS NLL 1D",
-        output=Path(f"/Users/admin/Desktop/MHPCThesis/imgs/OGSCatalog/{target}"),
-      )
       TargetCatalog = OGSCatalog(
         path,
         start=start,
         end=end,
         name=name,
+        output= pre / target,
+        verbose=False,
       )
       BaseCatalog.plot([TargetCatalog], vlines=special_days)
       BaseCatalog.bpgma(
@@ -108,6 +146,13 @@ def main():
         waveforms=waveforms,
         vlines=special_days,
       )
+      #TargetCatalog.bpgma(
+      #  BaseCatalog,
+      #  stations=stations,
+      #  waveforms=waveforms,
+      #  vlines=special_days,
+      #)
+
 
 if __name__ == "__main__":
   main()

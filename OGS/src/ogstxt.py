@@ -99,11 +99,13 @@ class DataFileTXT(OGSDataFile):
     if self.EVENTS.empty:
       self.logger.warning(f"No valid TXT records found in {self.input}")
       return
+    time_series = pd.to_datetime(self.EVENTS[OGS_C.TIME_STR])
+    self.EVENTS[OGS_C.TIME_STR] = time_series
     self.EVENTS[OGS_C.INDEX_STR] = \
       self.EVENTS[OGS_C.INDEX_STR].apply(int) + \
-        self.EVENTS[OGS_C.TIME_STR].dt.year * OGS_C.MAX_PICKS_YEAR # type: ignore
+        time_series.dt.year * OGS_C.MAX_PICKS_YEAR
     self.EVENTS[OGS_C.GROUPS_STR] = \
-      self.EVENTS[OGS_C.TIME_STR].dt.date # type: ignore
+      time_series.dt.date
     self.EVENTS[OGS_C.ERT_STR] = \
       self.EVENTS[OGS_C.ERT_STR].replace("-" * 5, "NaN").apply(float)
     self.EVENTS[OGS_C.LONGITUDE_STR] = \
@@ -126,8 +128,6 @@ class DataFileTXT(OGSDataFile):
       self.EVENTS[OGS_C.MAGNITUDE_L_STR].replace("-" * 4, "NaN").apply(float)
     self.EVENTS[OGS_C.MAGNITUDE_D_STR] = \
       self.EVENTS[OGS_C.MAGNITUDE_D_STR].replace("-" * 4, "NaN").apply(float)
-    self.EVENTS[OGS_C.TIME_STR] = \
-      pd.to_datetime(self.EVENTS[OGS_C.TIME_STR])
     self.EVENTS[OGS_C.NOTES_STR] = None
     self.EVENTS = self.EVENTS.astype({ OGS_C.INDEX_STR: int})
     self.EVENTS = self.EVENTS[(

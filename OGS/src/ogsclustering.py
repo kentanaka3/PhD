@@ -115,6 +115,7 @@ AUTHOR: AI2Seism Project
 # =============================================================================
 import warnings                       # Warning system for non-fatal errors
 from abc import ABC, abstractmethod   # Abstract base class support
+from importlib import import_module   # Optional dependency loading
 from typing import (                  # Type hints for better IDE support
   Optional,                           # Optional type annotation
   Tuple,                              # Tuple type annotation
@@ -122,7 +123,9 @@ from typing import (                  # Type hints for better IDE support
   Any,                                # Any type (escape hatch)
   List,                               # List type annotation
   Callable,                           # Function type annotation
-  Dict                                # Dictionary type annotation
+  Dict,                               # Dictionary type annotation
+  Literal,                            # Narrow string literal types
+  cast                                # Explicit type narrowing
 )
 
 # =============================================================================
@@ -158,12 +161,45 @@ from sklearn.cluster import (
   SpectralClustering,             # Graph Laplacian-based clustering
   AgglomerativeClustering,        # Hierarchical bottom-up clustering
   DBSCAN,                         # Density-based spatial clustering
-  HDBSCAN,                        # Hierarchical DBSCAN  # type: ignore
   OPTICS,                         # Ordering points clustering
   Birch,                          # Balanced iterative clustering
   BisectingKMeans,                # Divisive hierarchical K-Means
   FeatureAgglomeration,           # Feature-space hierarchical clustering
 )
+
+HDBSCAN: Optional[Any]
+
+
+def _load_hdbscan() -> Optional[Any]:
+  """Return an available HDBSCAN implementation, if installed."""
+  sklearn_hdbscan = getattr(import_module("sklearn.cluster"), "HDBSCAN", None)
+  if sklearn_hdbscan is not None:
+    return sklearn_hdbscan
+
+  try:
+    return getattr(import_module("hdbscan"), "HDBSCAN", None)
+  except ImportError:
+    return None
+
+
+HDBSCAN = _load_hdbscan()
+
+AgglomerativeLinkage = Literal['ward', 'complete', 'average', 'single']
+VALID_AGGLOMERATIVE_LINKAGES: Tuple[AgglomerativeLinkage, ...] = (
+  'ward',
+  'complete',
+  'average',
+  'single',
+)
+
+
+def _validate_agglomerative_linkage(linkage: str) -> AgglomerativeLinkage:
+  """Narrow linkage to the values accepted by AgglomerativeClustering."""
+  if linkage not in VALID_AGGLOMERATIVE_LINKAGES:
+    options = ", ".join(VALID_AGGLOMERATIVE_LINKAGES)
+    raise ValueError(
+      f"Invalid linkage '{linkage}'. Expected one of: {options}.")
+  return cast(AgglomerativeLinkage, linkage)
 
 # =============================================================================
 # SCIKIT-LEARN CLUSTERING EVALUATION METRICS
@@ -2320,8 +2356,12 @@ class OGSHDBSCAN(BaseClusterer):
     Persistence of each cluster (stability measure).
   """
 
-  def _create_model(self, min_cluster_size: int = 5, **kwargs) -> HDBSCAN:
-    """Create sklearn HDBSCAN instance."""
+  def _create_model(self, min_cluster_size: int = 5, **kwargs) -> Any:
+    """Create an available HDBSCAN instance."""
+    if HDBSCAN is None:
+      raise ImportError(
+        "HDBSCAN is unavailable. Install scikit-learn with HDBSCAN support "
+        "or install the 'hdbscan' package.")
     return HDBSCAN(min_cluster_size=min_cluster_size, **kwargs)
 
   def plot(self, show_probabilities: bool = False, *args, **kwargs) -> Axes:
@@ -4578,9 +4618,10 @@ class OGSAgglomerative(BaseClusterer):
     linkage: str = 'ward',
     **kwargs) -> AgglomerativeClustering:
       """Create sklearn AgglomerativeClustering instance."""
+      validated_linkage = _validate_agglomerative_linkage(linkage)
       return AgglomerativeClustering(
         n_clusters=n_clusters,
-        linkage=linkage,  # type: ignore
+        linkage=validated_linkage,
         **kwargs)
 
   def plot(self, *args, **kwargs) -> Axes:
