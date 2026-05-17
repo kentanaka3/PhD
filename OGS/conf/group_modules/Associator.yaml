@@ -1,0 +1,4 @@
+defaults:
+  - picker: ogsseisbenchpicker.yaml
+  - associator: ogspyocto.yaml
+  - qcpicks: ogsqcpicks.yaml

@@ -5,8 +5,8 @@ persistent: v1
 check: false
 paths:
   #- /Users/admin/Desktop/OGS_Catalog/waveforms/
-  - /leonardo/home/userexternal/ktanakah/AI2Seism/WORK/waveform/
-  - /leonardo/home/userexternal/ktanakah/AI2Seism/WORK/station/
+  - /leonardo/home/userexternal/ktanakah/AISeism/WORK/waveform/
+  - /leonardo/home/userexternal/ktanakah/AISeism/WORK/waveform/station/
 
 channel_priorities:
   - HH?

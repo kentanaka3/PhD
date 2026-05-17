@@ -605,8 +605,9 @@ def inventory(
     NETCOLOR_STR, STACOLOR_STR
 
   Side Effects:
-    - Prints warnings for unreadable station files
+    - Logs warnings for unreadable station files
   """
+  logger = setup_logger(__name__)
   # Import ObsPy utilities (lazy import to avoid circular dependencies)
   from obspy import Inventory, read_inventory
 
@@ -618,8 +619,8 @@ def inventory(
     try:
       S = read_inventory(str(station))
     except Exception as e:
-      print(f"WARNING: Unable to read {station}")
-      print(e)
+      logger.warning(f"Unable to read {station}")
+      logger.warning(str(e))
       continue
     myInventory.extend(S)
 
@@ -734,8 +735,9 @@ def waveforms(
       OGS_C.CHANNEL_STR, OGS_C.DATE_STR, OGS_C.FILENAME_STR
     ]
   )
+  logger = setup_logger(__name__)
   WAVEFORMS.to_csv(output / "OGSWaveforms.csv", index=False)
-  print(f"Saved file to {output / 'OGSWaveforms.csv'}")
+  logger.info(f"Saved file to {output / 'OGSWaveforms.csv'}")
   INVENTORY = inventory(stations)
   INVENTORY = INVENTORY.merge(
     WAVEFORMS[[OGS_C.NETWORK_STR, OGS_C.STATION_STR]],
@@ -743,7 +745,7 @@ def waveforms(
     on=[OGS_C.NETWORK_STR, OGS_C.STATION_STR]
   ).drop_duplicates()
   INVENTORY.to_csv(output / "OGSInventory.csv", index=False)
-  print(f"Saved file to {output / 'OGSInventory.csv'}")
+  logger.info(f"Saved file to {output / 'OGSInventory.csv'}")
   mystations = OGS_P.map_plotter(
     OGS_C.OGS_STUDY_REGION,
     legend=True,
@@ -755,7 +757,7 @@ def waveforms(
       color=None, facecolors="none", edgecolors=df[OGS_C.NETCOLOR_STR],
       legend=True,
     )
-  mystations.savefig(output / "img" / "OGSStations.png")
+  mystations.savefig(output / "OGSStations.png")
   plt.close()
 
   NET_COLORS = INVENTORY[
@@ -771,7 +773,9 @@ def waveforms(
     day: {net: 0 for net in WAVEFORMS[OGS_C.NETWORK_STR].unique()}
     for day in DAYS
   }
-  for group_key, group in WAVEFORMS.groupby([OGS_C.DATE_STR, OGS_C.NETWORK_STR]):
+  for group_key, group in WAVEFORMS.groupby(
+    [OGS_C.DATE_STR, OGS_C.NETWORK_STR]
+  ):
     date, net = cast(tuple[Any, Any], group_key)
     counts[date][net] = len(group[OGS_C.STATION_STR].unique())
   df = pd.DataFrame(counts).sort_index().T
@@ -781,13 +785,13 @@ def waveforms(
       x, y, labels=df.columns.tolist(),
       colors=[NET_COLORS.get(net, "gray") for net in df.columns],
       xlabel="Date", ylabel="Station Count",
-      output=output / "img" / "OGSAvailability.png",
+      output=output / "OGSAvailability.png",
       vlines=vlines,
       legend=True
     )
     plt.close()
   else:
-    logging.warning("No waveform data available for availability plot.")
+    logger.warning("No waveform data available for availability plot.")
   return WAVEFORMS, INVENTORY
 
 

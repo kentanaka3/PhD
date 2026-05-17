@@ -6,6 +6,7 @@ from pathlib import Path
 from datetime import datetime
 
 import ogsconstants as OGS_C
+import ogsutils as OGS_U
 
 # Project root (three levels above this file)
 DATA_PATH = Path(__file__).parent.parent.parent
@@ -15,7 +16,7 @@ def parse_arguments() -> argparse.Namespace:
   parser = argparse.ArgumentParser(description="Process AdriaArray Dataset")
   # TODO: Handle security issues
   parser.add_argument(
-    '-K', "--key", default=None, required=False, type=OGS_C.is_file_path,
+    '-K', "--key", default=None, required=False, type=OGS_U.is_file_path,
     metavar=OGS_C.EMPTY_STR, help="Key to download the data from server.")
   parser.add_argument(
     '-N', "--network", default=[OGS_C.ALL_WILDCHAR_STR], type=str,
@@ -31,7 +32,7 @@ def parse_arguments() -> argparse.Namespace:
     "-c", "--clip", required=False, type=str, metavar="HHMMSS",
     help="Specify the time of the center time")
   parser.add_argument(
-    '-d', "--directory", required=False, type=OGS_C.is_dir_path,
+    '-d', "--directory", required=False, type=OGS_U.is_dir_path,
     default=Path(DATA_PATH, OGS_C.WAVEFORMS_STR), metavar=OGS_C.EMPTY_STR,
     help="Directory path to the raw files")
   parser.add_argument(
@@ -45,7 +46,7 @@ def parse_arguments() -> argparse.Namespace:
     "--pyrocko", default=False, action='store_true',
     help="Enable PyRocko calls")
   parser.add_argument(
-    "--review", default=None, type=OGS_C.is_dir_path, required=False,
+    "--review", default=None, type=OGS_U.is_dir_path, required=False,
     help="Review the downloaded data")
   parser.add_argument(
     "--timing", default=False, action='store_true', required=False,
@@ -53,14 +54,14 @@ def parse_arguments() -> argparse.Namespace:
   date_group = parser.add_mutually_exclusive_group(required=False)
   date_group.add_argument(
     '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
-    type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
+    type=OGS_U.is_date, nargs=2, action=OGS_U.SortDatesAction,
     default=[datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT),
              datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT)],
     help="Specify the beginning and ending (inclusive) Gregorian date " \
          "(YYYYMMDD) range to work with.")
   date_group.add_argument(
     '-J', "--julian", required=False, metavar=OGS_C.DATE_STD,
-    action=OGS_C.SortDatesAction, type=OGS_C.is_julian, default=None, nargs=2,
+    action=OGS_U.SortDatesAction, type=OGS_U.is_julian, default=None, nargs=2,
     help="Specify the beginning and ending (inclusive) Julian date (YYMMDD) " \
          "range to work with.")
   domain_group = parser.add_mutually_exclusive_group(required=False)
@@ -104,7 +105,7 @@ def data_downloader(args: argparse.Namespace) -> None:
 
   """
   # Initialize logger based on CLI flags
-  logger = OGS_C.setup_logger(__name__, args.verbose, args.silent)
+  logger = OGS_U.setup_logger(__name__, args.verbose, args.silent)
 
   if args.review:
     logger.info("Reviewing the downloaded data in directory: %s", args.review)
@@ -187,7 +188,7 @@ def data_downloader(args: argparse.Namespace) -> None:
       mdl = MassDownloader(providers=CLIENTS.values())
       try:
         mdl.download(domain, restrictions, mseed_storage=str(D_FILE),
-                     stationxml_storage=str(Path(args.directory.parent,
+                     stationxml_storage=str(Path(args.directory,
                                              OGS_C.STATION_STR)))
       except Exception as e:
         logger.error("Error downloading data: %s", e)

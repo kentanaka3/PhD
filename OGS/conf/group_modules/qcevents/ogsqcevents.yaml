@@ -1,0 +1,4 @@
+_target_: OGS.src.ogsqc.OGSEventStatQC  # Without further parameters, this will just write statistics
+
+total_events: 6
+p_and_s_events: 3

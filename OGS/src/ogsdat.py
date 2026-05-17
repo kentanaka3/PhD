@@ -46,9 +46,8 @@ USAGE:
     parser.log()
 
 OUTPUT:
-  Parquet files organized by date containing:
-    - Event index, date, timestamp, station, phase type (P/S)
-    - Weight, distances, amplitudes, ML estimates, probability
+  - self.PICKS: DataFrame with station-level P and S picks
+  - self.picks: Dict mapping dates to grouped pick DataFrames
 
 DEPENDENCIES:
   - pandas: DataFrame operations and Parquet I/O
@@ -84,6 +83,9 @@ from datetime import datetime, timedelta as td
 # Local module: OGS-specific constants (column names, patterns, formats)
 import ogsconstants as OGS_C
 
+# Local module: OGS-specific utility functions (date parsing, path validation)
+import ogsutils as OGS_U
+
 # Local module: Base class providing regex extraction and logging
 from ogsdatafile import OGSDataFile
 
@@ -109,7 +111,7 @@ def parse_arguments():
       - dates: Tuple of (start_date, end_date) for filtering
       - verbose: Boolean flag for debug output
   """
-  parser = argparse.ArgumentParser(description="Run OGS HPL quality checks")
+  parser = argparse.ArgumentParser(description="Run OGS DAT quality checks")
 
   # -f/--file: Input file path(s), required, accepts multiple files
   parser.add_argument(
@@ -117,10 +119,10 @@ def parse_arguments():
     help="Path to the input file")
 
   # -D/--dates: Date range filter, optional, format YYMMDD
-  # Uses custom SortDatesAction to ensure start <= end
+  # Uses custom SortDatesAction to ensure start <= end.
   parser.add_argument(
     '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
-    type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
+    type=OGS_U.is_date, nargs=2, action=OGS_U.SortDatesAction,
     default=[datetime.min, datetime.max - OGS_C.ONE_DAY],
     help="Specify the beginning and ending (inclusive) Gregorian date " \
          "(YYMMDD) range to work with.")
@@ -141,12 +143,10 @@ class DataFileDAT(OGSDataFile):
   """
   Parser for OGS .dat format seismic phase pick files.
 
-  Extends OGSDataFile to provide format-specific regex patterns and
-  parsing logic for the legacy DAT fixed-width text format.
-
-  The DAT format contains one line per phase pick, with optional S-wave
-  data appended to P-wave records. Each record includes timing, quality
-  weights, and event classification metadata.
+  Extends OGSDataFile to provide format-specific regex patterns and parsing
+  logic for the legacy DAT fixed-width text format. Each record contains a
+  P-wave pick and may optionally append a paired S-wave pick for the same
+  station.
 
   Attributes:
     RECORD_EXTRACTOR_LIST: Regex patterns for individual pick records
@@ -154,143 +154,151 @@ class DataFileDAT(OGSDataFile):
   """
 
   # -------------------------------------------------------------------------
-  # RECORD EXTRACTOR: Regex patterns for parsing individual pick lines
+  # RECORD EXTRACTOR: Regex fragments for station pick records
   # -------------------------------------------------------------------------
-  # Each pattern fragment matches a specific column or field in the DAT format
-  # Named capture groups (?P<name>...) allow direct extraction to dict keys
+  # Each fragment matches one field in the fixed-width DAT layout. Named
+  # capture groups allow the parser to build a dictionary directly from the
+  # regex match.
   RECORD_EXTRACTOR_LIST = [
-    # Station code: 4 alphanumeric characters (right-padded with spaces)
-    fr"^(?P<{OGS_C.STATION_STR}>[A-Z0-9\s]{{4}})",                # Station
-
+    fr"^(?P<{OGS_C.STATION_STR}>[A-Z0-9\s]{{4}})",              # Station
     # P-wave onset quality: e=emergent, i=impulsive, ?=uncertain, space=unknown
-    fr"(?P<{OGS_C.P_ONSET_STR}>[ei\s\?]){OGS_C.PWAVE}",           # P Onset
-
-    # P-wave polarity: c/C/+=compression(up), d/D/-=dilatation(down), space=unknown
-    fr"(?P<{OGS_C.P_POLARITY_STR}>[cC\+dD\-\s])",                 # P Polarity
-
+    fr"(?P<{OGS_C.P_ONSET_STR}>[ei\s\?]){OGS_C.PWAVE}",         # P Onset
+    # P-wave polarity: c/C/+=compression(up), d/D/-=dilatation(down)
+    fr"(?P<{OGS_C.P_POLARITY_STR}>[cC\+dD\-\s])",               # P Polarity
     # P-wave weight: 0=best, 4=worst quality, space=unweighted
-    fr"(?P<{OGS_C.P_WEIGHT_STR}>[0-4\s])",                        # P Weight
-
+    fr"(?P<{OGS_C.P_WEIGHT_STR}>[0-4\s])",                      # P Weight
     # Fixed marker "1" (format identifier)
-    fr"1",                                                        # 1
-
+    fr"1",                                                      # 1
     # Date-time: YYMMDDHHMM format (10 digits) followed by space or zero
-    fr"(?P<{OGS_C.DATE_STR}>\d{{10}})[\s0]",                         # Date
-
+    fr"(?P<{OGS_C.DATE_STR}>\d{{10}})[\s0]",                    # Date
     # P-wave arrival time: SSCC (seconds.centiseconds, 4 digits)
-    fr"(?P<{OGS_C.P_TIME_STR}>[\s\d]{{4}})",                      # P Time
-
+    fr"(?P<{OGS_C.P_TIME_STR}>[\s\d]{{4}})",                    # P Time
     # Reserved/unknown field: 8 characters (ignored)
-    fr".{{8}}",                                                   # Unknown
-
+    fr".{{8}}",                                                 # Unknown
     # Optional S-wave data block (may be 8 spaces if no S pick)
     [
       # Either S-wave data OR 8 spaces (no S pick)
-      fr"(((?P<{OGS_C.S_TIME_STR}>[\s\d]{{4}})",                  # S Time
-      fr"(?P<{OGS_C.S_ONSET_STR}>[ei\s\?]){OGS_C.SWAVE}",         # S Onset
-      fr"(?P<{OGS_C.S_POLARITY_STR}>[cC\+dD\-\s])",               # S Polarity
-      fr"(?P<{OGS_C.S_WEIGHT_STR}>[0-5\s]))|\s{{8}})"             # S Weight
+      fr"(((?P<{OGS_C.S_TIME_STR}>[\s\d]{{4}})",                # S Time
+      fr"(?P<{OGS_C.S_ONSET_STR}>[ei\s\?]){OGS_C.SWAVE}",       # S Onset
+      fr"(?P<{OGS_C.S_POLARITY_STR}>[cC\+dD\-\s])",             # S Polarity
+      fr"(?P<{OGS_C.S_WEIGHT_STR}>[0-5\s]))|\s{{8}})"           # S Weight
     ],
-
-    # Padding: 22 spaces before metadata
-    fr"\s{{22}}",                                                 # SPACE
-
-    # Geographic zone code: Single character from predefined zone list
-    # Zones define regional seismotectonic areas (e.g., Alps, Friuli, etc.)
+    fr"\s{{22}}",                                               # Padding
     fr"(?P<{OGS_C.GEO_ZONE_STR}>[{OGS_C.EMPTY_STR.join(
-      OGS_C.OGS_GEO_ZONES.keys())}\s])",
-
+      OGS_C.OGS_GEO_ZONES.keys())}\s])",                        # Geo Zone
     # Event type code: Single character classifying the seismic event
     # Types include: L=local, R=regional, T=teleseismic, Q=quarry blast, etc.
     fr"(?P<{OGS_C.EVENT_TYPE_STR}>[{OGS_C.EMPTY_STR.join(
       OGS_C.OGS_EVENT_TYPES.keys())}\s])",
-
     # Event localization flag: D=distant event, space=local/regional
-    fr"(?P<{OGS_C.EVENT_LOCALIZATION_STR}>[D\s])",                # Event Loc
-
+    fr"(?P<{OGS_C.EVENT_LOCALIZATION_STR}>[D\s])",              # Event Type
     # Padding: 5 spaces
-    fr"\s{{5}}",                                                  # SPACE
-
+    fr"\s{{5}}",                                                # Padding
     # Signal duration: 5 digits (in samples or deciseconds)
-    fr"(?P<{OGS_C.DURATION_STR}>[\s\d]{{5}})",                    # Duration
-
+    fr"(?P<{OGS_C.DURATION_STR}>[\s\d]{{5}})",                  # Duration
     # Event index: 4-digit sequential event number within the year
-    fr"(?P<{OGS_C.INDEX_STR}>[\s\d]{{4}})",                       # Event
-
-    # End of line (empty pattern to terminate regex)
+    fr"(?P<{OGS_C.INDEX_STR}>[\s\d]{{4}})",                     # Event Index
     fr""
   ]
 
   # -------------------------------------------------------------------------
-  # EVENT EXTRACTOR: Regex patterns for event summary lines
+  # EVENT EXTRACTOR: Metadata-only lines without pick data
   # -------------------------------------------------------------------------
-  # Event lines contain only the metadata portion (no station/phase data)
   EVENT_EXTRACTOR_LIST = [
     # Event type code
     fr"(?P<{OGS_C.EVENT_TYPE_STR}>[{OGS_C.EMPTY_STR.join(
       OGS_C.OGS_EVENT_TYPES.keys())}\s])",
-
     # Event localization flag
-    fr"(?P<{OGS_C.EVENT_LOCALIZATION_STR}>[D\s])",                # Event Loc
-
+    fr"(?P<{OGS_C.EVENT_LOCALIZATION_STR}>[D\s])",              # Event Localization
     # Padding
-    fr"\s{{5}}",                                                  # SPACE
-
+    fr"\s{{5}}",                                                # Padding
     # Signal duration
-    fr"(?P<{OGS_C.DURATION_STR}>[\s\d]{{5}})",                    # Duration
-
+    fr"(?P<{OGS_C.DURATION_STR}>[\s\d]{{5}})",                  # Duration
     # Event index
-    fr"(?P<{OGS_C.INDEX_STR}>[\s\d]{{4}})",                       # Event
-
-    # End of line
-    fr""
+    fr"(?P<{OGS_C.INDEX_STR}>[\s\d]{{4}})",                     # Event Index
   ]
 
-  # -------------------------------------------------------------------------
-  # METHOD: read() - Parse DAT file into picks DataFrame
-  # -------------------------------------------------------------------------
+  @staticmethod
+  def _parse_event_datetime(value: str) -> datetime:
+    """Convert the DAT date field to a datetime, handling minute rollover."""
+    if int(value[-2:]) >= 60:
+      return datetime.strptime(value[:-2], OGS_C.DATETIME_FMT[:-4]) + \
+        td(hours=1)
+    return datetime.strptime(value, OGS_C.DATETIME_FMT[:-2])
+
+  @staticmethod
+  def _parse_pick_time(base_time: datetime, value: str) -> datetime:
+    """Convert a SSCC field to an absolute pick time."""
+    offset = float(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR)) / 100.
+    return base_time + td(seconds=offset)
+
+  @staticmethod
+  def _parse_index(value: str, year: int):
+    """Build a globally unique event index from the yearly DAT counter."""
+    if not value:
+      return None
+    return int(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR)) + \
+      year * OGS_C.MAX_PICKS_YEAR
+
+  @staticmethod
+  def _parse_weight(value: str, default_value: int = 0) -> int:
+    """Convert a single-character weight field, using a default for blanks."""
+    if value == OGS_C.SPACE_STR:
+      return default_value
+    return int(value)
+
+  @staticmethod
+  def _build_pick_row(event_index: int, pick_time: datetime, station: str,
+                      phase: str, weight: int):
+    """Create a standardized pick row for the output DataFrame."""
+    return [
+      event_index,
+      pick_time.strftime(OGS_C.DATE_FMT),
+      pick_time,
+      f".{station}.",
+      phase,
+      weight,
+      None,
+      None,
+      None,
+      None,
+      1.0,
+    ]
 
   def read(self):
     """
     Read and parse a .dat format file into P and S wave picks.
 
-    Processes each line of the input file, extracting phase arrival data
-    using regex patterns. Filters by date range and event type (local
-    earthquakes only). Handles edge cases like minute=60 (rollover).
-
-    The method populates:
-      - self.PICKS: DataFrame with all extracted picks
-      - self.picks: Dict mapping dates to pick DataFrames
+    The parser walks through the input file line by line, skips metadata-only
+    lines, extracts station records with regex patterns, filters by date range
+    and event type, and stores grouped picks in self.PICKS and self.picks.
 
     Raises:
-      AssertionError: If file doesn't exist or has wrong extension
+      FileNotFoundError: If the input file does not exist.
+      ValueError: If the input file does not use the .dat extension.
     """
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------
     # INPUT VALIDATION
-    # -------------------------------------------------------------------------
-
-    # Verify input file exists on filesystem
+    # -----------------------------------------------------------------------
     if not self.input.exists():
       raise FileNotFoundError(f"File {self.input} does not exist")
 
-    # Verify correct file extension (.dat)
     if self.input.suffix != OGS_C.DAT_EXT:
       raise ValueError(f"File extension must be {OGS_C.DAT_EXT}")
 
-    # TODO: Attemp restoration before SHUTDOWN
+    # TODO: Attempt restoration before shutdown.
 
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------
     # FILE READING
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------
+    pick_records = list()
+    default_weight = 0
 
-    # Initialize list to collect parsed pick records
-    DETECT = list()
-
-    # Read all lines from input file
-    with open(self.input, 'r') as fr: lines = fr.readlines()
+    with open(self.input, 'r') as fr:
+      lines = fr.readlines()
     self.logger.info(f"Reading DAT file: {self.input}")
 
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------
     # LINE-BY-LINE PARSING
     # -------------------------------------------------------------------------
 
@@ -480,15 +488,14 @@ class DataFileDAT(OGSDataFile):
       OGS_C.PHASE_STR, OGS_C.WEIGHT_STR, OGS_C.EPICENTRAL_DISTANCE_STR,
       OGS_C.DEPTH_STR, OGS_C.AMPLITUDE_STR, OGS_C.STATION_ML_STR,
       OGS_C.PROBABILITY_STR
-    ]).astype({ OGS_C.IDX_PICKS_STR: int})
+    ]).astype({OGS_C.IDX_PICKS_STR: int})
 
-    # Extract date from timestamp for grouping
+    # Extract the Gregorian date from the timestamp for downstream grouping.
     self.PICKS[OGS_C.GROUPS_STR] = self.PICKS[OGS_C.TIME_STR].apply(
-      lambda x: x.date())
+      lambda value: value.date())
 
-    # Populate picks dictionary: date -> DataFrame
-    for date, df in self.PICKS.groupby(OGS_C.GROUPS_STR):
-      self.picks[UTCDateTime(date).date] = df
+    for date, dataframe in self.PICKS.groupby(OGS_C.GROUPS_STR):
+      self.picks[UTCDateTime(date).date] = dataframe
 
 
 # =============================================================================
@@ -500,22 +507,19 @@ def main(args):
   Main entry point for command-line execution.
 
   Processes each input file specified on the command line:
-    1. Creates DataFileDAT parser instance
+    1. Creates a DataFileDAT parser instance
     2. Reads and parses the file
-    3. Logs output to Parquet format
+    3. Logs output through the shared OGS pipeline
 
   Args:
     args: Parsed command-line arguments from parse_arguments()
   """
   for file in args.file:
-    # Create parser with date range and verbosity settings
     datafile = DataFileDAT(file, args.dates[0], args.dates[1],
                            verbose=args.verbose)
-    # Parse the input file
     datafile.read()
-    # Write output to Parquet files
     datafile.log()
 
 
-# Script entry point: parse arguments and run main
-if __name__ == "__main__": main(parse_arguments())
+if __name__ == "__main__":
+  main(parse_arguments())

@@ -98,6 +98,9 @@ from datetime import datetime
 # Local module: OGS-specific constants (extensions, column names, formats)
 import ogsconstants as OGS_C
 
+# Local module: Utility functions for date parsing, path validation, etc.
+import ogsutils as OGS_U
+
 # Local module: Base class providing file I/O and logging
 from ogsdatafile import OGSDataFile
 
@@ -184,12 +187,12 @@ def parse_arguments() -> argparse.Namespace:
 
   # -d/--directory: Process all matching files in a directory recursively
   path_group.add_argument(
-    '-d', "--directory", required=False, type=OGS_C.is_dir_path, default=None,
+    '-d', "--directory", required=False, type=OGS_U.is_dir_path, default=None,
     help="Base directory for data files.")
 
   # -f/--file: Process specific file(s) by path
   path_group.add_argument(
-    '-f', "--file", required=False, type=OGS_C.is_file_path, default=None,
+    '-f', "--file", required=False, type=OGS_U.is_file_path, default=None,
     nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR,
     help="Base file for data files.")
 
@@ -201,7 +204,7 @@ def parse_arguments() -> argparse.Namespace:
   # -D/--dates: Gregorian date range (YYYYMMDD format)
   date_group.add_argument(
     '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
-    type=OGS_C.is_date, nargs=2, action=OGS_C.SortDatesAction,
+    type=OGS_U.is_date, nargs=2, action=OGS_U.SortDatesAction,
     default=[datetime.min, datetime.max - OGS_C.ONE_DAY],
     help="Specify the beginning and ending (inclusive) Gregorian date " \
          "(YYYYMMDD) range to work with.")
@@ -209,25 +212,16 @@ def parse_arguments() -> argparse.Namespace:
   # -J/--julian: Julian date range (YYDDD format)
   date_group.add_argument(
     '-J', "--julian", required=False, metavar=OGS_C.DATE_STD,
-    action=OGS_C.SortDatesAction, type=OGS_C.is_julian, default=None, nargs=2,
+    action=OGS_U.SortDatesAction, type=OGS_U.is_julian, default=None, nargs=2,
     help="Specify the beginning and ending (inclusive) Julian date (YYYYDDD) "\
          "range to work with.")
 
   # -o/--output: Output directory for the merged catalog
   parser.add_argument(
-    "-o", "--output", required=False, type=OGS_C.is_dir_path,
-    default=DATA_PATH / "catalog" / "OGSCatalog",
+    "-o", "--output", required=False, type=str,
+    default=str(DATA_PATH / "catalog" / "OGSCatalog"),
     help="Name of the catalog")
-
-  # -P/--polygon: Geographic polygon for spatial filtering of events
-  parser.add_argument(
-    "-P", "--polygon", required=False, type=is_polygon,
-    default=mplPath(OGS_C.OGS_POLY_REGION, closed=True),
-    nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR,
-    help="Polygon string to filter events")
-
   return parser.parse_args()
-
 
 # =============================================================================
 # DataCatalog Class - Multi-Format Catalog Aggregator
@@ -280,10 +274,12 @@ class DataCatalog(OGSDataFile):
     # Initialize list to hold format-specific parser instances
     self.files : list[OGSDataFile] = list()
 
+    Path(args.output).mkdir(parents=True, exist_ok=True)
+
     # Initialize parent class with catalog settings
     super().__init__(
-      args.output, args.dates[0], args.dates[1], verbose=args.verbose,
-      polygon=args.polygon, output=args.output)
+      Path(args.output), args.dates[0], args.dates[1], verbose=args.verbose,
+      output=Path(args.output))
 
   # -------------------------------------------------------------------------
   # METHOD: read() - Discover and parse input files
@@ -315,8 +311,7 @@ class DataCatalog(OGSDataFile):
           # Instantiate appropriate parser and add to file list
           self.files.append(self.DATAFILE_TYPES[ext](
             fr, self.args.dates[0], self.args.dates[1],
-            verbose=self.args.verbose, polygon=self.args.polygon,
-            output=self.args.output))
+            verbose=self.args.verbose, output=Path(self.args.output)))
 
     # -------------------------------------------------------------------------
     # DIRECTORY MODE: Recursively find matching files
@@ -338,8 +333,7 @@ class DataCatalog(OGSDataFile):
             # Instantiate appropriate parser and add to file list
             self.files.append(self.DATAFILE_TYPES[fr.suffix](
               fr, self.args.dates[0], self.args.dates[1],
-              verbose=self.args.verbose, polygon=self.args.polygon,
-              output=self.args.output))
+              verbose=self.args.verbose, output=Path(self.args.output)))
 
     # -------------------------------------------------------------------------
     # PARSE AND LOG ALL FILES
@@ -349,6 +343,25 @@ class DataCatalog(OGSDataFile):
       f.read()
       # Write parsed data to Parquet format
       f.log()
+
+  def normalize_event_groups(self, events: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalize event group identifiers to calendar dates before merging.
+
+    Legacy parsers emit the ``group`` column as a mix of ISO strings,
+    pandas timestamps, and Python ``date`` objects. Coercing everything to a
+    date keeps the merge keys stable across HPL, TXT, and PUN inputs.
+    """
+    if events.empty or OGS_C.GROUPS_STR not in events.columns:
+      return events
+
+    group_series = pd.to_datetime(events[OGS_C.GROUPS_STR], errors='coerce')
+    if OGS_C.TIME_STR in events.columns:
+      time_series = pd.to_datetime(events[OGS_C.TIME_STR], errors='coerce')
+      group_series = group_series.where(group_series.notna(), time_series)
+
+    events[OGS_C.GROUPS_STR] = group_series.dt.date
+    return events
 
   # -------------------------------------------------------------------------
   # METHOD: merge_events() - Consolidate events from all files
@@ -377,18 +390,20 @@ class DataCatalog(OGSDataFile):
     for f in self.files:
       if f.get("EVENTS").empty: continue
       self.logger.info(f"Processing EVENTS from file: {f.input}")
+      f.EVENTS = self.normalize_event_groups(f.EVENTS.copy())
+      self.EVENTS = self.normalize_event_groups(self.EVENTS)
 
       # First file: Initialize with copy of its events
       f.EVENTS[OGS_C.IDX_EVENTS_STR] = f.EVENTS[OGS_C.IDX_EVENTS_STR].apply(
         pd.to_numeric, errors='coerce'
       ).astype(int)
+      if self.EVENTS.empty or OGS_C.IDX_EVENTS_STR not in self.EVENTS.columns:
+        self.EVENTS = f.EVENTS.copy()
+        continue
       if self.EVENTS[self.EVENTS[OGS_C.IDX_EVENTS_STR].isin(
         f.EVENTS[OGS_C.IDX_EVENTS_STR]
       )].empty:
-        if self.EVENTS.empty:
-          self.EVENTS = f.EVENTS.copy()
-        else:
-          self.EVENTS = pd.concat([self.EVENTS, f.EVENTS], ignore_index=True)
+        self.EVENTS = pd.concat([self.EVENTS, f.EVENTS], ignore_index=True)
         continue
       self.EVENTS[OGS_C.IDX_EVENTS_STR] = self.EVENTS[
         OGS_C.IDX_EVENTS_STR
