@@ -259,8 +259,8 @@ NONE_STR = "None"                      # String representation of None
 # =============================================================================
 # String identifiers for various pipeline stages and components
 
-CLF_STR = "SeisBenchPicker"            # ML-based phase picker identifier
-AST_STR = "GammaAssociator"            # GaMMA phase associator identifier
+DEFAULT_PICKER = "SeisBenchPicker"     # ML-based phase picker identifier
+DEFAULT_ASSOCIATOR = "GammaAssociator" # GaMMA phase associator identifier
 FILE_STR = "file"                      # Generic file reference
 TEMPORAL_STR = "tmp"                   # Temporary file prefix
 DURATION_STR = "duration"              # Duration field name

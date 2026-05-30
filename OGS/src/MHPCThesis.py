@@ -15,7 +15,7 @@ def main():
   ]
   pre = Path("/Users/admin/Desktop/OGS_Catalog/catalogs/")
   for target in [
-    "Config1", "Config2", "Config3",
+    #"Config1", "Config2", "Config3",
   ]:
     print(f"Processing target: {target}")
     BaseCatalog = OGSCatalog(
@@ -52,15 +52,22 @@ def main():
       #  vlines=special_days,
       #)
   for model, target in [
-    ("PhaseNet[SCEDC, 0.1]", "PhaseNet[SCEDC,0.1]"),
-    ("PhaseNet[STEAD, 0.1]", "PhaseNet[STEAD,0.1]"),
-    ("PhaseNet[Original, 0.1]", "PhaseNet[Original,0.1]"),
-    ("EQTransformer[SCEDC, 0.1]", "EQTransformer[SCEDC,0.1]"),
-    ("EQTransformer[STEAD, 0.1]", "EQTransformer[STEAD,0.1]"),
-    ("EQTransformer[Original, 0.1]", "EQTransformer[Original,0.1]"),
-    ("EQTransformer[INSTANCE, 0.1]", "EQTransformer[INSTANCE,0.1]"),
-    ("EQTransformer[INSTANCE, 0.2]", "EQTransformer[INSTANCE,0.2]"),
-    ("EQTransformer[INSTANCE, 0.3]", "EQTransformer[INSTANCE,0.3]"),
+    (f"{model}[{dataset}, {threshold}]", f"{model}[{dataset},{threshold}]")
+    for model in [
+      "PhaseNet",
+      "EQTransformer"
+    ]
+    for dataset in [
+      #"SCEDC",
+      "STEAD",
+      "Original",
+      #"INSTANCE"
+    ]
+    for threshold in [
+      #0.1,
+      #0.2,
+      0.3
+    ]
   ]:
     print(f"Processing target: {target}")
     print(f"Processing catalog: SeisBench Picker")
@@ -84,7 +91,7 @@ def main():
       vlines=special_days,
     )
   for target in [
-    "GaMMA0.1", "GaMMA0.2", "GaMMA0.3",
+    #"GaMMA0.1", "GaMMA0.2", "GaMMA0.3",
   ]:
     print(f"Processing target: {target}")
     BaseCatalog = OGSCatalog(
@@ -114,7 +121,7 @@ def main():
         vlines=special_days,
       )
   for target in [
-    "PyOcto0.1", "PyOcto0.2", "PyOcto0.3",
+    #"PyOcto0.1", "PyOcto0.2", "PyOcto0.3",
   ]:
     print(f"Processing target: {target}")
     BaseCatalog = OGSCatalog(
