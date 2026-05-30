@@ -300,190 +300,120 @@ class DataFileDAT(OGSDataFile):
 
     # -----------------------------------------------------------------------
     # LINE-BY-LINE PARSING
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------
+    for raw_line in lines:
+      line = raw_line.strip()
 
-    for line in [l.strip() for l in lines]:
-
-      # Skip event summary lines (matched by EVENT_EXTRACTOR)
-      if self.EVENT_EXTRACTOR.match(line): continue
-
-      # Attempt to match line against RECORD_EXTRACTOR pattern
-      match = self.RECORD_EXTRACTOR.match(line)
-
-      if match:
-        # Extract all named capture groups into dictionary
-        result: dict = match.groupdict()
-
-        # -----------------------------------------------------------------------
-        # EVENT TYPE FILTERING
-        # -----------------------------------------------------------------------
-        # Only process local earthquakes (not distant events, not non-seismic)
-        # Skip if: localization is not "D" AND event type is defined AND
-        #          event type is not local earthquake
-        if (result[OGS_C.EVENT_LOCALIZATION_STR] != "D" and
-            result[OGS_C.EVENT_TYPE_STR] != OGS_C.SPACE_STR and
-            OGS_C.OGS_EVENT_TYPES[result[OGS_C.EVENT_TYPE_STR]] != \
-              OGS_C.EVENT_LOCAL_EQ_STR):
-          # print("WARNING: (DAT) Ignoring line:", line)
-          continue
-
-        # -----------------------------------------------------------------------
-        # DATE PARSING WITH EDGE CASE HANDLING
-        # -----------------------------------------------------------------------
-        try:
-          # Handle minute=60 edge case (some systems record 60 instead of 00+1hr)
-          if int(result[OGS_C.DATE_STR][-2:]) >= 60:
-            # Parse without minutes, then add 1 hour
-            result[OGS_C.DATE_STR] = \
-                datetime.strptime(result[OGS_C.DATE_STR][:-2],
-                                  OGS_C.DATETIME_FMT[:-4]) + td(hours=1)
-          else:
-            # Standard parsing: YYMMDDHHMM format
-            result[OGS_C.DATE_STR] = datetime.strptime(
-              result[OGS_C.DATE_STR], OGS_C.DATETIME_FMT[:-2])
-        except ValueError as e:
-          # Skip records with unparseable dates
-          print(e)
-          continue
-
-        # -----------------------------------------------------------------------
-        # DATE RANGE FILTERING
-        # -----------------------------------------------------------------------
-
-        # Skip picks before the specified start date
-        if self.start is not None and result[OGS_C.DATE_STR] < self.start:
-          self.logger.debug(f"Skipping pick before start date: {self.start}")
-          self.logger.debug(line)
-          continue
-
-        # Stop processing if we've passed the end date (assumes sorted input)
-        if (self.end is not None and
-            result[OGS_C.DATE_STR] >= self.end + OGS_C.ONE_DAY):
-          self.logger.debug(f"Stopping read at pick after end date: {self.end}")
-          self.logger.debug(line)
-          break
-
-        # -----------------------------------------------------------------------
-        # FIELD PROCESSING
-        # -----------------------------------------------------------------------
-
-        # Clean station name: remove padding spaces
-        result[OGS_C.STATION_STR] = \
-          result[OGS_C.STATION_STR].strip(OGS_C.SPACE_STR)
-
-        # Format date string for grouping (YYMMDD format)
-        date = result[OGS_C.DATE_STR].strftime(OGS_C.YYMMDD_FMT)
-
-        # -----------------------------------------------------------------------
-        # P-WAVE TIME CALCULATION
-        # -----------------------------------------------------------------------
-        try:
-          # Convert SSCC (seconds.centiseconds) to timedelta and add to base time
-          # Replace spaces with zeros for numeric conversion
-          result[OGS_C.P_TIME_STR] = result[OGS_C.DATE_STR] + \
-            td(seconds=float(result[OGS_C.P_TIME_STR].replace(
-              OGS_C.SPACE_STR, OGS_C.ZERO_STR)) / 100.)
-        except ValueError as e:
-          self.logger.error(e)
-          continue
-
-        # -----------------------------------------------------------------------
-        # EVENT INDEX PROCESSING
-        # -----------------------------------------------------------------------
-        if result[OGS_C.INDEX_STR]:
-          try:
-            # Convert to integer, add year offset for global uniqueness
-            # MAX_PICKS_YEAR ensures non-overlapping indices across years
-            result[OGS_C.INDEX_STR] = int(result[OGS_C.INDEX_STR].replace(
-              OGS_C.SPACE_STR, OGS_C.ZERO_STR)) + \
-                result[OGS_C.DATE_STR].year * OGS_C.MAX_PICKS_YEAR
-          except ValueError as e:
-            result[OGS_C.INDEX_STR] = None
-            self.logger.error(e)
-
-        # Default weight value for missing/blank weights
-        DEFAULT_VALUE = 0
-
-        # -----------------------------------------------------------------------
-        # P-WAVE WEIGHT PROCESSING
-        # -----------------------------------------------------------------------
-        try:
-          # Convert weight to integer, use default if blank
-          if result[OGS_C.P_WEIGHT_STR] == OGS_C.SPACE_STR:
-            result[OGS_C.P_WEIGHT_STR] = DEFAULT_VALUE
-          else:
-            result[OGS_C.P_WEIGHT_STR] = int(result[OGS_C.P_WEIGHT_STR])
-        except ValueError as e:
-          self.logger.error(e)
-          continue
-
-        # -----------------------------------------------------------------------
-        # APPEND P-WAVE PICK TO RESULTS
-        # -----------------------------------------------------------------------
-        # Record format: [event_id, date, time, station, phase, weight,
-        #                 distance, depth, amplitude, ML, probability]
-        DETECT.append([
-          result[OGS_C.INDEX_STR],
-          result[OGS_C.P_TIME_STR].strftime(OGS_C.DATE_FMT),
-          result[OGS_C.P_TIME_STR],
-          f".{result[OGS_C.STATION_STR]}.",  # Station with delimiters
-          OGS_C.PWAVE, int(result[OGS_C.P_WEIGHT_STR]),
-          None, None, None, None, 1.0  # Placeholders for computed fields
-        ])
-
-        # -----------------------------------------------------------------------
-        # S-WAVE PROCESSING (if present)
-        # -----------------------------------------------------------------------
-        if result[OGS_C.S_TIME_STR]:
-
-          # S-wave weight processing
-          try:
-            if result[OGS_C.S_WEIGHT_STR] == OGS_C.SPACE_STR:
-              result[OGS_C.S_WEIGHT_STR] = DEFAULT_VALUE
-            else:
-              result[OGS_C.S_WEIGHT_STR] = int(result[OGS_C.S_WEIGHT_STR])
-          except ValueError as e:
-            self.logger.error(e)
-            continue
-
-          # S-wave time calculation (same method as P-wave)
-          try:
-            result[OGS_C.S_TIME_STR] = result[OGS_C.DATE_STR] + \
-              td(seconds=float(result[OGS_C.S_TIME_STR].replace(
-                OGS_C.SPACE_STR, OGS_C.ZERO_STR)) / 100.)
-          except ValueError as e:
-            self.logger.error(e)
-            continue
-
-          # Append S-wave pick to results
-          DETECT.append([
-            result[OGS_C.INDEX_STR],
-            result[OGS_C.S_TIME_STR].strftime(OGS_C.DATE_FMT),
-            result[OGS_C.S_TIME_STR],
-            f".{result[OGS_C.STATION_STR]}.",
-            OGS_C.SWAVE, int(result[OGS_C.S_WEIGHT_STR]),
-            None, None, None, None, 1.0
-          ])
+      if line == OGS_C.EMPTY_STR:
         continue
 
-      # -------------------------------------------------------------------------
-      # UNMATCHED LINE HANDLING
-      # -------------------------------------------------------------------------
+      # Event summary lines carry only metadata already repeated in pick rows.
+      if self.EVENT_EXTRACTOR.match(line):
+        continue
 
-      # Skip known non-data lines (format markers, blank lines)
-      if re.match(r"1\s*D?\s*.?$", line): continue
-      if line == OGS_C.EMPTY_STR: continue
+      match = self.RECORD_EXTRACTOR.match(line)
+      if not match:
+        if re.match(r"1\s*D?\s*.?$", line):
+          continue
+        self.logger.error(f"ERROR: (DAT) Could not parse line: {line}")
+        self.debug(line, self.RECORD_EXTRACTOR_LIST)
+        continue
 
-      # Log and debug unrecognized lines
-      self.logger.error(f"ERROR: (DAT) Could not parse line: {line}")
-      self.debug(line, self.RECORD_EXTRACTOR_LIST)
+      result: dict = match.groupdict()
 
-    # -------------------------------------------------------------------------
+      # -----------------------------------------------------------------------
+      # EVENT TYPE FILTERING
+      # -----------------------------------------------------------------------
+      # Keep local earthquakes and distant events, mirroring the legacy
+      # filtering behavior in the original parser.
+      if (result[OGS_C.EVENT_LOCALIZATION_STR] != "D" and
+          result[OGS_C.EVENT_TYPE_STR] != OGS_C.SPACE_STR and
+          OGS_C.OGS_EVENT_TYPES[result[OGS_C.EVENT_TYPE_STR]] !=
+          OGS_C.EVENT_LOCAL_EQ_STR):
+        continue
+
+      try:
+        event_time = self._parse_event_datetime(result[OGS_C.DATE_STR])
+      except ValueError as exc:
+        self.logger.error(exc)
+        continue
+
+      # ---------------------------------------------------------------------
+      # DATE RANGE FILTERING
+      # ---------------------------------------------------------------------
+      if self.start is not None and event_time < self.start:
+        self.logger.debug(f"Skipping pick before start date: {self.start}")
+        self.logger.debug(line)
+        continue
+
+      if self.end is not None and event_time >= self.end + OGS_C.ONE_DAY:
+        self.logger.debug(f"Stopping read at pick after end date: {self.end}")
+        self.logger.debug(line)
+        break
+
+      # ---------------------------------------------------------------------
+      # FIELD PROCESSING
+      # ---------------------------------------------------------------------
+      station = result[OGS_C.STATION_STR].strip(OGS_C.SPACE_STR)
+
+      try:
+        event_index = self._parse_index(result[OGS_C.INDEX_STR], event_time.year)
+      except ValueError as exc:
+        event_index = None
+        self.logger.error(exc)
+
+      try:
+        p_pick_time = self._parse_pick_time(event_time, result[OGS_C.P_TIME_STR])
+      except ValueError as exc:
+        self.logger.error(exc)
+        continue
+
+      try:
+        p_weight = self._parse_weight(result[OGS_C.P_WEIGHT_STR], default_weight)
+      except ValueError as exc:
+        self.logger.error(exc)
+        continue
+
+      # ---------------------------------------------------------------------
+      # APPEND P-WAVE PICK TO RESULTS
+      # ---------------------------------------------------------------------
+      pick_records.append(self._build_pick_row(
+        event_index,
+        p_pick_time,
+        station,
+        OGS_C.PWAVE,
+        p_weight))
+
+      # ---------------------------------------------------------------------
+      # S-WAVE PROCESSING (if present)
+      # ---------------------------------------------------------------------
+      if result[OGS_C.S_TIME_STR]:
+        try:
+          s_weight = self._parse_weight(result[OGS_C.S_WEIGHT_STR], default_weight)
+        except ValueError as exc:
+          self.logger.error(exc)
+          continue
+
+        try:
+          s_pick_time = self._parse_pick_time(
+            event_time,
+            result[OGS_C.S_TIME_STR]
+          )
+        except ValueError as exc:
+          self.logger.error(exc)
+          continue
+
+        pick_records.append(self._build_pick_row(
+          event_index,
+          s_pick_time,
+          station,
+          OGS_C.SWAVE,
+          s_weight))
+
+    # -----------------------------------------------------------------------
     # BUILD OUTPUT DATAFRAME
-    # -------------------------------------------------------------------------
-
-    # Create DataFrame from collected picks with proper column names
-    self.PICKS = pd.DataFrame(DETECT, columns=[
+    # -----------------------------------------------------------------------
+    self.PICKS = pd.DataFrame(pick_records, columns=[
       OGS_C.IDX_PICKS_STR, OGS_C.GROUPS_STR, OGS_C.TIME_STR, OGS_C.STATION_STR,
       OGS_C.PHASE_STR, OGS_C.WEIGHT_STR, OGS_C.EPICENTRAL_DISTANCE_STR,
       OGS_C.DEPTH_STR, OGS_C.AMPLITUDE_STR, OGS_C.STATION_ML_STR,

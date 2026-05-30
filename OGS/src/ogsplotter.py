@@ -1,3 +1,85 @@
+"""
+=============================================================================
+OGS Plotter Module - Reusable Matplotlib / Cartopy Figure Builders
+=============================================================================
+
+OVERVIEW:
+This module provides a family of small plotter classes that wrap common
+matplotlib / cartopy idioms used across the OGS catalog and clustering
+workflow. Each plotter owns a single ``matplotlib.figure.Figure`` (or attaches
+to an existing one), exposes ergonomic constructors for the most frequent
+plot styles, and offers a uniform ``savefig`` helper.
+
+The module implements:
+
+1. PRIVATE HELPERS
+    - ``_LabelKwargs`` / ``_GridlinerLike`` / ``_CartopyAxesLike``: typed
+        protocols that document the cartopy/matplotlib shape we rely on
+        without importing optional types at runtime.
+    - ``_label_kwargs`` / ``_as_cartopy_axes`` / ``_plot_vline``: tiny
+        wrappers that keep call sites concise and type-checker friendly.
+    - ``v_lat_long_to_distance``: vectorized lon/lat (optionally depth)
+        distance helper built on ``obspy.geodetics.gps2dist_azimuth``.
+
+2. BASE PLOTTER
+    - ``plotter``: shared figure/logger setup and ``savefig`` implementation.
+
+3. ONE-AXIS PLOTTERS
+    - ``stack_plotter`` / ``line_plotter``: time-series and stacked-line
+        figures with optional vertical and horizontal annotation lines.
+
+4. CATALOG-EVENT PLOTTERS
+    - ``event_plotter``: per-event waveform / pick visualization.
+    - ``day_plotter``: daily station overview figures.
+
+5. MAP AND DEPTH PLOTTERS
+    - ``map_plotter``: cartopy maps with stations, events, polygons,
+        north arrow and scale-bar decorations.
+    - ``scatter_plotter`` / ``histogram_plotter``: distribution figures.
+
+6. METRIC PLOTTERS
+    - ``ConfMtx_plotter``: confusion-matrix rendering via scikit-learn's
+        ``ConfusionMatrixDisplay``.
+
+ARCHITECTURE:
+
+    plotter (base: figsize, fig, logger, savefig)
+            |
+            +-- stack_plotter        (time-series, stacked traces)
+            +-- line_plotter         (single line + vlines / hlines)
+            +-- event_plotter        (per-event waveform/picks)
+            +-- day_plotter          (daily multi-station overview)
+            +-- map_plotter          (cartopy map with overlays)
+            +-- scatter_plotter      (2D scatter)
+            +-- histogram_plotter    (distributions)
+            +-- ConfMtx_plotter      (confusion matrices)
+
+USAGE:
+    from ogsplotter import map_plotter, line_plotter
+
+    mp = map_plotter(stations_df, events_df, extent=[12, 14, 45, 47])
+    mp.savefig("map.png")
+
+    lp = line_plotter(x=dates, y=values, xlabel="date", ylabel="count")
+    lp.savefig("counts.png")
+
+DEPENDENCIES:
+    - numpy / pandas: vectorized math and tabular inputs
+    - matplotlib (pyplot, dates, patches): figure and axes machinery
+    - cartopy (crs, feature): geographic projection and basemaps
+    - obspy: ``UTCDateTime`` and ``gps2dist_azimuth`` geodesy
+    - sklearn.metrics: ``ConfusionMatrixDisplay`` rendering
+    - matplotlib_scalebar / matplotlib_map_utils: map ornaments
+    - ogsconstants / ogsutils: color palette and shared helpers
+
+AUTHOR: AI2Seism Project
+=============================================================================
+"""
+
+# =============================================================================
+# IMPORTS
+# =============================================================================
+
 import numpy as np
 import obspy as op
 import pandas as pd
@@ -19,6 +101,12 @@ from matplotlib_map_utils.core.north_arrow import north_arrow
 
 import ogsconstants as OGS_C
 import ogsutils as OGS_U
+
+# =============================================================================
+# PRIVATE PROTOCOLS AND TYPED HELPERS
+# =============================================================================
+# These tiny shims keep static type checkers happy without forcing strict
+# dependence on optional cartopy / matplotlib internals at runtime.
 
 class _LabelKwargs(TypedDict, total=False):
   label: str
@@ -48,12 +136,50 @@ def _plot_vline(ax: Axes, x: datetime, color: str, label: str) -> None:
              **_label_kwargs(label))
 
 def v_lat_long_to_distance(lng1, lat1, depth1, lng2, lat2, depth2, dim=2):
+  """Pairwise great-circle (optionally 3D) distance in km between two point
+  sequences.
+
+  Parameters
+  ----------
+  lng1, lat1, depth1 : Iterable[float]
+    Longitude (deg), latitude (deg) and depth (m) of the first point set.
+  lng2, lat2, depth2 : Iterable[float]
+    Longitude (deg), latitude (deg) and depth (m) of the second point set.
+  dim : int, default 2
+    ``2`` for purely horizontal great-circle distance; ``3`` to add the
+    vertical separation in quadrature.
+
+  Returns
+  -------
+  list[float]
+    Distance in kilometers for each input pair.
+  """
   return [np.sqrt((gps2dist_azimuth(lt1, lg1, lt2, lg2)[0] / 1000.0) ** 2 +
             ((abs(dp2 - dp1) / 1000.0) ** 2 if dim == 3 else 0.))
           for lg1, lt1, dp1, lg2, lt2, dp2 in zip(
             lng1, lat1, depth1, lng2, lat2, depth2)]
 
+# =============================================================================
+# BASE PLOTTER
+# =============================================================================
+
 class plotter:
+  """Common base for all OGS plotters.
+
+  Owns a ``matplotlib.figure.Figure`` (either created here or supplied by the
+  caller) plus a class-named logger. Subclasses focus on adding axes and
+  artists; saving the figure to disk is handled uniformly by :meth:`savefig`.
+
+  Parameters
+  ----------
+  figsize : tuple[float, float], default ``(20, 10)``
+    Figure size in inches; ignored when ``fig`` is provided.
+  fig : matplotlib.figure.Figure, optional
+    Pre-existing figure to draw into. When omitted a new compressed-layout
+    figure is created.
+  verbose : bool, default ``False``
+    Toggle DEBUG-level logging on the class-named logger.
+  """
   def __init__(self, figsize=(20, 10), fig=None, verbose: bool = False,
                **kwargs) -> None:
     plt.rcParams.update({'font.size': 12})
@@ -71,7 +197,17 @@ class plotter:
       plt.savefig(Path(self.output), bbox_inches='tight', dpi=300, **kwargs)
       self.logger.info("Figure saved to %s", self.output)
 
+# =============================================================================
+# ONE-AXIS TIME-SERIES PLOTTERS
+# =============================================================================
+
 class stack_plotter(plotter):
+  """Stacked time-series plot of multiple labeled series sharing one x axis.
+
+  Useful to compare several daily/cumulative curves on a common axis with
+  optional vertical reference lines (``vlines``) and horizontal threshold
+  markers (``hlines``).
+  """
   def __init__(self, x, y, labels, colors, xlabel=None, ylabel=None,
                title=None, fig=None, ax=None, gs=111, legend=False,
                output=None, xlim=None, ylim=None, verbose: bool = False,
@@ -92,6 +228,11 @@ class stack_plotter(plotter):
     if output is not None: self.savefig(output=output)
 
 class line_plotter(plotter):
+  """Single-line plot with optional secondary additions via :meth:`add_plot`.
+
+  Supports vertical reference lines (``vlines``) and horizontal threshold
+  lines (``hlines``) for annotating events of interest on the axis.
+  """
   def __init__(
       self, x, y, xlabel=None, ylabel=None, title=None, fig=None, ax=None,
       color=OGS_C.OGS_BLUE, gs=111, label=None, legend=False, ylim=(-100, 100),
@@ -124,7 +265,16 @@ class line_plotter(plotter):
     if output is not None: savefig = True
     if savefig: self.savefig(output=output)
 
+# =============================================================================
+# CATALOG-EVENT PLOTTERS
+# =============================================================================
+
 class event_plotter(plotter):
+  """Per-event waveform / pick visualization.
+
+  Renders the waveform context surrounding a catalog event together with the
+  associated picks, suitable for visual QC and BGMA review.
+  """
   def _resolve_station_plot_data(
         self, sta: object
       ) -> tuple[str, Path, pd.Series] | None:
@@ -284,6 +434,11 @@ class event_plotter(plotter):
     if savefig: self.savefig(output=output)
 
 class day_plotter(plotter):
+  """Daily multi-station overview plot.
+
+  Composes one axis per station for a single calendar day, useful as a quick
+  diagnostic summary of catalog activity.
+  """
   def __init__(self, picks, ylabel=None, title=None, ylim=None, label=None,
                output=None, legend=None, yscale=None, color=OGS_C.OGS_BLUE,
                grid=False, verbose: bool = False,
@@ -348,7 +503,17 @@ class day_plotter(plotter):
     if output is not None: savefig = True
     if savefig: self.savefig(output=output)
 
+# =============================================================================
+# MAP, SCATTER, AND HISTOGRAM PLOTTERS
+# =============================================================================
+
 class map_plotter(plotter):
+  """Geographic map plotter built on cartopy.
+
+  Renders stations, events, polygons and standard map ornaments (gridlines,
+  scale bar, north arrow) on a configurable extent. Used to inspect catalog
+  coverage and clustering outputs over the OGS region.
+  """
   def _add_scale_bar(self, ax, extent):
     """Add a cartographic scale bar using matplotlib-scalebar.
 
@@ -525,6 +690,7 @@ class map_plotter(plotter):
     if savefig: self.savefig(output=output)
 
 class scatter_plotter(plotter):
+  """2D scatter plot of arbitrary catalog features."""
   def __init__(self, x, y, xlabel=None, ylabel=None, title=None, fig=None,
                ax=None, color=OGS_C.OGS_BLUE, gs=111, label=None, legend=False,
                marker='o', aspect=None, edgecolors=OGS_C.OGS_BLUE,
@@ -562,6 +728,7 @@ class scatter_plotter(plotter):
     if savefig: self.savefig(output=output)
 
 class histogram_plotter(plotter):
+  """1D histogram plot for distribution diagnostics over catalog columns."""
   def __init__(self, data, bins=OGS_C.NUM_BINS, xlabel=None,
                ylabel="Number of Events", title=None, fig=None, ax=None,
                color=OGS_C. OGS_BLUE, gs=111, label=None, legend=False,
@@ -676,7 +843,16 @@ class histogram_plotter(plotter):
     if output is not None: savefig = True
     if savefig: self.savefig(output=output)
 
+# =============================================================================
+# METRIC PLOTTERS
+# =============================================================================
+
 class ConfMtx_plotter(plotter):
+  """Confusion-matrix figure built on ``sklearn.metrics.ConfusionMatrixDisplay``.
+
+  Used to summarize BGMA review outcomes (e.g. matched vs missed picks /
+  events) in a familiar tabular visualization.
+  """
   def __init__(self, data, title=None, fig=None, ax=None,
                color=OGS_C.MEX_PINK, gs=111, label=None, legend=False,
                facecolor=None, edgecolor=None, output=None,
