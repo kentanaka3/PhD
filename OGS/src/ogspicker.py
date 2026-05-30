@@ -1,3 +1,54 @@
+"""
+=============================================================================
+OGS Amplitude Extractor - Wood-Anderson Simulation with SNR Gating
+=============================================================================
+
+OVERVIEW:
+Provides :class:`OGSAmplitudeExtractor`, a subclass of
+``ml_catalog.modules.AmplitudeExtractor`` that extracts peak amplitudes from
+horizontal components around SeisBench picks for use by the OGS local
+magnitude module.
+
+Processing pipeline (per pick):
+  1. Slice a wide window around the pick peak time.
+  2. Detrend (demean + linear) and remove instrument response with a fixed
+     water-level deconvolution.
+  3. Apply a 1-40 Hz bandpass filter.
+  4. Split the window into a noise segment (before pick) and a signal segment
+     (after pick) of width ``TIME_SLACK``.
+  5. Reject picks whose SNR is below ``SNR_THRESHOLD`` on either component.
+  6. Simulate the OGS Wood-Anderson instrument response.
+  7. Report the maximum absolute amplitude (in mm) on each component over the
+     [pick - TIME_BEFORE, pick + TIME_AFTER] window.
+
+MODULE CONSTANTS:
+    OGS_WOOD_ANDERSON : dict
+        Poles/zeros/gain/sensitivity describing the OGS Wood-Anderson sim.
+    WATER_LEVEL : int
+        Water-level (dB) used in deconvolution.
+    FREQ_RANGE : list[float]
+        Bandpass corner frequencies [Hz].
+    SNR_THRESHOLD : float
+        Minimum noise/signal ratio gate.
+    TIME_BEFORE / TIME_AFTER / TIME_SLACK : float
+        Window geometry in seconds.
+
+USAGE:
+    from ogspicker import OGSAmplitudeExtractor
+
+    extractor = OGSAmplitudeExtractor()
+    builder.add_module(extractor)
+
+DEPENDENCIES:
+    - obspy: Stream / Inventory and response handling
+    - numpy: vectorized norm / max computations
+    - seisbench.util: ``Pick`` object
+    - ml_catalog.modules.AmplitudeExtractor: base class
+
+AUTHOR: AI2Seism Project
+=============================================================================
+"""
+
 import obspy
 import numpy as np
 import seisbench.util as sbu

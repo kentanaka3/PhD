@@ -1,8 +1,11 @@
-_target_: ml_catalog.data.SquirrelDataSource
+_target_: OGS.src.ogsdata.SquirrelDataSource
 
 env: ogsDB
 persistent: v1
 check: false
+index_workers: null
+copy_to_tmp: true
+filesystem_groups: true
 paths:
   #- /Users/admin/Desktop/OGS_Catalog/waveforms/
   - /leonardo/home/userexternal/ktanakah/AISeism/WORK/waveform/

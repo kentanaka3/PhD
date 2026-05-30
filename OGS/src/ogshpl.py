@@ -240,10 +240,48 @@ class DataFileHPL(OGSDataFile):
   NOTES_EXTRACTOR = re.compile(OGS_C.EMPTY_STR.join(
     list(_flatten(NOTES_EXTRACTOR_LIST))))
 
+  _PICK_COLUMNS = [
+    OGS_C.IDX_PICKS_STR, OGS_C.GROUPS_STR, OGS_C.TIME_STR, OGS_C.STATION_STR,
+    OGS_C.PHASE_STR, OGS_C.WEIGHT_STR, OGS_C.EPICENTRAL_DISTANCE_STR,
+    OGS_C.DEPTH_STR, OGS_C.AMPLITUDE_STR, OGS_C.STATION_ML_STR,
+    OGS_C.PROBABILITY_STR
+  ]
+
+  _EVENT_COLUMNS = [
+    OGS_C.IDX_EVENTS_STR, OGS_C.TIME_STR, OGS_C.LONGITUDE_STR,
+    OGS_C.LATITUDE_STR, OGS_C.DEPTH_STR, OGS_C.GAP_STR, OGS_C.ERZ_STR,
+    OGS_C.ERH_STR, OGS_C.GROUPS_STR, OGS_C.NO_STR,
+    OGS_C.NUMBER_P_PICKS_STR, OGS_C.NUMBER_S_PICKS_STR,
+    OGS_C.NUMBER_P_AND_S_PICKS_STR, OGS_C.MAGNITUDE_D_STR,
+    OGS_C.MAGNITUDE_L_STR, OGS_C.ML_MEDIAN_STR, OGS_C.ML_UNC_STR,
+    OGS_C.ML_STATIONS_STR
+  ]
+
   @staticmethod
   def _parse_seconds(value: str) -> td:
     """Convert a fixed-width seconds field into a timedelta."""
     return td(seconds=float(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR)))
+
+  @staticmethod
+  def _parse_zero_padded_int(value: str, default_value=OGS_C.NONE_STR):
+    """Convert a fixed-width integer field, preserving blank-as-zero HPL use."""
+    if not value:
+      return default_value
+    return int(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR))
+
+  @staticmethod
+  def _parse_float(value: str, default_value=OGS_C.NONE_STR):
+    """Convert a fixed-width float field, allowing fully blank values."""
+    if not value or value.strip(OGS_C.SPACE_STR) == OGS_C.EMPTY_STR:
+      return default_value
+    return float(value)
+
+  @staticmethod
+  def _parse_weight(value: str, default_value: int = 0) -> int:
+    """Convert a weight field, using the DAT default for blanks."""
+    if not value or value.strip(OGS_C.SPACE_STR) == OGS_C.EMPTY_STR:
+      return default_value
+    return int(value)
 
   @staticmethod
   def _parse_index(value: str, year: int):
@@ -273,8 +311,37 @@ class DataFileHPL(OGSDataFile):
     degrees, minutes = normalized.split(OGS_C.DASH_STR, maxsplit=1)
     return float(f"{float(degrees) + float(minutes) / 60.:.4f}")
 
+  def _parse_event_datetime(self, result: dict) -> datetime:
+    """Build the event origin datetime from HPL date and seconds fields."""
+    event_time = datetime.strptime(
+      result[OGS_C.DATE_STR].replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR),
+      f"{OGS_C.YYMMDD_FMT}0%H%M")
+    return event_time + self._parse_seconds(result[OGS_C.SECONDS_STR])
+
+  def _is_before_start(self, value: datetime) -> bool:
+    return self.start is not None and value < self.start
+
+  def _is_after_end(self, value: datetime) -> bool:
+    return self.end is not None and value >= self.end + OGS_C.ONE_DAY
+
   @staticmethod
-  def _build_pick_row(event_index: int, pick_time: datetime, station: str,
+  def _is_blank_line(line: str) -> bool:
+    return line.strip() == OGS_C.EMPTY_STR
+
+  @staticmethod
+  def _is_supported_event_record(result: dict) -> bool:
+    """Keep distant, blank-type, and local-earthquake records."""
+    if result[OGS_C.EVENT_LOCALIZATION_STR] == "D":
+      return True
+
+    event_type = result[OGS_C.EVENT_TYPE_STR]
+    if event_type == OGS_C.SPACE_STR:
+      return True
+
+    return OGS_C.OGS_EVENT_TYPES.get(event_type) == OGS_C.EVENT_LOCAL_EQ_STR
+
+  @staticmethod
+  def _build_pick_row(event_index, pick_time: datetime, station: str,
                       phase: str, weight: int):
     """Create a standardized pick row for the output DataFrame."""
     return [
@@ -290,6 +357,169 @@ class DataFileHPL(OGSDataFile):
       None,
       1.0,
     ]
+
+  def _build_event_context(self, result: dict, event_time: datetime):
+    context_time = datetime(
+      event_time.year,
+      event_time.month,
+      event_time.day,
+      event_time.hour,
+      event_time.minute,
+    ) + self._parse_seconds(result[OGS_C.SECONDS_STR])
+    return (
+      context_time,
+      self._parse_coordinate(result[OGS_C.LONGITUDE_STR]),
+      self._parse_coordinate(result[OGS_C.LATITUDE_STR]),
+      self._parse_float(result[OGS_C.DEPTH_STR]),
+    )
+
+  def _build_event_row(self, result: dict, event_context):
+    event_time = event_context[0]
+    return [
+      self._parse_index(result[OGS_C.INDEX_STR], event_time.year),
+      *event_context,
+      self._parse_zero_padded_int(result[OGS_C.GAP_STR]),
+      result[OGS_C.ERZ_STR],
+      result[OGS_C.ERH_STR],
+      event_time.strftime(OGS_C.DATE_FMT),
+      self._parse_zero_padded_int(result[OGS_C.NO_STR]),
+      0,
+      0,
+      None,
+      result[OGS_C.MAGNITUDE_D_STR],
+      None,
+      None,
+      None,
+      None,
+    ]
+
+  def _parse_event_summary(self, result: dict, line: str):
+    event_time = self._parse_event_datetime(result)
+
+    if self._is_before_start(event_time):
+      self.logger.debug("Skipping event before start date")
+      self.logger.debug(line)
+      return False, None
+
+    if self._is_after_end(event_time):
+      self.logger.debug("Stopping read at event after end date")
+      self.logger.debug(line)
+      return True, None
+
+    event_context = self._build_event_context(result, event_time)
+    event_row = self._build_event_row(result, event_context)
+    return False, (event_context, int(result[OGS_C.NOTES_STR]), event_row)
+
+  def _event_index_from_record(self, result: dict, event_context):
+    try:
+      return self._parse_index(result[OGS_C.INDEX_STR], event_context[0].year)
+    except ValueError as exc:
+      self.logger.error(exc)
+      return None
+
+  def _parse_pick_record(self, line: str, event_context):
+    match = self.RECORD_EXTRACTOR.match(line)
+
+    if not match:
+      self.logger.error(f"ERROR: (HPL) Could not parse line: {line}")
+      self.debug(line, self.RECORD_EXTRACTOR_LIST)
+      return False, []
+
+    result: dict = match.groupdict()
+    if not self._is_supported_event_record(result):
+      self.logger.warning(f"WARNING: (HPL) Ignoring line: {line}")
+      return False, []
+
+    p_time = self._parse_clock_time(event_context[0], result[OGS_C.P_TIME_STR])
+    if self._is_before_start(p_time):
+      self.logger.debug(f"Skipping event before start date: {self.start}")
+      self.logger.debug(line)
+      return False, []
+
+    if self._is_after_end(p_time):
+      return True, []
+
+    station = result[OGS_C.STATION_STR].strip(OGS_C.SPACE_STR)
+    event_index = self._event_index_from_record(result, event_context)
+    rows = [self._build_pick_row(
+      event_index,
+      p_time + self._parse_seconds(result[OGS_C.SECONDS_STR]),
+      station,
+      OGS_C.PWAVE,
+      self._parse_weight(result[OGS_C.P_WEIGHT_STR]))]
+
+    if result[OGS_C.S_TIME_STR]:
+      rows.append(self._build_pick_row(
+        event_index,
+        p_time + self._parse_seconds(result[OGS_C.S_TIME_STR]),
+        station,
+        OGS_C.SWAVE,
+        self._parse_weight(result[OGS_C.S_WEIGHT_STR])))
+
+    return False, rows
+
+  def _apply_metadata_line(self, line: str, events_data: list) -> bool:
+    if self.LOCATION_EXTRACTOR.match(line):
+      return True
+
+    match = self.NOTES_EXTRACTOR.match(line)
+    if not match:
+      return False
+
+    if events_data:
+      events_data[-1][-2] = match.groupdict()[OGS_C.NOTES_STR].rstrip(
+        OGS_C.SPACE_STR)
+    return True
+
+  def _build_picks_dataframe(self, picks_data: list) -> pd.DataFrame:
+    return pd.DataFrame(picks_data, columns=self._PICK_COLUMNS).astype({
+      OGS_C.IDX_PICKS_STR: int
+    })
+
+  def _build_events_dataframe(self, events_data: list) -> pd.DataFrame:
+    dataframe = pd.DataFrame(events_data, columns=self._EVENT_COLUMNS)
+    dataframe[OGS_C.GROUPS_STR] = pd.to_datetime(
+      dataframe[OGS_C.TIME_STR], format=OGS_C.DATE_FMT)
+    dataframe[OGS_C.ERH_STR] = \
+      dataframe[OGS_C.ERH_STR].replace(" " * 4, "NaN").apply(float)
+    dataframe[OGS_C.ERZ_STR] = \
+      dataframe[OGS_C.ERZ_STR].replace(" " * 5, "NaN").apply(float)
+    return dataframe
+
+  def _apply_pick_counts(self):
+    if self.PICKS.empty or self.EVENTS.empty:
+      return
+
+    event_indexes = set(self.EVENTS[OGS_C.IDX_EVENTS_STR].values)
+    for idx, dataframe in self.PICKS.groupby(OGS_C.IDX_PICKS_STR):
+      if idx not in event_indexes:
+        continue
+      for phase, phase_dataframe in dataframe.groupby(OGS_C.PHASE_STR):
+        column = OGS_C.NUMBER_P_PICKS_STR if phase == OGS_C.PWAVE \
+          else OGS_C.NUMBER_S_PICKS_STR
+        self.EVENTS.loc[
+          self.EVENTS[OGS_C.IDX_EVENTS_STR] == idx,
+          column
+        ] = len(phase_dataframe.index)
+
+  def _group_pick_dataframes(self):
+    for date, dataframe in self.PICKS.groupby(OGS_C.GROUPS_STR):
+      self.picks[UTCDateTime(date).date] = dataframe
+
+  def _group_event_dataframes(self):
+    if self.EVENTS.empty:
+      return
+    for date, dataframe in self.EVENTS.groupby(OGS_C.GROUPS_STR):
+      self.events[UTCDateTime(date).date] = dataframe
+
+  def _build_dataframes(self, events_data: list, picks_data: list):
+    self.PICKS = self._build_picks_dataframe(picks_data)
+    self._group_pick_dataframes()
+
+    self.EVENTS = self._build_events_dataframe(events_data)
+    self.logger.info(f"Total events read: {len(self.EVENTS)}")
+    self._apply_pick_counts()
+    self._group_event_dataframes()
 
   def read(self):
     """
@@ -324,220 +554,37 @@ class DataFileHPL(OGSDataFile):
     with open(self.input, 'r') as fr:
       lines = fr.readlines()
     self.logger.info(f"Reading HPL file: {self.input}")
-    for line in [l.strip("\n") for l in lines]:
-      if event_detect > 0:
-        event_detect -= 1
-        match = self.RECORD_EXTRACTOR.match(line)
-        if match:
-          result : dict = match.groupdict()
-          if (result[OGS_C.EVENT_LOCALIZATION_STR] != "D" and
-              result[OGS_C.EVENT_TYPE_STR] != "L"):
-            self.logger.warning(f"WARNING: (HPL) Ignoring line: {line}")
-            continue
-          result[OGS_C.STATION_STR] = \
-            result[OGS_C.STATION_STR].strip(OGS_C.SPACE_STR)
-          # Event
-          if result[OGS_C.INDEX_STR]:
-            try:
-              result[OGS_C.INDEX_STR] = int(result[OGS_C.INDEX_STR].replace(
-                OGS_C.SPACE_STR, OGS_C.ZERO_STR)) + \
-                event_spacetime[0].year * OGS_C.MAX_PICKS_YEAR
-            except ValueError as e:
-              result[OGS_C.INDEX_STR] = None
-              self.logger.error(e)
-          result[OGS_C.P_WEIGHT_STR] = int(result[OGS_C.P_WEIGHT_STR])
-          result[OGS_C.SECONDS_STR] = td(seconds=float(
-            result[OGS_C.SECONDS_STR].replace(
-              OGS_C.SPACE_STR,
-              OGS_C.ZERO_STR
-            )
-          ))
-          result[OGS_C.P_TIME_STR] = result[OGS_C.P_TIME_STR].replace(
-            OGS_C.SPACE_STR,
-            OGS_C.ZERO_STR
-          )
-          date = event_spacetime[0]
-          min_td = td(minutes=int(result[OGS_C.P_TIME_STR][2:]))
-          hrs = td(hours=int(result[OGS_C.P_TIME_STR][:2]))
-          result[OGS_C.P_TIME_STR] = datetime(
-            date.year, date.month, date.day
-          ) + hrs + min_td
-          if (self.start is not None and
-              result[OGS_C.P_TIME_STR] < self.start):
-            event_detect = -1 # Error
-            self.logger.debug("Skipping event before start date:"
-                              f"{self.start}")
-            self.logger.debug(line)
-            continue
-          if (self.end is not None and
-              result[OGS_C.P_TIME_STR] >= self.end + OGS_C.ONE_DAY): break
-          DETECT.append([
-            result[OGS_C.INDEX_STR],
-            result[OGS_C.P_TIME_STR].strftime(OGS_C.DATE_FMT),
-            result[OGS_C.P_TIME_STR] + result[OGS_C.SECONDS_STR],
-            f".{result[OGS_C.STATION_STR]}.",
-            OGS_C.PWAVE, result[OGS_C.P_WEIGHT_STR],
-            None, None, None, None, 1.0
-          ])
-          if result[OGS_C.S_TIME_STR]:
-            result[OGS_C.S_WEIGHT_STR] = int(result[OGS_C.S_WEIGHT_STR])
-            result[OGS_C.S_TIME_STR] = td(seconds=float(
-              result[OGS_C.S_TIME_STR].replace(OGS_C.SPACE_STR,
-                                                OGS_C.ZERO_STR)))
-            DETECT.append([
-              result[OGS_C.INDEX_STR],
-              result[OGS_C.P_TIME_STR].strftime(OGS_C.DATE_FMT),
-              result[OGS_C.P_TIME_STR] + result[OGS_C.S_TIME_STR],
-              f".{result[OGS_C.STATION_STR]}.",
-              OGS_C.SWAVE, result[OGS_C.S_WEIGHT_STR],
-              None, None, None, None, 1.0
-              #OGS_C.diff_space(), None, None, None, 1.0
-            ])
+
+    for raw_line in lines:
+      line = raw_line.strip("\n")
+
+      if record_lines_remaining > 0:
+        record_lines_remaining -= 1
+        stop_reading, pick_rows = self._parse_pick_record(line, event_context)
+        if stop_reading:
+          break
+        picks_data.extend(pick_rows)
+        continue
+
+      match = self.EVENT_EXTRACTOR.match(line)
+      if match:
+        stop_reading, event_summary = self._parse_event_summary(
+          match.groupdict(), line)
+        if stop_reading:
+          break
+        if event_summary is None:
           continue
-      else:
-        match = self.EVENT_EXTRACTOR.match(line)
-        if match:
-          result = match.groupdict()
-          result[OGS_C.SECONDS_STR] = td(seconds=float(
-            result[OGS_C.SECONDS_STR].replace(OGS_C.SPACE_STR,
-                                              OGS_C.ZERO_STR)))
-          result[OGS_C.DATE_STR] = datetime.strptime(
-            result[OGS_C.DATE_STR].replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR),
-            f"{OGS_C.YYMMDD_FMT}0%H%M") + result[OGS_C.SECONDS_STR]
-          if self.start is not None and result[OGS_C.DATE_STR] < self.start:
-            event_detect = 0
-            self.logger.debug("Skipping event before start date")
-            self.logger.debug(line)
-            continue
-          if (self.end is not None and
-              result[OGS_C.DATE_STR] >= self.end + OGS_C.ONE_DAY):
-            self.logger.debug("Stopping read at event after end date")
-            self.logger.debug(line)
-            break
-          # Event
-          # # Index
-          result[OGS_C.INDEX_STR] = int(int(result[OGS_C.INDEX_STR].replace(
-            OGS_C.SPACE_STR, OGS_C.ZERO_STR)) + \
-              result[OGS_C.DATE_STR].year * OGS_C.MAX_PICKS_YEAR)
-          # # Latitude
-          result[OGS_C.LATITUDE_STR] = result[OGS_C.LATITUDE_STR].replace(
-            OGS_C.SPACE_STR, OGS_C.ZERO_STR) \
-              if result[OGS_C.LATITUDE_STR] else OGS_C.NONE_STR
-          if result[OGS_C.LATITUDE_STR] != OGS_C.NONE_STR:
-            splt = result[OGS_C.LATITUDE_STR].split(OGS_C.DASH_STR)
-            result[OGS_C.LATITUDE_STR] = float("{:.4f}".format(
-                float(splt[0]) + float(splt[1]) / 60.))
-          # # Longitude
-          result[OGS_C.LONGITUDE_STR] = result[OGS_C.LONGITUDE_STR].replace(
-            OGS_C.SPACE_STR, OGS_C.ZERO_STR) \
-              if result[OGS_C.LONGITUDE_STR] else OGS_C.NONE_STR
-          if result[OGS_C.LONGITUDE_STR] != OGS_C.NONE_STR:
-            splt = result[OGS_C.LONGITUDE_STR].split(OGS_C.DASH_STR)
-            result[OGS_C.LONGITUDE_STR] = float("{:.4f}".format(
-                float(splt[0]) + float(splt[1]) / 60.))
-          # # Depth
-          result[OGS_C.DEPTH_STR] = float(result[OGS_C.DEPTH_STR]) \
-            if result[OGS_C.DEPTH_STR] else OGS_C.NONE_STR
-          event_spacetime = (
-            datetime(
-              result[OGS_C.DATE_STR].year,
-              result[OGS_C.DATE_STR].month,
-              result[OGS_C.DATE_STR].day,
-              result[OGS_C.DATE_STR].hour,
-              result[OGS_C.DATE_STR].minute
-            ) + result[OGS_C.SECONDS_STR],
-            result[OGS_C.LONGITUDE_STR], result[OGS_C.LATITUDE_STR],
-            result[OGS_C.DEPTH_STR]
-          )
-          # # Number of Observations
-          result[OGS_C.NO_STR] = int(result[OGS_C.NO_STR].replace(
-            OGS_C.SPACE_STR,
-            OGS_C.ZERO_STR
-          )) if result[OGS_C.NO_STR] else OGS_C.NONE_STR
-          # # Gap
-          result[OGS_C.GAP_STR] = int(result[OGS_C.GAP_STR].replace(
-            OGS_C.SPACE_STR,
-            OGS_C.ZERO_STR
-          )) if result[OGS_C.GAP_STR] else OGS_C.NONE_STR
-          # # DMIN
-          result[OGS_C.DMIN_STR] = float(result[OGS_C.DMIN_STR].replace(
-            OGS_C.SPACE_STR,
-            OGS_C.ZERO_STR
-          )) if result[OGS_C.DMIN_STR] else OGS_C.NONE_STR
-          # # ERT
-          result[OGS_C.ERT_STR] = float(result[OGS_C.ERT_STR].replace(
-            OGS_C.SPACE_STR,
-            OGS_C.ZERO_STR
-          )) if result[OGS_C.ERT_STR] else OGS_C.NONE_STR
-          # # Quality Metric
-          result[OGS_C.QM_STR] = result[OGS_C.QM_STR].strip(OGS_C.SPACE_STR) \
-            if result[OGS_C.QM_STR] else OGS_C.NONE_STR
-          event_detect = int(result[OGS_C.NOTES_STR])
-          SOURCE.append([
-            result[OGS_C.INDEX_STR], *event_spacetime, result[OGS_C.GAP_STR],
-            result[OGS_C.ERZ_STR], result[OGS_C.ERH_STR],
-            event_spacetime[0].strftime(OGS_C.DATE_FMT), result[OGS_C.NO_STR],
-            0, 0, None, result[OGS_C.MAGNITUDE_D_STR], None, None, None, None
-          ])
-          continue
-        match = self.LOCATION_EXTRACTOR.match(line)
-        if match:
-          result = match.groupdict()
-          continue
-        if event_detect == 0:
-          match = self.NOTES_EXTRACTOR.match(line)
-          if match:
-            result = match.groupdict()
-            event_notes = result[OGS_C.NOTES_STR].rstrip(OGS_C.SPACE_STR)
-            if len(SOURCE) > 0:
-              SOURCE[-1][-2] = event_notes
-            continue
-        if re.match(r"^\s*$", line): continue
-      if event_detect < 0:
-        self.logger.error(f"ERROR: (HPL) Could not parse line: {line}")
-        self.debug(line, self.EVENT_EXTRACTOR_LIST if event_detect == 0
-                   else self.RECORD_EXTRACTOR_LIST)
-    self.PICKS = pd.DataFrame(DETECT, columns=[
-      OGS_C.IDX_PICKS_STR, OGS_C.GROUPS_STR, OGS_C.TIME_STR, OGS_C.STATION_STR,
-      OGS_C.PHASE_STR, OGS_C.WEIGHT_STR, OGS_C.EPICENTRAL_DISTANCE_STR,
-      OGS_C.DEPTH_STR, OGS_C.AMPLITUDE_STR, OGS_C.STATION_ML_STR,
-      OGS_C.PROBABILITY_STR
-    ]).astype({OGS_C.IDX_PICKS_STR: int})
+        event_context, record_lines_remaining, event_row = event_summary
+        events_data.append(event_row)
+        continue
 
-    for date, dataframe in self.PICKS.groupby(OGS_C.GROUPS_STR):
-      self.picks[UTCDateTime(date).date] = dataframe
+      if self._apply_metadata_line(line, events_data):
+        continue
 
-    self.EVENTS = pd.DataFrame(events_data, columns=[
-      OGS_C.IDX_EVENTS_STR, OGS_C.TIME_STR, OGS_C.LONGITUDE_STR,
-      OGS_C.LATITUDE_STR, OGS_C.DEPTH_STR, OGS_C.GAP_STR, OGS_C.ERZ_STR,
-      OGS_C.ERH_STR, OGS_C.GROUPS_STR, OGS_C.NO_STR,
-      OGS_C.NUMBER_P_PICKS_STR, OGS_C.NUMBER_S_PICKS_STR,
-      OGS_C.NUMBER_P_AND_S_PICKS_STR, OGS_C.MAGNITUDE_D_STR,
-      OGS_C.MAGNITUDE_L_STR, OGS_C.ML_MEDIAN_STR, OGS_C.ML_UNC_STR,
-      OGS_C.ML_STATIONS_STR
-    ])
-    self.EVENTS[OGS_C.GROUPS_STR] = pd.to_datetime(
-      self.EVENTS[OGS_C.TIME_STR], format=OGS_C.DATE_FMT)
-    self.EVENTS[OGS_C.ERH_STR] = \
-      self.EVENTS[OGS_C.ERH_STR].replace(" " * 4, "NaN").apply(float)
-    self.EVENTS[OGS_C.ERZ_STR] = \
-      self.EVENTS[OGS_C.ERZ_STR].replace(" " * 5, "NaN").apply(float)
+      if self._is_blank_line(line):
+        continue
 
-    self.logger.info(f"Total events read: {len(self.EVENTS)}")
-
-    for idx, dataframe in self.PICKS.groupby(OGS_C.IDX_PICKS_STR):
-      for phase, phase_dataframe in dataframe.groupby(OGS_C.PHASE_STR):
-        if idx in self.EVENTS[OGS_C.IDX_EVENTS_STR].values:
-          self.EVENTS.loc[
-            self.EVENTS[OGS_C.IDX_EVENTS_STR] == idx,
-            OGS_C.NUMBER_P_PICKS_STR if phase == OGS_C.PWAVE
-            else OGS_C.NUMBER_S_PICKS_STR
-          ] = len(phase_dataframe.index)
-      # TODO: Compute NUMBER_P_AND_S_PICKS_STR
-
-    if not self.EVENTS.empty:
-      for date, dataframe in self.EVENTS.groupby(OGS_C.GROUPS_STR):
-        self.events[UTCDateTime(date).date] = dataframe
+    self._build_dataframes(events_data, picks_data)
 
 
 # =============================================================================

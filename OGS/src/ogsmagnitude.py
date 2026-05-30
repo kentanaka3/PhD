@@ -1,3 +1,46 @@
+"""
+=============================================================================
+OGS Local Magnitude Module - Calibrated M_L for the OGS Network
+=============================================================================
+
+OVERVIEW:
+Provides :class:`OGSLocalMagnitude`, an OGS-specific subclass of
+``ml_catalog.modules.LocalMagnitude`` that implements the local magnitude
+scale calibrated for OGS / Swiss-Alpine seismicity. The class:
+
+1. Loads per-station amplitude corrections from a ``pandas`` table.
+2. Optionally restricts station contributions to a network whitelist.
+3. Optionally ignores stations known to produce unreliable amplitudes.
+4. Computes the reference log-amplitude attenuation curve
+   ``log10(A_0) = c0 + c1*log10(r) + c2*log10(r*c3 + c4) + c5_station``
+   where ``r`` is the hypocentral distance in kilometers.
+5. Simulates a Wood-Anderson response on horizontal components, screens picks
+   by SNR, and aggregates station magnitudes into the event-level M_L using
+   median-absolute-deviation outlier rejection (5x MAD cutoff).
+
+CALIBRATION CONSTANTS:
+    c0 = -18.0471, c1 = 1.105, c2 = 147.111, c3 = 4.015e-5, c4 = 1.33885
+
+USAGE:
+    from ogsmagnitude import OGSLocalMagnitude
+
+    ml = OGSLocalMagnitude(
+        station_corrections=pd.read_csv("station_corrections.csv"),
+        ignore_stations=pd.DataFrame({"station": ["BAD1", "BAD2"]}),
+        networkfocus=["OX", "NI"],
+        components="NE",
+    )
+    builder.add_module(ml)
+
+DEPENDENCIES:
+    - numpy / pandas: vectorized math and tabular handling
+    - ml_catalog.modules.LocalMagnitude: base class providing the assignment
+      orchestration and event-level event_magnitudes pipeline
+
+AUTHOR: AI2Seism Project
+=============================================================================
+"""
+
 import numpy as np
 import pandas as pd
 from ml_catalog.modules import LocalMagnitude

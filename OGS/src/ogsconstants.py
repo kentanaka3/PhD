@@ -640,6 +640,9 @@ RASPISHAKE_CLIENT_STR = "RASPISHAKE"   # Raspberry Shake citizen network
 OGS_CLIENT_STR = "http://158.110.30.217:8080"  # OGS main FDSN server
 COLLALTO_CLIENT_STR = "http://scp-srv.core03.ogs.it:8080"  # Collalto array
 
+# OGS-specific stations to reject (e.g., noisy or unreliable stations)
+OGS_REJECT_STATIONS = ["SP", "OL", "ED"]
+
 # =============================================================================
 # DEFAULT CLIENT PRIORITY LIST
 # =============================================================================

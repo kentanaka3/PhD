@@ -1,3 +1,43 @@
+"""
+=============================================================================
+MHPC Thesis Driver - BGMA Comparison for the 2024 Italian Sequence
+=============================================================================
+
+OVERVIEW:
+Reproducible driver script used for the MHPC thesis. It evaluates several
+picker / associator / locator configurations against the OGS NLL 1D reference
+catalog over the 2024-03-20 to 2024-06-20 sequence (including the M_L 4.6
+shock of 2024-03-27 and the 2024-05-22 IT marker).
+
+For each scenario the script:
+  1. Loads the reference OGS catalog window.
+  2. For each target configuration / model, loads the candidate ML catalog.
+  3. Calls :meth:`OGSCatalog.plot` to render comparative figures with the
+     configured ``special_days`` vertical markers.
+  4. Calls :meth:`OGSCatalog.bpgma` to run the bipartite-graph matching
+     review and write per-stage reports.
+
+Configuration families covered:
+    - Config1 / Config2 / Config3 (PhaseNet[INSTANCE] + PyOcto + NLL 1D)
+    - PhaseNet / EQTransformer model and dataset sweeps
+    - GaMMA0.1 / GaMMA0.2 / GaMMA0.3 association thresholds
+    - PyOcto0.1 / PyOcto0.2 / PyOcto0.3 association thresholds
+
+USAGE:
+    python MHPCThesis.py     # runs the hard-coded configurations
+
+NOTE:
+Paths and waveform mount points are hard-coded for the author's workstation;
+edit them before reuse on another machine.
+
+DEPENDENCIES:
+    - ogsconstants: date format strings and color palette
+    - ogscatalog.OGSCatalog: catalog loading, plotting and BPGMA matching
+
+AUTHOR: AI2Seism Project
+=============================================================================
+"""
+
 from pathlib import Path
 from datetime import datetime
 

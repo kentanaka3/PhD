@@ -1,3 +1,44 @@
+"""
+=============================================================================
+OGS Quality-Control Modules - Region-Aware Pick & Event Statistics
+=============================================================================
+
+OVERVIEW:
+Extends the ``ml_catalog`` ``PickStatQC`` module with OGS-specific filtering:
+
+1. Geographic region filtering using the OGS study polygon (longitude/latitude
+   bounding box covering Switzerland and adjacent Alpine regions).
+2. Event-level statistics computation for downstream catalog QC.
+3. Optional comparison against a base catalog directory.
+
+The module implements two classes:
+
+- ``OGSPickStatQC``: subclass of ``PickStatQC`` adding a polygon-based
+  region filter on top of the standard pick-count thresholds.
+- ``EventStatQC``: further extension that computes per-event pick statistics
+  via :meth:`_get_pick_stats` before applying QC thresholds. Useful when
+  attached after the associator.
+
+MODULE CONSTANTS:
+    OGS_STUDY_REGION : list[tuple[float, float]]
+        Closed polygon defining the OGS study region in (lon, lat) degrees.
+
+USAGE:
+    from ogsqc import OGSPickStatQC, EventStatQC
+
+    qc = OGSPickStatQC(p_picks=3, s_picks=2, total_picks=6)
+    builder.add_module(qc)
+
+DEPENDENCIES:
+    - dask: lazy ``@dask.delayed`` execution of per-event QC
+    - pandas: tabular pick / event manipulation
+    - matplotlib.path: polygon point-in-region testing
+    - ml_catalog.modules.PickStatQC: base QC class
+
+AUTHOR: AI2Seism Project
+=============================================================================
+"""
+
 import dask
 import pandas as pd
 

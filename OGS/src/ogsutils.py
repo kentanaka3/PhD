@@ -1,3 +1,77 @@
+"""
+=============================================================================
+OGS Utilities Module - Shared Helpers for Catalog Comparison Workflows
+=============================================================================
+
+OVERVIEW:
+This module is the catch-all toolbox used by the rest of the ``ogs*`` package.
+Everything here is either pure (no in-package side effects) or talks to the
+filesystem / logging system on behalf of higher-level modules. It deliberately
+groups together the small primitives that would otherwise be re-implemented in
+several places.
+
+CONTENTS BY SECTION:
+
+1. LOGGING
+   - ``ColorFormatter``: ANSI-colored ``logging.Formatter`` with per-level
+     symbol prefixes (``>>>``, ``/!\\``, ``[X]``, ``...``, ``!!!``).
+   - ``setup_logger``: One-call configuration that wires the formatter onto
+     a per-name logger with verbose / silent toggles.
+
+2. DISTANCE & SIMILARITY FUNCTIONS
+   - Pick-level: ``dist_prob``, ``dist_phase``, ``diff_time``, ``dist_time``,
+     ``dist_pick``.
+   - Event-level: ``diff_space``, ``dist_space``, ``dist_event``.
+   - These compose into the cost functions consumed by the BGMA bipartite
+     graph matchers further below.
+
+3. POLYGON CONTAINMENT
+   - ``contains_point`` / ``contains_points``: pure-numpy ray-casting
+     implementations used as a lightweight alternative to
+     ``matplotlib.path.Path.contains_points`` when only the geometry is
+     needed.
+
+4. ARGUMENT PARSING UTILITIES
+   - ``is_date`` / ``is_julian`` / ``is_file_path`` / ``is_dir_path``:
+     argparse-compatible validators that raise ``ArgumentTypeError`` on
+     failure.
+   - ``decimeter``, ``labels_to_colormap``: small numeric/plot helpers.
+
+5. STATION INVENTORY MANAGEMENT
+   - ``inventory``: reads station metadata from disk into a normalized
+     pandas DataFrame used by catalog plotters.
+
+6. WAVEFORM FILE DISCOVERY
+   - ``waveforms``: indexes miniSEED / SAC files on disk and returns a
+     date- and station-keyed lookup table.
+
+7. ARGPARSE CUSTOM ACTIONS
+   - ``SortDatesAction``: argparse action that parses ``[start, end]`` date
+     ranges and sorts them so call-sites can rely on ascending order.
+
+8. BIPARTITE GRAPH MATCHING (BGMA backbone)
+   - ``OGSBPGraph``: abstract base for one-to-one matching using
+     ``networkx.bipartite``.
+   - ``OGSBPGraphPicks`` / ``OGSBPGraphEvents``: concrete subclasses that
+     wire the appropriate cost functions from section 2 into the matcher.
+
+USAGE:
+  from ogsutils import setup_logger, dist_event, OGSBPGraphPicks
+
+  log = setup_logger(__name__, verbose=True)
+  matcher = OGSBPGraphPicks(...)
+  matches, missed, proposed = matcher.solve()
+
+DEPENDENCIES:
+  - numpy, pandas      : array + DataFrame primitives
+  - networkx           : bipartite matching backend
+  - obspy.UTCDateTime  : robust datetime parsing for CLI inputs
+  - ogsconstants       : shared column-name / unit constants
+
+AUTHOR: AI2Seism Project
+=============================================================================
+"""
+
 # =============================================================================
 # STANDARD LIBRARY IMPORTS
 # =============================================================================
