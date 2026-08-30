@@ -8,5 +8,7 @@ memory: 490000MB
 processes: 1
 worker_extra_args:
   - --nthreads 1
-walltime: '20:59:00'
+walltime: '23:59:00'
 nanny: False
+job_script_prologue:
+  - "source OGS/utils/Leonardo/ACTIVATEME.sh"

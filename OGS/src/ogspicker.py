@@ -52,14 +52,14 @@ AUTHOR: AI2Seism Project
 import obspy
 import numpy as np
 import seisbench.util as sbu
-from datetime import datetime, timedelta as td
+from datetime import timedelta as td
 from ml_catalog.modules import AmplitudeExtractor
 
 OGS_WOOD_ANDERSON = {
-  "poles": [-5.49779 - 5.60886j, -5.49779 + 5.60886j],
-  "zeros": [0 + 0j],
-  "gain": 1.0,
-  "sensitivity": 2080,
+    "poles": [-5.49779 - 5.60886j, -5.49779 + 5.60886j],
+    "zeros": [0 + 0j],
+    "gain": 1.0,
+    "sensitivity": 2080,
 }
 
 WATER_LEVEL = 60
@@ -73,7 +73,14 @@ TIME_BEFORE = 2.0  # seconds before the pick
 TIME_AFTER = 10.0  # seconds after the pick
 TIME_SLACK = 10.0  # seconds slack around the pick
 
+
 class OGSAmplitudeExtractor(AmplitudeExtractor):
+  """
+  OGSAmplitudeExtractor is a subclass of ``ml_catalog.modules.AmplitudeExtractor``
+  that extracts peak amplitudes from horizontal components around SeisBench picks
+  for use by the OGS local magnitude module.
+  """
+
   def __init__(self, **kwargs):
     super().__init__(time_before=TIME_BEFORE, time_after=TIME_AFTER,
                      components="NE", slack=TIME_SLACK, response_removal_args={
@@ -82,7 +89,7 @@ class OGSAmplitudeExtractor(AmplitudeExtractor):
   def _extract_single_amplitude(self, large_window: obspy.Stream,
                                 pick: sbu.Pick,
                                 sub_inv: obspy.Inventory) -> dict[str, float]:
-    output = {"amplitude" : np.nan}
+    output = {"amplitude": np.nan}
     if pick.peak_time is None:
       print(f"No peak time found in {pick}, skipping amplitude extraction.")
       return output
@@ -95,7 +102,8 @@ class OGSAmplitudeExtractor(AmplitudeExtractor):
     print("Removing response...")
     try:
       large_window.remove_response(sub_inv, **self.response_removal_args)
-    except ValueError:  # No response information
+    except ValueError as e:  # No response information
+      print(f"Failed to remove response for {pick}: {e}")
       return output
 
     # Apply bandpass filter
@@ -128,10 +136,10 @@ class OGSAmplitudeExtractor(AmplitudeExtractor):
 
     for component in self.components:
       output["snr_" + component] = (
-        np.linalg.norm(tmp_windows["signal"][component]) /
-        np.linalg.norm(tmp_windows["noise"][component]))
+          np.linalg.norm(tmp_windows["signal"][component]) /
+          np.linalg.norm(tmp_windows["noise"][component]))
       output["amplitude_" + component] = np.max(np.abs(
-            large_window.slice(pick.peak_time - self.time_before,
-                               pick.peak_time + self.time_after).select(
-                component=component)[0].data)) * 1000  # Convert to mm
+          large_window.slice(pick.peak_time - self.time_before,
+                             pick.peak_time + self.time_after).select(
+              component=component)[0].data)) * 1000  # Convert to mm
     return output

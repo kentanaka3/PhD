@@ -190,12 +190,12 @@ PICK_TRAIN_OFFSET = td(seconds=60)    # 60 second window for ML training
 # Mapping of H71 weight classes to numerical offsets for event matching
 # Used in the dist_event() function to convert H71 weights to time offsets
 H71_OFFSET: dict[int, float] = {
-  0: 0.01,
-  1: 0.04,
-  2: 0.2,
-  3: 1,
-  4: 5,
-  5: 25
+    0: 0.01,
+    1: 0.04,
+    2: 0.2,
+    3: 1,
+    4: 5,
+    5: 25
 }
 """
 ===============================================================================
@@ -218,8 +218,7 @@ Weight | Uncertainty (sec) | Interpretation
 # =============================================================================
 # Thresholds for matching detected events to catalog events
 
-EVENT_TIME_OFFSET = td(seconds=2)     # Maximum time difference for matching
-                                      # detected events to catalog events
+EVENT_TIME_OFFSET = td(seconds=2)
 """
 Max time difference for event matching: 2 seconds\n
 This is used in the dist_event() function to determine if a detected event is
@@ -235,37 +234,31 @@ close enough to a catalog event to be considered a match.
 """
 
 # Commonly used string literals to ensure consistency and avoid typos
-EMPTY_STR = ''                        # Empty string for initialization
-ALL_WILDCHAR_STR = '*'                # Wildcard for glob patterns (any chars)
-ONE_MORECHAR_STR = '+'                # Regex: one or more characters
-PERIOD_STR = '.'                      # Period (used in SEED IDs, extensions)
-UNDERSCORE_STR = '_'                  # Underscore (filename separator)
-DASH_STR = '-'                        # Dash (used in date formats, separators)
-"""Dash"""
-SPACE_STR = ' '                       # Space character
-"""Space character"""
-COMMA_STR = ','                       # Comma character
-"""Comma (CSV separator)"""
-SEMICOL_STR = ';'                     # Semicolon character
-"""Semicolon (alternative separator)"""
-ZERO_STR = "0"                        # String representation of zero
-"""Zero string for padding"""
-NAN_STR = "NaN"                       # String representation of Not-a-Number
-""" Not-a-Number string representation"""
-NONE_STR = "None"                      # String representation of None
+EMPTY_STR = ''                          # Empty string for initialization
+ALL_WILDCHAR_STR = '*'                  # Wildcard for matching all entries
+ONE_MORECHAR_STR = '+'                  # Regex: one or more characters
+PERIOD_STR = '.'                        # Period (used in SEED IDs, extensions)
+UNDERSCORE_STR = '_'                    # Underscore (filename separator)
+DASH_STR = '-'                          # Dash
+SPACE_STR = ' '                         # Space character
+COMMA_STR = ','                         # Comma character
+SEMICOL_STR = ';'                       # Semicolon character
+ZERO_STR = "0"                          # String representation of zero
+NAN_STR = "NaN"                         # String representation of Not-a-Number
+NONE_STR = "None"                       # String representation of None
 
 # =============================================================================
 # PIPELINE COMPONENT IDENTIFIERS
 # =============================================================================
 # String identifiers for various pipeline stages and components
 
-DEFAULT_PICKER = "SeisBenchPicker"     # ML-based phase picker identifier
-DEFAULT_ASSOCIATOR = "GammaAssociator" # GaMMA phase associator identifier
-FILE_STR = "file"                      # Generic file reference
-TEMPORAL_STR = "tmp"                   # Temporary file prefix
-DURATION_STR = "duration"              # Duration field name
-STATUS_STR = "status"                  # Status field name
-SECONDS_STR = "seconds"                # Seconds unit label
+DEFAULT_PICKER = "SeisBenchPicker"      # ML-based phase picker identifier
+DEFAULT_ASSOCIATOR = "GammaAssociator"  # GaMMA phase associator identifier
+FILE_STR = "file"                       # Generic file reference
+TEMPORAL_STR = "tmp"                    # Temporary file prefix
+DURATION_STR = "duration"               # Duration field name
+STATUS_STR = "status"                   # Status field name
+SECONDS_STR = "seconds"                 # Seconds unit label
 
 # =============================================================================
 # POLARITY IDENTIFIERS
@@ -454,12 +447,12 @@ OGS_PROJECTION = "+proj=sterea +lon_0={lon} +lat_0={lat} +units=km"
 # Maximum magnitude threshold for OGS catalog (filter out larger events)
 OGS_MAX_MAGNITUDE = 3.5
 OGS_MAGNITUDE_SIZE = {
-  # Magnitude : [Marker Size]
-  (-1., 0.) : 10,
-  ( 0., 1.) : 20,
-  ( 1., 2.) : 40,
-  ( 2., 3.) : 80,
-  ( 3., OGS_MAX_MAGNITUDE) : 160,
+    # Magnitude : [Marker Size]
+    (-1., 0.): 10,
+    (0., 1.): 20,
+    (1., 2.): 40,
+    (2., 3.): 80,
+    (3., OGS_MAX_MAGNITUDE): 160,
 }
 
 # =============================================================================
@@ -649,13 +642,13 @@ OGS_REJECT_STATIONS = ["SP", "OL", "ED"]
 # Ordered list of FDSN clients to query (first available wins)
 
 OGS_CLIENTS_DEFAULT = [
-  OGS_CLIENT_STR,                      # OGS internal (highest priority)
-  INGV_CLIENT_STR,                     # Italian national network
-  GFZ_CLIENT_STR,                      # German stations in region
-  IRIS_CLIENT_STR,                     # Global backup
-  ETH_CLIENT_STR,                      # Swiss border stations
-  ORFEUS_CLIENT_STR,                   # European federation
-  COLLALTO_CLIENT_STR                  # Collalto dense array
+    OGS_CLIENT_STR,                      # OGS internal (highest priority)
+    INGV_CLIENT_STR,                     # Italian national network
+    GFZ_CLIENT_STR,                      # German stations in region
+    IRIS_CLIENT_STR,                     # Global backup
+    ETH_CLIENT_STR,                      # Swiss border stations
+    ORFEUS_CLIENT_STR,                   # European federation
+    COLLALTO_CLIENT_STR                  # Collalto dense array
 ]
 
 # =============================================================================
@@ -673,8 +666,8 @@ HEADER_MODL = [MODEL_STR, WEIGHT_STR, THRESHOLD_STR]
 HEADER_FSYS = [FILENAME_STR, MODEL_STR, WEIGHT_STR, TIME_STR, NETWORK_STR,
                STATION_STR]
 
-# Manual pick data header (6 columns)
-HEADER_MANL = [INDEX_STR, TIME_STR, PHASE_STR, STATION_STR, GROUPS_STR, GROUPS_STR]
+# Manual pick data header (5 columns)
+HEADER_MANL = [INDEX_STR, TIME_STR, PHASE_STR, STATION_STR, GROUPS_STR]
 
 # Predicted pick header (model info + pick info)
 HEADER_PRED = HEADER_MODL + HEADER_MANL
@@ -705,14 +698,14 @@ NUM_BINS = 41                          # Default histogram bin count
 # Polygon vertices defining the OGS operational region (lon, lat pairs)
 # Used for filtering events to the region of interest
 OGS_POLY_REGION = [
-  (10.0, 45.5),                      # SW corner (Trentino)
-  (10.0, 46.5),                      # NW corner (Alto Adige)
-  (11.5, 47.0),                      # N edge (Austria border)
-  (12.5, 47.0),                      # NE corner (Austria)
-  (14.5, 46.5),                      # E edge (Slovenia)
-  (14.5, 45.5),                      # SE corner (Friuli-Venezia Giulia)
-  (12.5, 44.5),                      # S edge (Emilia-Romagna)
-  (11.5, 44.5)                       # SW return (Veneto/Emilia)
+    (10.0, 45.5),                      # SW corner (Trentino)
+    (10.0, 46.5),                      # NW corner (Alto Adige)
+    (11.5, 47.0),                      # N edge (Austria border)
+    (12.5, 47.0),                      # NE corner (Austria)
+    (14.5, 46.5),                      # E edge (Slovenia)
+    (14.5, 45.5),                      # SE corner (Friuli-Venezia Giulia)
+    (12.5, 44.5),                      # S edge (Emilia-Romagna)
+    (11.5, 44.5)                       # SW return (Veneto/Emilia)
 ]
 """
 Polygon vertices defining the OGS operational region in NE Italy:
@@ -759,17 +752,17 @@ OGS_LABEL_CATEGORY = "{GEO_ZONE_STR}{EVENT_TYPE_STR}{EVENT_LOCALIZATION_STR}"
 # Single-letter codes used in OGS catalog to identify geographic regions
 
 OGS_GEO_ZONES = {
-  "A": "Alto Adige",                 # Northern Italy (South Tyrol)
-  "C": "Croatia",                    # Croatia (cross-border events)
-  "E": "Emilia",                     # Emilia region
-  "F": "Friuli",                     # Friuli region (main OGS focus)
-  "G": "Venezia Giulia",             # Venezia Giulia region
-  "L": "Lombardia",                  # Lombardy region
-  "O": "Austria",                    # Austria (cross-border events)
-  "R": "Romagna",                    # Romagna region
-  "S": "Slovenia",                   # Slovenia (cross-border events)
-  "T": "Trentino",                   # Trentino region
-  "V": "Veneto"                      # Veneto region
+    "A": "Alto Adige",                 # Northern Italy (South Tyrol)
+    "C": "Croatia",                    # Croatia (cross-border events)
+    "E": "Emilia",                     # Emilia region
+    "F": "Friuli",                     # Friuli region (main OGS focus)
+    "G": "Venezia Giulia",             # Venezia Giulia region
+    "L": "Lombardia",                  # Lombardy region
+    "O": "Austria",                    # Austria (cross-border events)
+    "R": "Romagna",                    # Romagna region
+    "S": "Slovenia",                   # Slovenia (cross-border events)
+    "T": "Trentino",                   # Trentino region
+    "V": "Veneto"                      # Veneto region
 }
 """
 ===============================================================================
@@ -795,11 +788,11 @@ Single-letter codes used in OGS catalog to identify geographic regions:
 # Single-letter codes used in OGS catalog to classify event types
 
 OGS_EVENT_TYPES = {
-  "B": EVENT_BOMB_STR,               # Military detonation (historical)
-  "E": EVENT_EXPLD_STR,              # Industrial explosion/quarry blast
-  "F": EVENT_LNDSLD_STR,             # Landslide-induced seismic event
-  "L": EVENT_LOCAL_EQ_STR,           # Local tectonic earthquake
-  "U": EVENT_UNKNOWN_STR             # Unknown/unclassified source
+    "B": EVENT_BOMB_STR,               # Military detonation (historical)
+    "E": EVENT_EXPLD_STR,              # Industrial explosion/quarry blast
+    "F": EVENT_LNDSLD_STR,             # Landslide-induced seismic event
+    "L": EVENT_LOCAL_EQ_STR,           # Local tectonic earthquake
+    "U": EVENT_UNKNOWN_STR             # Unknown/unclassified source
 }
 """
 ===============================================================================

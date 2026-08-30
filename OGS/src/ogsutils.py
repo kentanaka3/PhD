@@ -75,11 +75,11 @@ AUTHOR: AI2Seism Project
 # =============================================================================
 # STANDARD LIBRARY IMPORTS
 # =============================================================================
-import os                                   # Operating system interface
-import sys                                  # System-specific parameters
-import logging                              # Logging facility
-import argparse                             # Command-line argument parsing
-from pathlib import Path                    # Object-oriented filesystem paths
+import os                               # Operating system interface
+import sys                              # System-specific parameters
+import logging                          # Logging facility
+import argparse                         # Command-line argument parsing
+from pathlib import Path                # Object-oriented filesystem paths
 from datetime import datetime, timedelta as td  # Date and time manipulation
 from typing import Any, Optional, Sequence, Tuple, cast  # Type hinting
 
@@ -91,11 +91,10 @@ except ImportError:
 # =============================================================================
 # THIRD-PARTY LIBRARY IMPORTS
 # =============================================================================
-import numpy as np                         # Numerical computing
-import pandas as pd                        # Data manipulation and analysis
-import networkx as nx                      # Graph algorithms
-                                           # (bipartite matching)
-from obspy import UTCDateTime              # Seismology-specific datetime
+import numpy as np                      # Numerical computing
+import pandas as pd                     # Data manipulation and analysis
+import networkx as nx                   # Graph algorithms (bipartite matching)
+from obspy import UTCDateTime           # Seismology-specific datetime
 
 # =============================================================================
 # LOGGING
@@ -113,18 +112,18 @@ class ColorFormatter(logging.Formatter):
   """
 
   COLORS = {
-    logging.DEBUG:    "\033[36m",    # Cyan
-    logging.INFO:     "\033[32m",    # Green
-    logging.WARNING:  "\033[33m",    # Yellow
-    logging.ERROR:    "\033[31m",    # Red
-    logging.CRITICAL: "\033[1;31m",  # Bold Red
+      logging.DEBUG:    "\033[36m",    # Cyan
+      logging.INFO:     "\033[32m",    # Green
+      logging.WARNING:  "\033[33m",    # Yellow
+      logging.ERROR:    "\033[31m",    # Red
+      logging.CRITICAL: "\033[1;31m",  # Bold Red
   }
   SYMBOLS = {
-    logging.DEBUG:    "...",   # trace detail
-    logging.INFO:     ">>>",   # step progress
-    logging.WARNING:  "/!\\",  # caution
-    logging.ERROR:    "[X]",   # failure
-    logging.CRITICAL: "!!!",   # critical failure
+      logging.DEBUG:    "...",   # trace detail
+      logging.INFO:     ">>>",   # step progress
+      logging.WARNING:  "/!\\",  # caution
+      logging.ERROR:    "[X]",   # failure
+      logging.CRITICAL: "!!!",   # critical failure
   }
   RESET = "\033[0m"
   BASE_FMT = "%(asctime)s | %(name)-30s | %(levelname)-8s | %(message)s"
@@ -137,9 +136,9 @@ class ColorFormatter(logging.Formatter):
 
 
 def setup_logger(
-  name: str,
-  verbose: bool = False,
-  silent: bool = False,
+    name: str,
+    verbose: bool = False,
+    silent: bool = False,
 ) -> logging.Logger:
   """Create and configure a logger with colored, step-tracing output.
 
@@ -161,8 +160,8 @@ def setup_logger(
   if not logger.handlers:
     handler = logging.StreamHandler(sys.stderr)
     formatter = ColorFormatter(
-      fmt=ColorFormatter.BASE_FMT,
-      datefmt="%Y-%m-%d %H:%M:%S",
+        fmt=ColorFormatter.BASE_FMT,
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
     handler.setFormatter(formatter)
     logger.addHandler(handler)
@@ -179,7 +178,7 @@ def setup_logger(
 # Functions for computing distances and similarity scores between picks/events
 
 
-def dist_prob(B: pd.Series, T: pd.Series) -> float:
+def dist_prob(B: pd.Series, T: pd.Series, eps: float = 1e-6) -> float:
   """
   Calculate probability ratio between target and base picks.
 
@@ -189,11 +188,22 @@ def dist_prob(B: pd.Series, T: pd.Series) -> float:
   Args:
     B: Base pick (ground truth) as pandas Series with PROBABILITY_STR.
     T: Target pick (prediction) as pandas Series with PROBABILITY_STR.
+    eps: Small epsilon to prevent division by zero.
 
   Returns:
-    Ratio of target probability to base probability.
+    Ratio of target probability to base probability, bounded in [0.0, 1.0].
   """
-  return T[OGS_C.PROBABILITY_STR] / B[OGS_C.PROBABILITY_STR]
+  # Legacy code for probability ratio calculation (commented out)
+  # return T[OGS_C.PROBABILITY_STR] / B[OGS_C.PROBABILITY_STR]
+  prob_t = float(T[OGS_C.PROBABILITY_STR]) if (
+      OGS_C.PROBABILITY_STR in T and pd.notna(T[OGS_C.PROBABILITY_STR])
+  ) else 1.0
+  prob_t = max(prob_t, 0.0)
+  prob_b = float(B[OGS_C.PROBABILITY_STR]) if (
+      OGS_C.PROBABILITY_STR in B and pd.notna(B[OGS_C.PROBABILITY_STR])
+  ) else 1.0
+  prob_b = max(prob_b, eps)
+  return float(min(max(prob_t / prob_b, 0.0), 1.0))
 
 
 def dist_phase(B: pd.Series, T: pd.Series) -> float:
@@ -248,7 +258,7 @@ def diff_space(
     T: pd.Series,
     ndim: int = 2,
     p: float = 2.
-  ) -> float:
+) -> float:
   from obspy.geodetics import gps2dist_azimuth
   """
   Calculate spatial distance between two locations using geodetic formulas.
@@ -272,15 +282,19 @@ def diff_space(
       T[OGS_C.LATITUDE_STR], T[OGS_C.LONGITUDE_STR])[0] / 1000.
 
   # Add vertical component if 3D distance requested (depth in m)
-  vertical_component = ((B[OGS_C.DEPTH_STR] - T[OGS_C.DEPTH_STR]) / 1000.) ** p \
-    if ndim == 3 else 0.
+  vertical_component = (
+      (B[OGS_C.DEPTH_STR] - T[OGS_C.DEPTH_STR]) / 1000.
+  ) ** p if ndim == 3 else 0.
 
   # Compute Lp norm distance
   return float(format(np.sqrt(horizontal_dist_km ** p + vertical_component), ".4f"))
 
 
-def dist_space(B: pd.Series, T: pd.Series,
-              offset: float = OGS_C.EVENT_DIST_OFFSET) -> float:
+def dist_space(
+    B: pd.Series,
+    T: pd.Series,
+    offset: float = OGS_C.EVENT_DIST_OFFSET
+) -> float:
   """
   Calculate normalized spatial similarity score.
 
@@ -302,7 +316,7 @@ def contains_point(
     polygon: Sequence[tuple[float, float]] | np.ndarray,
     include_boundary: bool = True,
     eps: float = OGS_C.EPSILON,
-  ) -> bool:
+) -> bool:
   """
   Test whether a 2D point lies inside a polygon.
 
@@ -360,10 +374,7 @@ def contains_point(
   return inside
 
 
-def contains_points(
-      polygon: np.ndarray,
-      points: np.ndarray
-    ) -> np.ndarray:
+def contains_points(polygon: np.ndarray, points: np.ndarray) -> np.ndarray:
   """Vectorized ray-casting point-in-polygon test.
 
   Determines which points lie inside a polygon using the ray-casting
@@ -455,11 +466,10 @@ def dist_pick(B: pd.Series, T: pd.Series,
       Weighted similarity score between 0 and 1.
   """
   return (
-    97. * dist_time(T, B, time_offset_sec) +  # Time dominates (97%)
-    2. * dist_phase(T, B) +                    # Phase type (2%)
-    1. * dist_prob(T, B)                       # Probability ratio (1%)
+      97. * dist_time(T, B, time_offset_sec) +    # Time dominates (97%)
+      2. * dist_phase(T, B) +                     # Phase type (2%)
+      1. * dist_prob(T, B)                        # Probability ratio (1%)
   ) / 100.
-
 
 
 def dist_event(T: pd.Series, P: pd.Series,
@@ -510,21 +520,18 @@ def is_date(string: str) -> datetime:
 
 def is_julian(string: str) -> datetime:
   """
-  Parse a Julian day number to datetime (NOT IMPLEMENTED).
-
-  TODO: Define and convert Julian date to Gregorian date.
+  Parse a Julian day number to datetime.
 
   Args:
-    string: Julian day string.
+    string: Julian date string in YYYYJJJ format.
 
   Returns:
     datetime object.
 
   Raises:
-    NotImplementedError: This function is not yet implemented.
+    ValueError: If string doesn't match expected format.
   """
-  # TODO: Define and convert Julian date to Gregorian date
-  raise NotImplementedError("Julian date parsing is not yet implemented.")
+  return datetime.strptime(string, "%Y%j")
 
 
 def is_file_path(string: str) -> Path:
@@ -605,8 +612,8 @@ def decimeter(value, scale='normal') -> int:
 
 
 def labels_to_colormap(
-      labels: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray, Any, Any]:
+    labels: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray, Any, Any]:
   """
   Map arbitrary cluster labels to sequential indices for colormapping.
 
@@ -663,7 +670,7 @@ def labels_to_colormap(
 def inventory(
     stations: Path,
     output: Optional[Path] = None
-  ) -> pd.DataFrame:
+) -> pd.DataFrame:
   """
   Load and process station metadata from StationXML files.
 
@@ -702,19 +709,19 @@ def inventory(
   for net in sorted(myInventory.networks, key=lambda x: x.code):
     for sta in net.stations:
       elements.append([
-        f"{net.code}.{sta.code}.",  # Unique station ID
-        sta.longitude,
-        sta.latitude,
-        sta.elevation,
-        net.code,
-        sta.code,
+          f"{net.code}.{sta.code}.",  # Unique station ID
+          sta.longitude,
+          sta.latitude,
+          sta.elevation,
+          net.code,
+          sta.code,
       ])
   INVENTORY = pd.DataFrame(
-    elements,
-    columns=[
-      OGS_C.INDEX_STR, OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR,
-      OGS_C.DEPTH_STR, OGS_C.NETWORK_STR, OGS_C.STATION_STR
-    ],
+      elements,
+      columns=[
+          OGS_C.INDEX_STR, OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR,
+          OGS_C.DEPTH_STR, OGS_C.NETWORK_STR, OGS_C.STATION_STR
+      ],
   ).sort_values(by=[OGS_C.INDEX_STR]).reset_index(drop=True)
 
   # Use labels_to_colormap for consistent network and station coloring
@@ -790,11 +797,11 @@ def waveforms(
   elements = []
   # Scan all MiniSEED files recursively
   for wf in waveforms.glob("**/*.mseed"):
-    if wf.name.startswith("."): continue  # Skip hidden files
-    # Parse filename: NET.STA.LOC.CHA__YYYYMMDDTHHMMSS__suffix.mseed
-    stid, dateinitid, _ = wf.stem.split(
-      OGS_C.UNDERSCORE_STR + OGS_C.UNDERSCORE_STR
-    )
+    if not wf.name.startswith("."):
+        # Parse filename: NET.STA.LOC.CHA__YYYYMMDDTHHMMSS__suffix.mseed
+      stid, dateinitid, _ = wf.stem.split(
+          OGS_C.UNDERSCORE_STR + OGS_C.UNDERSCORE_STR
+      )
 
     # Parse date from filename
     dateinitid = UTCDateTime(dateinitid).date
@@ -803,52 +810,52 @@ def waveforms(
     elements.append([*stid.split(OGS_C.PERIOD_STR), dateinitid, wf])
 
   WAVEFORMS = pd.DataFrame(
-    elements,
-    columns=[
-      OGS_C.NETWORK_STR, OGS_C.STATION_STR, OGS_C.LOC_NAME_STR,
-      OGS_C.CHANNEL_STR, OGS_C.DATE_STR, OGS_C.FILENAME_STR
-    ]
+      elements,
+      columns=[
+          OGS_C.NETWORK_STR, OGS_C.STATION_STR, OGS_C.LOC_NAME_STR,
+          OGS_C.CHANNEL_STR, OGS_C.DATE_STR, OGS_C.FILENAME_STR
+      ]
   )
   logger = setup_logger(__name__)
   WAVEFORMS.to_csv(output / "OGSWaveforms.csv", index=False)
   logger.info(f"Saved file to {output / 'OGSWaveforms.csv'}")
   INVENTORY = inventory(stations)
   INVENTORY = INVENTORY.merge(
-    WAVEFORMS[[OGS_C.NETWORK_STR, OGS_C.STATION_STR]],
-    how="inner",
-    on=[OGS_C.NETWORK_STR, OGS_C.STATION_STR]
+      WAVEFORMS[[OGS_C.NETWORK_STR, OGS_C.STATION_STR]],
+      how="inner",
+      on=[OGS_C.NETWORK_STR, OGS_C.STATION_STR]
   ).drop_duplicates()
   INVENTORY.to_csv(output / "OGSInventory.csv", index=False)
   logger.info(f"Saved file to {output / 'OGSInventory.csv'}")
   mystations = OGS_P.map_plotter(
-    OGS_C.OGS_STUDY_REGION,
-    legend=True,
-    marker="^",
+      OGS_C.OGS_STUDY_REGION,
+      legend=True,
+      marker="^",
   )
   for net, df in INVENTORY.groupby(OGS_C.NETWORK_STR):
     mystations.add_plot(
-      df[OGS_C.LONGITUDE_STR], df[OGS_C.LATITUDE_STR], label=net,
-      color=None, facecolors="none", edgecolors=df[OGS_C.NETCOLOR_STR],
-      legend=True,
+        df[OGS_C.LONGITUDE_STR], df[OGS_C.LATITUDE_STR], label=net,
+        color=None, facecolors="none", edgecolors=df[OGS_C.NETCOLOR_STR],
+        legend=True,
     )
   mystations.savefig(output / "OGSStations.png")
   plt.close()
 
   NET_COLORS = INVENTORY[
-    [OGS_C.NETWORK_STR, OGS_C.NETCOLOR_STR]
+      [OGS_C.NETWORK_STR, OGS_C.NETCOLOR_STR]
   ].drop_duplicates().set_index(OGS_C.NETWORK_STR)[OGS_C.NETCOLOR_STR].to_dict()
   start_day = start.date()
   end_day = end.date()
   DAYS = [
-    start_day + td(days=offset)
-    for offset in range((end_day - start_day).days + 1)
+      start_day + td(days=offset)
+      for offset in range((end_day - start_day).days + 1)
   ]
   counts = {
-    day: {net: 0 for net in WAVEFORMS[OGS_C.NETWORK_STR].unique()}
-    for day in DAYS
+      day: {net: 0 for net in WAVEFORMS[OGS_C.NETWORK_STR].unique()}
+      for day in DAYS
   }
   for group_key, group in WAVEFORMS.groupby(
-    [OGS_C.DATE_STR, OGS_C.NETWORK_STR]
+      [OGS_C.DATE_STR, OGS_C.NETWORK_STR]
   ):
     date, net = cast(tuple[Any, Any], group_key)
     counts[date][net] = len(group[OGS_C.STATION_STR].unique())
@@ -856,12 +863,12 @@ def waveforms(
   if not df.empty and df.values.size > 0:
     x, y = [UTCDateTime(xx).date for xx in df.index], df.values.T
     OGS_P.stack_plotter(
-      x, y, labels=df.columns.tolist(),
-      colors=[NET_COLORS.get(net, "gray") for net in df.columns],
-      xlabel="Date", ylabel="Station Count",
-      output=output / "OGSAvailability.png",
-      vlines=vlines,
-      legend=True
+        x, y, labels=df.columns.tolist(),
+        colors=[NET_COLORS.get(net, "gray") for net in df.columns],
+        xlabel="Date", ylabel="Station Count",
+        output=output / "OGSAvailability.png",
+        vlines=vlines,
+        legend=True
     )
     plt.close()
   else:
@@ -887,11 +894,11 @@ class SortDatesAction(argparse.Action):
   """
 
   def __call__(
-    self,
-    parser: argparse.ArgumentParser,
-    namespace: argparse.Namespace,
-    values: Any,
-    option_string: Optional[str] = None,
+      self,
+      parser: argparse.ArgumentParser,
+      namespace: argparse.Namespace,
+      values: Any,
+      option_string: Optional[str] = None,
   ) -> None:
     """Sort and store the values."""
     sorted_values = sorted(cast(Sequence[str], values))
@@ -986,7 +993,7 @@ class OGSBPGraph():
         pairs[idx, 1] = left
       else:
         raise ValueError(
-          f"Unexpected matching edge ({left}, {right}) for base size {base_count}."
+            f"Unexpected matching edge ({left}, {right}) for base size {base_count}."
         )
     return pairs
 
@@ -1071,12 +1078,12 @@ class OGSBPGraphPicks(OGSBPGraph):
 
     offset_seconds = OGS_C.PICK_TIME_OFFSET.total_seconds()
     target_times = np.fromiter(
-      (
-        cast(UTCDateTime, time).timestamp
-        for time in self.Target[OGS_C.TIME_STR]
-      ),
-      dtype=float,
-      count=J,
+        (
+            cast(UTCDateTime, time).timestamp
+            for time in self.Target[OGS_C.TIME_STR]
+        ),
+        dtype=float,
+        count=J,
     )
 
     # Pre-index target picks by station and sorted time so each BASE row only
@@ -1084,14 +1091,14 @@ class OGSBPGraphPicks(OGSBPGraph):
     target_by_station: dict[str, tuple[np.ndarray[Any, Any],
                                        np.ndarray[Any, Any]]] = {}
     for station, positions in self.Target.groupby(
-      OGS_C.STATION_STR, sort=False
+        OGS_C.STATION_STR, sort=False
     ).indices.items():
       station_positions = np.asarray(positions, dtype=np.int64)
       order = np.argsort(target_times[station_positions], kind="mergesort")
       sorted_positions = station_positions[order]
       target_by_station[station] = (
-        sorted_positions,
-        target_times[sorted_positions],
+          sorted_positions,
+          target_times[sorted_positions],
       )
 
     # Build edges between matching picks
@@ -1105,17 +1112,17 @@ class OGSBPGraphPicks(OGSBPGraph):
       target_positions, station_times = target_by_station[station]
       base_time = cast(UTCDateTime, rowBase[OGS_C.TIME_STR]).timestamp
       start = int(np.searchsorted(
-        station_times, base_time - offset_seconds, side="left"
+          station_times, base_time - offset_seconds, side="left"
       ))
       stop = int(np.searchsorted(
-        station_times, base_time + offset_seconds, side="right"
+          station_times, base_time + offset_seconds, side="right"
       ))
 
       for target_pos in target_positions[start:stop]:
         rowTarget = self.Target.iloc[int(target_pos)]
         self.G.add_edge(
-          idxBase, int(target_pos) + I,  # Target offset by I
-          weight=dist_pick(rowBase, rowTarget)
+            idxBase, int(target_pos) + I,  # Target offset by I
+            weight=dist_pick(rowBase, rowTarget)
         )
 
     # Compute maximum weight matching (optimal assignment)
@@ -1199,8 +1206,9 @@ class OGSBPGraphEvents(OGSBPGraph):
       # No time pre-filtering for simplicity
       target_candidates = self.Target.copy()
       # Pre-filter targets by time window (reduces candidates significantly)
+      base_time = rowBase[OGS_C.TIME_STR]
       time_mask = np.abs(
-        target_times - rowBase[OGS_C.TIME_STR]
+          target_times - base_time
       ) <= OGS_C.EVENT_TIME_OFFSET.total_seconds()
       target_candidates = target_candidates[time_mask]
 
@@ -1209,8 +1217,8 @@ class OGSBPGraphEvents(OGSBPGraph):
         if diff_space(rowBase, rowTarget) <= OGS_C.EVENT_DIST_OFFSET:
           # Add edge with similarity weight
           self.G.add_edge(
-            idxBase, int(idxTarget) + I,
-            weight=dist_event(rowBase, rowTarget)
+              idxBase, int(idxTarget) + I,
+              weight=dist_event(rowBase, rowTarget)
           )
 
     # Compute maximum weight matching

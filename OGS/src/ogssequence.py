@@ -150,18 +150,19 @@ def parse_arguments() -> argparse.Namespace:
       - verbose: Boolean flag for debug output
   """
   parser = argparse.ArgumentParser(
-    description="OGS Sequence Clustering Tool")
+      description="OGS Sequence Clustering Tool"
+  )
 
   # -i/--input: Path to JSON configuration file (required)
   parser.add_argument(
-    "-i", "--input", required=True, type=OGS_C.is_file_path,
-    help="Input file containing seismic event data"
+      "-i", "--input", required=True, type=OGS_C.is_file_path,
+      help="Input file containing seismic event data"
   )
 
   # -v/--verbose: Enable detailed logging output
   parser.add_argument(
-    "-v", "--verbose", action='store_true', default=False,
-    help="Enable verbose output"
+      "-v", "--verbose", action='store_true', default=False,
+      help="Enable verbose output"
   )
 
   return parser.parse_args()
@@ -399,9 +400,9 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
       cached_catalogs[range_idx] = myCatalog
 
       # Extract and standardize feature matrix
-      # Features: X_KM (E-W position), Y_KM (N-S position), DEPTH, INTEREVENT
+      # Features: X_KM (E-W position), Y_KM (N-S position), DEPTH, INTEREVENT_LOG
       data = StandardScaler().fit_transform(myCatalog.EVENTS[[
-        "X_KM", "Y_KM", OGS_C.DEPTH_STR, "INTEREVENT"
+          "X_KM", "Y_KM", OGS_C.DEPTH_STR, "INTEREVENT_LOG"
       ]])
 
       # Initialize parameter storage for this range
@@ -416,9 +417,9 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
           # Optimize hyperparameters for this algorithm/metric combination
           # Returns dict with 'labels' and optimized parameters
           params = self._optimize_for_metric(
-            algo_name,
-            data,
-            metric_name
+              algo_name,
+              data,
+              metric_name
           )
 
           # Store optimized parameters
@@ -428,8 +429,8 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
           labels = params.get("labels")
           if labels is None:
             self.logger.warning(
-              "No valid clustering found for %s/%s in window #%s; skipping.",
-              algo_name, metric_name, range_idx + 1)
+                "No valid clustering found for %s/%s in window #%s; skipping.",
+                algo_name, metric_name, range_idx + 1)
             continue
           myCatalog.EVENTS["cluster"] = labels
 
@@ -578,25 +579,27 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
       OGSCatalog: Loaded catalog with EVENTS DataFrame populated
     """
     # Log the time window being processed
-    self.logger.info("Window #%s: %s to %s", range_idx + 1, range_[0], range_[1])
+    self.logger.info(
+        "Window #%s: %s to %s", range_idx + 1, range_[0], range_[1]
+    )
 
     # Build polygon from map_deg bounds if available
     from matplotlib.path import Path as mplPath
     lon_min, lon_max, lat_min, lat_max = self.metadata_map_bounds
     polygon = mplPath([
-      (lon_min, lat_min), (lon_min, lat_max),
-      (lon_max, lat_max), (lon_max, lat_min)
+        (lon_min, lat_min), (lon_min, lat_max),
+        (lon_max, lat_max), (lon_max, lat_min)
     ], closed=True)
 
     # Create catalog instance with time bounds
     myCatalog = OGSCatalog(
-      input=Path(self._metadata["directory"]),
-      start=datetime.strptime(range_[0], OGS_C.DATE_FMT),
-      end=datetime.strptime(range_[1], OGS_C.DATE_FMT),
-      verbose=self.verbose,
-      polygon=None,
-      output=Path(OGS_C.UNDERSCORE_STR.join(range_)),
-      name=f"Catalog_Range_{range_idx + 1}"
+        input=Path(self._metadata["directory"]),
+        start=datetime.strptime(range_[0], OGS_C.DATE_FMT),
+        end=datetime.strptime(range_[1], OGS_C.DATE_FMT),
+        verbose=self.verbose,
+        polygon=None,
+        output=Path(OGS_C.UNDERSCORE_STR.join(range_)),
+        name=f"Catalog_Range_{range_idx + 1}"
     )
 
     # Load events from parquet files
@@ -615,8 +618,8 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
 
   @staticmethod
   def _compute_centers(
-        myCatalog: OGSCatalog
-      ) -> Tuple[float, float, float, float]:
+      myCatalog: OGSCatalog
+  ) -> Tuple[float, float, float, float]:
     """
     Compute Cartesian and geographic centers for a catalog.
 
@@ -631,7 +634,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
 
     # Compute mean geographic coordinates (degrees)
     center_lon, center_lat = myCatalog.EVENTS[
-      [OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR]
+        [OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR]
     ].mean().to_numpy()
 
     return center_x, center_y, center_lon, center_lat
@@ -661,26 +664,31 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     """
     # Ensure timestamp column exists and is datetime type
     myCatalog.EVENTS[OGS_C.TIME_STR] = pd.to_datetime(
-      myCatalog.EVENTS[OGS_C.TIME_STR]
+        myCatalog.EVENTS[OGS_C.TIME_STR]
     )
 
     # Convert to Unix timestamp (seconds since 1970-01-01)
     # Divide by 10^9 to convert nanoseconds to seconds
     myCatalog.EVENTS[OGS_C.TIMESTAMP_STR] = myCatalog.EVENTS[
-      OGS_C.TIME_STR
+        OGS_C.TIME_STR
     ].astype("int64") // 10**9
 
     # ----- Convert lat/lon to local Cartesian approximation (km) -----
-    # This is a simple equirectangular projection suitable for small regions
+    # This is an equirectangular projection centered on the mean latitude.
+    # Using a constant reference latitude prevents trapezoidal distortion of
+    # distances.
     lat = myCatalog.EVENTS[OGS_C.LATITUDE_STR].to_numpy()
     lon = myCatalog.EVENTS[OGS_C.LONGITUDE_STR].to_numpy()
 
     # Convert to radians
     lat_rad = np.radians(lat)
+    mean_lat_rad = np.radians(np.mean(lat)) if len(lat) > 0 else 0.0
     lon_rad = np.radians(lon)
 
-    # X = R * lon * cos(lat) : East-West distance in km
-    myCatalog.EVENTS["X_KM"] = R * lon_rad * np.cos(lat_rad)
+    # Legacy formula for small distances: X = R * lon * cos(lat)
+    # myCatalog.EVENTS["X_KM"] = R * lon_rad * np.cos(lat_rad)
+    # X = R * lon * cos(mean_lat) : East-West distance in km
+    myCatalog.EVENTS["X_KM"] = R * lon_rad * np.cos(mean_lat_rad)
 
     # Y = R * lat : North-South distance in km
     myCatalog.EVENTS["Y_KM"] = R * lat_rad
@@ -693,8 +701,22 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     # Compute time difference between consecutive events
     # prepend=0 adds a zero at the start for the diff operation
     myCatalog.EVENTS["INTEREVENT"] = np.diff(
-      myCatalog.EVENTS[OGS_C.TIMESTAMP_STR], prepend=0
+        myCatalog.EVENTS[OGS_C.TIMESTAMP_STR], prepend=0
     )
+    # Use first event timestamp as prepend so the initial diff is naturally 0.0
+    if not myCatalog.EVENTS.empty:
+      first_ts = float(myCatalog.EVENTS[OGS_C.TIMESTAMP_STR].iloc[0])
+      diffs = np.diff(
+          myCatalog.EVENTS[OGS_C.TIMESTAMP_STR].astype(float),
+          prepend=first_ts
+      )
+      myCatalog.EVENTS["INTEREVENT"] = np.maximum(diffs, 0.0)
+      # Logarithmic inter-event time for power-law Omori sequence scaling
+      myCatalog.EVENTS["INTEREVENT_LOG"] = np.log10(
+          np.maximum(myCatalog.EVENTS["INTEREVENT"], 0.1))
+    else:
+      myCatalog.EVENTS["INTEREVENT"] = np.array([], dtype=float)
+      myCatalog.EVENTS["INTEREVENT_LOG"] = np.array([], dtype=float)
 
     # Set first event's inter-event time to 0 (no previous event)
     myCatalog.EVENTS.loc[0, "INTEREVENT"] = 0
@@ -722,7 +744,8 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     dir_path = Path("Clusters") / algo_name
 
     # Add metric subdirectory if specified
-    if metric_name: dir_path = dir_path / metric_name
+    if metric_name:
+      dir_path = dir_path / metric_name
 
     # Add range identifier subdirectory
     dir_path = dir_path / OGS_C.UNDERSCORE_STR.join([myCatalog.output.name])
@@ -778,13 +801,13 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
 
     # Create scatter plot with cluster coloring
     sc = ax.scatter(
-      df[lon_col].to_numpy(),
-      df[lat_col].to_numpy(),
-      s=df[mag_col].to_numpy(),  # Size proportional to magnitude
-      c=enc,                      # Color by cluster encoding
-      cmap=cmap,
-      norm=norm,
-      linewidths=0.0              # No edge lines
+        df[lon_col].to_numpy(),
+        df[lat_col].to_numpy(),
+        s=df[mag_col].to_numpy(),  # Size proportional to magnitude
+        c=enc,                      # Color by cluster encoding
+        cmap=cmap,
+        norm=norm,
+        linewidths=0.0              # No edge lines
     )
 
     # Extract center coordinates
@@ -797,9 +820,9 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     # Highlight high-magnitude events (M > 3.5) with red stars
     big = df[mag_col].to_numpy() > 3.5
     ax.scatter(
-      df.loc[big, lon_col].to_numpy(),
-      df.loc[big, lat_col].to_numpy(),
-      color="red", marker="*", s=100, label="Magnitude > 3.5"
+        df.loc[big, lon_col].to_numpy(),
+        df.loc[big, lat_col].to_numpy(),
+        color="red", marker="*", s=100, label="Magnitude > 3.5"
     )
 
     # Draw cross-section projection line through center
@@ -811,7 +834,8 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
 
     # Add cluster ID labels at cluster centroids
     for cl_id, cl_data in df.groupby("cluster"):
-      if cl_id == -1: continue  # Skip noise
+      if cl_id == -1:
+        continue  # Skip noise
       ax.text(cl_data[lon_col].mean(),
               cl_data[lat_col].mean(),
               chr(97 + 2 * range_idx).upper() + str(cl_id),  # e.g., "A0", "A1"
@@ -874,10 +898,10 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
 
     # Filter to events within the map window
     mask = (
-      (df["PROJECTION_KM"] >= -0.5 * self.metadata_map_size[1]) &
-      (df["PROJECTION_KM"] <= 0.5 * self.metadata_map_size[1]) &
-      (df["X_KM"] >= center_x - 0.5 * self.metadata_map_size[0]) &
-      (df["X_KM"] <= center_x + 0.5 * self.metadata_map_size[0])
+        (df["PROJECTION_KM"] >= -0.5 * self.metadata_map_size[1]) &
+        (df["PROJECTION_KM"] <= 0.5 * self.metadata_map_size[1]) &
+        (df["X_KM"] >= center_x - 0.5 * self.metadata_map_size[0]) &
+        (df["X_KM"] <= center_x + 0.5 * self.metadata_map_size[0])
     )
     df = df[mask]
 
@@ -886,13 +910,13 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
 
     # Create scatter plot with cluster coloring
     sc = ax.scatter(
-      df["PROJECTION_KM"].to_numpy(),
-      df[depth_col].to_numpy(),
-      s=df[mag_col].to_numpy(),
-      c=enc,
-      cmap=cmap,
-      norm=norm,
-      linewidths=0.0
+        df["PROJECTION_KM"].to_numpy(),
+        df[depth_col].to_numpy(),
+        s=df[mag_col].to_numpy(),
+        c=enc,
+        cmap=cmap,
+        norm=norm,
+        linewidths=0.0
     )
 
     # Add colorbar with cluster ID labels
@@ -902,20 +926,21 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     # Highlight high-magnitude events with red stars
     big = df[mag_col].to_numpy() > OGS_C.OGS_MAX_MAGNITUDE
     ax.scatter(
-      df.loc[big, "PROJECTION_KM"].to_numpy(),
-      df.loc[big, depth_col].to_numpy(),
-      color="red", marker="*", s=100,
-      label=f"Magnitude > {OGS_C.OGS_MAX_MAGNITUDE}",
+        df.loc[big, "PROJECTION_KM"].to_numpy(),
+        df.loc[big, depth_col].to_numpy(),
+        color="red", marker="*", s=100,
+        label=f"Magnitude > {OGS_C.OGS_MAX_MAGNITUDE}",
     )
 
     # Add cluster ID labels at cluster centroids
     for cl_id, cl_data in df.groupby("cluster"):
-      if cl_id == -1: continue  # Skip noise
+      if cl_id == -1:
+        continue  # Skip noise
       ax.text(
-        cl_data["PROJECTION_KM"].mean(),
-        cl_data[depth_col].mean(),
-        chr(98 + 2 * range_idx).upper() + str(cl_id),  # e.g., "B0", "B1"
-        fontsize=8, fontweight="bold",
+          cl_data["PROJECTION_KM"].mean(),
+          cl_data[depth_col].mean(),
+          chr(98 + 2 * range_idx).upper() + str(cl_id),  # e.g., "B0", "B1"
+          fontsize=8, fontweight="bold",
       )
 
     return ax
@@ -952,17 +977,17 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
 
     # Compute centers in both coordinate systems
     center_x, center_y, center_lon, center_lat = \
-      self._compute_centers(myCatalog)
+        self._compute_centers(myCatalog)
 
     # Convert angle to radians
     angle_rad = np.radians(angle_deg)
 
     # ----- Map view: plot noise as small gray dots (top row) -----
     ax[0, range_idx].scatter(
-      noise_df[OGS_C.LONGITUDE_STR].to_numpy(),
-      noise_df[OGS_C.LATITUDE_STR].to_numpy(),
-      s=5, color="gray", alpha=0.4, marker=".",
-      linewidths=0.0, label="Noise", zorder=1
+        noise_df[OGS_C.LONGITUDE_STR].to_numpy(),
+        noise_df[OGS_C.LATITUDE_STR].to_numpy(),
+        s=5, color="gray", alpha=0.4, marker=".",
+        linewidths=0.0, label="Noise", zorder=1
     )
 
     # ----- Cross-section view: project noise onto the section plane -----
@@ -975,18 +1000,18 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
 
     # Filter to events within the map window
     mask = (
-      (noise_df["PROJECTION_KM"] >= -0.5 * self.metadata_map_size[1]) &
-      (noise_df["PROJECTION_KM"] <= 0.5 * self.metadata_map_size[1]) &
-      (noise_df["X_KM"] >= center_x - 0.5 * self.metadata_map_size[0]) &
-      (noise_df["X_KM"] <= center_x + 0.5 * self.metadata_map_size[0])
+        (noise_df["PROJECTION_KM"] >= -0.5 * self.metadata_map_size[1]) &
+        (noise_df["PROJECTION_KM"] <= 0.5 * self.metadata_map_size[1]) &
+        (noise_df["X_KM"] >= center_x - 0.5 * self.metadata_map_size[0]) &
+        (noise_df["X_KM"] <= center_x + 0.5 * self.metadata_map_size[0])
     )
     noise_df = noise_df[mask]
 
     ax[1, range_idx].scatter(
-      noise_df["PROJECTION_KM"].to_numpy(),
-      noise_df[OGS_C.DEPTH_STR].to_numpy(),
-      s=5, color="gray", alpha=0.4, marker=".",
-      linewidths=0.0, label="Noise", zorder=1
+        noise_df["PROJECTION_KM"].to_numpy(),
+        noise_df[OGS_C.DEPTH_STR].to_numpy(),
+        s=5, color="gray", alpha=0.4, marker=".",
+        linewidths=0.0, label="Noise", zorder=1
     )
 
   # ---------------------------------------------------------------------------
@@ -1012,32 +1037,32 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     """
     # Compute centers in both coordinate systems
     center_x, center_y, center_lon, center_lat = \
-      self._compute_centers(myCatalog)
+        self._compute_centers(myCatalog)
 
     # Convert angle to radians
     angle_rad = np.radians(angle_deg)
 
     # Draw map view in top row
     self.plot_map_view(
-      ax[0, range_idx],
-      myCatalog.EVENTS,
-      lon_col=OGS_C.LONGITUDE_STR,
-      lat_col=OGS_C.LATITUDE_STR,
-      mag_col=OGS_C.ML_STR,
-      range_idx=range_idx,
-      center=(center_lon, center_lat),
-      angle_rad=angle_rad
+        ax[0, range_idx],
+        myCatalog.EVENTS,
+        lon_col=OGS_C.LONGITUDE_STR,
+        lat_col=OGS_C.LATITUDE_STR,
+        mag_col=OGS_C.ML_STR,
+        range_idx=range_idx,
+        center=(center_lon, center_lat),
+        angle_rad=angle_rad
     )
 
     # Draw cross-section in bottom row
     self.plot_cross_section(
-      ax[1, range_idx],
-      myCatalog.EVENTS,
-      depth_col=OGS_C.DEPTH_STR,
-      mag_col=OGS_C.ML_STR,
-      range_idx=range_idx,
-      center=(center_x, center_y),
-      angle_rad=angle_rad
+        ax[1, range_idx],
+        myCatalog.EVENTS,
+        depth_col=OGS_C.DEPTH_STR,
+        mag_col=OGS_C.ML_STR,
+        range_idx=range_idx,
+        center=(center_x, center_y),
+        angle_rad=angle_rad
     )
 
   # ---------------------------------------------------------------------------
@@ -1074,7 +1099,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
 
     # Construct output filename
     output_filepath = Path("Clusters") / \
-      f"{algo_name}_{metric_name}_{angle_deg:.1f}.png"
+        f"{algo_name}_{metric_name}_{angle_deg:.1f}.png"
 
     # Ensure output directory exists
     output_filepath.parent.mkdir(parents=True, exist_ok=True)
@@ -1101,7 +1126,8 @@ def main(args: argparse.Namespace) -> None:
     args: Parsed command-line arguments with 'input' and 'verbose' fields
   """
   # Load metadata configuration from JSON file
-  with open(args.input, 'r') as infile: metadata = json.load(infile)
+  with open(args.input, 'r') as infile:
+    metadata = json.load(infile)
 
   # Create sequence clustering orchestrator
   run = OGSSequence(metadata=metadata, verbose=args.verbose)
@@ -1111,4 +1137,5 @@ def main(args: argparse.Namespace) -> None:
 
 
 # Script entry point: parse arguments and run main
-if __name__ == "__main__": main(parse_arguments())
+if __name__ == "__main__":
+  main(parse_arguments())

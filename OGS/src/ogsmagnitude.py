@@ -6,7 +6,7 @@ OGS Local Magnitude Module - Calibrated M_L for the OGS Network
 OVERVIEW:
 Provides :class:`OGSLocalMagnitude`, an OGS-specific subclass of
 ``ml_catalog.modules.LocalMagnitude`` that implements the local magnitude
-scale calibrated for OGS / Swiss-Alpine seismicity. The class:
+scale calibrated for the OGS / Swiss-Alpine seismicity. The class:
 
 1. Loads per-station amplitude corrections from a ``pandas`` table.
 2. Optionally restricts station contributions to a network whitelist.
@@ -45,24 +45,36 @@ import numpy as np
 import pandas as pd
 from ml_catalog.modules import LocalMagnitude
 
+
 class OGSLocalMagnitude(LocalMagnitude):
   """
   OGS-specific implementation of the ML Catalog LocalMagnitude.
 
-  OGGS has performed extensive calibration of the local magnitude scale for
+  OGS has performed extensive calibration of the local magnitude scale for
   Switzerland and surrounding regions. This implementation includes station
   corrections and the option to ignore specific stations that are known to
   produce unreliable amplitude measurements.
   """
+
   def __init__(self,
                station_corrections: pd.DataFrame,
                ignore_stations: pd.DataFrame = pd.DataFrame(),
                networkfocus: list[str] = [],
-               components: str = "NE") -> None:
+               components: str = "NE",
+               attenuation_params: dict | None = None) -> None:
     self.components = components
     self.station_corrections = station_corrections
     self.ignore_stations = ignore_stations
     self.networkfocus = networkfocus
+    self.attenuation_params = {
+        "c0": -18.0471,
+        "c1": 1.105,
+        "c2": 147.111,
+        "c3": 4.015e-5,
+        "c4": 1.33885,
+    }
+    if attenuation_params is not None:
+      self.attenuation_params.update(attenuation_params)
     super().__init__(hypocentral_range=(3, 150))
 
   def get_log_amp_0(
@@ -71,20 +83,40 @@ class OGSLocalMagnitude(LocalMagnitude):
       depth_km: np.ndarray,
       stations: pd.Series,
   ) -> np.ndarray:
-    # Hypocentral distance in km
-    r = np.sqrt(dist_epi_km**2 + depth_km**2)
-    c0 = -18.0471
-    c1 = 1.105
-    c2 = 147.111
-    c3 = 4.015e-5
-    c4 = 1.33885
+    # Hypocentral distance in km (guarded against r=0 singularity)
+    r = np.maximum(np.sqrt(dist_epi_km**2 + depth_km**2), 0.01)
+    c0 = self.attenuation_params["c0"]
+    c1 = self.attenuation_params["c1"]
+    c2 = self.attenuation_params["c2"]
+    c3 = self.attenuation_params["c3"]
+    c4 = self.attenuation_params["c4"]
     c5 = stations.to_frame()
-    c5["c5"] = 0.0
-    c5["station"] = c5["station"].str.split(".").str[1]
-    for _, row in self.station_corrections.iterrows():
-      if row["station"] in c5["station"].values:
-        c5.loc[c5["station"] == row["station"], "c5"] = float(row["c5"])
-    return c0 + c1 * np.log10(r) + c2 * np.log10(r * c3 + c4) + c5["c5"]
+    # Legacy code for station corrections (commented out)
+    # c5["c5"] = 0.0
+    # c5["station"] = c5["station"].str.split(".").str[1]
+    # for _, row in self.station_corrections.iterrows():
+    #   if row["station"] in c5["station"].values:
+    #     c5.loc[c5["station"] == row["station"], "c5"] = float(row["c5"])
+    # return c0 + c1 * np.log10(r) + c2 * np.log10(r * c3 + c4) + c5["c5"]
+    c5["station"] = c5["station"].astype(str).str.split(".").str[1]
+
+    if (
+        self.station_corrections is not None
+        and not self.station_corrections.empty
+        and "station" in self.station_corrections.columns
+        and "c5" in self.station_corrections.columns
+    ):
+      corr_map = dict(
+          zip(
+              self.station_corrections["station"].astype(str),
+              self.station_corrections["c5"].astype(float),
+          )
+      )
+      c5["c5"] = c5["station"].map(corr_map).fillna(0.0).astype(float)
+    else:
+      c5["c5"] = 0.0
+
+    return c0 + c1 * np.log10(r) + c2 * np.log10(r * c3 + c4) + c5["c5"].values
 
   def _calc_station_amplitude(self, assignments: pd.DataFrame) -> None:
     """
@@ -105,31 +137,37 @@ class OGSLocalMagnitude(LocalMagnitude):
     #       pick for each event_idx and station.
     # NOTE: If there is no S pick, the amplitude will be NaN for that station
     #       for that event_idx.
-    merged = pd.merge(assignments[mask_], assignments[~mask_], how="inner",
-                      on=["event_idx", "station"], suffixes=[
-                        f"_{self.phase}",
-                        f"_{'S' if self.phase == 'P' else 'P'}"])
+    merged = pd.merge(
+        assignments[mask_], assignments[~mask_], how="inner",
+        on=["event_idx", "station"], suffixes=[
+            f"_{self.phase}", f"_{'S' if self.phase == 'P' else 'P'}"
+        ]
+    )
     # Step 2
     # Compute the amplitude of the S pick for each component if the SNR of the
     # P pick is above the threshold
     for component in self.components:
       mask_ = merged[f"snr_{component}_P"] >= SNR_THRESHOLD
       merged.loc[mask_, f"amplitude_{component}"] = merged.loc[
-        mask_, f"amplitude_{component}_S"]
+          mask_, f"amplitude_{component}_S"
+      ]
       if merged[~mask_].empty:
         continue
       merged.loc[~mask_, f"amplitude_{component}"] = np.nan
     # Compute the geometric mean of the valid amplitudes
-    merged["amplitude"] = np.exp(np.nanmean(np.log(
-      merged[[f"amplitude_{component}" for component in self.components]]),
-      axis=1))
+    merged["amplitude"] = np.exp(np.nanmean(
+        np.log(
+            merged[[f"amplitude_{component}" for component in self.components]]
+        ), axis=1)
+    )
     # Step 3
     # We have determined the amplitude for each event_idx and station, now we
     # merge it back to the assignments DataFrame. This will add the amplitude
     # column to the assignments DataFrame.
     assignments["amplitude"] = pd.merge(
-      assignments, merged[["event_idx", "station", "amplitude"]], how="left",
-      on=["event_idx", "station"])["amplitude"]
+        assignments, merged[["event_idx", "station", "amplitude"]], how="left",
+        on=["event_idx", "station"]
+    )["amplitude"]
 
   def _calc_station_magnitude(self, assignments: pd.DataFrame) -> None:
     self._calc_station_amplitude(assignments)
@@ -139,7 +177,8 @@ class OGSLocalMagnitude(LocalMagnitude):
                              assignments: pd.DataFrame) -> pd.DataFrame:
     magnitudes = []
     for (event_idx, group), event_df in assignments.groupby(
-      ["event_idx", "group"]):
+        ["event_idx", "group"]
+    ):
       event_df = event_df[event_df["phase"] == self.phase]
 
       # Use specific list of networks if provided
@@ -151,7 +190,7 @@ class OGSLocalMagnitude(LocalMagnitude):
       # Remove listed stations
       if not self.ignore_stations.empty:
         event_df = event_df[
-          ~event_df["station"].isin(self.ignore_stations["station"])
+            ~event_df["station"].isin(self.ignore_stations["station"])
         ]
 
       # Remove stations with absolute deviation NO greater than 5 times the
@@ -164,17 +203,21 @@ class OGSLocalMagnitude(LocalMagnitude):
         abs_dev = np.abs(station_magnitudes - med)
         # Compute the median absolute deviation
         mad = np.nanmedian(abs_dev)
-        if mad > 0: station_magnitudes = station_magnitudes[abs_dev <= 5 * mad]
+        if mad > 0:
+          station_magnitudes = station_magnitudes[abs_dev <= 5 * mad]
 
       n_stations = np.sum(~np.isnan(station_magnitudes))
       magnitudes.append(
-        {
-          "idx": event_idx,
-          "group": group,
-          "ML": np.nanmean(station_magnitudes),
-          "ML_median": np.nanmedian(station_magnitudes),
-          "ML_unc": np.nanstd(station_magnitudes) / np.sqrt(n_stations - 1),
-          "ML_stations": n_stations,
-        }
+          {
+              "idx": event_idx,
+              "group": group,
+              "ML": np.nanmean(station_magnitudes),
+              "ML_median": np.nanmedian(station_magnitudes),
+              "ML_unc": (
+                  np.nanstd(station_magnitudes) / np.sqrt(n_stations - 1)
+                  if n_stations > 1 else np.nan
+              ),
+              "ML_stations": n_stations,
+          }
       )
     return pd.merge(events, pd.DataFrame(magnitudes), on=["idx", "group"])

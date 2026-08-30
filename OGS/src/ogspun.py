@@ -101,22 +101,27 @@ def parse_arguments():
 
   # -f/--file: Input file path(s), required, accepts multiple files
   parser.add_argument(
-    "-f", "--file", type=Path, required=True, nargs=OGS_C.ONE_MORECHAR_STR,
-    help="Path to the input file")
+      "-f", "--file", type=Path, required=True, nargs=OGS_C.ONE_MORECHAR_STR,
+      help="Path to the input file (can specify multiple files)."
+  )
 
   # -D/--dates: Date range filter, optional, format YYYYMMDD
   parser.add_argument(
-    '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
-    type=OGS_U.is_date, nargs=2, action=OGS_U.SortDatesAction,
-    default=[datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT),
-             datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT)],
-    help="Specify the beginning and ending (inclusive) Gregorian date " \
-         "(YYYYMMDD) range to work with.")
+      '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
+      type=OGS_U.is_date, nargs=2, action=OGS_U.SortDatesAction,
+      default=[datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT),
+               datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT)],
+      help="""
+          Specify the beginning and ending (inclusive) Gregorian date
+          (YYYYMMDD) range to work with.
+      """
+  )
 
   # -v/--verbose: Enable detailed logging output
   parser.add_argument(
-    '-v', "--verbose", action='store_true', default=False,
-    help="Enable verbose output")
+      '-v', "--verbose", action='store_true', default=False,
+      help="Enable verbose output"
+  )
 
   return parser.parse_args()
 
@@ -141,57 +146,41 @@ class DataFilePUN(OGSDataFile):
   # RECORD EXTRACTOR: fixed-width event summary line
   # -------------------------------------------------------------------------
   RECORD_EXTRACTOR_LIST = [
-    fr"^1(?P<{OGS_C.DATE_STR}>\d{{6}}[\s\d]\d[\s\d]\d)\s",  # Date [YYMMDDHHMM]
-    fr"(?P<{OGS_C.SECONDS_STR}>[\s\d]\d\.\d{{2}})\s",       # Seconds [SS.ss]
-    fr"(?P<{OGS_C.LATITUDE_STR}>[\s\d\-\.]{{8}})\s{{2}}",   # Latitude [DD-MM.mm]
-    fr"(?P<{OGS_C.LONGITUDE_STR}>[\s\d\-\.]{{8}})\s{{2}}",  # Longitude [DD-MM.mm]
-    fr"(?P<{OGS_C.DEPTH_STR}>[\s\d\-\.]{{5}})\s{{2}}",      # Depth
-    fr"(?P<{OGS_C.MAGNITUDE_D_STR}>[\-\s\d\.]{{5}})",       # Duration Magnitude
-    fr"(?P<{OGS_C.NO_STR}>[\s\d]{{3}})\s",                  # Number of Observations
-    fr"(?P<{OGS_C.GAP_STR}>[\s\d]{{3}})",                   # GAP
-    fr"(?P<{OGS_C.DMIN_STR}>[\s\d]{{2}}\d\.\d)",            # DMIN
-    fr"(?P<{OGS_C.RMS_STR}>[\s\d]\d\.\d{{2}})",             # RMS
-    fr"(?P<{OGS_C.ERH_STR}>([\s\d\.\-]{{5}}))",             # ERH
-    fr"(?P<{OGS_C.ERZ_STR}>([\s\d\.\-]{{5}}))\s",           # ERZ
-    fr"(?P<{OGS_C.QM_STR}>[A-Z][0-9])",                     # QM
+      # Date [YYMMDDHHMM]
+      fr"^1(?P<{OGS_C.DATE_STR}>\d{{6}}[\s\d]\d[\s\d]\d)\s",
+      # Seconds [SS.ss]
+      fr"(?P<{OGS_C.SECONDS_STR}>[\s\d]\d\.\d{{2}})\s",
+      # Latitude [DD-MM.mm]
+      fr"(?P<{OGS_C.LATITUDE_STR}>[\s\d\-\.]{{8}})\s{{2}}",
+      # Longitude [DD-MM.mm]
+      fr"(?P<{OGS_C.LONGITUDE_STR}>[\s\d\-\.]{{8}})\s{{2}}",
+      # Depth
+      fr"(?P<{OGS_C.DEPTH_STR}>[\s\d\-\.]{{5}})\s{{2}}",
+      # Duration Magnitude
+      fr"(?P<{OGS_C.MAGNITUDE_D_STR}>[\-\s\d\.]{{5}})",
+      # Number of Observations [DDD]
+      fr"(?P<{OGS_C.NO_STR}>[\s\d]{{3}})\s",
+      # GAP [DDD]
+      fr"(?P<{OGS_C.GAP_STR}>[\s\d]{{3}})",
+      # DMIN [DDD.D]
+      fr"(?P<{OGS_C.DMIN_STR}>[\s\d]{{2}}\d\.\d)",
+      # RMS [DD.DD]
+      fr"(?P<{OGS_C.RMS_STR}>[\s\d]\d\.\d{{2}})",
+      # ERH
+      fr"(?P<{OGS_C.ERH_STR}>([\s\d\.\-]{{5}}))",
+      # ERZ
+      fr"(?P<{OGS_C.ERZ_STR}>([\s\d\.\-]{{5}}))\s",
+      # Quality Metric [A-Z][0-9]
+      fr"(?P<{OGS_C.QM_STR}>[A-Z][0-9])",
   ]
-
-  @staticmethod
-  def _parse_seconds(value: str) -> td:
-    """Convert the fixed-width seconds field into a timedelta."""
-    return td(seconds=float(value))
 
   @staticmethod
   def _parse_origin_time(date_value: str, seconds: td) -> datetime:
     """Convert the origin date and seconds fields into a datetime."""
     return datetime.strptime(
-      date_value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR),
-      OGS_C.DATETIME_FMT[:-2]) + seconds
-
-  @staticmethod
-  def _parse_coordinate(value: str):
-    """Convert a degree-minute coordinate string to decimal degrees."""
-    if not value:
-      return OGS_C.NONE_STR
-
-    normalized = value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR)
-    degrees, minutes = normalized.split(OGS_C.DASH_STR)
-    return float(degrees) + float(minutes) / 60.
-
-  @staticmethod
-  def _parse_optional_int(value: str):
-    """Convert an optional integer field, preserving empty values as NONE."""
-    if not value:
-      return OGS_C.NONE_STR
-    return int(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR))
-
-  @staticmethod
-  def _parse_zero_padded_float(value: str) -> float:
-    """Convert a numeric field, mapping placeholder-only values to NaN."""
-    normalized = value.strip()
-    if not any(character.isdigit() for character in normalized):
-      return float("nan")
-    return float(normalized.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR))
+        date_value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR),
+        OGS_C.DATETIME_FMT[:-2]
+    ) + seconds
 
   def read(self):
     """
@@ -241,17 +230,22 @@ class DataFilePUN(OGSDataFile):
       # ---------------------------------------------------------------------
       # DATE PROCESSING AND RANGE FILTERING
       # ---------------------------------------------------------------------
-      result[OGS_C.SECONDS_STR] = self._parse_seconds(result[OGS_C.SECONDS_STR])
+      result[OGS_C.SECONDS_STR] = self._parse_seconds(
+          result[OGS_C.SECONDS_STR]
+      )
       result[OGS_C.DATE_STR] = self._parse_origin_time(
-        result[OGS_C.DATE_STR], result[OGS_C.SECONDS_STR])
+          result[OGS_C.DATE_STR], result[OGS_C.SECONDS_STR]
+      )
 
       if self.start is not None and result[OGS_C.DATE_STR] < self.start:
         self.logger.debug(f"Skipping event before start date: {self.start}")
         self.logger.debug(line)
         continue
 
-      if (self.end is not None and
-          result[OGS_C.DATE_STR] >= self.end + OGS_C.ONE_DAY):
+      if (
+          self.end is not None
+          and result[OGS_C.DATE_STR] >= self.end + OGS_C.ONE_DAY
+      ):
         self.logger.debug(f"Stopping read at event after end date: {self.end}")
         self.logger.debug(line)
         break
@@ -260,42 +254,49 @@ class DataFilePUN(OGSDataFile):
       # FIELD PROCESSING
       # ---------------------------------------------------------------------
       result[OGS_C.LATITUDE_STR] = self._parse_coordinate(
-        result[OGS_C.LATITUDE_STR])
+          result[OGS_C.LATITUDE_STR], round_decimals=4
+      )
       result[OGS_C.LONGITUDE_STR] = self._parse_coordinate(
-        result[OGS_C.LONGITUDE_STR])
-      result[OGS_C.DEPTH_STR] = float(result[OGS_C.DEPTH_STR]) \
-        if result[OGS_C.DEPTH_STR] else OGS_C.NONE_STR
+          result[OGS_C.LONGITUDE_STR], round_decimals=4
+      )
+      result[OGS_C.DEPTH_STR] = self._parse_float(result[OGS_C.DEPTH_STR])
+
       result[OGS_C.NO_STR] = self._parse_optional_int(result[OGS_C.NO_STR])
       result[OGS_C.GAP_STR] = int(result[OGS_C.GAP_STR].replace(
-        OGS_C.SPACE_STR, OGS_C.ZERO_STR))
+          OGS_C.SPACE_STR, OGS_C.ZERO_STR
+      ))
       result[OGS_C.DMIN_STR] = self._parse_zero_padded_float(
-        result[OGS_C.DMIN_STR])
+          result[OGS_C.DMIN_STR]
+      )
       result[OGS_C.RMS_STR] = self._parse_zero_padded_float(
-        result[OGS_C.RMS_STR])
+          result[OGS_C.RMS_STR]
+      )
       result[OGS_C.ERH_STR] = self._parse_zero_padded_float(
-        result[OGS_C.ERH_STR])
+          result[OGS_C.ERH_STR]
+      )
       result[OGS_C.ERZ_STR] = self._parse_zero_padded_float(
-        result[OGS_C.ERZ_STR])
+          result[OGS_C.ERZ_STR]
+      )
 
       # ---------------------------------------------------------------------
       # APPEND EVENT SUMMARY TO RESULTS
       # ---------------------------------------------------------------------
       events_data.append([
-        event_counter + result[OGS_C.DATE_STR].year * OGS_C.MAX_PICKS_YEAR,
-        result[OGS_C.DATE_STR],
-        result[OGS_C.LATITUDE_STR],
-        result[OGS_C.LONGITUDE_STR],
-        result[OGS_C.DEPTH_STR],
-        result[OGS_C.MAGNITUDE_D_STR],
-        result[OGS_C.NO_STR],
-        result[OGS_C.GAP_STR],
-        result[OGS_C.DMIN_STR],
-        result[OGS_C.RMS_STR],
-        result[OGS_C.ERH_STR],
-        result[OGS_C.ERZ_STR],
-        result[OGS_C.QM_STR],
-        None,
-        result[OGS_C.DATE_STR].strftime(OGS_C.DATE_FMT),
+          event_counter + result[OGS_C.DATE_STR].year * OGS_C.MAX_PICKS_YEAR,
+          result[OGS_C.DATE_STR],
+          result[OGS_C.LATITUDE_STR],
+          result[OGS_C.LONGITUDE_STR],
+          result[OGS_C.DEPTH_STR],
+          result[OGS_C.MAGNITUDE_D_STR],
+          result[OGS_C.NO_STR],
+          result[OGS_C.GAP_STR],
+          result[OGS_C.DMIN_STR],
+          result[OGS_C.RMS_STR],
+          result[OGS_C.ERH_STR],
+          result[OGS_C.ERZ_STR],
+          result[OGS_C.QM_STR],
+          None,
+          result[OGS_C.DATE_STR].strftime(OGS_C.DATE_FMT),
       ])
       event_counter += 1
 
@@ -303,15 +304,15 @@ class DataFilePUN(OGSDataFile):
     # BUILD OUTPUT DATAFRAME
     # -----------------------------------------------------------------------
     self.EVENTS = pd.DataFrame(events_data, columns=[
-      OGS_C.INDEX_STR, OGS_C.TIME_STR, OGS_C.LATITUDE_STR,
-      OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR, OGS_C.MAGNITUDE_D_STR,
-      OGS_C.NO_STR, OGS_C.GAP_STR, OGS_C.DMIN_STR, OGS_C.RMS_STR,
-      OGS_C.ERH_STR, OGS_C.ERZ_STR, OGS_C.QM_STR, OGS_C.NOTES_STR,
-      OGS_C.GROUPS_STR
+        OGS_C.INDEX_STR, OGS_C.TIME_STR, OGS_C.LATITUDE_STR,
+        OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR, OGS_C.MAGNITUDE_D_STR,
+        OGS_C.NO_STR, OGS_C.GAP_STR, OGS_C.DMIN_STR, OGS_C.RMS_STR,
+        OGS_C.ERH_STR, OGS_C.ERZ_STR, OGS_C.QM_STR, OGS_C.NOTES_STR,
+        OGS_C.GROUPS_STR
     ]).astype({OGS_C.INDEX_STR: int})
 
     self.EVENTS[OGS_C.MAGNITUDE_D_STR] = self.EVENTS[
-      OGS_C.MAGNITUDE_D_STR
+        OGS_C.MAGNITUDE_D_STR
     ].replace(OGS_C.SPACE_STR * 5, "NaN").apply(float)
 
     self.logger.info(f"Total events read: {len(self.EVENTS)}")

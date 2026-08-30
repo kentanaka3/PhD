@@ -166,19 +166,22 @@ def parse_arguments() -> argparse.Namespace:
 
   # -m/--merge: Consolidate all parsed files into a single unified catalog
   parser.add_argument(
-    "-m", "--merge", action='store_true', default=False,
-    help="Merge all data files into a single catalog")
+      "-m", "--merge", action='store_true', default=False,
+      help="Merge all data files into a single catalog"
+  )
 
   # -x/--ext: File extensions to process (default: all known extensions)
   parser.add_argument(
-    "-x", "--ext", default=OGS_C.ALL_WILDCHAR_STR, type=str,
-    nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR,
-    help="File extension to process")
+      "-x", "--ext", default=OGS_C.ALL_WILDCHAR_STR, type=str,
+      nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR,
+      help="File extension to process"
+  )
 
   # -v/--verbose: Enable detailed logging output
   parser.add_argument(
-    '-v', "--verbose", action='store_true', default=False,
-    help="Enable verbose output")
+      '-v', "--verbose", action='store_true', default=False,
+      help="Enable verbose output"
+  )
 
   # -------------------------------------------------------------------------
   # INPUT PATH GROUP (mutually exclusive: directory OR file)
@@ -187,14 +190,16 @@ def parse_arguments() -> argparse.Namespace:
 
   # -d/--directory: Process all matching files in a directory recursively
   path_group.add_argument(
-    '-d', "--directory", required=False, type=OGS_U.is_dir_path, default=None,
-    help="Base directory for data files.")
+      '-d', "--directory", required=False, type=OGS_U.is_dir_path,
+      default=None, help="Base directory for data files."
+  )
 
   # -f/--file: Process specific file(s) by path
   path_group.add_argument(
-    '-f', "--file", required=False, type=OGS_U.is_file_path, default=None,
-    nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR,
-    help="Base file for data files.")
+      '-f', "--file", required=False, type=OGS_U.is_file_path, default=None,
+      nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR,
+      help="Base file for data files."
+  )
 
   # -------------------------------------------------------------------------
   # DATE RANGE GROUP (mutually exclusive: Gregorian OR Julian)
@@ -203,29 +208,37 @@ def parse_arguments() -> argparse.Namespace:
 
   # -D/--dates: Gregorian date range (YYYYMMDD format)
   date_group.add_argument(
-    '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
-    type=OGS_U.is_date, nargs=2, action=OGS_U.SortDatesAction,
-    default=[datetime.min, datetime.max - OGS_C.ONE_DAY],
-    help="Specify the beginning and ending (inclusive) Gregorian date " \
-         "(YYYYMMDD) range to work with.")
+      '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
+      type=OGS_U.is_date, nargs=2, action=OGS_U.SortDatesAction,
+      default=[datetime.min, datetime.max - OGS_C.ONE_DAY],
+      help="""
+          Specify the beginning and ending (inclusive) Gregorian date
+          (YYYYMMDD) range to work with.
+      """
+  )
 
-  # -J/--julian: Julian date range (YYDDD format)
+  # -J/--julian: Julian date range (YYYYJJJ format)
   date_group.add_argument(
-    '-J', "--julian", required=False, metavar=OGS_C.DATE_STD,
-    action=OGS_U.SortDatesAction, type=OGS_U.is_julian, default=None, nargs=2,
-    help="Specify the beginning and ending (inclusive) Julian date (YYYYDDD) "\
-         "range to work with.")
+      '-J', "--julian", required=False, metavar=OGS_C.DATE_STD, nargs=2,
+      action=OGS_U.SortDatesAction, type=OGS_U.is_julian, default=None,
+      help="""
+          Specify the beginning and ending (inclusive) Julian date (YYYYJJJ)
+          range to work with.
+      """
+  )
 
   # -o/--output: Output directory for the merged catalog
   parser.add_argument(
-    "-o", "--output", required=False, type=str,
-    default=str(DATA_PATH / "catalog" / "OGSCatalog"),
-    help="Name of the catalog")
+      "-o", "--output", required=False, type=str,
+      default=str(DATA_PATH / "catalog" / "OGSCatalog"),
+      help="Name of the catalog"
+  )
   return parser.parse_args()
 
 # =============================================================================
 # DataCatalog Class - Multi-Format Catalog Aggregator
 # =============================================================================
+
 
 class DataCatalog(OGSDataFile):
   """
@@ -247,10 +260,10 @@ class DataCatalog(OGSDataFile):
   # Maps file extensions to their corresponding parser classes
   # Each parser handles a specific OGS legacy format
   DATAFILE_TYPES = {
-    OGS_C.HPL_EXT: DataFileHPL,  # (Highly recommended) Hypocenter information
-    OGS_C.DAT_EXT: DataFileDAT,  # (Recommended) Picks information
-    OGS_C.TXT_EXT: DataFileTXT,  # Local Magnitude information
-    OGS_C.PUN_EXT: DataFilePUN,  # Events (punch card format)
+      OGS_C.HPL_EXT: DataFileHPL,  # (Recommended) Hypocenter information
+      OGS_C.DAT_EXT: DataFileDAT,  # (Recommended) Picks information
+      OGS_C.TXT_EXT: DataFileTXT,  # Local Magnitude information
+      OGS_C.PUN_EXT: DataFilePUN,  # Events (punch card format)
   }
 
   # -------------------------------------------------------------------------
@@ -272,14 +285,15 @@ class DataCatalog(OGSDataFile):
     self.args = args
 
     # Initialize list to hold format-specific parser instances
-    self.files : list[OGSDataFile] = list()
+    self.files: list[OGSDataFile] = list()
 
     Path(args.output).mkdir(parents=True, exist_ok=True)
 
     # Initialize parent class with catalog settings
     super().__init__(
-      Path(args.output), args.dates[0], args.dates[1], verbose=args.verbose,
-      output=Path(args.output))
+        Path(args.output), args.dates[0], args.dates[1], verbose=args.verbose,
+        output=Path(args.output)
+    )
 
   # -------------------------------------------------------------------------
   # METHOD: read() - Discover and parse input files
@@ -310,8 +324,9 @@ class DataCatalog(OGSDataFile):
         if ext in self.DATAFILE_TYPES:
           # Instantiate appropriate parser and add to file list
           self.files.append(self.DATAFILE_TYPES[ext](
-            fr, self.args.dates[0], self.args.dates[1],
-            verbose=self.args.verbose, output=Path(self.args.output)))
+              fr, self.args.dates[0], self.args.dates[1],
+              verbose=self.args.verbose, output=Path(self.args.output)
+          ))
 
     # -------------------------------------------------------------------------
     # DIRECTORY MODE: Recursively find matching files
@@ -332,8 +347,9 @@ class DataCatalog(OGSDataFile):
           if fr.suffix in self.DATAFILE_TYPES:
             # Instantiate appropriate parser and add to file list
             self.files.append(self.DATAFILE_TYPES[fr.suffix](
-              fr, self.args.dates[0], self.args.dates[1],
-              verbose=self.args.verbose, output=Path(self.args.output)))
+                fr, self.args.dates[0], self.args.dates[1],
+                verbose=self.args.verbose, output=Path(self.args.output)
+            ))
 
     # -------------------------------------------------------------------------
     # PARSE AND LOG ALL FILES
@@ -388,25 +404,26 @@ class DataCatalog(OGSDataFile):
     # MERGE EVENTS FROM ALL FILES
     # -------------------------------------------------------------------------
     for f in self.files:
-      if f.get("EVENTS").empty: continue
+      if f.get("EVENTS").empty:
+        continue
       self.logger.info(f"Processing EVENTS from file: {f.input}")
       f.EVENTS = self.normalize_event_groups(f.EVENTS.copy())
       self.EVENTS = self.normalize_event_groups(self.EVENTS)
 
       # First file: Initialize with copy of its events
       f.EVENTS[OGS_C.IDX_EVENTS_STR] = f.EVENTS[OGS_C.IDX_EVENTS_STR].apply(
-        pd.to_numeric, errors='coerce'
+          pd.to_numeric, errors='coerce'
       ).astype(int)
       if self.EVENTS.empty or OGS_C.IDX_EVENTS_STR not in self.EVENTS.columns:
         self.EVENTS = f.EVENTS.copy()
         continue
       if self.EVENTS[self.EVENTS[OGS_C.IDX_EVENTS_STR].isin(
-        f.EVENTS[OGS_C.IDX_EVENTS_STR]
+          f.EVENTS[OGS_C.IDX_EVENTS_STR]
       )].empty:
         self.EVENTS = pd.concat([self.EVENTS, f.EVENTS], ignore_index=True)
         continue
       self.EVENTS[OGS_C.IDX_EVENTS_STR] = self.EVENTS[
-        OGS_C.IDX_EVENTS_STR
+          OGS_C.IDX_EVENTS_STR
       ].apply(pd.to_numeric, errors='coerce').astype(int)
       # TXT files: Contribute magnitude and error information
       if f.input.suffix == OGS_C.TXT_EXT:
@@ -421,43 +438,49 @@ class DataCatalog(OGSDataFile):
           time, groups, event_id, magnitude_d, erz, erh, gap
         """
         self.EVENTS = pd.merge(
-          # Left side: Existing merged events
-          self.EVENTS[[OGS_C.IDX_EVENTS_STR,
-            # TODO: Order alfabetically
-            OGS_C.LATITUDE_STR,
-            OGS_C.LONGITUDE_STR,
-            OGS_C.DEPTH_STR,
-            OGS_C.NUMBER_P_PICKS_STR,
-            OGS_C.NUMBER_S_PICKS_STR,
-            OGS_C.NUMBER_P_AND_S_PICKS_STR,
-            OGS_C.ML_MEDIAN_STR,
-            OGS_C.ML_UNC_STR,
-            OGS_C.ML_STATIONS_STR,
-          ]],
-          # Right side: TXT file contribution (magnitude, errors, gap)
-          f.EVENTS[[OGS_C.IDX_EVENTS_STR,
-            # TODO: Order alfabetically
-            OGS_C.TIME_STR,
-            OGS_C.ERT_STR,
-            OGS_C.ERZ_STR,
-            OGS_C.ERH_STR,
-            OGS_C.GAP_STR,
-            OGS_C.GROUPS_STR,
-            OGS_C.MAGNITUDE_L_STR,
-            OGS_C.MAGNITUDE_D_STR,
-          ]],
-          how="outer",  # Keep all events from both sources
-          on=OGS_C.IDX_EVENTS_STR).copy()
+            # Left side: Existing merged events
+            self.EVENTS[[
+                OGS_C.IDX_EVENTS_STR,
+                # TODO: Order alfabetically
+                OGS_C.LATITUDE_STR,
+                OGS_C.LONGITUDE_STR,
+                OGS_C.DEPTH_STR,
+                OGS_C.NUMBER_P_PICKS_STR,
+                OGS_C.NUMBER_S_PICKS_STR,
+                OGS_C.NUMBER_P_AND_S_PICKS_STR,
+                OGS_C.ML_MEDIAN_STR,
+                OGS_C.ML_UNC_STR,
+                OGS_C.ML_STATIONS_STR,
+            ]],
+            # Right side: TXT file contribution (magnitude, errors, gap)
+            f.EVENTS[[
+                OGS_C.IDX_EVENTS_STR,
+                # TODO: Order alfabetically
+                OGS_C.TIME_STR,
+                OGS_C.ERT_STR,
+                OGS_C.ERZ_STR,
+                OGS_C.ERH_STR,
+                OGS_C.GAP_STR,
+                OGS_C.GROUPS_STR,
+                OGS_C.MAGNITUDE_L_STR,
+                OGS_C.MAGNITUDE_D_STR,
+            ]],
+            how="outer",  # Keep all events from both sources
+            on=OGS_C.IDX_EVENTS_STR
+        ).copy()
 
       # PUN files: Contribute hypocenter location data
       elif f.input.suffix == OGS_C.PUN_EXT:
         self.EVENTS = pd.merge(
-          self.EVENTS,
-          f.EVENTS,
-          how="outer",  # Keep all events from both sources
-          on=[OGS_C.TIME_STR, OGS_C.LATITUDE_STR,
-              OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR,
-              OGS_C.GROUPS_STR]).copy()
+            self.EVENTS,
+            f.EVENTS,
+            how="outer",  # Keep all events from both sources
+            on=[
+                OGS_C.TIME_STR, OGS_C.LATITUDE_STR,
+                OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR,
+                OGS_C.GROUPS_STR
+            ]
+        ).copy()
 
     # -------------------------------------------------------------------------
     # COMPUTE PICK STATISTICS PER EVENT
@@ -469,7 +492,7 @@ class DataCatalog(OGSDataFile):
       # Count picks by event and phase type using groupby + pivot
       # Creates a DataFrame with event_id as index and phase types as columns
       phase_counts = self.PICKS.groupby(
-        [OGS_C.IDX_PICKS_STR, OGS_C.PHASE_STR]
+          [OGS_C.IDX_PICKS_STR, OGS_C.PHASE_STR]
       ).size().unstack(fill_value=0)
 
       # Map P and S pick counts to events
@@ -478,7 +501,7 @@ class DataCatalog(OGSDataFile):
         if phase in phase_counts.columns:
           # Map count from phase_counts to events by event_id
           self.EVENTS[column] = self.EVENTS[OGS_C.IDX_EVENTS_STR].map(
-            phase_counts[phase]
+              phase_counts[phase]
           ).fillna(0).astype(int)
         else:
           # No picks of this phase type
@@ -487,20 +510,20 @@ class DataCatalog(OGSDataFile):
       # Count stations with both P and S picks per event
       # Step 1: Count unique phase types per (event, station) pair
       station_phase_counts = self.PICKS.groupby(
-        [OGS_C.IDX_PICKS_STR, OGS_C.STATION_STR]
+          [OGS_C.IDX_PICKS_STR, OGS_C.STATION_STR]
       )[OGS_C.PHASE_STR].nunique()
 
       # Step 2: Filter to stations with 2+ phase types (both P and S)
       # Step 3: Count such stations per event
       stations_with_both = station_phase_counts[
-        station_phase_counts >= 2
+          station_phase_counts >= 2
       ].groupby(
-        level=0  # Group by event_id (first level of MultiIndex)
+          level=0  # Group by event_id (first level of MultiIndex)
       ).size()
 
       # Map station counts to events
       self.EVENTS[OGS_C.NUMBER_P_AND_S_PICKS_STR] = self.EVENTS[
-        OGS_C.IDX_EVENTS_STR
+          OGS_C.IDX_EVENTS_STR
       ].map(stations_with_both).fillna(0).astype(int)
 
     else:
@@ -512,7 +535,7 @@ class DataCatalog(OGSDataFile):
       time_series = self.EVENTS[OGS_C.TIME_STR]
       if not isinstance(time_series, pd.Series):
         raise TypeError(
-          f"Expected {OGS_C.TIME_STR!r} to resolve to a pandas Series"
+            f"Expected {OGS_C.TIME_STR!r} to resolve to a pandas Series"
         )
       self.EVENTS[OGS_C.GROUPS_STR] = time_series.dt.date
 
@@ -598,8 +621,10 @@ def main(args: argparse.Namespace) -> None:
   OGS_Catalog.read()
 
   # If merge flag set, consolidate all files into single catalog
-  if args.merge: OGS_Catalog.merge()
+  if args.merge:
+    OGS_Catalog.merge()
 
 
 # Script entry point: parse arguments and run main
-if __name__ == "__main__": main(parse_arguments())
+if __name__ == "__main__":
+  main(parse_arguments())

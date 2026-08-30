@@ -14,14 +14,15 @@
 
 # Simple smoke-test payload for LAUNCHME.sh.
 # LAUNCHME.sh dummy 1 1 launchme_dummy python AISeism/WORK/test/dummy.py
+set -euo pipefail
 
 # Reseting the number of Environment variables for specific use case
 source ./ACTIVATEME.sh
 
-CONDA_BIN="/leonardo_work/IscrC_AISeism/.miniconda3/bin/conda"
 date
-printf 'Executing command: %s run -n SBC_3.12' "$CONDA_BIN"
-printf ' %s' "$@"
+cmd=("$@")
+printf 'Executing command:'
+printf ' %q' "${cmd[@]}"
 printf '\n'
-"$CONDA_BIN" run -n SBC_3.12 "$@"
+"${cmd[@]}"
 date

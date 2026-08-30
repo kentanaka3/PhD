@@ -1,8 +1,10 @@
+from ogsutils import OGSBPGraphPicks, dist_prob, dist_pick, dist_event
+from ogscatalog import OGSCatalog, _EVENTS_MH_COLUMNS, _EVENTS_PHASES
+import ogsconstants as OGS_C
 import os
 import sys
 import unittest
 import unittest.mock
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -10,10 +12,6 @@ from matplotlib.path import Path as mplPath
 
 THIS_DIR = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(THIS_DIR + "/../src"))
-
-import ogsconstants as OGS_C
-from ogscatalog import OGSCatalog, _EVENTS_MH_COLUMNS, _EVENTS_PHASES
-from ogsutils import OGSBPGraphPicks
 
 
 class TestOGSCatalogEventPrefilter(unittest.TestCase):
@@ -23,20 +21,20 @@ class TestOGSCatalogEventPrefilter(unittest.TestCase):
 
   def _event_frame(self) -> pd.DataFrame:
     return pd.DataFrame({
-      OGS_C.INDEX_STR: [1, 2, 3],
-      OGS_C.TIME_STR: [
-        "2024-01-01T00:00:00",
-        "2024-01-01T00:01:00",
-        "2024-01-01T00:02:00",
-      ],
-      OGS_C.LATITUDE_STR: [0.5, 3.0, 1.5],
-      OGS_C.LONGITUDE_STR: [0.5, 3.0, 1.5],
-      OGS_C.DEPTH_STR: [1.0, 2.0, 3.0],
-      OGS_C.ERH_STR: [0.1, 0.2, 0.3],
-      OGS_C.ERZ_STR: [0.1, 0.2, 0.3],
-      OGS_C.GAP_STR: [10, 20, 30],
-      OGS_C.MAGNITUDE_L_STR: [1.1, 2.2, 3.3],
-      OGS_C.GROUPS_STR: ["2024-01-01", "2024-01-01", "2024-01-01"],
+        OGS_C.INDEX_STR: [1, 2, 3],
+        OGS_C.TIME_STR: [
+            "2024-01-01T00:00:00",
+            "2024-01-01T00:01:00",
+            "2024-01-01T00:02:00",
+        ],
+        OGS_C.LATITUDE_STR: [0.5, 3.0, 1.5],
+        OGS_C.LONGITUDE_STR: [0.5, 3.0, 1.5],
+        OGS_C.DEPTH_STR: [1.0, 2.0, 3.0],
+        OGS_C.ERH_STR: [0.1, 0.2, 0.3],
+        OGS_C.ERZ_STR: [0.1, 0.2, 0.3],
+        OGS_C.GAP_STR: [10, 20, 30],
+        OGS_C.MAGNITUDE_L_STR: [1.1, 2.2, 3.3],
+        OGS_C.GROUPS_STR: ["2024-01-01", "2024-01-01", "2024-01-01"],
     })
 
   def test_event_candidate_mask_projects_onto_polygon(self):
@@ -53,41 +51,43 @@ class TestOGSCatalogEventPrefilter(unittest.TestCase):
     skimmed_frames: list[pd.DataFrame] = []
 
     candidates = self.catalog._prefilter_events(
-      events,
-      polygon.vertices,
-      skimmed_frames,
-      pd.Timestamp("2024-01-01"),
-      "TARGET",
+        events,
+        polygon.vertices,
+        skimmed_frames,
+        pd.Timestamp("2024-01-01"),
+        "TARGET",
     )
 
     expected_candidates = events.iloc[[0, 2]].reset_index(drop=True)
     pd.testing.assert_frame_equal(candidates, expected_candidates)
     self.assertEqual(len(skimmed_frames), 1)
     pd.testing.assert_frame_equal(
-      skimmed_frames[0],
-      events.iloc[[1]].reindex(columns=_EVENTS_MH_COLUMNS).reset_index(
-        drop=True
-      ),
+        skimmed_frames[0],
+        events.iloc[[1]].reindex(
+            columns=_EVENTS_MH_COLUMNS
+        ).reset_index(
+            drop=True
+        ),
     )
 
   def test_event_feasible_positions_prune_impossible_rows(self):
     base = pd.DataFrame({
-      OGS_C.TIME_STR: [
-        "2024-01-01T00:00:00",
-        "2024-01-01T00:10:00",
-      ],
-      OGS_C.LATITUDE_STR: [46.0, 46.0],
-      OGS_C.LONGITUDE_STR: [13.0, 13.0],
-      OGS_C.DEPTH_STR: [1000.0, 1000.0],
+        OGS_C.TIME_STR: [
+            "2024-01-01T00:00:00",
+            "2024-01-01T00:10:00",
+        ],
+        OGS_C.LATITUDE_STR: [46.0, 46.0],
+        OGS_C.LONGITUDE_STR: [13.0, 13.0],
+        OGS_C.DEPTH_STR: [1000.0, 1000.0],
     })
     target = pd.DataFrame({
-      OGS_C.TIME_STR: [
-        "2024-01-01T00:00:01",
-        "2024-01-01T01:00:00",
-      ],
-      OGS_C.LATITUDE_STR: [46.0, 47.0],
-      OGS_C.LONGITUDE_STR: [13.0, 14.0],
-      OGS_C.DEPTH_STR: [1000.0, 1000.0],
+        OGS_C.TIME_STR: [
+            "2024-01-01T00:00:01",
+            "2024-01-01T01:00:00",
+        ],
+        OGS_C.LATITUDE_STR: [46.0, 47.0],
+        OGS_C.LONGITUDE_STR: [13.0, 14.0],
+        OGS_C.DEPTH_STR: [1000.0, 1000.0],
     })
 
     base_pos, target_pos = self.catalog._event_feasible_positions(base, target)
@@ -97,14 +97,14 @@ class TestOGSCatalogEventPrefilter(unittest.TestCase):
 
   def test_mh_diff_normalizes_mixed_timezone_event_times(self):
     self.catalog.EventsMH = pd.DataFrame({
-      f"{OGS_C.TIME_STR}_base": [
-        pd.Timestamp("2024-01-01T00:00:00"),
-        pd.Timestamp("2024-01-01T00:00:10Z"),
-      ],
-      f"{OGS_C.TIME_STR}_target": [
-        pd.Timestamp("2024-01-01T00:00:01Z"),
-        pd.Timestamp("2024-01-01T00:00:11"),
-      ],
+        f"{OGS_C.TIME_STR}_base": [
+            pd.Timestamp("2024-01-01T00:00:00"),
+            pd.Timestamp("2024-01-01T00:00:10Z"),
+        ],
+        f"{OGS_C.TIME_STR}_target": [
+            pd.Timestamp("2024-01-01T00:00:01Z"),
+            pd.Timestamp("2024-01-01T00:00:11"),
+        ],
     })
 
     diff = self.catalog._mh_diff(OGS_C.TIME_STR)
@@ -147,39 +147,87 @@ class TestOGSCatalogEventPrefilter(unittest.TestCase):
 class TestOGSBPGraphPicks(unittest.TestCase):
   def test_make_match_limits_candidates_by_station_and_time_window(self):
     base = pd.DataFrame({
-      OGS_C.TIME_STR: [
-        "2024-01-01T00:00:00",
-        "2024-01-01T00:00:10",
-      ],
-      OGS_C.STATION_STR: ["AAA", "AAA"],
-      OGS_C.PHASE_STR: [OGS_C.PWAVE, OGS_C.SWAVE],
+        OGS_C.TIME_STR: [
+            "2024-01-01T00:00:00",
+            "2024-01-01T00:00:10",
+        ],
+        OGS_C.STATION_STR: ["AAA", "AAA"],
+        OGS_C.PHASE_STR: [OGS_C.PWAVE, OGS_C.SWAVE],
     })
     target = pd.DataFrame({
-      OGS_C.TIME_STR: [
-        "2024-01-01T00:00:00.2",
-        "2024-01-01T00:00:10.3",
-        "2024-01-01T00:00:10.8",
-        "2024-01-01T00:00:00.1",
-      ],
-      OGS_C.STATION_STR: ["AAA", "AAA", "AAA", "BBB"],
-      OGS_C.PHASE_STR: [
-        OGS_C.PWAVE,
-        OGS_C.SWAVE,
-        OGS_C.SWAVE,
-        OGS_C.PWAVE,
-      ],
-      OGS_C.PROBABILITY_STR: [0.9, 0.8, 0.7, 0.9],
+        OGS_C.TIME_STR: [
+            "2024-01-01T00:00:00.2",
+            "2024-01-01T00:00:10.3",
+            "2024-01-01T00:00:10.8",
+            "2024-01-01T00:00:00.1",
+        ],
+        OGS_C.STATION_STR: ["AAA", "AAA", "AAA", "BBB"],
+        OGS_C.PHASE_STR: [
+            OGS_C.PWAVE,
+            OGS_C.SWAVE,
+            OGS_C.SWAVE,
+            OGS_C.PWAVE,
+        ],
+        OGS_C.PROBABILITY_STR: [0.9, 0.8, 0.7, 0.9],
     })
 
     matcher = OGSBPGraphPicks(base, target, verbose=False)
 
-    self.assertEqual({tuple(edge) for edge in matcher.G.edges()}, {(0, 2), (1, 3)})
+    self.assertEqual(
+        {tuple(edge) for edge in matcher.G.edges()}, {(0, 2), (1, 3)}
+    )
     pairs = matcher.matched_pairs_array()
     pairs = pairs[np.argsort(pairs[:, 0])]
     np.testing.assert_array_equal(
-      pairs,
-      np.array([[0, 2], [1, 3]], dtype=np.int64),
+        pairs,
+        np.array([[0, 2], [1, 3]], dtype=np.int64),
     )
+
+
+class TestOGSDistanceMetrics(unittest.TestCase):
+  def test_dist_prob_target_over_base(self):
+    base = pd.Series({OGS_C.PROBABILITY_STR: 1.0})
+    target_high = pd.Series({OGS_C.PROBABILITY_STR: 0.9})
+    target_low = pd.Series({OGS_C.PROBABILITY_STR: 0.3})
+
+    score_high = dist_prob(base, target_high)
+    score_low = dist_prob(base, target_low)
+
+    self.assertAlmostEqual(score_high, 0.9)
+    self.assertAlmostEqual(score_low, 0.3)
+    self.assertGreater(score_high, score_low)
+
+  def test_dist_prob_zero_division_guard(self):
+    base_zero = pd.Series({OGS_C.PROBABILITY_STR: 0.0})
+    target = pd.Series({OGS_C.PROBABILITY_STR: 0.5})
+
+    score = dist_prob(base_zero, target)
+    self.assertGreaterEqual(score, 0.0)
+    self.assertLessEqual(score, 1.0)
+
+  def test_dist_pick_higher_confidence_higher_score(self):
+    from obspy import UTCDateTime
+    t0 = UTCDateTime("2024-01-01T00:00:00")
+    base = pd.Series({
+        OGS_C.TIME_STR: t0,
+        OGS_C.PHASE_STR: OGS_C.PWAVE,
+        OGS_C.PROBABILITY_STR: 1.0,
+    })
+    target_high = pd.Series({
+        OGS_C.TIME_STR: t0,
+        OGS_C.PHASE_STR: OGS_C.PWAVE,
+        OGS_C.PROBABILITY_STR: 0.95,
+    })
+    target_low = pd.Series({
+        OGS_C.TIME_STR: t0,
+        OGS_C.PHASE_STR: OGS_C.PWAVE,
+        OGS_C.PROBABILITY_STR: 0.20,
+    })
+
+    score_high = dist_pick(base, target_high)
+    score_low = dist_pick(base, target_low)
+
+    self.assertGreater(score_high, score_low)
 
 
 if __name__ == "__main__":

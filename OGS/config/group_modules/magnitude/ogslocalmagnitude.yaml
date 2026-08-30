@@ -5,3 +5,9 @@ station_corrections:
 ignore_stations:
   _target_: pandas.read_csv
   filepath_or_buffer: "OGS/data/Magnitude/LocalMagnitude/IGNORE_STATIONS.csv"
+attenuation_params:
+  c0: -18.0471
+  c1: 1.105
+  c2: 147.111
+  c3: 4.015e-5
+  c4: 1.33885

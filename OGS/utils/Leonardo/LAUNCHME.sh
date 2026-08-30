@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+set -euo pipefail
+
 # =============================================================================
 # LAUNCHME.sh - SLURM Job Submission Wrapper Script
 # =============================================================================
@@ -48,9 +51,6 @@
 # -----------------------------------------------------------------------------
 # CONFIGURATION
 # -----------------------------------------------------------------------------
-
-# Strict mode: exit on error, undefined variable, or pipe failure
-set -euo pipefail
 
 # MPI command prefix used in the template when a multi-task job is selected.
 # The trailing space is intentional: it allows the script to append the MPI
@@ -226,16 +226,17 @@ configure_template() {
 #   the EXIT trap.
 restore_template() {
   [ "$TEMPLATE_CONFIGURED" -eq 1 ] || return 0
-  sed -i -E -e "s/(#SBATCH --job-name=\"${CURRENT_USER} )${JOB_NAME}/\1#/g" \
-            -e "s/(#SBATCH --nodes=)${CURRENT_NODES}/\1#/g" \
-            -e "s/(#SBATCH --tasks-per-node=)${CURRENT_TASKS}/\1#/g" \
-            -e "s/(#SBATCH --gres=gpu:)${CURRENT_TASKS}/\1#/g" \
-            -e "s/(#SBATCH --cpus-per-task=)${CURRENT_CPUS}/\1#/g" \
-            -e "s/(#SBATCH --error=${USER_INITIAL}_%j_)${JOB_NAME_SUFFIX}.err/\1#.err/g" \
-            -e "s/(#SBATCH --output=${USER_INITIAL}_%j_)${JOB_NAME_SUFFIX}.out/\1#.out/g" \
-            -e "s/(export NUMBA_NUM_THREADS=)${CURRENT_THREADS}/\1#/g" \
-            -e "s/(export OMP_NUM_THREADS=)${CURRENT_THREADS}/\1#/g" \
-            -e "s/${MPI_CMD}${CURRENT_TASKS}/${MPI_CMD}#/g" "$TEMPLATE"
+  sed -i -E \
+    -e "s/(#SBATCH --job-name=\"${CURRENT_USER} )${JOB_NAME}/\1#/g" \
+    -e "s/(#SBATCH --nodes=)${CURRENT_NODES}/\1#/g" \
+    -e "s/(#SBATCH --tasks-per-node=)${CURRENT_TASKS}/\1#/g" \
+    -e "s/(#SBATCH --gres=gpu:)${CURRENT_TASKS}/\1#/g" \
+    -e "s/(#SBATCH --cpus-per-task=)${CURRENT_CPUS}/\1#/g" \
+    -e "s/(#SBATCH --error=${USER_INITIAL}_%j_)${JOB_NAME_SUFFIX}.err/\1#.err/g" \
+    -e "s/(#SBATCH --output=${USER_INITIAL}_%j_)${JOB_NAME_SUFFIX}.out/\1#.out/g" \
+    -e "s/(export NUMBA_NUM_THREADS=)${CURRENT_THREADS}/\1#/g" \
+    -e "s/(export OMP_NUM_THREADS=)${CURRENT_THREADS}/\1#/g" \
+    -e "s/${MPI_CMD}${CURRENT_TASKS}/${MPI_CMD}#/g" "$TEMPLATE"
   TEMPLATE_CONFIGURED=0
 }
 

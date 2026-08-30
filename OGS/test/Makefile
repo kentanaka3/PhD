@@ -1,4 +1,4 @@
-all: .dat .hpl .pun .txt parser constants
+all: .dat .hpl .pun .txt parser constants clustering downloader catalog data
 
 constants:
 	python testogsconstants.py
@@ -17,3 +17,14 @@ parser:
 
 .txt:
 	python testogstxt.py
+clustering:
+	python testogsclustering.py
+
+downloader:
+	python testogsdownloader.py
+
+catalog:
+	python testogscatalog.py
+
+data:
+	python testogsdata.py

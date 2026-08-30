@@ -1,14 +1,16 @@
 # =============================================================================
-# AISeism Seismic Data Processing Pipeline - Makefile
+# AISeism Seismic Data Processing Pipeline for Local workflow - Makefile
 # =============================================================================
 # Pipeline stages:
 #   1. DATA ACQUISITION   : download, compress, decompress, retrieve, station
 #   2. PHASE PICKING      : PhaseNet / EQTransformer with dataset+threshold args
-#   3. PHASE ASSOCIATION  : PyOcto / GaMMA with picker-input args
+#   3. PHASE ASSOCIATION  : PyOcto / GaMMA / REAL with picker-input args
 #   4. EVENT LOCATION     : NLL1D / NLL3D with associator+picker-input args
 #   5. CATALOG MANAGEMENT : parse, clean
 #
-# USAGE EXAMPLES:
+# QUICK START / USAGE EXAMPLES:
+#   make help
+#   make init [DRY_RUN=1]   # Initialize the WORK directory structure
 #   make download YEAR=2025 STEP_DAYS=5 OFFSET=0 END_DAY=365
 #   make download YEAR=2025 STEP_DAYS=5 OFFSET=0 END_DAY=365 THREADS=4
 #	  make compress           # Compress raw waveforms into yearly tar.gz files
@@ -22,16 +24,32 @@
 #   make base               # Just make the base catalog for quick iteration
 #   make station YEAR=2025
 #   make parse
-#   make clean              # WARNING: deletes catalogs
+#   make clean              # WARNING: deletes generated catalogs
+#   make test               # Run a quick test of the SBC_RUN_BIN entrypoint
+#
+# Bracketed targets must be quoted because square brackets are shell glob characters:
+#   make PhaseNet[INSTANCE,0.2]
+#   make "PyOcto[PhaseNet,INSTANCE,0.2]"
+#   make "NLL1D[PyOcto,PhaseNet,INSTANCE,0.2]" START_DATE=2024-03-20 END_DATE=2024-06-20
+# Use `make -n TARGET ...` to preview a command.
 #
 # Database/Picker/associator/NLL targets are generated from the registered
 # stage-name lists below via the
 # _INDEXER_RULES / _PICKER_RULES / _ASSOC_RULES / _NLL_RULES macros.
 #
 # DEPENDENCIES:
-#   - Analyze.sh         : SLURM job-submission wrapper (activates SBC env)
-#   - ml_catalog_run     : ML catalog generation entrypoint (Hydra)
-#   - $(SRC_PATH)/*.py   : OGS-specific Python scripts
+#   - LAUNCHME.sh           : Local command runner (argv-safe, supports DRY_RUN)
+#   - $(SBC_RUN_BIN)        : ML catalog generation entrypoint (Hydra) [= ml_catalog_run]
+#   - $(OGS_PATH)/src/*.py  : OGS-specific Python scripts
+#
+# This Makefile intentionally does not submit SLURM jobs, load modules, install
+# packages, or modify OGS/utils/Leonardo. It provides a local wrapper around
+# the checked-in OGS Python utilities and the scripts in this directory.
+#
+# Use `DRY_RUN=1` with filesystem or command targets to inspect actions without
+# creating directories, links, or running a process.  For arbitrary commands,
+# invoke LAUNCHME.sh directly; keeping argv in the caller's shell avoids
+# reparsing a command string in Make.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -47,23 +65,33 @@ PROJECT  := ""
 THREADS  ?= 4
 
 
-# Data range
-YEAR        ?= 2025
-STEP_DAYS   ?= 5
-OFFSET      ?= 0
-END_DAY     ?= 366    # max 366 (leap years); loop clamps to year end
+# Date Variables
+YEAR         ?= 2026
+STEP_DAYS    ?= 5
+OFFSET       ?= 0
+END_DAY      ?= 366    # max 366 (leap years); loop clamps to year end
 
-START_DATE ?= $(shell date -d "$(YEAR)-01-01 + $(OFFSET) days" +%Y%m%d)
-END_DATE   ?= $(shell date -d "$(YEAR)-12-31" +%Y%m%d)
+# Paths
+OGS_PATH     ?= $(abspath $(LOCAL_DIR)/../..)
+WORK_PATH    ?= $(if $(HOME),$(HOME),$(CURDIR))/AISeism/WORK
+NLL_PATH     ?= $(abspath $(WORK_PATH)/../NonLinLoc)
+SBC_PATH     ?= $(abspath $(WORK_PATH)/../ml_catalog_main)
+CATALOG_PATH ?= $(abspath $(WORK_PATH)/catalog)
+DATASET_PATH ?= $(abspath $(WORK_PATH)/dataset)
+STATION_PATH ?= $(abspath $(WORK_PATH)/station)
+WAVE_PATH    ?= $(abspath $(WORK_PATH)/waveform)
+
+START_DATE   ?= $(shell date -d "$(YEAR)-01-01 + $(OFFSET) days" +%Y%m%d)
+END_DATE     ?= $(shell date -d "$(YEAR)-12-31" +%Y%m%d)
 
 _START_DATE_CHECK := $(shell date -d "$(START_DATE)" +%Y%m%d 2>/dev/null || echo invalid)
-_END_DATE_CHECK   := $(shell date -d "$(END_DATE)"   +%Y%m%d 2>/dev/null || echo invalid)
+_END_DATE_CHECK   := $(shell date -d  "$(END_DATE)"  +%Y%m%d 2>/dev/null || echo invalid)
 $(if $(filter invalid,$(_START_DATE_CHECK)),$(error Invalid START_DATE: $(START_DATE)))
 $(if $(filter invalid,$(_END_DATE_CHECK)),$(error Invalid END_DATE: $(END_DATE)))
 
 ifeq ($(YEAR),$(shell date -d "$(START_DATE)" +%Y))
 else
-	YEAR := $(shell date -d "$(START_DATE)" +%Y)
+  YEAR := $(shell date -d "$(START_DATE)" +%Y)
 endif
 
 # Paths
@@ -81,24 +109,24 @@ TT_DB        ?= $(ROOT)/OGS/data/VelocityModel/1D/tt_db.txt
 ML_CATALOG_RUN := HYDRA_FULL_ERROR=1 ml_catalog_run +libpath=.
 
 # Default picker/associator roots that chained stages can reuse.
-base        := OGS/$(YEAR)
-BASE_PICKER := $(ROOT)/catalogs/$(base)/SeisBenchPicker
-BASE_ASSOC  := $(ROOT)/catalogs/$(base)/PyOcto
+base         := OGS/$(YEAR)
+BASE_PICKER  := $(WORK_PATH)/catalogs/$(base)/SeisBenchPicker
+BASE_ASSOC   := $(WORK_PATH)/catalogs/$(base)/PyOcto
 
 # Default selections and registered stage names for generated runtime targets.
 # The generated rules inject these values into the Hydra overrides.
-INDEXER     ?= Indexer
-INDEXERS		:= Indexer
-MODEL 			?= PhaseNet
-MODELS			:= PhaseNet EQTransformer
-DATASET 		?= INSTANCE
-DATASETS		:= Original INSTANCE STEAD SCEDC
-THRESHOLD		?= 0.1
-THRESHOLDS  := 0.1 0.2 0.3
-ASSOC			  ?= PyOcto
-ASSOCS			:= PyOcto GaMMA
-NLL				  ?= NLL1D
-NLLS				:= NLL1D NLL3D
+INDEXER      ?= Indexer
+INDEXERS     := Indexer
+MODEL        ?= PhaseNet
+MODELS       := PhaseNet EQTransformer
+DATASET      ?= INSTANCE
+DATASETS     := Original INSTANCE STEAD SCEDC
+THRESHOLD    ?= 0.1
+THRESHOLDS   := 0.1 0.2 0.3
+ASSOC        ?= PyOcto
+ASSOCS       := PyOcto GaMMA
+NLL          ?= NLL1D
+NLLS         := NLL1D NLL3D
 
 # -----------------------------------------------------------------------------
 # PHONY DECLARATIONS
@@ -110,8 +138,8 @@ NLLS				:= NLL1D NLL3D
 # -----------------------------------------------------------------------------
 # DEFAULT / META
 # -----------------------------------------------------------------------------
-all: base
-	@$(MAKE) --no-print-directory $(NLL)[$(ASSOC),$(MODEL),$(DATASET),$(THRESHOLD)] START_DATE=20240320 END_DATE=20240620
+all: base # 2
+	@$(MAKE) --no-print-directory '$(NLL)[$(ASSOC),$(MODEL),$(DATASET),$(THRESHOLD)]'
 
 help:
 	@echo "AISeism Makefile — common targets:"
@@ -148,13 +176,19 @@ download:
 			--threads $(THREADS) -S "* -SP -OL -ED"; \
 	done
 
-compress:
-	$(PYTHON_PATH) $(WORK_ROOT)/compressor.py -C $(WAVE_PATH) . -v
+compress: #
+	@echo "WARNING: make compress is deprecated; use the current waveform archive workflow instead." >&2
+	"$(LOCAL_RUN)" --workdir "$(WORK_PATH)" --threads "$(THREADS)" \
+		$(DRY_FLAG) -- "$(PYTHON_BIN)" "$(WORK_PATH)/compressor.py" \
+		-C "$(WAVE_PATH)" . -v
 
 decompress:
-	$(PYTHON_PATH) $(WORK_ROOT)/compressor.py -D $(WAVE_PATH)/$(YEAR) \
-		$(WAVE_PATH) -v && \
-	find $(WAVE_PATH)/$(YEAR)/* -type f -name "*.tar.gz" -print -delete
+	@echo "WARNING: make decompress is deprecated; use the current waveform archive workflow instead." >&2
+	"$(LOCAL_RUN)" --workdir "$(WORK_PATH)" --threads "$(THREADS)" \
+		$(DRY_FLAG) -- "$(PYTHON_BIN)" "$(WORK_PATH)/compressor.py" \
+		-D "$(WAVE_PATH)/$(YEAR)" \
+		"$(WAVE_PATH)" -v
+	find "$(WAVE_PATH)/$(YEAR)"/* -type f -name "*.tar.gz" -print -delete
 
 # Station metadata for the configured date range.
 station:
@@ -237,9 +271,11 @@ ASSOC_DIR_REAL         ?= REAL
 define _INDEXER_RULES
 
 $1:
-	$$(ML_CATALOG_RUN) +index_only=true data=ogsDB data.check=true \
-		data.index_workers=$$(THREADS) \
-		data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
+	"$$(LOCAL_RUN)" --workdir "$$(WORK_PATH)" --threads "$$(THREADS)" \
+	  --env HYDRA_FULL_ERROR=1 $$(DRY_FLAG) -- $$(SBC_RUN_BIN) \
+	  +index_only=true data=ogsDB data.check=true \
+	  data.index_workers=$$(THREADS) \
+	  data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
 endef
 
 # --- PICKER ------------------------------------------------------------------

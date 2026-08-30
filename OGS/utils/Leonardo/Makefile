@@ -1,16 +1,16 @@
 # =============================================================================
-# AISeism Seismic Data Processing Pipeline - Makefile
+# AISeism Seismic Data Processing Pipeline for HPC workflow - Makefile
 # =============================================================================
 # Pipeline stages:
 #   1. DATA ACQUISITION   : download, compress, decompress, retrieve, station
 #   2. PHASE PICKING      : PhaseNet / EQTransformer with dataset+threshold args
-#   3. PHASE ASSOCIATION  : PyOcto / GaMMA with picker-input args
+#   3. PHASE ASSOCIATION  : PyOcto / GaMMA / REAL with picker-input args
 #   4. EVENT LOCATION     : NLL1D / NLL3D with associator+picker-input args
 #   5. CATALOG MANAGEMENT : parse, clean
 #
 # QUICK START / USAGE EXAMPLES:
 #   make help
-#   make init								# Initialize the WORK directory structure
+#   make init [DRY_RUN=1]   # Initialize the WORK directory structure
 #   make download YEAR=2025 STEP_DAYS=5 OFFSET=0 END_DAY=365
 #   make download YEAR=2025 STEP_DAYS=5 OFFSET=0 END_DAY=365 THREADS=4
 #	  make compress           # Compress raw waveforms into yearly tar.gz files
@@ -41,8 +41,8 @@
 # _INDEXER_RULES / _PICKER_RULES / _ASSOC_RULES / _NLL_RULES macros.
 #
 # DEPENDENCIES:
-#   - LAUNCHER.sh           : SLURM job-submission wrapper (activates SBC env)
-#   - ml_catalog_run        : ML catalog generation entrypoint (Hydra)
+#   - LAUNCHME.sh           : SLURM job-submission wrapper (activates SBC env)
+#   - $(SBC_RUN_BIN)        : ML catalog generation entrypoint (Hydra) [= ml_catalog_run]
 #   - $(OGS_PATH)/src/*.py  : OGS-specific Python scripts
 # =============================================================================
 
@@ -52,22 +52,27 @@
 
 # General
 USER        ?= $(shell whoami)
-PROJECT     ?=
+PROJECT     ?= Leonardo_Dev
 THREADS     ?= 4
+CONDA_ENV   ?= SBC_3.12
 
 # Date Variables
-YEAR        ?= 2025
+YEAR        ?= 2026
 STEP_DAYS   ?= 5
 OFFSET      ?= 0
 END_DAY     ?= 366    # max 366 (leap years); loop clamps to year end
 
 # Paths
-WORK_PATH   ?= /leonardo_work/IscrC_AISeism/WORK
-OGS_PATH    ?= $(realpath $(WORK_PATH)/../PhD/OGS)
-WAVE_PATH   ?= $(WORK_PATH)/waveform
-
-# Tool paths
-PYTHON      ?= python
+WORK_PATH   		?= /leonardo_work/IscrC_AISeism/WORK
+OGS_PATH    		?= $(abspath $(WORK_PATH)/../PhD/OGS)
+NLL_PATH    		?= $(abspath $(WORK_PATH)/../NonLinLoc)
+SBC_PATH				?= $(abspath $(WORK_PATH)/../ml_catalog_main)
+CONDA_INSTALLER	?= $(abspath $(WORK_PATH)/../Miniconda3-latest-Linux-x86_64.sh)
+CONDA_ROOT 			?= $(abspath $(WORK_PATH)/../.miniconda3)
+CATALOG_PATH 		?= $(abspath $(WORK_PATH)/catalog)
+DATASET_PATH 		?= $(abspath $(WORK_PATH)/dataset)
+STATION_PATH 		?= $(abspath $(WORK_PATH)/station)
+WAVE_PATH   		?= $(abspath $(WORK_PATH)/waveform)
 
 START_DATE  ?= $(shell date -d "$(YEAR)-01-01 + $(OFFSET) days" +%Y%m%d)
 END_DATE    ?= $(shell date -d "$(YEAR)-12-31" +%Y%m%d)
@@ -83,15 +88,15 @@ else
 endif
 
 # More paths
-MANUAL_PATH  ?= $(WORK_PATH)/manual/OnlyEqNLL1D
-CONDA_PATH   ?= /leonardo_work/IscrC_AISeism/.miniconda3/bin/conda
-PYTHON_PATH  ?= /leonardo_work/IscrC_AISeism/.miniconda3/envs/SBC_3.12/bin/python
-STATION_PATH ?= $(WAVE_PATH)/station
-TT_DB        ?= $(OGS_PATH)/data/VelocityModel/1D/tt_db.txt
+TT_DB        	?= $(OGS_PATH)/data/VelocityModel/1D/tt_db.txt
 
-# ml_catalog_run launcher — wrapped via LAUNCHER.sh for SLURM submission.
-# `$$@` in `define` bodies expands to the target name inside generated rules.
-ML_CATALOG_RUN := HYDRA_FULL_ERROR=1 ml_catalog_run +libpath=.
+# Executable binaries
+CONDA_BIN			?= $(CONDA_ROOT)/bin/conda
+PYTHON_BIN		?= $(CONDA_ROOT)/envs/$(CONDA_ENV)/bin/python
+SBC_RUN_BIN		?= ml_catalog_run +libpath=.
+
+# SLURM template (defaults to user template if present, else default)
+SLURM_TEMPLATE ?= $(if $(wildcard $(OGS_PATH)/utils/Leonardo/$(USER).sh),$(USER),default)
 
 # Default picker/associator roots that chained stages can reuse.
 base        := OGS/$(YEAR)
@@ -125,10 +130,10 @@ NLLS				:= NLL1D NLL3D
 # -----------------------------------------------------------------------------
 # DEFAULT / META
 # -----------------------------------------------------------------------------
-all: base
+all: base # 2
 	@$(MAKE) --no-print-directory '$(NLL)[$(ASSOC),$(MODEL),$(DATASET),$(THRESHOLD)]'
 
-help:
+help: #
 	@echo "AISeism Makefile — common targets:"
 	@echo "  make init"
 	@echo "  make download   YEAR=YYYY STEP_DAYS=N OFFSET=D END_DAY=D"
@@ -138,16 +143,16 @@ help:
 	@echo "  make index THREADS=8 START_DATE=1977-01-01 END_DATE=2025-12-31"
 	@echo "  make PhaseNet | EQTransformer | ...	(picker models with default dataset/threshold)"
 	@echo "  make PhaseNet[INSTANCE,0.1] | EQTransformer[STEAD,0.2] | ...	(picker models with dataset/threshold overrides)"
-	@echo "  make PyOcto | GaMMA | REAL      			(associator with default picker input)"
+	@echo "  make PyOcto | GaMMA | REAL           (associator with default picker input)"
 	@echo "  make PyOcto[PhaseNet,INSTANCE,0.1] | GaMMA[EQTransformer,STEAD,0.2] | REAL[PhaseNet,SCEDC,0.3] ...	(associator with picker overrides)"
-	@echo "  make NLL1D | NLL3D               	  (locator with default picker+assoc input)"
+	@echo "  make NLL1D | NLL3D                   (locator with default picker+assoc input)"
 	@echo "  make NLL1D[PyOcto,PhaseNet,INSTANCE,0.1] | NLL3D[GaMMA,EQTransformer,STEAD,0.2] | ...	(locator with picker+assoc overrides)"
-	@echo "  make base                     			 	(just make the base catalog for quick iteration on later stages)"
+	@echo "  make base                            (just make the base catalog for quick iteration on later stages)"
 	@echo "  make parse | clean"
-	@echo "  make MHPC                     			 	(submit all registered models/assocs to SLURM for the given date range)"
-	@echo "  make PhD										 			 	  (submit all registered models/assocs to SLURM for the given date range)"
-	@echo "  make test                     			 	(run a quick test of the ml_catalog_run entrypoint)"
-	@echo "  make help                     			 	(this message)"
+	@echo "  make MHPC                            (submit all registered models/assocs to SLURM for the given date range)"
+	@echo "  make PhD                             (submit all registered models/assocs to SLURM for the given date range)"
+	@echo "  make test                            (run a quick test of the SBC_RUN_BIN entrypoint)"
+	@echo "  make help                            (this message)"
 
 setup:
 	@echo "Setup placeholder — module loads / env activation go here."
@@ -156,40 +161,56 @@ setup:
 # INITIALIZATION
 # =============================================================================
 init:
-	@echo "Initializing $(WORK_PATH) directory structure..."
-	@mkdir -p "$(WORK_PATH)"
-	@cp -ar "$(OGS_PATH)/utils/Leonardo/"* "$(WORK_PATH)" && \
-	cd "$(WORK_PATH)" && bash LAUNCHME.sh dummy 1 1 launchme_dummy python "$(WORK_PATH)/test/dummy.py"
-	@ln -sfn "$(OGS_PATH)/conf" "$(WORK_PATH)/config"
-	@ln -sfn "$(OGS_PATH)/data" "$(WORK_PATH)/data"
-	@ln -sfn "$(OGS_PATH)/src" "$(WORK_PATH)/src"
+	@WORK_PATH="$(WORK_PATH)" OGS_PATH="$(OGS_PATH)" \
+		NLL_PATH="$(NLL_PATH)" DATASET_PATH="$(DATASET_PATH)" \
+		CONDA_ROOT="$(CONDA_ROOT)" CONDA_INSTALLER="$(CONDA_INSTALLER)" \
+		CONDA_ENV="$(CONDA_ENV)" SBC_PATH="$(SBC_PATH)" \
+		bash "$(OGS_PATH)/utils/Leonardo/init.sh"
 
 # =============================================================================
 # DATA ACQUISITION
 # =============================================================================
 
 # Download waveforms in $(STEP_DAYS)-day chunks, clamped to $(YEAR).
-download:
-	@for i in $$(seq $(OFFSET) $(STEP_DAYS) $(END_DAY)); do \
+download: #
+	[[ "$(STEP_DAYS)" =~ ^[1-9][0-9]*$$ ]] || {
+		printf 'ERROR: STEP_DAYS must be a positive integer: %s\n' "$(STEP_DAYS)" >&2
+		exit 2
+	}
+	[[ "$(OFFSET)" =~ ^[0-9]+$$ ]] || {
+		printf 'ERROR: OFFSET must be a non-negative integer: %s\n' "$(OFFSET)" >&2
+		exit 2
+	}
+	[[ "$(END_DAY)" =~ ^[1-9][0-9]*$$ ]] || {
+		printf 'ERROR: END_DAY must be a positive integer: %s\n' "$(END_DAY)" >&2
+		exit 2
+	}
+	for i in $$(seq $(OFFSET) $(STEP_DAYS) $$(END_DAY)); do \
 	  start=$$(date -d "$(YEAR)-01-01 + $$i days" +%Y%m%d); \
-	  end=$$(date -d "$(YEAR)-01-01 + $$((i+$(STEP_DAYS))) days" +%Y%m%d); \
-	  [ "$$(date -d "$(YEAR)-01-01 + $$i days" +%Y)" = "$(YEAR)" ] || continue; \
-	  [ "$$(date -d "$(YEAR)-01-01 + $$((i+$(STEP_DAYS))) days" +%Y)" = "$(YEAR)" ] || end=$(YEAR)1231; \
+	  [ "$$(date -d "$$start" +%Y)" = "$(YEAR)" ] || continue; \
+	  end=$$(date -d "$$start + $$STEP_DAYS - 1 days" +%Y%m%d); \
+	  [ "$$end" -le "$$(END_DAY)" ] || end=$$(END_DAY); \
+	  [ "$$(date -d "$$end" +%Y)" = "$(YEAR)" ] || end=$(YEAR)1231; \
 	  echo "Downloading waveforms $$start → $$end (offset $$i days)"; \
-	  bash LAUNCHER.sh download 1 1 "DownLoad $$start $$end" \
-	    $(PYTHON_PATH) $(OGS_PATH)/src/ogsdownloader.py -D $$start $$end -d $(WAVE_PATH) \
-	      --threads $(THREADS) -S "* -SP -OL -ED"; \
+	  bash LAUNCHME.sh download 1 1 "DownLoad_$${start}_$${end}" \
+	    $(PYTHON_BIN) $(OGS_PATH)/src/ogsdownloader.py \
+				-D $$start $$end \
+				-d $(WAVE_PATH) \
+				--threads $(THREADS) \
+				-S "* -SP -OL -ED"; \
 	done
 
-compress:
+compress: #
 	@echo "WARNING: make compress is deprecated; use the current waveform archive workflow instead." >&2
-	bash LAUNCHER.sh compress 1 1 Compressor \
-	  $(PYTHON_PATH) $(WORK_PATH)/compressor.py -C $(WAVE_PATH) . -v
+	bash LAUNCHME.sh compress 1 1 Compressor \
+	  $(PYTHON_BIN) $(WORK_PATH)/compressor.py \
+			-C $(WAVE_PATH) . -v
 
 decompress:
 	@echo "WARNING: make decompress is deprecated; use the current waveform archive workflow instead." >&2
-	bash LAUNCHER.sh compress 1 1 Decompressor \
-	  $(PYTHON_PATH) $(WORK_PATH)/compressor.py -D $(WAVE_PATH)/$(YEAR) \
+	bash LAUNCHME.sh compress 1 1 Decompressor \
+	  $(PYTHON_BIN) $(WORK_PATH)/compressor.py \
+			-D $(WAVE_PATH)/$(YEAR) \
 	    $(WAVE_PATH) -v && \
 	find $(WAVE_PATH)/$(YEAR)/* -type f -name "*.tar.gz" -print -delete
 
@@ -202,14 +223,14 @@ retrieve:
 # Station metadata for the configured date range.
 station:
 	@echo "Processing station metadata $(START_DATE) → $(END_DATE)..."
-	bash LAUNCHER.sh $(USER) 1 1 "Stations $(START_DATE)-$(END_DATE)" \
-	  $(PYTHON_PATH) $(OGS_PATH)/src/ogsstation.py \
+	bash LAUNCHME.sh $(SLURM_TEMPLATE) 1 1 "Stations $(START_DATE)-$(END_DATE)" \
+	  $(PYTHON_BIN) $(OGS_PATH)/src/ogsstation.py \
 	    $(OGS_PATH)/src $(WAVE_PATH) $(STATION_PATH) \
 	    $(START_DATE) $(END_DATE) $(WORK_PATH)/catalogs/$(base)
 
 # Build/update the sharded Squirrel indexes for the full waveform archive.
 index:
-	$(ML_CATALOG_RUN) +index_only=true data=ogsDB data.check=true \
+	$(SBC_RUN_BIN) +index_only=true data=ogsDB data.check=true \
 	  data.index_workers=$(THREADS) \
 	  data.starttime=$(START_DATE) \
 	  data.endtime=$(END_DATE)
@@ -281,8 +302,8 @@ ASSOC_DIR_REAL         ?= REAL
 define _INDEXER_RULES
 
 $1:
-	bash LAUNCHER.sh $$(USER) 1 1 "Indexer $$(YEAR)" \
-	  $$(ML_CATALOG_RUN) +index_only=true data=ogsDB data.check=true \
+	bash LAUNCHME.sh $$(USER) 1 1 "Indexer $$(YEAR)" \
+	  $$(SBC_RUN_BIN) +index_only=true data=ogsDB data.check=true \
 	  data.index_workers=$$(THREADS) \
 	  data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
 endef
@@ -297,8 +318,8 @@ $1[%]:
 	id="$1[$$$$dataset,$$$$threshold]"; \
 	picker_id="$$$$dataset/$$$$threshold/$$(YEAR)"; \
 	mkdir -p "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$picker_id/SeisBenchPicker"; \
-	bash LAUNCHER.sh $$(USER) 1 1 "$$$$id" \
-	  $$(ML_CATALOG_RUN) output_path="catalogs/$$(PROJECT)/$1/$$$$picker_id" \
+	bash LAUNCHME.sh $$(SLURM_TEMPLATE) 1 1 "$$$$id" \
+	  $$(SBC_RUN_BIN) output_path="catalogs/$$(PROJECT)/$1/$$$$picker_id" \
 	  group_modules/picker=$(PICKER_YAML_$1) \
 	  group_modules.picker.model._target_="seisbench.models.$1.from_pretrained" \
 	  group_modules.picker.model.name=$$$${dataset,,} \
@@ -323,8 +344,8 @@ $1[%]:
 	mkdir -p "$$(WORK_PATH)/catalogs/$$(PROJECT)/$$$$picker_id"; \
 	ln -sfn "$$(WORK_PATH)/catalogs/$$(PROJECT)/$$$$picker_id/SeisBenchPicker" \
 	  "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$picker_id/SeisBenchPicker"; \
-	bash LAUNCHER.sh $$(USER) 1 1 "$$$$id" \
-	  $$(ML_CATALOG_RUN) output_path="catalogs/$$(PROJECT)/$1/$$$$picker_id" \
+	bash LAUNCHME.sh $$(SLURM_TEMPLATE) 1 1 "$$$$id" \
+	  $$(SBC_RUN_BIN) output_path="catalogs/$$(PROJECT)/$1/$$$$picker_id" \
 	  group_modules/associator=$(ASSOC_YAML_$1) \
 	  data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
 endef
@@ -349,8 +370,8 @@ $1[%]:
 	  "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$assoc_id/OGSPickStatQC"; \
 	ln -sfn "$$(WORK_PATH)/catalogs/$$(PROJECT)/$$$$picker_id/SeisBenchPicker" \
 	  "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$assoc_id/SeisBenchPicker"; \
-	bash LAUNCHER.sh $$(USER) 1 1 "$$$$nll_id" \
-	  $$(ML_CATALOG_RUN) output_path="catalogs/$$(PROJECT)/$1/$$$$assoc_id" \
+	bash LAUNCHME.sh $$(SLURM_TEMPLATE) 1 1 "$$$$nll_id" \
+	  $$(SBC_RUN_BIN) output_path="catalogs/$$(PROJECT)/$1/$$$$assoc_id" \
 	  group_modules/nonlinloc=$(LOCATOR_YAML_$1) \
 	  data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
 endef
@@ -394,14 +415,25 @@ PhD:
 # =============================================================================
 
 # Merge manual OGS pick files into a unified catalog.
-parse:
-	$(PYTHON_PATH) $(OGS_PATH)/src/ogsparser.py -f $(MANUAL_PATH)/* --merge \
-	  -o $(WORK_PATH)/catalogs/$(notdir $(patsubst %/,%,$(MANUAL_PATH)))
+parse: # 3
+	$(PYTHON_BIN) $(OGS_PATH)/src/ogsparser.py \
+		-f $(DATASET_PATH)/* \
+		--merge \
+	  -o $(WORK_PATH)/catalogs/$(notdir $(patsubst %/,%,$(DATASET_PATH)))
 
-test:
-	$(ML_CATALOG_RUN) output_path=$(base)/$(YEAR)
+test: # 2
+	$(SBC_RUN_BIN) output_path=$(base)/$(YEAR)
 
 # WARNING: deletes every generated catalog under $(WORK_PATH)/catalogs
-clean:
-	@echo "Removing generated catalogs below $(WORK_PATH)/catalogs"
-	@test -n "$(WORK_PATH)" && rm -rf -- "$(WORK_PATH)/catalogs"/*
+clean: #
+	@test -n "$(WORK_PATH)" && \
+	test "$(WORK_PATH)" != "/" || { \
+		echo "ERROR: refusing to clean unsafe WORK_PATH=$(WORK_PATH)" >&2; exit 1; \
+	}
+	@echo "Removing generated files under $(WORK_PATH)"
+	@cd "$(WORK_PATH)" && \
+	rm -rf -- config data src test && \
+	rm -rf -- ACTIVATEME.sh download.sh dummy.sh init.sh ktanakah.sh \
+		LAUNCHME.sh LEONARDO.yml Makefile
+	#@echo "Removing generated catalogs below $(WORK_PATH)/catalogs"
+	#@test -n "$(WORK_PATH)" && rm -rf -- "$(WORK_PATH)/catalogs"/*

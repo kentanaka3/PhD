@@ -45,6 +45,12 @@ DEPENDENCIES:
 # IMPORTS
 # -----------------------------------------------------------------------------
 
+# Local module: Parent class providing catalog data structures and methods
+from ogscatalog import OGSCatalog
+
+# Local module: OGS-specific constants (strings, default paths, regions)
+import ogsconstants as OGS_C
+
 # Standard library: Regular expressions for pattern matching
 import re
 
@@ -55,28 +61,13 @@ import itertools as it
 from pathlib import Path
 
 # Standard library: Date and time objects for temporal filtering
-from datetime import datetime
+from datetime import datetime, timedelta as td
 
 # ObsPy: Seismological library - UTCDateTime for precise earthquake timing
 from obspy import UTCDateTime
 
 # Matplotlib: Path object for polygon-based geographic containment tests
 from matplotlib.path import Path as mplPath
-
-# Utility to flatten nested lists (for regex pattern assembly)
-def _flatten(iterable):
-  """Recursively flatten nested iterables of strings into a flat generator."""
-  for item in iterable:
-    if isinstance(item, str):
-      yield item
-    else:
-      yield from _flatten(item)
-
-# Local module: OGS-specific constants (strings, default paths, regions)
-import ogsconstants as OGS_C
-
-# Local module: Parent class providing catalog data structures and methods
-from ogscatalog import OGSCatalog
 
 
 # =============================================================================
@@ -105,16 +96,25 @@ class OGSDataFile(OGSCatalog):
 
   # List of regex pattern fragments for parsing individual pick/phase records
   # Subclasses populate this with format-specific patterns
-  RECORD_EXTRACTOR_LIST : list = []  # TBD in subclasses
+  RECORD_EXTRACTOR_LIST: list = []  # TBD in subclasses
 
   # List of regex pattern fragments for parsing event header lines
   # Subclasses populate this with format-specific patterns
-  EVENT_EXTRACTOR_LIST : list = []   # TBD in subclasses
+  EVENT_EXTRACTOR_LIST: list = []   # TBD in subclasses
 
   # Regex to extract named group identifiers from regex patterns
   # Used by debug() to identify which capture group failed matching
   # Matches patterns like: (?P<station>[\w]+) and extracts "station"
   GROUP_PATTERN = re.compile(r"\(\?P<(\w+)>[\[\]\w\d\{\}\-\\\?\+]+\)(\w)*")
+
+  @staticmethod
+  def _flatten(iterable):
+    """Recursively flatten nested iterables of strings into a flat generator."""
+    for item in iterable:
+      if isinstance(item, str):
+        yield item
+      else:
+        yield from OGSDataFile._flatten(item)
 
   # -------------------------------------------------------------------------
   # CONSTRUCTOR
@@ -122,8 +122,8 @@ class OGSDataFile(OGSCatalog):
 
   def __init__(self, input: Path, start: datetime = datetime.max,
                end: datetime = datetime.min, verbose: bool = False,
-               polygon : mplPath = mplPath(OGS_C.OGS_POLY_REGION, closed=True),
-               output : Path = OGS_C.THIS_FILE.parent / "data" / "OGSCatalog"):
+               polygon: mplPath = mplPath(OGS_C.OGS_POLY_REGION, closed=True),
+               output: Path = OGS_C.THIS_FILE.parent / "data" / "OGSCatalog"):
     """
     Initialize the data file wrapper and compile regex extractors.
 
@@ -141,12 +141,14 @@ class OGSDataFile(OGSCatalog):
 
     # Compile the record extractor regex from the list of pattern fragments
     # _flatten handles nested lists, join concatenates all fragments
-    self.RECORD_EXTRACTOR : re.Pattern = re.compile(OGS_C.EMPTY_STR.join(
-      list(_flatten(self.RECORD_EXTRACTOR_LIST))))  # TBD in subclasses
+    self.RECORD_EXTRACTOR: re.Pattern = re.compile(OGS_C.EMPTY_STR.join(
+        list(self._flatten(self.RECORD_EXTRACTOR_LIST))
+    ))  # TBD in subclasses
 
     # Compile the event extractor regex from the list of pattern fragments
-    self.EVENT_EXTRACTOR : re.Pattern = re.compile(OGS_C.EMPTY_STR.join(
-      list(_flatten(self.EVENT_EXTRACTOR_LIST))))   # TBD in subclasses
+    self.EVENT_EXTRACTOR: re.Pattern = re.compile(OGS_C.EMPTY_STR.join(
+        list(self._flatten(self.EVENT_EXTRACTOR_LIST))
+    ))   # TBD in subclasses
 
     # Extract file format name from extension (e.g., ".hyp" -> "HYP")
     self.name = self.input.suffix.lstrip(OGS_C.PERIOD_STR).upper()
@@ -196,7 +198,8 @@ class OGSDataFile(OGSCatalog):
 
       # Build date-based directory path: {log}/assignments/YYYY-MM-DD
       dir_path = log / "assignments" / OGS_C.DASH_STR.join([
-        f"{date.year}", f"{date.month:02}", f"{date.day:02}"])
+          f"{date.year}", f"{date.month:02}", f"{date.day:02}"
+      ])
 
       # Create parent directories if they don't exist
       dir_path.parent.mkdir(parents=True, exist_ok=True)
@@ -210,7 +213,8 @@ class OGSDataFile(OGSCatalog):
     for date, df in self.postload("events").items():
       # Build date-based directory path: {log}/events/YYYY-MM-DD
       dir_path = log / "events" / OGS_C.DASH_STR.join([
-        f"{date.year}", f"{date.month:02}", f"{date.day:02}"])
+          f"{date.year}", f"{date.month:02}", f"{date.day:02}"
+      ])
 
       # Create parent directories if they don't exist
       dir_path.parent.mkdir(parents=True, exist_ok=True)
@@ -249,9 +253,12 @@ class OGSDataFile(OGSCatalog):
     # This creates patterns of decreasing length to isolate the failure point
     # Example: [full_pattern, pattern_minus_last, pattern_minus_last_two, ...]
     RECORD_EXTRACTOR_DEBUG = list(reversed(list(it.accumulate(
-      EXTRACTOR_LIST[:-1],
-      lambda x, y: x + (y if isinstance(y, str) else
-                        OGS_C.EMPTY_STR.join(list(_flatten(y))))))))
+        EXTRACTOR_LIST[:-1],
+        lambda x, y: x + (
+            y if isinstance(y, str)
+            else OGS_C.EMPTY_STR.join(list(self._flatten(y)))
+        )
+    ))))
 
     # Default to first group as the suspected failure point
     bug = self.GROUP_PATTERN.findall(EXTRACTOR_LIST[0])
@@ -276,3 +283,74 @@ class OGSDataFile(OGSCatalog):
         break
 
     return bug
+
+  # -------------------------------------------------------------------------
+  # SHARED PARSING UTILITIES
+  # -------------------------------------------------------------------------
+
+  @staticmethod
+  def _parse_seconds(value: str) -> td:
+    """Convert a fixed-width seconds field into a timedelta."""
+    return td(seconds=float(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR)))
+
+  @staticmethod
+  def _parse_float(value: str, default_value=OGS_C.NONE_STR):
+    """Convert a fixed-width float field, allowing fully blank values."""
+    if not value or value.strip(OGS_C.SPACE_STR) == OGS_C.EMPTY_STR:
+      return default_value
+    return float(value)
+
+  @staticmethod
+  def _parse_zero_padded_float(value: str) -> float:
+    """Convert a numeric field, mapping placeholder-only values to NaN."""
+    normalized = value.strip()
+    if not any(character.isdigit() for character in normalized):
+      return float("nan")
+    return float(normalized.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR))
+
+  @staticmethod
+  def _parse_optional_int(value: str, default_value=OGS_C.NONE_STR):
+    """Convert an optional integer field, preserving empty values as default."""
+    if not value or value.strip(OGS_C.SPACE_STR) == OGS_C.EMPTY_STR:
+      return default_value
+    return int(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR))
+
+  @staticmethod
+  def _parse_zero_padded_int(value: str, default_value=OGS_C.NONE_STR):
+    """Convert a fixed-width integer field, preserving blank values as default."""
+    if not value or value.strip(OGS_C.SPACE_STR) == OGS_C.EMPTY_STR:
+      return default_value
+    return int(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR))
+
+  @staticmethod
+  def _parse_coordinate(value: str, round_decimals: int | None = None):
+    """Convert a degree-minute coordinate string (DD-MM.MM) to decimal degrees."""
+    if not value:
+      return OGS_C.NONE_STR
+
+    normalized = value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR)
+    if OGS_C.DASH_STR not in normalized:
+      return OGS_C.NONE_STR
+
+    degrees, minutes = normalized.split(OGS_C.DASH_STR, maxsplit=1)
+    coord = float(degrees) + float(minutes) / 60.0
+    if round_decimals is not None:
+      return float(f"{coord:.{round_decimals}f}")
+    return coord
+
+  @staticmethod
+  def _parse_weight(value: str, default_value: int = 0) -> int:
+    """Convert a weight field, using default_value for blanks."""
+    if not value or value.strip(OGS_C.SPACE_STR) == OGS_C.EMPTY_STR:
+      return default_value
+    return int(value)
+
+  @staticmethod
+  def _parse_index(value: str, year: int):
+    """Build a globally unique event index from the yearly counter."""
+    if not value:
+      return None
+    return (
+        int(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR))
+        + year * OGS_C.MAX_PICKS_YEAR
+    )

@@ -1,24 +1,17 @@
 import os
 import functools
-from collections import defaultdict
-from importlib.metadata import version
-from pathlib import Path
-from typing import Callable, Optional
 
 import dask
 import dask.distributed
 import dask.optimization
 import pandas as pd
-import yaml
-from dask.highlevelgraph import HighLevelGraph
 
 from ml_catalog.base import AbstractModule, GroupStatus, MergeModule, Status
-from ml_catalog.data import AbstractDataSource
-from ml_catalog.types import DataInterface, pathlike
 from ml_catalog.util import logger
 
 from dask_mpi import initialize
 from ml_catalog import CatalogBuilder
+
 
 class OGSCatalogBuilderMPI(CatalogBuilder):
   """
@@ -33,9 +26,42 @@ class OGSCatalogBuilderMPI(CatalogBuilder):
     Run the builder as configured.
     This function will build and execute the compute graph.
     """
-    initialize(memory_limit=f"{os.getenv('SLURM_MEM_PER_CPU'):d}MB")
+    slurm_mem = os.getenv("SLURM_MEM_PER_CPU")
+    if slurm_mem is not None and slurm_mem.strip().isdigit():
+      mem_limit = f"{int(slurm_mem)}MB"
+    else:
+      mem_limit = "8000MB"
+    # Pin GPU device based on local MPI rank if CUDA is available BEFORE dask_mpi intercepts workers
+    local_rank_str = (
+        os.getenv("SLURM_LOCALID")
+        or os.getenv("OMPI_COMM_WORLD_LOCAL_RANK")
+        or os.getenv("MPI_LOCALRANKID")
+        or os.getenv("LOCAL_RANK")
+    )
+    if local_rank_str is not None:
+      try:
+        local_rank = int(local_rank_str)
+        import torch
+        if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+          num_gpus = torch.cuda.device_count()
+          device_id = local_rank % num_gpus
+          torch.cuda.set_device(device_id)
+          logger.info(
+              f"Local rank {local_rank} pinned to CUDA device {device_id} "
+              f"of {num_gpus} available GPUs"
+          )
+      except Exception as e:
+        logger.warning(
+            f"Failed to pin CUDA device for local rank {local_rank_str}: {e}"
+        )
+
+    initialize(memory_limit=mem_limit)
+
     client = dask.distributed.Client()
-    client.wait_for_workers(n_workers=(int(os.getenv("SLURM_NTASKS")) - 2)) # type: ignore
+    ntasks = os.getenv("SLURM_NTASKS")
+    if ntasks is not None and ntasks.strip().isdigit():
+      n_workers = max(int(ntasks) - 2, 1)
+      client.wait_for_workers(n_workers=n_workers)
     print(client.scheduler_info()["workers"])
 
     status = Status(self.output_path)
@@ -44,9 +70,9 @@ class OGSCatalogBuilderMPI(CatalogBuilder):
     self.data.populate_status(status)
 
     for module in (
-      list(self.group_modules.values())
-      + [self.merge_module]
-      + list(self.joint_modules.values())
+        list(self.group_modules.values())
+        + [self.merge_module]
+        + list(self.joint_modules.values())
     ):
       logger.debug(f"Setting up {module.name}")
       for param in module.output_keys():
@@ -62,7 +88,7 @@ class OGSCatalogBuilderMPI(CatalogBuilder):
     regrouped = self._regroup(groups)
 
     self._regrouped_to_df(regrouped).to_csv(
-      self.output_path / "groups.csv", index=False
+        self.output_path / "groups.csv", index=False
     )
 
     for group, subgroups in regrouped.items():
@@ -72,13 +98,13 @@ class OGSCatalogBuilderMPI(CatalogBuilder):
 
       group_status.register_parameter("data_func")
       group_status.set_param(
-        functools.partial(
-          self._get_multigroup,
-          self.data.get_group,
-          subgroups
-        ),
-        "data_func",
-        None,
+          functools.partial(
+              self._get_multigroup,
+              self.data.get_group,
+              subgroups
+          ),
+          "data_func",
+          None,
       )
 
       for module in self.group_modules.values():
@@ -99,7 +125,7 @@ class OGSCatalogBuilderMPI(CatalogBuilder):
 
     with dask.config.set(delayed_optimize=self._optimize_dask_graph):
       with dask.distributed.performance_report(
-        self.output_path / "dask-report.html"
+          self.output_path / "dask-report.html"
       ):
         outputs = client.compute(outputs, sync=True)
 
