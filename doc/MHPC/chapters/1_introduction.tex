@@ -1,0 +1,149 @@
+\label{chap:Introduction}
+This thesis presents a Procedural Machine Learning Pipeline for Earthquake Pick 
+Detection and Phase Association, integrating \ac{HPC} infrastructures to 
+enhance both the accuracy and scalability of seismic data analysis. The work 
+focuses on seismic waveforms recorded by the \ac{SMINO}, managed by the 
+\ac{OGS}, in Northeastern Italy and surrounding regions including Veneto, 
+Slovenia, and Alto Adige.
+
+Earthquakes are caused by the sudden release of elastic strain energy 
+accumulated within the Earth's lithosphere. This energy propagates as seismic 
+waves, which travel through heterogeneous geological structures. The 
+lithosphere constitutes a mechanically rigid yet dynamically active shell and 
+its behavior produces the deformation patterns that manifest as seismicity and 
+volcanism. Capturing the temporal and spatial variability of these processes 
+requires robust and high throughput analytical tools.
+
+Seismometers record ground motion as continuous digital time series, but the 
+transformation of these raw signals into scientifically meaningful information 
+depends on the accurate detection of seismic phases. Phase picking, the 
+identification of P- and S-wave onset times, is foundational for earthquake 
+location, source characterization, and downstream seismological analyses. 
+Traditional automated picking algorithms such as the \ac{STA/LTA} 
+(\cite{STALTA}) method and the \ac{AIC} picker have provided decades of 
+utility. However, their performance degrades substantially under challenging 
+conditions: low signal to noise ratios, emergent onsets, overlapping events, 
+and environmental noise. Furthermore, operational seismic networks often depend 
+on expert analysts to review and correct automated picks, introducing latency 
+and potential subjective bias.
+
+Continuous waveform archives from regional and global networks commonly reach 
+terabyte scales annually, rendering manual processing infeasible. Addressing 
+this "Big Data" problem requires distributed architectures employing parallel 
+algorithms, GPU acceleration, and scalable storage. This thesis integrates 
+\ac{ML} workflows with \ac{HPC} clusters to enable efficient processing at 
+operational scale.
+
+The inherent complexity and nonlinearity of seismic phenomena have motivated 
+the adoption of machine learning approaches capable of discovering subtle 
+waveform patterns beyond the reach of rule based algorithms. Recent advances in 
+\ac{DL} have led to models that outperform classical methods in event 
+detection, signal classification, and phase arrival estimation. These include 
+convolutional and recurrent neural architectures trained on large labeled 
+data sets, which demonstrate improved robustness to noise and generalization 
+across stations and regions. Their ability to extract multi-scale temporal
+features makes them particularly well suited to the intricate structure of 
+seismic waveforms.
+
+By coupling \ac{ML} methodologies with large scale computational frameworks, 
+this thesis aims to refine pick detection and event association in Northeastern 
+Italy. The regional focus is particularly relevant, as this area is 
+characterized by complex tectonic structures and moderate to high seismicity. 
+Improving monitoring capabilities here has direct implications for hazard 
+assessment, early warning, and civil protection strategies. A noteworthy 
+contribution to this field is SeisBench (\cite{SeisBench}), an open-source 
+platform that offers unified access to state-of-the-art \ac{DL} models for 
+seismic analysis. By providing standardized APIs, pretrained models, and 
+curated data sets, SeisBench reduces the barriers to reproducibility and 
+facilitates rapid experimentation. This thesis leverages SeisBench to access 
+and evaluate pretrained PhaseNet and EQTransformer models trained on multiple 
+benchmark datasets.
+
+The focus of this work lies on seismic waveforms recorded by the \ac{SMINO}, a 
+northeastern Italian network (\cite{SMINO}), established following the 
+destructive 1976 Mw 6.4 Friuli earthquake. The network plays a critical role in 
+real-time seismic surveillance and civil protection activities in the region. 
+The thesis evaluates \ac{ML} based models for automatic pick detection, event 
+association, hypocenter location, and magnitude estimation on this dataset, 
+with an emphasis on deploying methods suitable for near real-time operation.
+
+The evaluation is as follows: two deep-learning picker architectures (PhaseNet 
+(\cite{PhaseNet}) and EQTransformer (\cite{EQTransformer})) are each trained on 
+four benchmark datasets (INSTANCE (\cite{INSTANCE}), STEAD (\cite{STEAD}), 
+SCEDC (\cite{SCEDC}), and the original training corpus), and their performance 
+is assessed across three detection-probability thresholds (0.1, 0.2, 0.3). The 
+best-performing picker is then paired with two association algorithms (GaMMA 
+(\cite{GaMMA}) and PyOcto (\cite{PyOcto})) and a probabilistic locator, 
+NonLinLoc (\cite{NonLinLoc}) to quantify end-to-end pipeline recall, timing 
+precision, spatial accuracy, and magnitude fidelity against the OGS reference 
+catalog. To compare the ML results with the OGS reference catalog, OGS events 
+were relocated using the 1D NonLinLoc (\cite{NonLinLoc}) configuration adopted 
+in this study. The catalog will be published soon (Magrin, personal 
+communication). It contains 380 events within the red polygon shown in 
+Figure~\ref{fig:OGSSeismicity}, with local magnitudes ranging from -0.2 to 4.6. 
+A total of 7,129 phase picks were associated with these events, including 
+4,126~P picks and 3,003~S picks.
+
+The document is structured as follows. Chapter~2 introduces the data sets 
+utilized in this study, detailing acquisition, metadata standards, and data 
+quality control procedures. Chapter~3 describes the data engineering 
+framework, encompassing multi-format catalog parsing, data aggregation, and 
+visualization components. Chapter~4 presents the computational pipeline 
+architecture, describing the preprocessing steps and the implementation of 
+deep-learning models for phase picking, event association, hypocenter 
+location, and magnitude estimation. Chapter~5 presents the pipeline evaluation 
+framework, introducing a physically informed validation methodology based on 
+bipartite graph matching and domain-specific confusion matrices to rigorously 
+assess model performance against manual catalogs. Chapter~6 details the 
+high-performance computing infrastructure and parallelization strategy deployed 
+on the Leonardo supercomputer at CINECA, including job submission, resource 
+management, and scalability considerations. Chapter~7 presents the results of 
+the comprehensive benchmarking campaign on the Northeastern Italy dataset, 
+analyzing performance through recall statistics, residual distributions, and 
+detailed comparisons between models trained on different data sets. Finally, 
+Chapter~8 synthesizes the key findings, discusses the implications for 
+operational seismology, and outlines future research directions for scalable, 
+automated monitoring systems.
+
+\section{Seismic Waveforms}
+An \textbf{earthquake} is the shaking of the Earth's surface resulting from a 
+sudden release of energy in the lithosphere, which generates 
+\textbf{seismic waves}. These events arise primarily from the rupture of 
+geological faults under tectonic stress, ranging in magnitude from 
+imperceptible events to catastrophic events capable of widespread destruction. 
+Seismic waves propagate energy through the Earth and are broadly categorized 
+into two main types: \textbf{body waves} and \textbf{surface waves}.
+
+\begin{itemize}
+  \item \textbf{Body waves} are seismic waves that travel through the Earth's 
+  interior and are the fastest seismic waves. Body waves are further divided 
+  into two types: \textbf{P waves} and \textbf{S waves}.
+  \begin{itemize}
+    \item \textbf{P waves} (Primary or Compressional waves): These are the 
+    fastest seismic waves and the first to be recorded by seismometers. They 
+    propagate through solids, liquids, and gases by compressing and expanding 
+    the medium in the direction of propagation (longitudinal motion).
+    \item \textbf{S waves} (Secondary or Shear waves): S waves are slower than 
+    P waves and arrive second. They propagate only through solid materials, 
+    moving the medium perpendicular to the direction of propagation (transverse 
+    motion).
+  \end{itemize}
+  \item \textbf{Surface waves} propagate along the Earth's surface. While 
+  slower than body waves, they typically have larger amplitudes and are 
+  responsible for the majority of structural damage. They include \textbf{Love 
+  waves} (horizontal shear) and \textbf{Rayleigh waves} (elliptical rolling 
+  motion).
+\end{itemize}
+
+The propagation velocity of seismic waves is governed by the elastic properties 
+and density of the medium. Seismic stations record these ground motions using 
+specialized instruments: \textbf{seismometers}, which typically measure ground 
+velocity and are sensitive to weak motions, and \textbf{accelerometers}, which 
+measure ground acceleration and are essential for recording strong ground 
+motions without clipping.
+
+Modern seismic stations continuously record ground motion in three orthogonal 
+components: Vertical (Z), North-South (N), and East-West (E). The data are 
+digitized and stored in standard formats such as miniSEED (MSEED) or SAC, 
+accompanied by metadata (StationXML) containing valid station coordinates and 
+instrument response information.

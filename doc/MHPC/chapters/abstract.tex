@@ -1,0 +1,32 @@
+\begin{abstract}
+  A rapid increase in continuous seismic data volumes demands automated 
+  solutions that can operate efficiently at regional scales. This work 
+  evaluates an end-to-end, scalable \ac{ML} pipeline for earthquake detection 
+  and characterization, designed for deployment in a \ac{HPC} environment. The 
+  pipeline integrates publicly available models from the seismological 
+  community via the SeisBench framework (\cite{SeisBench}) to process waveform 
+  data from the Northeast Italy Monitoring System (\cite{SMINO}), managed by 
+  the \acf{OGS}, as well as data from other Italian and international seismic
+  networks in neighboring regions and countries.
+
+  The workflow includes specialized modules for phase picking (PhaseNet, 
+  \cite{PhaseNet}; EQTransformer, \cite{EQTransformer}), event association 
+  (GaMMA, \cite{GaMMA}; PyOcto, \cite{PyOcto}), hypocenter location (NonLinLoc,
+  \cite{NonLinLoc}), and magnitude estimation. Deep-learning phase pickers for 
+  Northeastern Italy are extensively evaluated using diverse training datasets, 
+  including INSTANCE (\cite{INSTANCE}), STEAD (\cite{STEAD}), SCEDC 
+  (\cite{SCEDC}), and the original PhaseNet and EQTransformer training dataset,
+  to determine the most effective combinations and ensure robust detection
+  across the region.
+
+  Performance is rigorously validated against the OGS reference catalogs using
+  strict spatiotemporal matching criteria and recall-based metrics.
+
+  Results show that the pipeline achieves high fidelity in detecting P- and 
+  S-wave arrivals and in associating events, substantially outperforming 
+  traditional CPU-only implementations in both speed and scalability. The 
+  PhaseNet model trained on the INSTANCE dataset achieves the best overall 
+  performance. The HPC architecture provides enhanced operational flexibility,
+  enabling rapid near-real-time analysis as well as large-scale historical
+  reprocessing on the same platform.
+\end{abstract}

@@ -1,0 +1,249 @@
+\label{chap:Conclusion}
+
+This thesis presented a modular, end-to-end machine learning pipeline for
+earthquake phase picking, phase association, hypocenter location, and magnitude 
+estimation, deployed on the CINECA Leonardo \ac{HPC} infrastructure. The 
+pipeline was evaluated over a 93-day continuous waveform archive from the 
+\ac{SMINO} in Northeastern Italy, spanning 266 stations across 18 networks, and 
+rigorously validated against the manually reviewed OGS reference catalog of 380 
+events and 7,129 picks (4,126~P and 3,003~S).
+
+\section{Summary of Findings}
+
+\paragraph{Phase picking.}
+A comprehensive benchmarking campaign compared PhaseNet and EQTransformer
+models trained on four datasets (INSTANCE, STEAD, SCEDC, and the original
+training sets). PhaseNet trained on the INSTANCE dataset achieved the best
+overall balance of recall and timing precision, with P-wave recall of 0.953,
+S-wave recall of 0.918, and a combined recall of 0.938 at the default
+detection threshold of 0.1. Its timing accuracy was the highest of all
+configurations: P-phase MAE~$=0.066$\,s (mean bias~$=-0.021$\,s) and S-phase 
+MAE~$= 0.116$\,s (mean bias~$=+0.054$\,s). EQTransformer (INSTANCE) attained 
+marginally higher overall recall (0.944) but exhibited systematically larger 
+timing residuals, P-phase MAE~$=0.075$\,s ($+14\%$) and S-phase MAE~$=0.134$\,s 
+($+16\%$), with a pronounced S-phase bias of $+0.091$\,s. This indicates that 
+PhaseNet provides superior temporal precision, that is critical for downstream 
+association and location.
+
+The benchmark results revealed that domain proximity is the primary determinant 
+of picker performance. The INSTANCE dataset, which includes stations and events 
+from Northeastern Italy (overlapping with the OGS network), produced the most 
+sensitive and precise pickers. Models trained on out of domain data showed 
+clear degradation: SCEDC-trained models generated $12\times$--$22\times$ more 
+proposed picks (23--30~million vs. $\sim$1--2~million) due to an inability to 
+discriminate regional noise characteristics, while STEAD-trained PhaseNet 
+achieved only 0.750 combined recall, the lowest among all variants. The 
+threshold sweep (0.1, 0.2, 0.3) demonstrated that raising the detection 
+probability threshold primarily filters low-confidence picks without degrading 
+timing quality: P-phase MAE remained stable at $\sim$0.065\,s across all 
+thresholds, while proposed-pick volume decreased by a factor of $\sim$5$\times$ 
+from 0.1 to 0.3.
+
+\paragraph{Phase association.}
+Two association algorithms, GaMMA and PyOcto, were evaluated downstream of the
+selected PhaseNet (INSTANCE) picker. At the association stage, both achieved
+identical event recall of 96.1\% (365 of 380 catalog events) at threshold~0.1,
+but they differed substantially in their pick-level behavior. GaMMA's
+probabilistic filtering retained only 70.6\% of matched picks (combined P~$+$~S
+recall), discarding $\sim$25\% of true-positive arrivals during association
+while reducing the proposed-pick volume by a factor of $\sim$60$\times$ (from
+$\sim$2~million to $\sim$33,000). PyOcto preserved 90.7\% of matched picks, 
+retaining 94\% of all matched P arrivals and 86\% of matched S arrivals, at the 
+cost of somewhat higher proposed-pick counts ($\sim$51,500).
+
+The event time residuals revealed contrasting systematic biases: GaMMA placed
+origin times $+0.484$\,s later than the OGS catalog, while PyOcto placed them
+$-0.421$\,s earlier, reflecting fundamental algorithmic differences in
+preliminary origin-time estimation. Spatially, GaMMA achieved slightly tighter
+epicentral accuracy (median 1.10\,km vs.\ PyOcto's 1.29\,km) but both exhibited 
+comparable depth uncertainties at this stage.
+
+\paragraph{Hypocenter location.}
+NonLinLoc was applied with a 1D layered velocity model and revealed a striking
+divergence between the two associators. GaMMA+NonLinLoc suffered a catastrophic
+recall drop from 96.1\% to 73.7\% (280 of 380 events), losing 85 catalog 
+events, nearly one quarter, during location. In contrast, PyOcto+NonLinLoc
+maintained 96.3\% recall (366 events), actually recovering one additional event
+beyond the association stage. This disparity demonstrates that PyOcto's 
+association produces events with sufficient spatial constraints for robust 
+hypocenter inversion, whereas GaMMA's probabilistic associations frequently 
+lack the azimuthal coverage and station density required for NonLinLoc 
+convergence.
+
+After NonLinLoc inversion, both pathways achieved comparable location quality
+for their respective matched-event sets. Origin time residuals were centered
+near zero with small bias ($\sim -0.06$\,s for both pathways), MAE of 0.161\,s 
+(GaMMA) and 0.171\,s (PyOcto), confirming that the probabilistic inversion 
+effectively re-estimates origin times independent of the associator's 
+preliminary values, using the same 1D velocity model as the OGS catalog. 
+Epicentral distances showed median accuracy of 0.67\,km (GaMMA) and 0.72\,km 
+(PyOcto), with 90\% of events located within 2.7\,km of catalog positions. 
+Depth residuals exhibited a slight positive bias ($+0.50$\,km for GaMMA, 
+$+0.15$\,km for PyOcto) with standard deviations of 2.75--3.22\,km.
+
+\paragraph{Magnitude estimation.}
+Both pathways showed virtually identical magnitude residual values:
+mean~$\Delta M_L = -0.193$ (GaMMA) and $-0.190$ (PyOcto), with MAE
+$\approx 0.22$ and median residuals of $-0.108$ and $-0.117$, respectively.
+The systematic underestimation originates in station-subset differences between
+the automated and manual workflows. Above $M_L \approx 2$, catalog magnitudes 
+agree within $\pm 0.3$ magnitude units. Below this threshold, a characteristic 
+bimodal residual pattern emerges, with one cluster near zero and another 
+showing underestimation by 0.3--0.8 units. The critical practical advantage of 
+the PyOcto pathway is that its magnitude estimates cover 366 events versus
+GaMMA's 280, a 31\% larger catalog, providing a more complete
+magnitude--frequency distribution particularly in the $M_L < 1$ range.
+
+\paragraph{Event-level false discovery rate.}
+Across all configurations and pipeline stages, event-level \ac{FDR} remained
+high, ranging from 0.656 to 0.781. At the association stage with threshold~0.1,
+GaMMA and PyOcto produced \ac{FDR} values of 0.744 and 0.781, respectively,
+corresponding to roughly 3--4 proposed events for every catalog-confirmed
+event. These values persisted through NonLinLoc location essentially
+unchanged (0.743 for GaMMA+NonLinLoc; 0.781 for PyOcto+NonLinLoc at
+threshold~0.1), indicating that proposed events possess internally consistent
+pick sets and plausible hypocentral solutions that survive probabilistic
+inversion. Raising the detection threshold to 0.3 reduced \ac{FDR} to 0.658
+(GaMMA+NonLinLoc) and 0.675 (PyOcto+NonLinLoc), demonstrating that threshold
+tuning is the primary mechanism for controlling proposed-event volume.
+Raising the detection probability threshold from 0.1 to 0.3 reduced the 
+\ac{FDR} appreciably: from 0.743 to 0.658 for GaMMA+NonLinLoc and from 0.781 
+to 0.675 for PyOcto+NonLinLoc. This improvement occurs because a higher 
+threshold discards low-confidence picks, which disproportionately contribute to 
+spurious event proposals. However, this \ac{FDR} reduction comes at the cost 
+of recall: event-level recall decreased from 96.1\% at threshold~0.1 to 92.1\% 
+at threshold~0.3, meaning that fewer catalog events are recovered as the 
+threshold becomes more stringent. This trade-off between recall and \ac{FDR} 
+is a fundamental characteristic of threshold-based detection systems: lowering 
+the threshold maximizes sensitivity (high recall) at the expense of more false 
+proposals (high \ac{FDR}), while raising it improves purity (lower \ac{FDR}) 
+but risks missing genuine events (lower recall).
+
+It is important to note that the OGS reference catalog is itself incomplete, 
+particularly below $M_L \approx 1$, where many micro-earthquakes go 
+unreviewed. Consequently, a substantial fraction of the proposed events may 
+represent genuine uncataloged micro-seismicity rather than false detections. 
+This interpretation is supported by the spatial distribution of proposed 
+events, which are concentrated in patterns consistent with known seismogenic 
+zones. Nonetheless, the raw automated catalog requires post-processing 
+quality-control filters, such as minimum station count, maximum azimuthal 
+gap, and travel-time residual threshold, before operational use to reduce 
+the effective \ac{FDR} to acceptable levels.
+
+\paragraph{Missing events.}
+The analysis of missed events revealed fundamentally different failure modes
+for the two associators. GaMMA+NonLinLoc missed 100 events. PyOcto+NonLinLoc 
+missed only 14 events. Spatially, PyOcto's missed events clustered at the
+periphery of the bulletin area (red polygon), where station density is 
+insufficient for robust location, while GaMMA's missed events were scattered 
+throughout the monitoring area.
+
+\section{Implications for Operational Seismology}
+The results demonstrate that publicly available deep learning models, accessed
+through the SeisBench framework (\cite{SeisBench}), can achieve recall levels
+approaching, and in the best configuration (PyOcto+NonLinLoc, 96.3\%)
+effectively matching, those of expert human analysts when applied to a regional
+network with an appropriately matched training dataset. The 93-day evaluation
+period encompassed the full range of seismicity recorded by the OGS network,
+from micro-earthquakes ($M_L < 0$) to moderate events ($M_L > 3$), providing
+a statistically robust assessment of pipeline reliability.
+
+The choice of training dataset emerged as the single most important
+determinant of system performance, outweighing the choice of model
+architecture (PhaseNet vs.\ EQTransformer) or detection threshold. The
+INSTANCE dataset's inclusion of Northeastern Italian stations provided the
+domain alignment necessary for high recall and precise timing, while
+out-of-domain datasets (SCEDC, STEAD) demonstrated that geographic and
+tectonic mismatch can degrade performance by 10--20 percentage points in
+recall or inflate proposed-pick volumes by more than an order of magnitude.
+This finding underscores the practical importance of regional training data
+for operational deployments.
+
+The comparison of GaMMA and PyOcto revealed that the choice of associator
+has a far greater impact on end-to-end pipeline performance than the choice
+of picker or detection threshold. Despite identical association-stage recall,
+PyOcto preserved 30\% more catalog events through the location stage (366 vs.\ 
+280), demonstrating that spatial consistency in association is essential for 
+robust hypocenter determination.
+
+The high event-level \ac{FDR} across all configurations (0.656--0.781)
+indicates that the raw automated output contains a substantial number of
+proposed events that do not match the OGS catalog. At threshold~0.1, the
+best-performing pathway (PyOcto+NonLinLoc) produces $\sim$3.6 proposed events
+for every MH detection (\ac{FDR}~0.781). However, the persistence of these
+proposed events through NonLinLoc inversion, combined with their spatial
+clustering in patterns consistent with known seismicity, suggests that many
+represent genuine micro-seismicity. Nonetheless, without systematic validation
+of proposed events, the raw automated output would require post-processing
+filters to achieve the reliability expected in operational seismic monitoring.
+
+The \ac{HPC} deployment on the Leonardo supercomputer at CINECA enables both
+near-real-time analysis and large-scale historical reprocessing on the same
+platform. The hybrid parallelization strategy (MPI for task distribution,
+CUDA for GPU-accelerated inference, OpenMP for thread-level parallelism)
+provides computational flexibility that is essential for processing
+terabyte-scale continuous waveform archives. The Makefile-based workflow
+automation ensures reproducibility and allows individual pipeline components
+(picker, associator, locator) to be upgraded or replaced independently as
+improved models become available, without disrupting the overall workflow.
+
+\subsection{Operational Recommendations}
+Based on the findings of this study, the following practical guidelines are
+proposed for deploying the pipeline in operational settings:
+\begin{itemize}
+  \item \textbf{Picker}: Use PhaseNet trained on INSTANCE as the default
+  picker; validate new deployments with time-residual diagnostics and
+  recall/\ac{FDR} distributions.
+  \item \textbf{Associator}: Prefer PyOcto for the area under investigation.
+  GaMMA should be tuned to improve its performance for the region.
+  \item \textbf{Thresholds}: Start at 0.2--0.3 for P and S detection
+  probabilities; adjust per-station or per-region if systematic
+  recall/\ac{FDR} patterns appear in quality-control dashboards.
+  \item \textbf{Quality-control gates}: Enforce minimum station count, maximum
+  per-station residual, and P/S ordering checks before publishing events.
+  \item \textbf{Monitoring}: Track key performance indicators (recall,
+  \ac{FDR}, processing lead time) and re-tune monthly or after major
+  configuration changes.
+\end{itemize}
+
+\section{Limitations and Future Work}
+Several limitations of the current study and directions for future development
+should be noted:
+\begin{itemize}
+  \item \textbf{3D velocity models.} All locations in this study were computed
+  with a 1D layered velocity model. Replacing the 1D model with a regional 3D velocity model is
+  expected to improve event characterization,
+  particularly for shallow events and those near major structural boundaries.
+
+  \item \textbf{Threshold optimization.} This study evaluated uniform detection
+  thresholds (0.1, 0.2, 0.3) applied identically across all stations and
+  phases. Systematic exploration of per-station or per-region adaptive
+  thresholds, informed by station noise characteristics and local seismicity
+  rates, could improve the recall/\ac{FDR} balance beyond the uniform
+  settings tested here.
+
+  \item \textbf{Magnitude calibration.} The bimodal residual pattern observed
+  below $M_L \approx 2$, with systematic underestimation of 0.3--0.8 magnitude
+  units for a subset of events, requires further investigation.
+
+  \item \textbf{Additional associators.} Evaluating alternative association
+  algorithms (e.g., REAL (\cite{REAL})) is recommended.
+
+  \item \textbf{Proposed-event validation.} The 810--1,304 proposed events
+  absent from the OGS catalog require systematic validation. Many likely 
+  represent genuine uncataloged micro-seismicity, and quality-control criteria 
+  such as minimum station count, maximum azimuthal gap, and travel-time
+  residual thresholds should be applied.
+\end{itemize}
+
+\section{Concluding Remarks}
+This thesis demonstrated that a modular ML pipeline, combining PhaseNet
+(INSTANCE) for phase picking, PyOcto for phase association, NonLinLoc for
+hypocenter location, and local magnitude estimation, can recover 96.3\% of a
+manually reviewed regional earthquake catalog with sub-kilometer epicentral
+accuracy (median 0.72\,km), sub-second origin time precision (MAE 0.171\,s),
+and magnitude agreement within $\pm 0.22$ magnitude units. These results
+establish a quantitative baseline for automated seismic monitoring in
+Northeastern Italy and demonstrate that deep-learning-based pipelines deployed
+on HPC infrastructure are ready for operational integration into regional
+seismic surveillance systems.

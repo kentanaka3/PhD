@@ -1,0 +1,436 @@
+% Purpose: Software architecture, central configuration, data acquisition, multi-format catalog parsing, aggregation, and visualization framework.
+% Status: Draft; under academic review.
+% Source-of-truth: OGS/src/ogsconstants.py, OGS/src/ogsdatafile.py, OGS/src/ogsparser.py, OGS/src/ogshpl.py, OGS/src/ogsdat.py, OGS/src/ogstxt.py, OGS/src/ogspun.py, OGS/src/ogsdownloader.py, OGS/src/ogsplotter.py, OGS/src/ogsutils.py
+
+\label{chap:data_engineering}
+
+The development and deployment of an automated, operational seismic catalog pipeline requires a robust, scalable data engineering infrastructure. Seismological observatories must routinely ingest heterogeneous multi-channel continuous waveforms from distributed networks, parse decades of legacy catalog archives stored in idiosyncratic text formats, merge multi-source hypocenter and magnitude solutions, and render high-resolution geographic and statistical visualizations.
+
+This chapter details the data engineering framework developed for this dissertation, implemented as a modular Python package under \texttt{OGS/src/}. Section~\ref{sec:software_architecture} presents the software design patterns and the central configuration module \texttt{ogsconstants}. Section~\ref{sec:weight_conversion} establishes the formal weight-to-uncertainty mapping. Section~\ref{sec:data_acquisition} describes the distributed FDSN continuous waveform acquisition architecture. Section~\ref{sec:catalog_parsing} formulates the extensible multi-format catalog parsing hierarchy. Section~\ref{sec:catalog_aggregation} details the automated format detection, merging logic, and columnar persistence. Section~\ref{sec:visualization_framework} presents the object-oriented visualization framework and geodetic math. Finally, Section~\ref{sec:storage_strategy} outlines the tiered storage strategy and quality assurance protocols.
+
+\section{Software Architecture and Central Configuration Module}
+\label{sec:software_architecture}
+
+The data engineering pipeline is architected around object-oriented and functional programming paradigms in Python 3.12, interfacing with core scientific computing libraries including NumPy, pandas, ObsPy (\cite{ObsPy}), Pyrocko, Cartopy, and scikit-learn. To ensure maintainability, maintain loose coupling between processing stages, and eliminate hardcoded parameters, the system adheres to the \textbf{Single Source of Truth} design pattern.
+
+\subsection{The Central Configuration Module: \texttt{ogsconstants}}
+\label{sec:ogsconstants}
+
+The \texttt{ogsconstants.py} module serves as the central configuration repository for the entire codebase. Every pipeline stage—data downloading, parsing, neural picking, phase association, relocation, magnitude estimation, bipartite matching, and plotting—imports its operational constants, schema definitions, regex fragments, and mathematical tolerances directly from this module.
+
+The primary configuration domains governed by \texttt{ogsconstants} include:
+\begin{enumerate}
+  \item \textbf{Parallel Execution and HPC Hardware Allocation}:
+  \begin{itemize}
+    \item \texttt{MPI\_RANK}, \texttt{MPI\_SIZE}, \texttt{MPI\_COMM}: Global variables capturing Message Passing Interface (\ac{MPI}) process rank, communicator size, and communicator topology for distributed multi-node execution on HPC clusters.
+    \item \texttt{GPU\_RANK}, \texttt{GPU\_SIZE}: Device identifiers managing CUDA device affinity for multi-GPU inference across NVIDIA A100 nodes.
+    \item \texttt{EPSILON = 1e-6}: Small numerical constant preventing division-by-zero singularities during travel-time residual calculations and weight inversions.
+  \end{itemize}
+
+  \item \textbf{Standardized Date and Time Representations}:
+  Seismological files and web services employ diverse date-time string conventions. The module defines canonical format strings following Python \texttt{strftime} standards:
+  \begin{itemize}
+    \item \texttt{DATE\_FMT = "\%Y-\%m-\%d"}: Standard ISO 8601 calendar date.
+    \item \texttt{TIME\_FMT = "\%H\%M\%S"}: Compact six-digit time string.
+    \item \texttt{YYMMDD\_FMT = "\%y\%m\%d"} and \texttt{YYYYMMDD\_FMT = "\%Y\%m\%d"}: Two-digit and four-digit year date representations.
+    \item \texttt{DATETIME\_FMT = "\%y\%m\%d\%H\%M\%S"}: Compact twelve-digit timestamp string used in legacy fixed-width records.
+    \item \texttt{ONE\_DAY = timedelta(days=1)}: Fundamental step interval for temporal partitioning.
+  \end{itemize}
+
+  \item \textbf{Phase Identifiers and Detection Thresholds}:
+  \begin{itemize}
+    \item \texttt{PWAVE = "P"}, \texttt{SWAVE = "S"}: Authoritative phase type string literals.
+    \item \texttt{THRESHOLDS}: Systematic confidence threshold array spanning $0.1$ to $0.9$ in increments of $0.1$, constructed via \texttt{np.linspace(0.1, 0.9, 9)}.
+    \item \texttt{PWAVE\_THRESHOLD = SWAVE\_THRESHOLD = 0.1}: Default minimum model probability threshold for accepting machine-learning phase candidates.
+  \end{itemize}
+
+  \item \textbf{Spatial Domain and Polygon Boundaries}:
+  \begin{itemize}
+    \item \texttt{OGS\_POLY\_REGION}: An eight-vertex convex polygon enclosing the core monitoring area in Northeastern Italy, defined by ordered $(lon, lat)$ coordinate pairs:
+    \begin{align}
+      \mathcal{P}_{\mathrm{OGS}} = \{ &(10.0, 45.5),\, (10.0, 46.5),\, (11.5, 47.0),\, (12.5, 47.0), \nonumber \\
+                                      &(14.5, 46.5),\, (14.5, 45.5),\, (12.5, 44.5),\, (11.5, 44.5) \}.
+      \label{eq:ogs_poly_coords}
+    \end{align}
+    \item \texttt{OGS\_STUDY\_REGION = [9.5, 15.0, 44.3, 47.5]}: Extended rectangular bounding box $[lon_{\min}, lon_{\max}, lat_{\min}, lat_{\max}]$ encompassing border sectors of Austria, Slovenia, and Croatia to ensure complete wavefield capture.
+    \item \texttt{OGS\_PROJECTION}: Proj4 stereographic projection string (\texttt{"+proj=sterea +lon\_0=\{lon\} +lat\_0=\{lat\} +units=km"}) providing conformal, low-distortion Cartesian metric mapping for regional travel-time calculations and plotting.
+  \end{itemize}
+
+  \item \textbf{Geographic Zone and Event Type Taxonomies}:
+  \begin{itemize}
+    \item \texttt{OGS\_GEO\_ZONES}: Dictionary mapping single-letter catalog codes to formal geographic regions (e.g., \texttt{'F'} $\to$ Friuli, \texttt{'V'} $\to$ Veneto, \texttt{'S'} $\to$ Slovenia, \texttt{'A'} $\to$ Alto Adige, \texttt{'O'} $\to$ Austria).
+    \item \texttt{OGS\_EVENT\_TYPES}: Taxonomy distinguishing natural tectonic earthquakes (\texttt{'L'} $\to$ \texttt{local\_eq}) from industrial explosions (\texttt{'E'} $\to$ \texttt{explosion}), military detonations (\texttt{'B'} $\to$ \texttt{bomb}), landslide-induced ground shaking (\texttt{'F'} $\to$ \texttt{landslide}), and unclassified sources (\texttt{'U'} $\to$ \texttt{UNKNOWN}).
+  \end{itemize}
+
+  \item \textbf{Canonical DataFrame Schema Headers}:
+  Predefined column tuples ensuring schema congruence across parquet storage:
+  \begin{itemize}
+    \item \texttt{HEADER\_EVENTS = [idx, time, latitude, longitude, depth, ERH, ERZ, GAP]}
+    \item \texttt{HEADER\_PICKS = [idx, time, phase, station, onset, polarity, weight]}
+    \item \texttt{HEADER\_MODL = [MODEL, WEIGHT, THRESHOLD]}
+    \item \texttt{HEADER\_PRED = HEADER\_MODL + HEADER\_MANL}
+  \end{itemize}
+\end{enumerate}
+
+\section{Pick Quality Weight and Timing Uncertainty Conversion}
+\label{sec:weight_conversion}
+
+In observational seismology, human analysts assign qualitative weight codes to picked phase arrivals based on onset clarity, signal-to-noise ratio, and waveform impulsiveness. The legacy Hypo71 formulation (\cite{Hypo71}) establishes a discrete integer weighting scale $w \in \{0, 1, 2, 3, 4\}$. To utilize these picks in probabilistic relocation algorithms (such as NonLinLoc) or in quantitative distance scoring functions, discrete weights must be mapped to physical timing uncertainties $\sigma_t$ (in seconds).
+
+Table~\ref{tab:h71_weights} defines the quantitative mapping implemented in the pipeline. Picks assigned weight 0 represent ideal, impulsive onsets with timing uncertainties below 10 milliseconds ($\sigma_t < 0.01\,\mathrm{s}$), whereas weight 4 denotes poor-quality picks with uncertainties exceeding one second ($\sigma_t \ge 1.0\,\mathrm{s}$).
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Mapping between analyst-assigned Hypo71 pick weight codes, timing uncertainties ($\sigma_t$), and physical interpretation implemented in the OGS pipeline. The reader should notice that weight codes represent an approximately logarithmic scaling of picking uncertainty. Weight codes and thresholds derived from official OGS operational catalog conventions and anchored in \texttt{ogsconstants.H71\_OFFSET}.}
+  \label{tab:h71_weights}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{c c c X}
+      \toprule
+      \textbf{Weight Code ($w$)} & \textbf{Epistemic Tag\tnote{a}} & \textbf{Uncertainty $\sigma_t$ (\unit{\second})\tnote{b}} & \textbf{Observational Semantic / Waveform Quality} \\
+      \midrule
+      0 & [Analyst-Normalized] & $< 0.01$     & Impulsive onset, sharp first motion, high SNR \\
+      1 & [Analyst-Normalized] & $0.01\text{--}0.04$ & Clear onset, unambiguous first break \\
+      2 & [Analyst-Normalized] & $0.04\text{--}0.20$ & Fairly clear onset, moderate background noise \\
+      3 & [Analyst-Normalized] & $0.20\text{--}1.00$ & Emergent onset, low SNR, gradual amplitude rise \\
+      4 & [Analyst-Normalized] & $\ge 1.00$    & Poor quality pick, emergent coda, highly uncertain \\
+      5 & [Analyst-Normalized] & $25.00$      & Very uncertain / rejected pick (rarely utilized) \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item[a] Epistemic classification: \texttt{[Analyst-Normalized]} denotes discrete human expert labels assigned according to regional observatory picking manuals.
+      \item[b] In the bipartite graph matching and event distance modules (\texttt{dist\_event} and \texttt{dist\_pick}), uncertainty offsets are parameterized by the dictionary \texttt{H71\_OFFSET = \{0: 0.01, 1: 0.04, 2: 0.2, 3: 1.0, 4: 5.0, 5: 25.0\}}.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+
+In downstream probabilistic hypocenter inversion, the timing uncertainty $\sigma_t$ determines the diagonal elements of the data covariance matrix $\mathbf{C}_{\mathbf{d}}$:
+\begin{equation}
+  \mathbf{C}_{\mathbf{d}, ii} = \sigma_{t, i}^2 + \sigma_{\mathrm{model}}^2,
+  \label{eq:data_covariance}
+\end{equation}
+where $\sigma_{\mathrm{model}}$ accounts for theoretical travel-time uncertainty induced by unmodeled 3D crustal heterogeneities.
+
+\section{Continuous Data Acquisition: The \texttt{ogsdownloader} Architecture}
+\label{sec:data_acquisition}
+
+Waveform data acquisition is governed by the command-line utility \texttt{ogsdownloader.py}, engineered to retrieve continuous waveform streams and station metadata from distributed \acf{FDSN} web services. The tool supports dual operational backends—ObsPy \texttt{MassDownloader} (\cite{ObsPy}) and Pyrocko \texttt{squirrel}—controlled through a unified command-line argument schema.
+
+\subsection{Multi-Client Fallback Querying}
+\label{subsec:multi_client_fallback}
+
+Because regional seismic stations are operated by distinct national, regional, and academic institutions, single-client queries frequently suffer from missing channels, network maintenance downtime, or restricted routing. The acquisition engine resolves this by executing prioritized multi-client fallback queries. The priority order is defined in \texttt{ogsconstants.OGS\_CLIENTS\_DEFAULT}:
+\begin{enumerate}
+  \item \textbf{OGS Internal FDSN Web Service} (\url{http://158.110.30.217:8080}): Authoritative internal data center providing real-time broadband and accelerometric feeds from the SMINO network.
+  \item \textbf{INGV FDSN Web Service}: Italian National Institute of Geophysics and Volcanology, serving national broadband (IV) and accelerometric (IT) stations.
+  \item \textbf{GFZ GEOFON Program}: German Research Centre for Geosciences, hosting transboundary stations across Central and Southern Europe.
+  \item \textbf{IRIS DMC / EarthScope}: Global backup data center.
+  \item \textbf{ETH Zurich}: Swiss Seismological Service (SED), providing border coverage along the Western Alpine arc.
+  \item \textbf{ORFEUS Data Center (ODC)}: European observational federation.
+  \item \textbf{Collalto Dense Microseismic Network} (\url{http://scp-srv.core03.ogs.it:8080}): High-density industrial monitoring array located in the Venetian Prealps.
+\end{enumerate}
+
+Queries proceed iteratively down the client list: when a station or waveform segment is unavailable at client $k$, the downloader automatically cascades to client $k+1$, maximizing data completeness without duplicating downloaded files.
+
+\subsection{Temporal Segmentation and Multi-Threaded Execution}
+\label{subsec:temporal_segmentation}
+
+Querying continuous waveform archives over multi-month observation windows in a single HTTP request routinely triggers server socket timeouts, memory exhaustion, or network connection resets. To prevent these failures, \texttt{ogsdownloader} automatically partitions the global date range $[t_{\mathrm{start}}, t_{\mathrm{end}}]$ into discrete \textbf{24-hour UTC calendar days}:
+\begin{equation}
+  \mathcal{D}_k = \left[ t_{\mathrm{start}} + k \cdot \Delta t_{\mathrm{day}},\, t_{\mathrm{start}} + (k+1) \cdot \Delta t_{\mathrm{day}} \right), \quad k \in \{0, 1, \dots, N_{\mathrm{days}}-1\}.
+  \label{eq:daily_segmentation}
+\end{equation}
+
+For each calendar day $\mathcal{D}_k$, a dedicated worker thread is dispatched via Python's \texttt{concurrent.futures.ThreadPoolExecutor}. The worker constructs a hierarchical directory structure under the designated root filesystem:
+\begin{verbatim}
+  {base_directory}/{YYYY}/{MM}/{DD}/
+\end{verbatim}
+Within each day directory, waveforms are persisted as miniSEED files following the SEED naming convention:
+\begin{verbatim}
+  {NETWORK}.{STATION}.{LOCATION}.{CHANNEL}__{STARTTIME}__{ENDTIME}.mseed
+\end{verbatim}
+This temporal segmentation guarantees:
+\begin{itemize}
+  \item \textbf{Atomic Checkpointing}: Interrupted downloads can be resumed without re-downloading completed days.
+  \item \textbf{Lock-Free Parallelism}: Multiple MPI ranks or SLURM tasks can read different dates concurrently without filesystem write contention.
+  \item \textbf{Memory Predictability}: Working memory per thread is strictly bounded by the 24-hour waveform volume of the active station subset.
+\end{itemize}
+
+\subsection{Channel Selection Priorities}
+\label{subsec:channel_priorities}
+
+Seismic stations frequently record on multiple co-located sensor channels (e.g., broadbands, short-period sensors, and accelerometers). To prevent duplicate processing while preserving the highest recording fidelity, the downloader enforces a strict band-code selection hierarchy:
+\begin{enumerate}
+  \item \textbf{HH[ZNE]}: High-Gain Broadband Seismometer ($100\,\mathrm{Hz}$ sampling; primary choice for microseismic picking).
+  \item \textbf{EH[ZNE]}: Extremely Short-Period Seismometer (high-frequency velocity sensors).
+  \item \textbf{HN[ZNE]}: High-Gain Accelerometer (strong-motion channels; essential during high-amplitude near-source shaking).
+  \item \textbf{HG[ZNE]}: High-Gain Seismometer.
+\end{enumerate}
+Horizontal channel orientation fallbacks (components 1 and 2 mapped to N and E) are handled automatically during stream parsing.
+
+\section{Multi-Format Catalog Parsing Architecture}
+\label{sec:catalog_parsing}
+
+Over its 45-year operational history, the OGS Seismological Research Centre has accumulated vast archives of earthquake catalogs and phase arrival bulletins stored in legacy ASCII and fixed-width formats. To ingest and unify these records, we engineered an extensible, object-oriented parsing framework.
+
+\subsection{Abstract Base Class Design: \texttt{OGSDataFile}}
+\label{subsec:ogsdatafile}
+
+The parsing framework is rooted at the abstract base class \texttt{OGSDataFile}, which inherits from \texttt{OGSCatalog} (Figure~\ref{fig:parser_architecture}). \texttt{OGSDataFile} provides core infrastructure common to all text-based formats:
+\begin{itemize}
+  \item \textbf{Regex-Based Token Extraction}: Subclasses declare format-specific lists of regular expression fragments (\texttt{RECORD\_EXTRACTOR\_LIST} for pick arrivals, \texttt{EVENT\_EXTRACTOR\_LIST} for event headers). The base class flattens and compiles these fragments into high-performance regular expressions with named capture groups.
+  \item \textbf{Spatial Polygon Filtering}: Automatic spatial subsetting using \texttt{matplotlib.path.Path.contains\_points} to filter event coordinates against the regional polygon \texttt{OGS\_POLY\_REGION}.
+  \item \textbf{Temporal Date Range Filtering}: In-line filtering during stream reading, discarding records outside the configured $[t_{\mathrm{start}}, t_{\mathrm{end}}]$ window before allocating DataFrame memory.
+  \item \textbf{Columnar Parquet Serialization}: Built-in persistence methods that serialize parsed picks and events into compressed Apache Parquet tables partitioned by calendar date.
+\end{itemize}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[
+    >=Stealth,
+    node distance=8mm and 12mm,
+    every node/.style={font=\small},
+    base/.style={rectangle, rounded corners=3pt, draw=black!80, line width=0.8pt, align=center, inner sep=6pt, minimum height=9mm},
+    catalog/.style={base, fill=blue!10, draw=blue!80!black, text width=42mm},
+    datafile/.style={base, fill=blue!18, draw=blue!90!black, line width=1.0pt, text width=42mm},
+    parser/.style={base, fill=gray!8, draw=black!70, text width=28mm},
+    aggregator/.style={base, fill=orange!12, draw=orange!80!black, line width=1.0pt, text width=42mm},
+    parquet/.style={base, fill=gray!15, draw=black!80, double, double distance=1pt, text width=42mm},
+    arrow/.style={->, thick, draw=black!80}
+  ]
+
+    % Nodes
+    \node[catalog] (cat) {\textbf{OGSCatalog}\\\scriptsize Catalog container \& BGMA review};
+    \node[datafile, below=of cat] (df) {\textbf{OGSDataFile}\\\scriptsize Abstract base class \& regex engine};
+    \node[aggregator, right=22mm of df] (dc) {\textbf{DataCatalog}\\\scriptsize Multi-format aggregator \& merge};
+
+    \node[parser, below left=12mm and -8mm of df] (hpl) {\textbf{DataFileHPL}\\\scriptsize .hpl (Hypo71)};
+    \node[parser, below=12mm of df] (dat) {\textbf{DataFileDAT}\\\scriptsize .dat (P/S picks)};
+    \node[parser, below right=12mm and -8mm of df] (txt) {\textbf{DataFileTXT}\\\scriptsize .txt ($M_{\mathrm{L}}$ magnitudes)};
+    \node[parser, right=6mm of txt] (pun) {\textbf{DataFilePUN}\\\scriptsize .pun (Punch card)};
+
+    \node[parquet, below=12mm of dc] (out) {\textbf{Parquet Persistence}\\\scriptsize \texttt{.all/events/}, \texttt{.all/assignments/}};
+
+    % Connections
+    \draw[arrow] (df) -- (cat);
+    \draw[arrow] (dc) -- (df);
+    \draw[arrow] (hpl) |- (df);
+    \draw[arrow] (dat) -- (df);
+    \draw[arrow] (txt) |- (df);
+    \draw[arrow] (pun) |- (df);
+    \draw[arrow] (dc) -- (out);
+
+  \end{tikzpicture}
+  \caption{Class inheritance and aggregation architecture of the OGS multi-format catalog parsing framework. Solid boxes denote demonstrated Python classes implemented under \texttt{OGS/src/}; double-bordered gray box denotes Apache Parquet on-disk storage. The reader should notice the inheritance hierarchy rooted at \texttt{OGSCatalog}, specialized via \texttt{OGSDataFile}, and orchestrated by the \texttt{DataCatalog} aggregator.}
+  \label{fig:parser_architecture}
+\end{figure}
+
+\subsection{Progressive Regular Expression Debugging}
+\label{subsec:progressive_regex_debugging}
+
+A major challenge in parsing decades of legacy seismological data is the occurrence of subtle formatting corruptions: misaligned character columns, non-standard blank characters, and missing fields. To diagnose parsing failures without resorting to manual line-by-line inspection, \texttt{OGSDataFile} implements a \textbf{progressive regular expression debugger} (\texttt{debug()} method).
+
+The debugger decomposes the composite regex fragment list $\mathcal{R} = [r_1, r_2, \dots, r_m]$ into cumulative prefixes:
+\begin{equation}
+  \mathcal{R}_k = \sum_{i=1}^k r_i, \quad k \in \{1, 2, \dots, m\}.
+  \label{eq:regex_prefixes}
+\end{equation}
+When a record line fails matching against the full pattern $\mathcal{R}_m$, the debugger evaluates the line sequentially against each prefix $\mathcal{R}_k$. Using named capture group introspection (\texttt{GROUP\_PATTERN = re.compile(r"\(\?P<(\w+)>...")}), the method immediately isolates the exact capture group (e.g., station name, centisecond fraction, or azimuthal gap) that caused the match to fail, logging the failure line number and corrupted substring.
+
+\subsection{Supported Legacy File Formats}
+\label{subsec:supported_formats}
+
+Table~\ref{tab:file_formats} summarizes the four primary legacy catalog formats supported by dedicated subclass implementations.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Supported OGS catalog and phase pick file formats and their corresponding parser implementations. The reader should notice the complementary nature of the files: HPL provides comprehensive hypocenters and picks, DAT provides dense arrival times, TXT contributes revised local magnitudes, and PUN preserves historical punch card records. Formats anchored in \texttt{ogshpl.py}, \texttt{ogsdat.py}, \texttt{ogstxt.py}, and \texttt{ogspun.py}.}
+  \label{tab:file_formats}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{l c l X}
+      \toprule
+      \textbf{Extension} & \textbf{Epistemic Tag\tnote{a}} & \textbf{Parser Class} & \textbf{Extracted Attributes and Operational Semantics} \\
+      \midrule
+      \texttt{.hpl} & [Analyst-Normalized] & \texttt{DataFileHPL} & Hypocenter locations, origin times, focal depths, local magnitude ($M_{\mathrm{L}}$), station P/S arrival times, onset polarities, weights (0--4), $ERH$, $ERZ$, $RMS$, azimuthal gap ($GAP$), analyst free-text notes, and geographic locality descriptions. \\
+      \texttt{.dat} & [Analyst-Normalized] & \texttt{DataFileDAT} & Fixed-width station phase arrival records: 4-character station code, P/S onset quality (I/E), first-motion polarity ($+/-/c/d$), weight code, timestamp down to centiseconds, and event type. \\
+      \texttt{.txt} & [Analyst-Normalized] & \texttt{DataFileTXT} & Tabular event summary records: origin times, revised local magnitude ($M_{\mathrm{L}}$), duration magnitude ($M_{\mathrm{D}}$), horizontal/vertical uncertainties, and event identification tags. \\
+      \texttt{.pun} & [Analyst-Normalized] & \texttt{DataFilePUN} & Legacy punch card fixed-column format: hypocentral coordinates in degrees-minutes format (automatically converted to decimal degrees), depths, $DMIN$, $RMS$, and quality classes. \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item[a] Epistemic classification: \texttt{[Analyst-Normalized]} indicates catalog records produced through supervised manual picking and operational hypocenter location programs (Hypo71, HypoEllipse) at the OGS Centro di Ricerche Sismologiche.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+
+\section{Catalog Aggregation, Merging Logic, and Columnar Storage}
+\label{sec:catalog_aggregation}
+
+The \texttt{DataCatalog} class (implemented in \texttt{ogsparser.py}) acts as the central multi-format aggregator. When executed over an input directory containing mixed legacy files, it orchestrates automated format detection, batch parsing, cross-file attribute merging, and optimized columnar persistence.
+
+\subsection{Automatic Format Detection}
+\label{subsec:format_detection}
+
+The aggregator inspects the file extensions of discovered files and dispatches parsing via an internal registry mapping (\texttt{DATAFILE\_TYPES}):
+\begin{verbatim}
+  DATAFILE_TYPES = {
+      '.hpl': DataFileHPL,  # Primary hypocenter and pick data
+      '.dat': DataFileDAT,  # Phase pick data
+      '.txt': DataFileTXT,  # Magnitude and error data
+      '.pun': DataFilePUN,  # Punch card event summaries
+  }
+\end{verbatim}
+Unrecognized file types or hidden operating system files are automatically bypassed.
+
+\subsection{Cross-File Catalog Merging Logic}
+\label{subsec:merge_logic}
+
+When merging is requested (\texttt{--merge} CLI flag), \texttt{DataCatalog} reconciles complementary attributes across heterogeneous file types into unified \texttt{EVENTS} and \texttt{PICKS} DataFrames:
+\begin{enumerate}
+  \item \textbf{Pick Normalization and Concatenation}: Pick records across all parsed files are concatenated. Column names are mapped to standardized schema identifiers (\texttt{HEADER\_PICKS}), timestamps are parsed to UTCDateTime, and calendar dates are coerced using \texttt{normalize\_event\_groups()} to ensure consistent join keys across HPL, DAT, and PUN files.
+  \item \textbf{Event Attribute Outer Joins}: Merging events from distinct files requires joining complementary fields:
+  \begin{itemize}
+    \item Primary hypocenters, origin times, depths, and spatial uncertainties are seeded from HPL files.
+    \item TXT files contribute revised local magnitude ($M_{\mathrm{L}}$), duration magnitude ($M_{\mathrm{D}}$), and station count metrics, joined via an outer merge on event index \texttt{idx}.
+    \item PUN files contribute legacy coordinates for events missing HPL records, joined via spatiotemporal matching on $[time, lat, lon, depth]$.
+  \end{itemize}
+  \item \textbf{Vectorized Event Pick Statistics Aggregation}: Following hypocenter merging, the aggregator computes pick statistics for every event. To prevent performance degradation from nested Python loops, aggregation is executed via vectorized pandas operations:
+  \begin{lstlisting}[language=Python, basicstyle=\ttfamily\scriptsize]
+# Vectorized pick counts per event by phase type
+phase_counts = self.PICKS.groupby(
+    [OGS_C.IDX_PICKS_STR, OGS_C.PHASE_STR]
+).size().unstack(fill_value=0)
+
+self.EVENTS[OGS_C.NUMBER_P_PICKS_STR] = self.EVENTS[OGS_C.IDX_EVENTS_STR].map(
+    phase_counts[OGS_C.PWAVE]
+).fillna(0).astype(int)
+
+self.EVENTS[OGS_C.NUMBER_S_PICKS_STR] = self.EVENTS[OGS_C.IDX_EVENTS_STR].map(
+    phase_counts[OGS_C.SWAVE]
+).fillna(0).astype(int)
+
+# Stations recording both P and S arrivals
+station_phase_counts = self.PICKS.groupby(
+    [OGS_C.IDX_PICKS_STR, OGS_C.STATION_STR]
+)[OGS_C.PHASE_STR].nunique()
+stations_with_both = station_phase_counts[
+    station_phase_counts >= 2
+].groupby(level=0).size()
+
+self.EVENTS[OGS_C.NUMBER_P_AND_S_PICKS_STR] = self.EVENTS[
+    OGS_C.IDX_EVENTS_STR
+].map(stations_with_both).fillna(0).astype(int)
+  \end{lstlisting}
+\end{enumerate}
+
+\subsection{Columnar Parquet Storage Organization}
+\label{subsec:parquet_storage}
+
+Consolidated catalogs are serialized using \textbf{Apache Parquet} format with Snappy compression. Parquet provides columnar data layout, typed schemas, dictionary encoding, and predicate pushdown filtering. On large multi-year catalogs, Parquet achieves a $5\times\text{--}10\times$ storage volume reduction compared to raw CSV and accelerates analytical filtering queries by over an order of magnitude.
+
+Storage is partitioned chronologically by calendar date:
+\begin{verbatim}
+  {output_directory}/.all/assignments/{YYYY}-{MM}-{DD}.parquet  (picks)
+  {output_directory}/.all/events/{YYYY}-{MM}-{DD}.parquet       (events)
+\end{verbatim}
+
+\section{Visualization Framework and Geodetic Mathematics}
+\label{sec:visualization_framework}
+
+Scientific data analysis, quality control, and model benchmarking require reproducible, publication-grade figure generation. The \texttt{ogsplotter.py} module implements a family of specialized plotter classes built on Matplotlib and Cartopy, standardizing visual aesthetics across the project.
+
+\subsection{Base Plotter Architecture: \texttt{plotter}}
+\label{subsec:base_plotter}
+
+All specialized plotting classes inherit from the \texttt{plotter} base class, which encapsulates:
+\begin{itemize}
+  \item Consistent figure dimensions, DPI scaling (300 DPI publication resolution), and typography using Helvetica/sans-serif font families.
+  \item Standardized multi-format figure export (PNG raster, PDF vector, EPS).
+  \item The authoritative OGS institutional color palette defined in \texttt{ogsconstants}:
+  \begin{itemize}
+    \item \texttt{OGS\_BLUE = "\#163771"}: Primary OGS dark blue (ground truth, reference series).
+    \item \texttt{MEX\_PINK = "\#E4007C"}: Accent vibrant pink (predicted models, PhaseNet).
+    \item \texttt{ALN\_GREEN = "\#00e468"}: Bright green (matched events, true positives).
+    \item \texttt{LIP\_ORANGE = "\#FF8C00"}: Orange (EQTransformer, warnings, missed events).
+    \item \texttt{SUN\_YELLOW = "\#e4da00"}: Yellow (tertiary accent, proposed events).
+  \end{itemize}
+\end{itemize}
+
+\subsection{Specialized Plotting Engines}
+\label{subsec:specialized_plotters}
+
+The framework provides purpose-built visualization engines tailored to specific seismological representations:
+\begin{enumerate}
+  \item \textbf{Cartographic Mapping (\texttt{map\_plotter})}: Integrates Cartopy projections (PlateCarree and local Stereographic) to render geographic basemaps, coastlines, international borders, provincial boundaries, and the regional polygon \texttt{OGS\_POLY\_REGION}. Stations are rendered as upward-pointing triangles ($\blacktriangle$) colored by network; earthquake hypocenters are rendered as circles ($\CIRCLE$) scaled proportionally to magnitude and colored by focal depth or catalog origin. Includes automated north arrows and physical metric scale bars (\texttt{matplotlib\_scalebar}).
+  \item \textbf{Data Availability Stacking (\texttt{stack\_plotter})}: Generates daily multi-network station count area stacks over time (\texttt{OGSAvailability.png}), tracking continuous recording availability and highlighting operational network drops.
+  \item \textbf{Cumulative Event Progression (\texttt{line\_plotter} and \texttt{day\_plotter})}: Renders cumulative earthquake discovery curves over the observation horizon, supporting vertical event annotation lines for key seismic shocks (e.g., the $M_{\mathrm{L}}~4.6$ Socchieve mainshock).
+  \item \textbf{Waveform Record Sections (\texttt{event\_plotter})}: Generates distance-ordered three-component seismic record sections, bandpass-filtering traces, normalizing trace amplitudes, and overlaying theoretical or picked P- and S-wave arrival flags.
+  \item \textbf{Distribution and Confusion Matrix Engines (\texttt{histogram\_plotter} and \texttt{ConfMtx\_plotter})}: Visualizes magnitude-frequency distributions, travel-time residual histograms with Gaussian kernel density estimation, and $3 \times 3$ phase confusion matrices via scikit-learn's \texttt{ConfusionMatrixDisplay}.
+\end{enumerate}
+
+\subsection{Geodetic Distance Computations}
+\label{subsec:geodetic_math}
+
+Computing epicentral and hypocentral distances between station coordinates $(\phi_{\mathrm{sta}}, \lambda_{\mathrm{sta}}, z_{\mathrm{sta}})$ and earthquake hypocenters $(\phi_{\mathrm{hyp}}, \lambda_{\mathrm{hyp}}, z_{\mathrm{hyp}})$ is fundamental for distance-ordered record sections and spatial matching tolerances.
+
+The module implements the vectorized helper \texttt{v\_lat_long_to_distance} in \texttt{ogsplotter.py}. Horizontal great-circle distance $d_{\mathrm{horizontal}}$ is computed along the WGS84 reference ellipsoid using the geodesic algorithm of \textcite{ObsPy} (\texttt{obspy.geodetics.gps2dist_azimuth}):
+\begin{equation}
+  d_{\mathrm{horizontal}} = \frac{1}{1000} \cdot \operatorname{geodesic}_{\mathrm{WGS84}}\left(\phi_{\mathrm{hyp}}, \lambda_{\mathrm{hyp}},\, \phi_{\mathrm{sta}}, \lambda_{\mathrm{sta}}\right) \quad [\unit{\kilo\meter}].
+  \label{eq:horizontal_distance}
+\end{equation}
+The 3D hypocentral distance $d_{3\mathrm{D}}$ is subsequently obtained by adding the vertical depth separation in quadrature:
+\begin{equation}
+  d_{3\mathrm{D}} = \sqrt{d_{\mathrm{horizontal}}^2 + \left(\frac{|z_{\mathrm{hyp}} - z_{\mathrm{sta}}|}{1000}\right)^2} \quad [\unit{\kilo\meter}],
+  \label{eq:hypocentral_distance}
+\end{equation}
+where depths $z$ are defined in meters positive downwards.
+
+\section{Tiered Data Storage Strategy and Quality Assurance}
+\label{sec:storage_strategy}
+
+To support high-throughput parallel execution on the CINECA Leonardo supercomputer while strictly maintaining reproducibility and data provenance, the framework employs a tiered hierarchical storage architecture (Figure~\ref{fig:storage_architecture}):
+\begin{itemize}
+  \item \textbf{Tier 1: Raw Continuous Waveforms (MiniSEED)}: Ingested daily streams stored in read-only, date-partitioned directory hierarchies under \texttt{\$WORK/waveforms/YYYY/MM/DD/}. Preserves primary observation integrity without modification.
+  \item \textbf{Tier 2: Station Metadata (StationXML)}: XML metadata stored under \texttt{station/\{NET\}.\{STA\}.xml}, providing calibration responses, gains, and coordinates.
+  \item \textbf{Tier 3: Columnar Catalogs (Parquet)}: Pick and event tables persisted in compressed Parquet partitions under \texttt{catalogs/\{target\}/.all/}.
+  \item \textbf{Tier 4: Zero-Copy Symbolic Link Trees}: Intermediate pipeline stages (such as outputs from phase picking feeding into phase associators) are linked using filesystem symlinks (\texttt{link.py}), avoiding multi-gigabyte data duplication on shared Lustre filesystems while preserving exact provenance chains.
+\end{itemize}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[
+    >=Stealth,
+    node distance=6mm and 10mm,
+    every node/.style={font=\small},
+    base/.style={rectangle, rounded corners=3pt, draw=black!80, line width=0.8pt, align=center, inner sep=5pt, minimum height=8mm},
+    tier1/.style={base, fill=blue!8, draw=blue!80!black, text width=55mm},
+    tier2/.style={base, fill=teal!8, draw=teal!80!black, text width=55mm},
+    tier3/.style={base, fill=gray!12, draw=black!80, double, double distance=1pt, text width=55mm},
+    tier4/.style={base, fill=orange!8, draw=orange!80!black, text width=55mm},
+    arrow/.style={->, thick, draw=black!75}
+  ]
+
+    \node[tier1] (t1) {\textbf{Tier 1: Raw Waveforms}\\MiniSEED date tree (\texttt{YYYY/MM/DD/})};
+    \node[tier2, below=of t1] (t2) {\textbf{Tier 2: Station Metadata}\\StationXML inventory (\texttt{station/})};
+    \node[tier3, below=of t2] (t3) {\textbf{Tier 3: Structured Catalogs}\\Columnar Parquet (\texttt{events/}, \texttt{assignments/})};
+    \node[tier4, below=of t3] (t4) {\textbf{Tier 4: Pipeline Link Trees}\\Zero-copy symlinks for HPC stage reuse};
+
+    \draw[arrow] (t1) -- (t3);
+    \draw[arrow] (t2) -- (t3);
+    \draw[arrow] (t3) -- (t4);
+
+  \end{tikzpicture}
+  \caption{Hierarchical four-tier storage and data organization architecture deployed on the CINECA Leonardo HPC filesystem. The reader should notice the clear separation between read-only raw observation layers (Tiers 1 and 2), compressed columnar analytical catalogs (Tier 3), and zero-copy symbolic link execution structures (Tier 4).}
+  \label{fig:storage_architecture}
+\end{figure}
+
+Comprehensive quality assurance protocols ensure data integrity across all stages:
+\begin{enumerate}
+  \item \textbf{Input Pre-flight Verification}: File existence, non-zero file size, valid MSEED header structure, and complete StationXML coordinate verification before pipeline execution.
+  \item \textbf{Strict Coordinate Bounding}: Immediate rejection of event hypocenters located outside valid ellipsoidal coordinate domains ($\phi \notin [-90, 90]^\circ, \lambda \notin [-180, 180]^\circ$).
+  \item \textbf{Duplicate Rejection}: Detection and suppression of duplicate pick records sharing identical station, channel, phase type, and arrival timestamps within $\Delta t < 0.01\,\mathrm{s}$.
+  \item \textbf{Progressive Regex Error Logging}: Granular logging of any unparseable record lines, capturing line numbers, input filenames, and failing capture groups.
+\end{enumerate}

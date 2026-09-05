@@ -12,6 +12,13 @@ PhD/
 └── LLM/      # LLM knowledge, prompts, workflows, experiments, and reviews
 ```
 
+## Custom agents
+
+Use the [`.github/agents/latex-docxer.agent.md`](.github/agents/latex-docxer.agent.md)
+agent for PEIT LaTeX document creation, review, and evidence-bounded builds.
+
+Use the [`.github/agents/bash-scripter.agent.md`](.github/agents/bash-scripter.agent.md)
+agent for PEIT scientific Bash scripting, validation, and reproducible workflows.
 
 ## Scientific context
 

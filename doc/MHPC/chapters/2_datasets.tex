@@ -1,0 +1,245 @@
+\label{chap:Datasets}
+This chapter describes the case study and the \ac{ML} pre-trained model and
+dataset used in this study for detecting the arrival times of primary (P) and
+secondary (S) waves. A summary of the benchmark datasets used to train PhaseNet 
+(\cite{PhaseNet}) and EQTransformer (\cite{EQTransformer}) is provided in Table 
+\ref{tab:datasets}. These datasets differ in geographical coverage, noise 
+characteristics, and labeling quality, offering complementary advantages for 
+benchmarking and evaluation.
+
+\section{Case Study}
+\label{sec:case_study}
+
+The primary dataset used in this thesis consists of continuous seismic 
+recordings from the \ac{SMINO}, managed by the \ac{OGS} and surrounding 
+seismic network. This dataset serves as the target domain for evaluating the 
+efficacy of the implemented machine-learning pipeline in a operational setting.
+
+Key characteristics include:
+\begin{itemize}
+  \item \textbf{Geographical setting}: Northeastern Italy, with a focus on the 
+  Friuli Venezia Giulia (FVG) and Veneto regions. This area is characterized by 
+  complex tectonics resulting from the collision between the Adria microplate 
+  and the Eurasian plate, leading to significant seismic hazard.
+  \item \textbf{Instrumentation}: 266 stations across 18 networks
+  (Fig.~\ref{fig:OGSStations}), comprising a mix of high-sensitivity broadband
+  seismometers and strong-motion accelerometers. This dense network ensures
+  high-fidelity recording of both microseismicity and larger regional events.
+  \item \textbf{Sampling rate}: All waveforms are resampled to 100 Hz to align 
+  with the input specifications of the pre-trained deep-learning models.
+  \item \textbf{Observation period}: A three-month continuous period from 
+  March 20, 2024, to June 20, 2024. This timeframe captures a representative 
+  range of seismic activity (Fig.~\ref{fig:OGSSeismicity}), The period under 
+  analysis was chosen because on 27 March 2024 a magnitude 4.6 earthquake 
+  occurred in Friuli, near Socchieve (Lat: 46.3583, Lon: 12.808; Depth: 10.22 
+  km; UTC: 2024-03-27 21:19:37; Local time: 22:19:37; Ml: 4.6 ± 0.3; Location: 
+  5 km SSO of Socchieve, Udine). This is one of the most energetic events to 
+  occur in Friuli since 1980.
+  \item \textbf{Format}: Data are retrieved in continuous miniSEED (MSEED) 
+  format directly from multiple data centers (OGS, INGV, IRIS, GFZ, ETH,
+  ORFEUS, and GEOFON) using the ObsPy library (\cite{ObsPy}), with station 
+  availability shown in Fig.~\ref{fig:OGSAvailability}. Metadata are managed 
+  using StationXML, ensuring accurate station coordinates and instrument 
+  response information. To compare the ML results with the OGS reference 
+  catalog, OGS events were relocated using the 1D NonLinLoc (\cite{NonLinLoc}) 
+  configuration adopted in this study. The catalog will be published soon 
+  (Magrin, personal communication). It contains 380 events within the red 
+  polygon shown in Figure~\ref{fig:OGSSeismicity}, with local magnitudes 
+  ranging from -0.2 to 4.6. A total of 7,129 phase picks were associated with 
+  these events, including 4,126~P picks and 3,003~S picks.
+\end{itemize}
+
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\textwidth]{OGSCatalog/GaMMA0.1/img/OGSStations.png}
+  \caption{Geographical distribution of seismic stations used in this study 
+  (see Data and resources section for details).}
+  \label{fig:OGSStations}
+\end{figure}
+
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\textwidth]{OGSCatalog/GaMMA0.1/img/.all_EventsMap.pdf}
+  \caption{Seismicity recorded during the observation period.}
+  \label{fig:OGSSeismicity}
+\end{figure}
+
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\textwidth]{OGSCatalog/GaMMA0.1/img/OGSAvailability.png}
+  \caption{Stations availability during the observation period.}
+  \label{fig:OGSAvailability}
+\end{figure}
+
+This target dataset provides a challenging testbed due to the region's moderate 
+seismicity, crustal heterogeneity, and the presence of significant 
+anthropogenic noise sources, making it ideal for assessing model robustness.
+
+To compare the \ac{ML} results with the OGS reference catalog, we relocated the
+OGS events using the 1D NonLinLoc (\cite{NonLinLoc}) configuration adopted in
+this study. The relocated catalog contains 380 events within the study region,
+with local magnitudes ranging from $-0.2$ to 4.6. A total of 7,129 phase 
+picks were associated with these events (4,126~P and 3,003~S).
+
+\newpage
+\newpage
+\section{Benchmark Datasets}
+
+The pre-trained models available in SeisBench employed in this work were 
+selected according to three principal criteria. First, each dataset must 
+provide a large corpus of three-component seismic waveforms with expert-labeled 
+P- and S-wave arrival times, ensuring sufficient supervised signal for model 
+training. Second, the datasets should include local earthquakes ($\leq 
+150$\,km). Third, the recordings should originate from a diverse set of seismic 
+stations and tectonic settings, so that the trained models can generalize 
+beyond the conditions of any single network. The following subsections describe 
+each dataset in detail.
+
+\subsection{INSTANCE}
+\label{sec:INSTANCE}
+
+The INSTANCE dataset (\cite{INSTANCE}) constitutes one of the most 
+comprehensive regional seismic collections available for phase-picking 
+research, comprising nearly 1.3 million three-component waveforms recorded 
+across Italy. Unlike global datasets curated for high signal-to-noise ratios, 
+INSTANCE preserves the ``natural'' noise environment encountered in operational 
+monitoring networks. This includes urban and industrial noise, cultural noise 
+from transportation corridors, meteorological effects, and small-magnitude 
+events with emergent onsets. This realism makes INSTANCE a particularly 
+valuable benchmark for validation. It captures the operational complexity of 
+modern monitoring systems, especially in regions where distinguishing weak 
+events from anthropogenic noise is critical. The dataset spans a wide range of 
+magnitudes and distances, providing a robust basis for training models that 
+must generalize to the specific noise characteristics.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.8\textwidth]{INSTANCE.png}
+\caption{Geographical distribution of the INSTANCE dataset. Image taken from 
+\cite{SeisBench}}
+\label{fig:INSTANCE_sample}
+\end{figure}
+
+\subsection{STEAD}
+\label{sec:STEAD}
+
+The STanford EArthquake Dataset (STEAD) (\cite{STEAD}) provides a complementary 
+global perspective with more than 1.2 million labeled waveform segments derived 
+from diverse tectonic environments. Designed explicitly for machine-learning
+research, STEAD is characterized by:
+\begin{itemize}
+  \item \textbf{High signal clarity}: Rigorous quality control ensures high 
+  signal-to-noise ratios for positive examples.
+  \item \textbf{Meticulous labeling}: Precise manual and automatic picks for
+  both P and S waves.
+  \item \textbf{Noise separation}: A distinct subset of noise-only examples to 
+  improve model discrimination.
+  \item \textbf{Instrument diversity}: Data recorded by a wide variety of 
+  sensors across global networks.
+\end{itemize}
+
+Its global coverage minimizes overfitting to local path effects and enables the 
+development of models capable of transferring across regions, a crucial 
+requirement for universal phase pickers.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.8\textwidth]{STEAD.png}
+\caption{Global distribution of stations represented in the STEAD dataset. 
+Image taken from \cite{SeisBench}}
+\label{fig:STEAD_sample}
+\end{figure}
+
+\subsection{SCEDC}
+\label{sec:SCEDC}
+
+The Southern California Earthquake Data Center (SCEDC) dataset (\cite{SCEDC}) 
+offers an unmatched volume of seismic recordings, with more than 8.1 million 
+waveform samples. Sourced from the Southern California Seismic Network (SCSN), 
+this dataset represents decades of high-quality monitoring in one of the most 
+seismically active and well-instrumented regions in the world.
+
+The SCEDC dataset is distinguished by its:
+\begin{itemize}
+    \item \textbf{Data Volume}: Ideally suited for deep learning, the massive 
+    size of the dataset allows for the training of high-capacity models with 
+    minimal risk of overfitting.
+    \item \textbf{Density}: The high density of stations in Southern California 
+    provides redundancy and captures detailed wavefield properties.
+    \item \textbf{Catalog Completeness}: The associated catalog is highly 
+    complete down to very small magnitudes, providing a rigorous ground truth 
+    for evaluating detection sensitivity.
+\end{itemize}
+
+In this study, SCEDC serves as a benchmark for large-scale training efficiency 
+and provides a baseline for model performance on dense, local networks.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.8\textwidth]{SCEDC.png}
+\caption{Station map of the SCEDC dataset. Image taken from \cite{SeisBench}}
+\label{fig:SCEDC_sample}
+\end{figure}
+
+\subsection{Original PhaseNet Corpus}
+\label{sec:Original}
+The original PhaseNet corpus (\cite{PhaseNet}) consists of approximately 
+780,000 waveform segments recorded by the Northern California Seismic Network 
+(NCSN). This dataset was curated to train the original PhaseNet model and is 
+characterized by:
+\begin{itemize}
+    \item \textbf{Regional Focus}: Data from a single, well-instrumented 
+    region, which may limit generalization but provides a consistent training
+    environment.
+    \item \textbf{Moderate Size}: Smaller than the other datasets, which may
+    lead to faster training but potentially less robust models.
+    \item \textbf{High-Quality Picks}: The dataset includes high-quality manual
+    picks, which are essential for supervised learning.
+\end{itemize}
+While not as large or diverse as the other datasets, the original PhaseNet
+corpus provides a valuable reference point for evaluating the impact of training
+data diversity and volume on model performance.
+
+\subsection{Original EQTransformer Corpus}
+\label{sec:Original_EQT}
+The original EQTransformer corpus (\cite{EQTransformer}) is a subset of the 
+STEAD dataset, consisting of approximately 1.2 million waveform segments. This
+dataset was specifically curated to train the original EQTransformer model and
+is characterized by:
+\begin{itemize}
+  \item \textbf{Global Coverage}: Data from a wide range of tectonic settings
+  and station types, which enhances the potential for model generalization.
+  \item \textbf{Large Size}: The extensive volume of data allows for training
+  high-capacity models, though it may require significant computational resources.
+  \item \textbf{High-Quality Picks}: The dataset includes meticulously labeled
+  picks for both P and S waves, which are crucial for supervised learning.
+\end{itemize}
+The original EQTransformer corpus serves as a benchmark for evaluating the
+impact of training data diversity and volume on the performance of
+transformer-based models for seismic phase picking.
+
+Table \ref{tab:datasets} summarizes the principal datasets used in this study. 
+The selected collections span regional to global scales and encompass curated, 
+high-quality annotations essential for training robust deep-learning models. All 
+datasets share a common sampling rate of 100~Hz, which is also the target 
+sampling rate adopted for preprocessing in this work.
+
+\begin{table}[h!]
+  \centering
+  \caption{Summary of training data sets used for PhaseNet \cite{PhaseNet} and 
+  EQTransformer \cite{EQTransformer} models. Traces: total number of traces; 
+  P: number of P-wave samples; S: number of S-wave samples; Events: number of 
+  seismic events; Noise: number of noise samples; Region: geographical
+  coverage; Dist: distance range (L: local $\leq$ 150 km, R: regional 150 km 
+  $\leq\Delta\leq$ 600 km) (\cite{SeisBench}).
+  }
+  \begin{tabular}{c|c|c|c|c|c|c|c|}
+    Data Set &   Traces  & P         &   S       &  Events &   Noise & Region & Dist \\\hline
+    INSTANCE & 1,291,537 & 1,159,249 &   713,883 &  54,008 & 132,288 & Italy  &  L/R \\\hline
+    STEAD    & 1,265,657 & 1,030,231 & 1,030,231 & 441,705 & 235,426 & Global &  L/R \\\hline
+    SCEDC    & 8,111,060 & 7,571,970 & 4,364,155 & 378,528 &       0 & US     &   L  \\\hline
+    Original &   779,514 & \multicolumn{2}{c|}{$\ast$} &  234,117 &       0 & US     &   L  \\\hline
+    \multicolumn{8}{l}{\footnotesize $\ast$ P and S sample counts not separately reported in (\cite{PhaseNet}); both phase types are present.}
+  \end{tabular}
+  \label{tab:datasets}
+\end{table}

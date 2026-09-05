@@ -1,0 +1,251 @@
+% =============================================================================
+% High-Performance Computing Implementation
+% =============================================================================
+\label{chap:hpc}
+
+The computational demands of processing large-scale seismic datasets 
+necessitate the use of High-Performance Computing (HPC) infrastructure. This 
+chapter describes the HPC implementation developed for the AI4Seism seismic 
+data processing pipeline, deployed on the Leonardo supercomputer at CINECA 
+(Italy).
+
+\section{Computing Infrastructure}
+
+The pipeline was deployed on the Leonardo supercomputer at CINECA, one of 
+Europe's leading HPC facilities, under the research project IscrC\_AI4Seism\_C.
+
+\subsection{Leonardo Cluster Specifications}
+The Leonardo cluster runs Red Hat Enterprise Linux 8.7 (Ootpa) and exposes one 
+GPU-based partition called Booster and one CPU-based partition called DCGP 
+(Data Centric General purpose module). In this thesis work we used only the 
+Booster partition.\\
+
+The Booster partition is equipped with:
+\begin{itemize}
+  \item \textbf{Booster module (Atos BullSequana X2135 "Da Vinci" Blade)}:
+  3,456 compute nodes, each equipped with:
+  \begin{itemize}
+    \item \textbf{Processor}: 1$\times$ Intel Xeon Platinum 8358 (Ice Lake), 32 
+    cores at 2.60 GHz
+    \item \textbf{Memory}: 512 GB DDR4 RAM
+    \item \textbf{GPU Accelerators}: 4$\times$ NVIDIA Ampere A100 (64 GB HBM2e)
+  \end{itemize}
+
+  \item \textbf{Internal Network}: 200G HDR InfiniBand with Dragonfly+ topology
+
+  \item \textbf{Storage}: Lustre parallel file system optimized for 
+  high-throughput I/O operations
+\end{itemize}
+
+\textbf{Workload Manager}: SLURM 23.11 is used for job scheduling and resource 
+management on Leonardo.
+
+\subsection{Resource Management}
+The cluster is managed by the SLURM (Simple Linux Utility for Resource 
+Management) workload scheduler, which provides:
+
+\begin{itemize}
+  \item Job queuing and prioritization
+  \item Resource allocation and accounting
+  \item User-friendly interface for managing computational resources
+  \item Support for both interactive and batch job execution
+\end{itemize}
+
+\section{Pipeline Architecture}
+
+The seismic processing workflow was automated through a Makefile-based 
+orchestration system, enabling reproducible execution of the complete 
+processing chain.
+
+\subsection{Processing Stages}
+The pipeline comprises five main processing stages:
+
+\begin{enumerate}
+  \item \textbf{Data Acquisition}: Automated retrieval of seismic waveforms 
+  from data servers. To prevent server timeouts, downloads were segmented into 
+  days of interval.
+
+  \item \textbf{Phase Picking}: Machine learning-based detection of P and S 
+  wave arrivals using the SeisBench framework. This stage leveraged GPU 
+  acceleration for neural network inference.
+
+  \item \textbf{Phase Association}: Grouping of detected phases into coherent 
+  seismic events using two complementary algorithms:
+  \begin{itemize}
+    \item GaMMA: A probabilistic Gaussian Mixture Model associator
+    \item PyOcto: An octree-based, velocity-model-aware association algorithm 
+    optimized for computational efficiency
+  \end{itemize}
+
+  \item \textbf{Event Location}: Non-linear hypocenter determination using the 
+  NonLinLoc software package, employing probabilistic global search algorithms 
+  with a 1D layered velocity model.
+
+  \item \textbf{Magnitude Estimation}: Computation of local magnitudes ($M_L$) 
+  from Wood-Anderson simulated waveforms using regional attenuation
+  corrections.
+\end{enumerate}
+
+\subsection{Workflow Automation}
+The Makefile-based automation system provides the following capabilities:
+
+\begin{itemize}
+  \item \textbf{Modular Execution}: Individual pipeline stages can be executed 
+  independently, enabling selective reprocessing
+
+  \item \textbf{Configuration Management}: The pipeline uses Hydra 
+  (\cite{Hydra}), an open-source framework developed by Meta for composable 
+  configuration management. Hydra organizes all processing parameters, such as 
+  detection thresholds, model selections, station lists, and velocity-model 
+  paths, into hierarchical YAML files that can be overridden from the command 
+  line at runtime without modifying source code. This enables systematic 
+  parameter sweeps (\textit{e.g.} varying detection thresholds across 0.1, 0.2, 
+  0.3) and ensures that every pipeline run is fully reproducible from its 
+  configuration alone.
+
+  \item \textbf{Disk Space Optimization}: Symbolic links are used to share 
+  intermediate results between processing stages, reducing storage requirements
+
+  \item \textbf{Multi-Year Processing}: Parameterized targets support 
+  processing of multiple years with consistent configurations
+\end{itemize}
+
+\section{Parallelization Strategy}
+
+The deep learning pipeline is parallelized and optimized for performance on the 
+Leonardo cluster using multiple parallelization paradigms.
+
+\subsection{Parallel Execution Framework}
+The pipeline employs a hybrid parallelization approach:
+
+\begin{itemize}
+  \item \textbf{CUDA}: GPU acceleration for neural network inference during the 
+  phase picking stage
+
+  \item \textbf{OpenMP}: Thread-level parallelism for shared-memory operations 
+  within individual nodes
+\end{itemize}
+
+\subsection{Thread Optimization}
+The resource allocation strategy ensures full utilization of available CPU 
+cores by maintaining the constraint:
+
+\begin{equation}
+  N_{\text{tasks}} \times N_{\text{threads}} = N_{\text{cores}}
+\end{equation}
+
+where $N_{\text{tasks}}$ represents the number of MPI processes (or GPU 
+instances), $N_{\text{threads}}$ represents the number of OpenMP threads per 
+task, and $N_{\text{cores}}$ is the number of available CPU cores per node (32 
+on the Leonardo booster partition). This approach maximizes CPU utilization 
+while allowing flexibility in the parallelization strategy.
+
+\subsection{Execution Modes}
+The system supports two execution modes selected automatically based on the 
+task count:
+
+\begin{itemize}
+  \item \textbf{Serial Mode}: For single-task jobs, direct Python execution 
+  without MPI overhead
+
+  \item \textbf{Parallel Mode}: For multi-task jobs, MPI-based parallel 
+  execution using \texttt{mpirun}
+\end{itemize}
+
+\section{Parallel I/O}
+
+The input/output operations are parallelized and optimized for performance on 
+the Leonardo cluster.
+
+\subsection{I/O Parallelization}
+The I/O operations leverage:
+
+\begin{itemize}
+  \item \textbf{Lustre File System}: High-speed parallel storage optimized for 
+  large-scale scientific computing
+
+  \item \textbf{Striping Configuration}: Data files are striped across multiple 
+  Object Storage Targets (OSTs) for improved throughput
+\end{itemize}
+
+\subsection{Task Distribution}
+The task distribution strategy is optimized to:
+
+\begin{itemize}
+  \item Minimize data transfer between nodes
+  \item Balance computational load across nodes
+  \item Partition seismic waveforms into temporal chunks for parallel 
+  processing
+  \item Ensure even distribution of workload across all available resources
+\end{itemize}
+
+\section{Job Submission Framework}
+
+A template-based job submission wrapper (\texttt{Analyze.sh}) was developed to 
+streamline the submission process on the SLURM scheduler.
+
+\subsection{Submission Workflow}
+The wrapper performs the following operations:
+
+\begin{enumerate}
+  \item Modifies a template SLURM script with the required resource 
+  specifications (nodes, tasks, CPUs, GPUs)
+
+  \item Configures environment variables for thread management 
+  (\texttt{OMP\_NUM\_THREADS}, \texttt{NUMBA\_NUM\_THREADS})
+
+  \item Submits the configured job to the SLURM scheduler
+
+  \item Restores the template to its original state for subsequent submissions
+\end{enumerate}
+
+\subsection{Dynamic Resource Configuration}
+This approach enables rapid reconfiguration of computational resources without 
+manual editing of job scripts, facilitating experimentation with different 
+parallelization strategies.
+
+\section{Scalability Considerations}
+
+The pipeline was designed with scalability as a primary objective.
+
+\subsection{Design Principles}
+Key scalability features include:
+
+\begin{itemize}
+  \item \textbf{Temporal Segmentation}: Data downloads are segmented by time to 
+  prevent server timeouts and enable parallel acquisition
+
+  \item \textbf{GPU Acceleration}: Machine learning inference on GPUs reduces 
+  phase picking time by orders of magnitude compared to CPU-only execution
+
+  \item \textbf{Modular Architecture}: Independent tasks can be distributed 
+  across multiple nodes
+
+  \item \textbf{Shared Storage}: Output catalogs are stored on shared 
+  filesystems accessible to all compute nodes
+\end{itemize}
+
+\subsection{Resource Allocations}
+Table~\ref{tab:hpc_resources} summarizes the typical resource allocations used 
+for each pipeline stage.
+
+\begin{table}[h]
+\centering
+\caption{Typical HPC resource allocations for pipeline stages}
+\label{tab:hpc_resources}
+\begin{tabular}{lccc}
+\hline
+\textbf{Pipeline Stage} & \textbf{Nodes} & \textbf{Tasks/Node} & \textbf{Threads/Task} \\
+\hline
+Data Acquisition & 1 & 1 & 32 \\
+Phase Picking (SeisBench) & 1 & 1 & 32 \\
+Phase Association (GaMMA) & 1 & 1 & 32 \\
+Phase Association (PyOcto) & 1 & 1 & 32 \\
+Event Location (NonLinLoc) & 1 & 1 & 32 \\
+\hline
+\end{tabular}
+\end{table}
+
+% =============================================================================
+% End of HPC Implementation Chapter
+% =============================================================================

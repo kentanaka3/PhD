@@ -1,0 +1,363 @@
+\label{chap:Methodology}
+This chapter describes the evaluation methodology used to benchmark the 
+automated pipeline against the manually reviewed OGS reference catalog. The 
+central challenge is to establish rigorous, one-to-one correspondences between 
+automated detections and catalog entries, so that each detection is matched to 
+at most one catalog pick or event. To this end, we employ a bipartite graph 
+matching framework grounded in weighted similarity metrics.
+
+In this formulation, detected picks and catalog entries form two disjoint node 
+sets. Edge weights encode multi-criteria similarity scores that combine 
+temporal proximity, phase consistency, station coverage, and physical 
+plausibility. A maximum-weight matching algorithm then selects the globally 
+optimal, non-conflicting set of correspondences, eliminating duplicate 
+assignments and ensuring consistent benchmarking against the manually curated 
+OGS catalog.
+
+
+\section{Distance and Similarity Functions}
+
+The matching framework relies on two core similarity functions, one temporal 
+and one spatial, whose outputs are combined into a single weighted score.
+
+\subsection{Time-Based Similarity}
+The time similarity function \texttt{dist\_time()} computes a score based on 
+the temporal difference between predicted and reference arrivals, normalized by 
+the pick-weight uncertainty:
+
+\begin{equation}
+  S_t = \max\left(0, 1 - \frac{|t_{\text{pred}} - t_{\text{ref}}|}{\sigma_w}\right)
+\end{equation}
+
+where $\sigma_w$ is the uncertainty corresponding to the reference pick weight. 
+A perfect temporal match yields $S_t = 1$, while differences exceeding 
+$\sigma_w$ yield $S_t = 0$.
+
+\subsection{Spatial Distance}
+The spatial distance function \texttt{dist\_space()} computes geodetic 
+distances using ObsPy's \texttt{gps2dist\_azimuth()} function, which implements 
+the WGS84 ellipsoid model for accurate great-circle distance calculations.
+
+\subsection{Weighted Matching Scores}
+The overall matching score for each candidate pair is a weighted combination 
+of temporal and spatial components. The relative weights are configurable, 
+allowing the scoring scheme to be tuned for different operational priorities 
+(see Sections~\ref{subsec:matching_criteria} for the specific weight values 
+used in this study).
+
+\section{Confusion Matrix}
+Confusion matrices are a standard tool in \ac{ML} for evaluating classification 
+performance. Table~\ref{tab:cfn_mtx} shows the confusion matrices used to 
+evaluate the seismic phase pickers and associators used in this 
+study. A confusion matrix is a tabular representation that summarizes the 
+performance of a classification model by comparing two classes of observations. 
+Each entry $C_{ij}$ records the number of instances assigned to predicted 
+\textbf{Target} class ($T_j$), given that the corresponding \textbf{Base} class 
+($B_i$) is known. In the seismic context, the $T_j$ are the outputs of the 
+automated phase pickers (\textit{e.g.} PhaseNet and EQTransformer) and 
+associators (\textit{e.g.} GaMMA and PyOcto), while the $B_i$ are the P- and 
+S-wave picks (and their associated events) in a hand-curated catalog (here, the 
+OGS reference catalog). Thus, the confusion matrix quantifies how many catalog 
+picks or events are correctly recovered by the automated method versus how many 
+are missed, and how many are spuriously reported.
+
+In applying confusion matrices to seismic pick detection, analogous to the 
+\ac{ML} domain in confusion matrices for classification, we propose a new 
+standard terminology to reflect the seismic phase picking and event association 
+context. For example, a “\textbf{True Positive}” in ML simply means a correct 
+classification, but in seismic picking we use the term “\textbf{Matched}” (MH) 
+to emphasize a specific, criterion-based (see \ref{subsec:matching_criteria}) 
+correspondence between a $B_i$ and a $T_j$. Mathematically, this can be 
+expressed as:
+$$B_i \Leftrightarrow T_j$$
+Similarly, what ML calls a "\textbf{False Negative}" (an instance where the 
+model missed a positive case) we term a “\textbf{Missed}” (MS) pick or event: 
+these are catalog entries that our method failed to detect or failed to match 
+under our strict criteria. "\textbf{False Positives}" are renamed to 
+"\textbf{Proposed}" (PS) picks or events, indicating those that were detected 
+by the automated method but are not present in the OGS reference catalog, which 
+could be due to false detections or very subtle microseismic events not 
+recorded in the manually reviewed catalog. The terms $\epsilon_{PS}$, and 
+$\epsilon_{SP}$, represents proposed S picks correspond to P picks in the 
+catalog, and vice versa, due to phase misclassification errors. The 
+$\epsilon_{NN}$ term is provided for completeness, and can be interpreted as 
+the number of instances where both the catalog and the automated method agree 
+that no pick/event is present. However, since the absence of a pick in a time 
+continuum framework is not explicitly cataloged, this term is not directly 
+measurable and is often omitted from performance metrics. By adopting this 
+terminology, we can more intuitively interpret the confusion matrices in the 
+context of seismic phase picking and event association, while still leveraging 
+the powerful analytical framework provided by \ac{ML} evaluation metrics.\\
+
+At the pick level, the confusion matrices report Matched (MH), Missed (MS), and 
+Proposed (PS) counts for P and S waves across all model--dataset combinations 
+(INSTANCE, STEAD, SCEDC, and each model's original training set). Diagonal 
+cells represent correctly identified picks~(MH); off-diagonal cells capture 
+misclassifications and missed detections. Color intensity (logarithmic scale) 
+is proportional to the relative frequency of each outcome, enabling rapid 
+visual comparison of model behavior. At the event level, the confusion matrices 
+extend this assessment to the full detection pipeline (picking + association), 
+since successful event detection requires multiple coherent phase picks across 
+the seismic network.
+
+\begin{table}[h!]
+  \centering
+  \begin{tabular}{cc||c|c|c|}
+    \hline
+    \multirow{3}{*}{\rotatebox{90}{\textbf{Base}}} & P    & $MH_{P}$        & $\epsilon_{PS}$ & $MS_P$       \\\cline{2-5}
+    & S    & $\epsilon_{SP}$ & $MH_{S}$        & $MS_S$       \\\cline{2-5}
+    & None & $PS_P$          & $PS_S$          & $\epsilon_{NN}$ \\\hline\hline
+    &      & P               & S               & None \\
+    &      & \multicolumn{3}{c|}{\textbf{ML (Target)}} \\
+  \end{tabular} $\qquad$
+  \begin{tabular}{cc||c|c|}
+    \hline
+    \multirow{2}{*}{\rotatebox{90}{\textbf{Base}}}  & Event & $MH_{E}$ & $MS_{E}$        \\\cline{2-4}
+                                                    & None  & $PS_{E}$ & $\epsilon_{NN}$ \\\hline\hline
+                                                    &       & Event & None \\
+                                                    &       & \multicolumn{2}{c|}{\textbf{ML (Target)}} \\
+
+  \end{tabular}
+  \caption{Confusion matrices for Picks (left) and Events (right).
+  Manual OGS catalog (Base); automated \ac{ML} output (Target). MH: Matched; 
+  MS: Missed; PS: Proposed.}
+  \label{tab:cfn_mtx}
+\end{table}
+
+\subsection{Matching Criteria for Picks and Events}
+\label{subsec:matching_criteria}
+Rigorous evaluation of both phase picking and event association requires a 
+transparent and reproducible protocol for determining when an automated output 
+corresponds to a catalog entry. To ensure a physically meaningful assessment of 
+system performance, we define an explicit set of criteria for what constitutes 
+a ``\textbf{Match}'' between a detected pick/event and a catalog entry. These 
+criteria balance \textbf{strictness} (to avoid overestimating performance) and 
+\textbf{tolerance} (to avoid penalizing near misses due to observational 
+uncertainty). The matching criteria below impose temporal and spatial 
+tolerances grounded in the physics of seismic wave propagation and in the 
+practical uncertainties of automated processing.
+
+With these criteria, each detection is classified as Matched~(MH), Missed~(MS), 
+or Proposed~(PS) based on its correspondence to the catalog. Ambiguities often 
+arise when multiple detections fall within close proximity to a single catalog 
+entry. To resolve these ambiguities, we adopt a bipartite matching scheme that 
+selects the pairing that maximizes the composite matching score 
+($\Delta_{\text{Picks}}$ or $\Delta_{\text{Events}}$). The matching score is a 
+weighted sum of measurables such as temporal offset~($\delta t$), phase 
+consistency~($\delta p$), pick certainty~($\delta \rho$), and, for events, 
+spatial discrepancy~($\delta d$). We adjust each measurable's influence in the 
+overall matching score by multiplying  them with predefined 
+coefficient~($w_i$). These weights can be tuned to emphasize the sensitivity of 
+the matching procedure to different aspects of pick or event quality, depending 
+on the operational priorities or scientific objectives.
+
+\subsubsection{Pick Matching}
+A detected P- or S-wave pick is classified as a "Match" (MH) to a catalog pick 
+if it satisfies all of the following conditions:
+\begin{enumerate}
+  \item \textbf{Station Consistency:} The detected and catalog pick originate 
+  from the same seismic station, ensuring that the comparison is evaluated 
+  based on each station's location and instrumentation.
+  \item \textbf{Phase Agreement:} The detected phase type matches the catalog 
+  phase (P or S), preserving physical interpretability in arrival time 
+  comparisons and ensuring that P-wave picks are not erroneously matched to 
+  S-wave picks, and vice versa.
+  \item \textbf{Temporal Proximity:} The detected pick time falls within a time 
+  window $\omega_t = 0.5$ seconds of the catalog pick time. This time interval 
+  accounts for typical picking uncertainties from noise and variable signal 
+  quality.
+\end{enumerate}
+
+Additionally, we incorporate confidence information when available. Both 
+automated pickers and OGS analysts provide a pick certainty parameter 
+($\delta \rho$), enabling a broader measure of pick-level similarity. We define 
+a composite score:
+$$\Delta_{Picks} = \sum_{i\in \left\{t, p, \rho\right\}} w_i \delta_i$$
+where
+\begin{itemize}
+  \item $\delta t$ represents the absolute arrival time difference;
+  $$\delta t = \begin{cases}
+    1 - \frac{|T_t - B_t|}{\omega_t}, & \text{if } |T_t - B_t| \leq \omega_t \\
+    0, & \text{otherwise}
+  \end{cases}$$
+  where $T_t$ and $B_t$ are the detected and catalog pick times, respectively, 
+  and $\omega_t$ is the predefined temporal tolerance (0.5 seconds).
+  \item $\delta p$ is a binary variable indicator quantifying whether both 
+  picks correspond to the same phase type (P or S).
+  $$\delta p = \begin{cases}
+    1, & B_p = T_p\\
+    0, & B_p \neq T_p
+  \end{cases}$$
+  where $T_p$ and $B_p$ are the detected and catalog pick phase types,
+  respectively. Using a binary indicator for phase type mismatch ensures that 
+  picks of different phases are heavily penalized in the overall matching 
+  score.
+  \item $\delta_\rho$ compares the confidence values assigned to the 
+  detected and catalog picks, incorporating probabilistic information about 
+  pick reliability (\textit{e.g.} signal clarity, analyst confidence).
+  $$\delta \rho = \frac{T_\rho}{B_\rho}$$
+  where $T_\rho$ and $B_\rho$ are the confidence values assigned to the 
+  detected and catalog picks, respectively.
+  \item $w_i$ are adjustable non-negative coefficients that control the 
+  relative influence of each component, satisfying the normalization 
+  condition $\sum_i w_i = 1$. In this study:
+  $$w_t=0.97, \quad w_p=0.02, \quad w_\rho=0.01$$
+  The dominant weight on $\delta t$ reflects the primacy of temporal accuracy 
+  in phase-pick evaluation.
+\end{itemize}
+
+\subsubsection{Event Matching}
+An automatically detected seismic event is a coherent set of associated picks 
+spanning multiple stations. A detected event~($T_j$) is classified as a 
+``Match''~(MH) to a catalog event~($B_i$) if it satisfies the following 
+spatiotemporal criteria:
+\begin{enumerate}
+  \item \textbf{Temporal Proximity}: The origin time discrepancy between the 
+  detected and catalog events lies within a tolerance of $\omega_t = 2$ 
+  seconds. This threshold accommodates uncertainties arising from phase picking 
+  variability, network coverage, and event location inversion.
+  \item \textbf{Spatial Proximity}: The epicentral distance between the 
+  detected event and the catalog event must be less than 8 km, $\omega_d = 8$ 
+  km. The distance is calculated as the Euclidean epicentral distance between 
+  the detected event location ($T_d$) and the catalog event location ($B_d$) 
+  under projected coordinates. This constraint reflects typical lateral 
+  uncertainties for regional networks with moderate station density and 
+  acknowledges the variability inherent in automated location algorithms.
+\end{enumerate}
+These tolerances are consistent with expected uncertainties arising from noise, 
+inversion errors, and variability in modern automated location algorithms. To 
+quantify the similarity between detected and catalog events, we define the 
+overall event-level similarity score as:
+$$\Delta_{Events} = \sum_{i\in \left\{t, d\right\}} w_i \delta_i$$
+where
+\begin{itemize}
+  \item $\delta t$ is the absolute origin time difference;
+  $$\delta t = \begin{cases}
+    1 - \frac{|T_t - B_t|}{\omega_t}, & \text{if } |T_t - B_t| \leq \omega_t \\
+    0, & \text{otherwise}
+  \end{cases}$$
+  where $T_t$ and $B_t$ are the predicted and catalog event times, 
+  respectively, and $\omega_t$ is the predefined temporal tolerance (2
+  seconds).
+  \item $\delta d$ is the epicentral distance between detected and catalog 
+  event locations, calculated using Euclidean distance in Mercator projected
+  coordinates.
+  $$\delta d = \begin{cases}
+    1 - \frac{||T_d - B_d||_2}{\omega_d},&\text{if }||T_d-B_d||_2\leq\omega_d\\
+    0, & \text{otherwise}
+  \end{cases}$$
+  where $T_d$ and $B_d$ are the predicted and catalog event locations, 
+  respectively, and $\omega_d$ is the predefined spatial tolerance (8 km).
+  \item $w_i$ are the adjustable weights assigned to each parameter to 
+  balance their influence on the overall matching score.
+  $$\sum_i w_i = 1$$
+  $$w_t=0.99, \quad w_d=0.01$$
+\end{itemize}
+
+Together, these criteria provide a structured, physically informed framework 
+for establishing one-to-one correspondences between detected and cataloged 
+phases and events, while accommodating the uncertainties inherent in real-world 
+seismic data processing.
+
+\section{Time Residual Analysis}
+For each matched pick or event, the time residual is defined as 
+$\Delta t = T_t - B_t$, i.e., the difference between the detected and catalog 
+arrival (or origin) times. A narrow, symmetric, zero-centered residual 
+distribution indicates high timing fidelity and minimal systematic bias; a 
+broader or skewed distribution signals systematic timing errors or increased 
+uncertainty.
+
+Two complementary error metrics are reported: the Mean Absolute Error~(MAE), 
+which is robust to outliers, and the Root Mean Square Error~(RMSE), which is 
+sensitive to large deviations~(\cite{WhichPicker}). For each model 
+configuration, we also report the mean~($\mu$) and standard 
+deviation~($\sigma$) of the residual distribution to quantify bias and spread, 
+enabling direct comparison across model and parameter choices.
+
+\section{Event Location Accuracy}
+For each matched event, we compute the epicentral distance between the 
+detected and reference (OGS) locations. This metric captures spatial 
+discrepancies arising from station geometry, velocity-model assumptions, and 
+phase-arrival uncertainties. Combined with time residuals, spatial residuals 
+reveal systematic propagation errors that can guide velocity-model refinement 
+and network optimization. Mapping spatial residuals as a function of event 
+depth or azimuthal gap further exposes network-dependent biases in the 
+automatic locator.
+
+\section{Magnitude Residual Analysis}
+For each matched event, the magnitude residual is defined as:
+\begin{equation*}
+  \Delta M_L = M_{L : \text{detected}} - M_{L : \text{catalog}}
+\end{equation*}
+where $M_{L : \text{detected}}$ is the local magnitude estimated by our
+automated pipeline, and $M_{L : \text{catalog}}$ is the local magnitude 
+reported in the OGS catalog.
+
+Positive residuals ($\Delta M_L > 0$) indicate overestimation; negative 
+residuals indicate underestimation. We examine the distribution of magnitude 
+residuals to assess systematic biases (mean) and random scatter (standard 
+deviation). Additionally, we analyze how residual statistics and the balance 
+between magnitude recall and \ac{FDR} vary with the detection threshold, and 
+we report Missed and Proposed event counts as a function of threshold to 
+characterize the sensitivity--specificity trade-off.
+
+\section{Machine Learning Metrics}
+In order to provide a comprehensive evaluation of our seismic phase picking and 
+event association algorithms, we employ several key performance metrics 
+commonly used in machine learning, adapted to the seismological context. We 
+classify the outcomes of our detection algorithms into three categories based 
+on the confusion matrix terminology introduced earlier: Matched (MH), Missed 
+(MS), and Proposed (PS). We then derive the following metrics to quantify 
+performance at both the pick and event levels:
+\begin{itemize}
+  \item \textbf{Recall}: 
+    $$\mathrm{Recall}_P = \dfrac{\mathrm{MH}_P}{\mathrm{MH}_P + \mathrm{MS}_P + \epsilon_{PS}}$$
+    $$\mathrm{Recall}_S = \dfrac{\mathrm{MH}_S}{\mathrm{MH}_S + \mathrm{MS}_S + \epsilon_{SP}}$$
+    $$\mathrm{Recall}_{\text{Picks}} = \dfrac{\mathrm{MH}_P + \mathrm{MH}_S}{\mathrm{MH}_P + \mathrm{MH}_S + \mathrm{MS}_P + \mathrm{MS}_S + \epsilon_{PS} + \epsilon_{SP}}$$
+    $$\mathrm{Recall}_{\text{Events}} = \dfrac{\mathrm{MH}_E}{\mathrm{MH}_E + \mathrm{MS}_E}$$
+    Recall measures the fraction of catalog entries correctly recovered by 
+    the automated method. At pick level, it quantifies the fraction of catalog 
+    picks recovered; at event level, the fraction of catalog earthquakes 
+    detected. High recall is essential to avoid overlooking significant events, 
+    particularly in early-warning and hazard-monitoring contexts 
+    (\cite{SeismicPhaseDetection}).
+  \item \textbf{False Detection Rate (\ac{FDR})}:
+    $$\mathrm{\ac{FDR}}_P = \dfrac{\mathrm{PS}_P}{\mathrm{MH}_P + \mathrm{PS}_P + \epsilon_{SP}}$$
+    $$\mathrm{\ac{FDR}}_S = \dfrac{\mathrm{PS}_S}{\mathrm{MH}_S + \mathrm{PS}_S + \epsilon_{PS}}$$
+    $$\mathrm{\ac{FDR}}_{\text{Picks}} = \dfrac{\mathrm{PS}_P + \mathrm{PS}_S}{\mathrm{MH}_P + \mathrm{MH}_S + \mathrm{PS}_P + \mathrm{PS}_S + \epsilon_{PS} + \epsilon_{SP}}$$
+    $$\mathrm{\ac{FDR}}_{\text{Events}} = \dfrac{\mathrm{PS}_E}{\mathrm{MH}_E + \mathrm{PS}_E}$$
+    \ac{FDR} measures the proportion of automated detections absent from the 
+    reference catalog. Low \ac{FDR} is essential to avoid alarm fatigue, 
+    preserve analyst trust, and ensure resource-efficient response. Although 
+    Precision and F1 are standard metrics in the \ac{ML} literature, this 
+    work focuses on recall, \ac{FDR}, and timing residuals as the primary 
+    evaluation criteria.
+  \item \textbf{Timing residuals}: Mean ($\mu$), standard deviation ($\sigma$), 
+    Root Mean Square Error (RMSE) and Mean Absolute Error (MAE) of pick and 
+    event origin-time residuals. Lower spread improves association and location 
+    stability.
+\end{itemize}
+
+\section{Bipartite Graph Matching}
+
+The matching scores defined above are used within a bipartite graph 
+maximum-weight matching algorithm, implemented with the NetworkX library.
+
+\subsection{Graph Construction}
+The algorithm constructs a bipartite graph in which:
+\begin{itemize}
+  \item Nodes in partition~$A$ represent reference (catalog) picks or events
+  \item Nodes in partition~$B$ represent predicted (automated) picks or events
+  \item Edge weights encode the composite similarity score between each pair
+\end{itemize}
+
+\subsection{Matching Classes}
+Two specialized classes implement the matching:
+\begin{itemize}
+  \item \textbf{OGSBPGraphPicks}: Maximum-weight matching for phase picks, 
+  enforcing station and time constraints.
+  \item \textbf{OGSBPGraphEvents}: Maximum-weight matching for seismic 
+  events, incorporating spatiotemporal similarity and magnitude differences.
+\end{itemize}
+Both classes use the Hungarian algorithm to guarantee an optimal one-to-one 
+correspondence between predicted and reference observations.

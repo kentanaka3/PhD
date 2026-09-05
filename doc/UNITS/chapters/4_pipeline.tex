@@ -1,0 +1,551 @@
+% Purpose: Complete mathematical, algorithmic, and architectural exposition of the procedural machine learning pipeline for seismic monitoring.
+% Status: Complete | Under Review; thesis doctoral chapter.
+% Source-of-truth: OGS/src/ogspicker.py, OGS/src/ogsmagnitude.py, OGS/src/ogsbuilderMPI.py, OGS/src/ogscatalog.py, OGS/src/ogsconstants.py
+
+\label{chap:pipeline}
+
+This chapter details the procedural machine learning computational pipeline engineered for automated, end-to-end seismic monitoring and high-precision catalog generation. The pipeline ingests continuous, multi-station seismic waveforms and transforms them into an earthquake bulletin containing associated phase picks, probabilistic hypocenter locations, and calibrated local magnitudes.
+
+The workflow is architected into five distinct stages executed sequentially:
+\begin{enumerate}
+  \item \textbf{Stage 0 --- Preprocessing \& Stream Conditioning}: Continuous waveform ingestion, channel harmonization, detrending, anti-aliasing resampling to a normalized frequency of $100\,\mathrm{Hz}$, and sliding-window segmentation.
+  \item \textbf{Stage 1 --- Deep Learning Phase Picking}: Dense temporal arrival-time estimation for P-wave and S-wave phases using 1D convolutional and attention-based deep neural networks (PhaseNet and EQTransformer).
+  \item \textbf{Stage 2 --- Spatiotemporal Phase Association}: Unsupervised Bayesian clustering and octree-based spatial partitioning (GaMMA and PyOcto) resolving pick-to-source assignments in four-dimensional space-time.
+  \item \textbf{Stage 3 --- Non-Linear Hypocenter Location}: Global probabilistic grid-search inversion (NonLinLoc) under an Equal Differential Time (EDT) formulation using regional 1D layered velocity structures.
+  \item \textbf{Stage 4 --- Calibrated Local Magnitude Estimation}: Instrument deconvolution, synthetic Wood-Anderson torsion seismograph response simulation, horizontal peak vector aggregation, and regional attenuation corrections with empirical station terms.
+\end{enumerate}
+
+Each processing stage communicates via strictly specified, immutable data contracts, ensuring high modularity, full computational reproducibility, and seamless execution across High-Performance Computing (HPC) infrastructures.
+
+% =============================================================================
+% SECTION 1: DATA PREPROCESSING AND STREAM CONDITIONING
+% =============================================================================
+\section{Data Preprocessing and Stream Conditioning}
+\label{sec:preprocessing}
+
+Continuous seismic data recorded by regional networks, such as the \ac{SMINO} network operated by \ac{OGS} in Northeastern Italy (\cite{SMINO}), exhibit substantial heterogeneity in sensor response, digitizer sampling rates, and continuous telemetry transmission quality. A standardized conditioning workflow is applied to guarantee numerical stability and architectural alignment prior to neural network inference.
+
+\subsection{Waveform Ingestion and Stream Harmonization}
+Continuous waveform data are retrieved from distributed seismic repositories (OGS, INGV, and EIDA archives) in standard miniSEED (MSEED) format. Using the ObsPy seismological library (\cite{ObsPy}), the raw byte streams are parsed into in-memory \texttt{Stream} objects comprising three orthogonal components: vertical ($Z$), North-South ($N$), and East-West ($E$).
+
+Data streams often contain telemetry dropouts, timing tears, or overlapping segments resulting from network reconnects. The conditioning pipeline applies the following deterministic operations:
+\begin{enumerate}
+  \item \textbf{Stream Merging and Gap Handling}: Overlapping trace fragments are cross-checked for timestamp consistency. Small gaps ($\le 5$ samples) are linearly interpolated, whereas extended telemetry outages are zero-padded or split into discrete processing windows to prevent artificial phase transients.
+  \item \textbf{Baseline Correction and Detrending}: Long-period instrumental drift and DC offsets are eliminated by subtracting the mean and removing the best-fit linear trend:
+  \begin{equation}
+    x_{\mathrm{detrended}}(t) = x(t) - (\hat{\alpha} t + \hat{\beta}),
+  \end{equation}
+  where $\hat{\alpha}$ and $\hat{\beta}$ are estimated via ordinary least-squares regression over each unbroken trace segment:
+  \begin{equation}
+    \hat{\alpha} = \frac{\sum_{i=1}^{N_s} (t_i - \bar{t})(x(t_i) - \bar{x})}{\sum_{i=1}^{N_s} (t_i - \bar{t})^2}, \quad \hat{\beta} = \bar{x} - \hat{\alpha}\bar{t}.
+  \end{equation}
+  \item \textbf{Edge Tapering}: A split-cosine-bell (Tukey) window with a $5\%$ taper fraction is applied to trace boundaries to suppress spectral leakage and Gibbs phenomena during digital filtering operations.
+\end{enumerate}
+
+\subsection{Sampling Rate Normalization (100 Hz)}
+\label{subsec:sampling_rate}
+Seismic data acquisition systems in the study region operate at varying native sampling frequencies, predominantly $100\,\mathrm{Hz}$ for broadband sensors, and $50\,\mathrm{Hz}$, $125\,\mathrm{Hz}$, or $200\,\mathrm{Hz}$ for older short-period and strong-motion accelerometers. However, modern deep neural network pickers enforce fixed discrete receptive fields tailored to a specific temporal grid spacing. In accordance with the training specifications of PhaseNet (\cite{PhaseNet}) and EQTransformer (\cite{EQTransformer}), all waveform data are standardized to a sampling rate of:
+\begin{equation}
+  f_s = 100\,\mathrm{Hz} \quad (\Delta t = 0.01\,\mathrm{s}).
+\end{equation}
+
+When downsampling from $f_{\mathrm{orig}} > 100\,\mathrm{Hz}$, strict anti-aliasing precautions are required. Let $x[n]$ be the original discrete signal sampled at $f_{\mathrm{orig}}$, with Nyquist frequency $f_{\mathrm{Nyq}} = f_{\mathrm{orig}}/2$. Direct decimation by a factor $M = f_{\mathrm{orig}} / 100$ without low-pass filtering would cause energy above the target Nyquist frequency $f_{\mathrm{target}}^{\mathrm{Nyq}} = 50\,\mathrm{Hz}$ to fold back into the signal passband:
+\begin{equation}
+  X_{\mathrm{aliased}}(e^{j\omega}) = \frac{1}{M} \sum_{k=0}^{M-1} X\left(e^{j(\omega - 2\pi k)/M}\right).
+\end{equation}
+To prevent spectral distortion, an infinite impulse response (IIR) or linear-phase finite impulse response (FIR) low-pass filter with a sharp cutoff at $f_c = 40\,\mathrm{Hz}$ ($0.8 \times f_{\mathrm{target}}^{\mathrm{Nyq}}$) is applied in both forward and reverse directions (zero-phase filtering via \texttt{filtfilt}), eliminating phase shifts that would otherwise bias high-precision onset pick times.
+
+\subsection{Sliding Window Segmentation and Dynamic Normalization}
+Continuous seismic traces spanning 24-hour periods ($N_s = 8{,}640{,}000$ samples at $100\,\mathrm{Hz}$ per channel) exceed the memory limits of GPU tensor processing cores when evaluated as a single tensor. Waveforms are therefore partitioned into fixed-duration sliding windows of length $W_L$ with a temporal overlap $W_O$:
+\begin{itemize}
+  \item \textbf{PhaseNet Windowing}: $W_L = 30.0\,\mathrm{s}$ ($3{,}000$ samples) with $W_O = 10.0\,\mathrm{s}$ ($1{,}000$ samples overlap).
+  \item \textbf{EQTransformer Windowing}: $W_L = 60.0\,\mathrm{s}$ ($6{,}000$ samples) with $W_O = 30.0\,\mathrm{s}$ ($3{,}000$ samples overlap, $50\%$ duty cycle).
+\end{itemize}
+
+Within each window, the 3-component seismic vector $\mathbf{X}(t) = [x_Z(t), x_N(t), x_E(t)]^T \in \mathbb{R}^{3 \times N_w}$ is standardized independently per channel to zero mean and unit variance:
+\begin{equation}
+  \tilde{x}_c(t) = \frac{x_c(t) - \mu_c}{\sigma_c + \epsilon}, \quad c \in \{Z, N, E\},
+\end{equation}
+where $\mu_c = \frac{1}{N_w}\sum_{t=1}^{N_w} x_c(t)$, $\sigma_c = \sqrt{\frac{1}{N_w}\sum_{t=1}^{N_w} (x_c(t) - \mu_c)^2}$, and $\epsilon = 10^{-6}$ is a regularization constant preventing numerical division by zero during quiescent, dead-channel intervals.
+
+% =============================================================================
+% SECTION 2: DEEP LEARNING PHASE PICKING
+% =============================================================================
+\section{Phase Picking via Deep Neural Networks}
+\label{sec:phase_picking}
+
+Seismic phase picking identifies the precise arrival times of primary compressional (P) and secondary shear (S) body waves. Traditional algorithmic pickers rely on thresholding moving energy ratios, such as the classical Short-Time Average over Long-Time Average (\ac{STA/LTA}, \cite{STALTA}) or autoregressive Akaike Information Criterion (\ac{AIC}, \cite{LEONARD1999247}). While computationally lightweight, these energy-based methods suffer high false-trigger rates during anthropogenic noise bursts and exhibit degraded timing accuracy when arrivals are emergent or low in Signal-to-Noise Ratio (\ac{SNR}).
+
+To overcome these limitations, the computational pipeline integrates state-of-the-art deep learning architectures accessible via the SeisBench framework (\cite{SeisBench}): \textbf{PhaseNet} (\cite{PhaseNet}) and \textbf{Earthquake Transformer} (\ac{EQTransformer}, \cite{EQTransformer}). These models formulate phase picking as a continuous dense-prediction task, mapping raw waveform arrays directly into continuous posterior probability distributions for P-wave, S-wave, and background noise arrivals.
+
+\subsection{Mathematical Formulation of the Dense Labeling Objective}
+Let $\mathbf{X} \in \mathbb{R}^{C \times N_w}$ denote a standardized $C$-component seismic waveform window of $N_w$ discrete time samples ($C=3$ for $Z, N, E$). The objective of the neural network $f_\Theta(\mathbf{X})$ parameterized by weights $\Theta$ is to predict a continuous probability matrix $\hat{\mathbf{Y}} \in [0, 1]^{K \times N_w}$, where $K$ denotes the target class space.
+
+During supervised training, discrete ground-truth phase arrival times $t_P$ and $t_S$ manually picked by seismologists are converted into continuous probability distributions via truncated Gaussian kernels centered at the picked samples:
+\begin{equation}
+  y_k(t) = \exp\left( - \frac{(t - t_k)^2}{2 \sigma_{\mathrm{label}}^2} \right), \quad k \in \{\mathrm{P}, \mathrm{S}\},
+\end{equation}
+where the standard deviation $\sigma_{\mathrm{label}}$ is set to $0.1\,\mathrm{s}$ ($10$ samples at $100\,\mathrm{Hz}$), reflecting human pick picking uncertainty. The noise target distribution $y_{\mathrm{Noise}}(t)$ is defined to enforce class partition of unity:
+\begin{equation}
+  y_{\mathrm{Noise}}(t) = \max\left(0, 1 - y_{\mathrm{P}}(t) - y_{\mathrm{S}}(t)\right).
+\end{equation}
+
+The network parameters $\Theta$ are optimized by minimizing the multi-class cross-entropy loss summed over all time steps:
+\begin{equation}
+  \mathcal{L}_{\mathrm{CE}}(\Theta) = - \frac{1}{N_w} \sum_{t=1}^{N_w} \sum_{k \in \{\mathrm{Noise}, \mathrm{P}, \mathrm{S}\}} y_k(t) \log \hat{y}_k(t; \Theta).
+\end{equation}
+
+\subsection{PhaseNet: 1D U-Net Fully Convolutional Architecture}
+PhaseNet (\cite{PhaseNet}) adapts the U-Net biomedical segmentation topology to 1D continuous time-series data. The network comprises an encoder (contracting path) and a decoder (expanding path) interconnected by lateral skip connections, as summarized in Table~\ref{tab:phasenet_architecture}.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Architectural specification of the PhaseNet 1D U-Net network.}
+  \label{tab:phasenet_architecture}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{l c c c X}
+      \toprule
+      \textbf{Stage / Layer} & \textbf{Kernel Size} & \textbf{Stride} & \textbf{Output Shape\tnote{a}} & \textbf{Mathematical Operation / Layer Semantic} \\
+      \midrule
+      Input $\mathbf{X}$ & --- & --- & $(3, 3000)$ & [Observed] 3-component seismic waveform \\
+      Conv1 (Encoder) & $7$ & $1$ & $(8, 3000)$ & 1D Conv $\to$ Batch Normalization $\to$ ReLU \\
+      Downsample 1 & $7$ & $2$ & $(8, 1500)$ & Strided 1D Conv (feature downsampling) \\
+      Conv2 (Encoder) & $7$ & $1$ & $(16, 1500)$ & 1D Conv $\to$ Batch Normalization $\to$ ReLU \\
+      Downsample 2 & $7$ & $2$ & $(16, 750)$ & Strided 1D Conv (feature downsampling) \\
+      Conv3 (Encoder) & $7$ & $1$ & $(32, 750)$ & 1D Conv $\to$ Batch Normalization $\to$ ReLU \\
+      Downsample 3 & $7$ & $2$ & $(32, 375)$ & Strided 1D Conv (feature downsampling) \\
+      Conv4 (Encoder) & $7$ & $1$ & $(64, 375)$ & 1D Conv $\to$ Batch Normalization $\to$ ReLU \\
+      Downsample 4 & $7$ & $2$ & $(64, 188)$ & Strided 1D Conv (bottleneck transition) \\
+      Bottleneck & $7$ & $1$ & $(128, 188)$ & Deep contextual feature extraction \\
+      Upsample 4 & $7$ & $2$ & $(64, 375)$ & Transposed 1D Conv (spatial expansion) \\
+      Skip Concat 4 & --- & --- & $(128, 375)$ & Concatenate Upsample 4 with Conv4 features \\
+      Upsample 3 & $7$ & $2$ & $(32, 750)$ & Transposed 1D Conv $\to$ Skip Concat with Conv3 \\
+      Upsample 2 & $7$ & $2$ & $(16, 1500)$ & Transposed 1D Conv $\to$ Skip Concat with Conv2 \\
+      Upsample 1 & $7$ & $2$ & $(8, 3000)$ & Transposed 1D Conv $\to$ Skip Concat with Conv1 \\
+      Final Conv & $1$ & $1$ & $(3, 3000)$ & $1\times 1$ pointwise linear projection \\
+      Softmax Output & --- & --- & $(3, 3000)$ & Normalized class posterior probabilities \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item[a] Target \& Scope: Shapes are specified as $(\mathrm{Channels}, \mathrm{Temporal\,Samples})$ for a standard $30\,\mathrm{s}$ input window sampled at $100\,\mathrm{Hz}$.
+      \item Notice how transposed convolutions symmetrically restore resolution while lateral skip connections re-inject high-frequency onset timing.
+      \item Evidence Anchor: Implemented according to \cite{PhaseNet} specifications within \texttt{OGS/src/ogspicker.py}.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+
+\subsubsection{Contracting Encoder Hierarchy}
+The encoder consists of four downsampling stages. At each stage $l \in \{1, 2, 3, 4\}$, the temporal dimension is halved while the channel capacity doubles:
+\begin{equation}
+  \mathbf{H}^{(l)} = \mathrm{ReLU}\left( \mathrm{BN}\left( \mathbf{W}_{\mathrm{conv}}^{(l)} * \mathbf{H}^{(l-1)} + \mathbf{b}_{\mathrm{conv}}^{(l)} \right) \right),
+\end{equation}
+where $*$ denotes discrete 1D cross-correlation, $\mathrm{BN}(\cdot)$ denotes Batch Normalization, and $\mathbf{H}^{(0)} = \mathbf{X}$. Strided convolutions with stride $s=2$ downsample the feature maps. This contracting hierarchy expands the effective receptive field exponentially, enabling deeper layers to learn global waveform characteristics, such as emergent coda decays and multi-second wave packets.
+
+\subsubsection{Lateral Skip Connections and Expanding Decoder}
+A primary challenge in dense seismic phase picking is that downsampling operations destroy high-frequency spatial and temporal onset information. A sharp P-wave onset occupies an impulsive interval of $\approx 10$--$30\,\mathrm{ms}$ (1 to 3 samples at $100\,\mathrm{Hz}$). To preserve sharp temporal localization:
+\begin{enumerate}
+  \item The expanding decoder applies transposed 1D convolutions (fractionally strided convolutions) that double the temporal dimension at each stage.
+  \item Lateral skip connections copy the intermediate feature representations $\mathbf{H}^{(l)}$ from the encoder directly to the decoder at the corresponding scale, concatenating them along the channel dimension prior to subsequent convolutions:
+  \begin{equation}
+    \tilde{\mathbf{D}}^{(l)} = \left[ \mathbf{D}_{\mathrm{up}}^{(l)} \, \Big\Vert \, \mathbf{H}^{(l)} \right].
+  \end{equation}
+\end{enumerate}
+
+This design allows the network to combine abstract semantic context (distinguishing an earthquake from cultural noise) from the deep bottleneck with sub-sample arrival onset fidelity from early layers.
+
+\subsubsection{Output Softmax Normalization}
+The final layer applies a $1 \times 1$ convolution mapping the 8-channel decoder output to $K=3$ channels, followed by a channel-wise Softmax activation:
+\begin{equation}
+  \hat{y}_k(t) = \frac{\exp\left(z_k(t)\right)}{\sum_{j \in \{\mathrm{Noise}, \mathrm{P}, \mathrm{S}\}} \exp\left(z_j(t)\right)}, \quad \forall t \in \{1, \dots, N_w\}.
+\end{equation}
+
+\subsection{EQTransformer: Hierarchical Self-Attention and Multi-Task Decoding}
+Earthquake Transformer (\ac{EQTransformer}, \cite{EQTransformer}) represents a significant paradigm shift by combining deep 1D residual convolutions, bidirectional recurrent memory, and hierarchical multi-head self-attention. It solves three interrelated seismic monitoring objectives simultaneously:
+\begin{enumerate}
+  \item \textbf{Detection Branch}: Binary probability that a seismic event is active within the current window: $\hat{\mathbf{y}}_{\mathrm{det}} \in [0, 1]^{N_w}$.
+  \item \textbf{P-Phase Picking Branch}: Continuous P-wave arrival probability: $\hat{\mathbf{y}}_{\mathrm{P}} \in [0, 1]^{N_w}$.
+  \item \textbf{S-Phase Picking Branch}: Continuous S-wave arrival probability: $\hat{\mathbf{y}}_{\mathrm{S}} \in [0, 1]^{N_w}$.
+\end{enumerate}
+
+\subsubsection{Deep Residual Convolutional Front-End}
+The input 3-component window $\mathbf{X} \in \mathbb{R}^{3 \times 6000}$ ($60\,\mathrm{s}$ at $100\,\mathrm{Hz}$) is ingested by an initial 1D convolutional layer followed by seven residual blocks with identity mappings:
+\begin{equation}
+  \mathbf{x}_{\mathrm{res}}^{(m)} = \mathbf{x}_{\mathrm{res}}^{(m-1)} + \mathcal{F}\left( \mathbf{x}_{\mathrm{res}}^{(m-1)}, \mathcal{W}^{(m)} \right),
+\end{equation}
+where $\mathcal{F}$ represents a sequence of two 1D convolutions with kernel size $k=3$ or $k=5$, Batch Normalization, and Dropout. The residual connections eliminate vanishing gradients during backpropagation, enabling the network to learn multiscale feature hierarchies spanning microseismic transients to low-frequency surface waves.
+
+\subsubsection{Bidirectional Long Short-Term Memory (BiLSTM)}
+Following the residual encoder, a stack of bidirectional Long Short-Term Memory (\ac{LSTM}) layers processes the temporal feature sequences. For a sequence of hidden vectors $\mathbf{h}_t$, the BiLSTM maintains two independent recurrent pathways:
+\begin{align}
+  \overrightarrow{\mathbf{h}}_t &= \mathrm{LSTM}_{\mathrm{forward}}\left( \mathbf{x}_t, \overrightarrow{\mathbf{h}}_{t-1} \right), \\
+  \overleftarrow{\mathbf{h}}_t &= \mathrm{LSTM}_{\mathrm{backward}}\left( \mathbf{x}_t, \overleftarrow{\mathbf{h}}_{t+1} \right), \\
+  \mathbf{h}_t &= \left[ \overrightarrow{\mathbf{h}}_t \, \Big\Vert \, \overleftarrow{\mathbf{h}}_t \right].
+\end{align}
+
+The forward pass models causal energy accumulation leading to phase onsets, while the backward pass captures anticausal coda relaxation and dispersion. This bidirectional context prevents ambiguous secondary arrivals (such as depth phases $pP$, $sP$ or local crustal reverberations) from being erroneously classified as primary P onsets.
+
+\subsubsection{Hierarchical Multi-Head Self-Attention Mechanisms}
+EQTransformer deploys self-attention mechanisms to dynamically capture long-range temporal dependencies without computational degradation over extended horizons. The scaled dot-product attention maps query ($\mathbf{Q}$), key ($\mathbf{K}$), and value ($\mathbf{V}$) matrices:
+\begin{equation}
+  \mathrm{Attention}(\mathbf{Q}, \mathbf{K}, \mathbf{V}) = \mathrm{softmax}\left( \frac{\mathbf{Q}\mathbf{K}^T}{\sqrt{d_k}} \right) \mathbf{V},
+\end{equation}
+where $d_k$ is the dimensionality of the key projection vectors. Multi-Head Attention linearly projects queries, keys, and values $h$ times ($h=8$ heads), computing attention distributions in parallel:
+\begin{equation}
+  \mathrm{MultiHead}(\mathbf{Q}, \mathbf{K}, \mathbf{V}) = \left[ \mathrm{head}_1 \, \Vert \, \dots \, \Vert \, \mathrm{head}_h \right] \mathbf{W}^O,
+\end{equation}
+with $\mathrm{head}_i = \mathrm{Attention}(\mathbf{Q}\mathbf{W}_i^Q, \mathbf{K}\mathbf{W}_i^K, \mathbf{V}\mathbf{W}_i^V)$.
+
+The attention hierarchy operates on two distinct levels:
+\begin{itemize}
+  \item \textbf{Global Attention}: Evaluated across the entire window sequence, aggregating global envelope context to identify whether an earthquake occurs within the window.
+  \item \textbf{Local Task-Specific Attention}: Implemented within the separate P- and S-wave decoders, narrowing the focus to candidate arrival zones identified by the detection branch and resolving sharp onset times with millisecond resolution.
+\end{itemize}
+
+\subsubsection{Multi-Task Decoder and Loss Formulation}
+The shared representation is branched into three independent decoders comprising 1D transposed convolutions and Feed-Forward Networks (FFN), each terminating with a Sigmoid activation:
+\begin{equation}
+  \hat{y}_{\mathrm{det}}(t) = \sigma\left(z_{\mathrm{det}}(t)\right), \quad \hat{y}_{\mathrm{P}}(t) = \sigma\left(z_{\mathrm{P}}(t)\right), \quad \hat{y}_{\mathrm{S}}(t) = \sigma\left(z_{\mathrm{S}}(t)\right),
+\end{equation}
+where $\sigma(z) = \frac{1}{1 + e^{-z}}$. The combined loss function is a weighted sum of binary cross-entropy terms:
+\begin{equation}
+  \mathcal{L}_{\mathrm{total}} = \lambda_{\mathrm{det}} \mathcal{L}_{\mathrm{BCE}}(\mathbf{y}_{\mathrm{det}}, \hat{\mathbf{y}}_{\mathrm{det}}) + \lambda_{\mathrm{P}} \mathcal{L}_{\mathrm{BCE}}(\mathbf{y}_{\mathrm{P}}, \hat{\mathbf{y}}_{\mathrm{P}}) + \lambda_{\mathrm{S}} \mathcal{L}_{\mathrm{BCE}}(\mathbf{y}_{\mathrm{S}}, \hat{\mathbf{y}}_{\mathrm{S}}),
+\end{equation}
+with empirical weighting factors $\lambda_{\mathrm{det}} = 0.2$, $\lambda_{\mathrm{P}} = 0.4$, and $\lambda_{\mathrm{S}} = 0.4$.
+
+\subsection{Peak Extraction and Pick Thresholding}
+To extract discrete arrival times from the continuous probability time series $\hat{\mathbf{y}}_P(t)$ and $\hat{\mathbf{y}}_S(t)$, a local peak-finding algorithm is executed subject to two operational criteria:
+\begin{enumerate}
+  \item \textbf{Confidence Threshold}: A candidate peak at sample index $n^*$ is retained if its probability exceeds a prescribed detection threshold:
+  \begin{equation}
+    \hat{y}_k(n^*) \ge \tau_{\mathrm{threshold}}, \quad k \in \{\mathrm{P}, \mathrm{S}\},
+  \end{equation}
+  where $\tau_{\mathrm{threshold}}$ typically varies between $0.1$ (high recall mode) and $0.5$ (high precision mode).
+  \item \textbf{Local Extrema and Minimum Separation}: The candidate sample must be a strict local maximum within a neighborhood of radius $\delta_{\mathrm{sep}} = 0.5\,\mathrm{s}$ ($50$ samples at $100\,\mathrm{Hz}$):
+  \begin{equation}
+    \hat{y}_k(n^*) > \hat{y}_k(n^* \pm m), \quad \forall m \in \{1, \dots, 50\}.
+  \end{equation}
+\end{enumerate}
+For each accepted pick, the absolute arrival timestamp is computed by mapping $n^*$ back to the trace start time: $t_{\mathrm{pick}} = t_{\mathrm{start}} + n^* \cdot \Delta t$. The pick confidence certainty metric is recorded as $\rho = \hat{y}_k(n^*)$.
+
+% =============================================================================
+% SECTION 3: EVENT ASSOCIATION
+% =============================================================================
+\section{Spatiotemporal Phase Association}
+\label{sec:phase_association}
+
+Phase association constitutes the combinatorial problem of grouping individual, asynchronous P- and S-wave arrival picks detected across a seismic network into coherent physical earthquake events. In regional monitoring networks, this task is severely complicated by:
+\begin{itemize}
+  \item High pick densities resulting from sensitive machine-learning detection thresholds ($\tau_{\mathrm{threshold}} \le 0.3$), which introduce numerous false-positive detections from cultural noise, tremors, and teleseisms.
+  \item Concurrent or overlapping earthquake sequences, such as seismic swarms or mainshock-aftershock clusters, where phase arrivals from multiple events arrive simultaneously at different stations.
+  \item Missing phase arrivals caused by low SNR at distant stations or station telemetry outages.
+\end{itemize}
+
+The pipeline integrates two complementary state-of-the-art associators: \textbf{GaMMA} (\cite{GaMMA}), which uses a probabilistic Gaussian Mixture Model with Bayesian Expectation-Maximization, and \textbf{PyOcto} (\cite{PyOcto}), which employs octree-based spatial partitioning in 4D origin space.
+
+\subsection{GaMMA: Bayesian Gaussian Mixture Model Associator}
+GaMMA (\cite{GaMMA}) conceptualizes phase association as an unsupervised clustering problem within a probabilistic Bayesian framework. Each detected pick is treated as an observed data point generated by a mixture of candidate earthquake sources plus a uniform background noise process.
+
+\subsubsection{Coordinate Transformation and Spatial Projection}
+To avoid distortions inherent in spherical latitude-longitude coordinates when evaluating physical distances, geodetic station coordinates $(\lambda_s, \phi_s, h_s)$ are transformed into a local Cartesian coordinate system $(x_s, y_s, z_s)$ in kilometers via a transverse Mercator or stereographic projection centered at the regional centroid $(\bar{\lambda}, \bar{\phi})$:
+\begin{align}
+  x_s &= R_E \cos(\bar{\phi}) (\lambda_s - \bar{\lambda}) \frac{\pi}{180^{\circ}}, \\
+  y_s &= R_E (\phi_s - \bar{\phi}) \frac{\pi}{180^{\circ}}, \\
+  z_s &= - h_s,
+\end{align}
+where $R_E \approx 6{,}371\,\mathrm{km}$ is the mean radius of the Earth and $z_s$ is depth positive downward.
+
+\subsubsection{DBSCAN Spatiotemporal Pre-Clustering}
+Fitting a full Gaussian Mixture Model directly to thousands of daily picks is computationally prohibitive due to $\mathcal{O}(N \cdot K)$ complexity per EM iteration. GaMMA mitigates this by applying Density-Based Spatial Clustering of Applications with Noise (\ac{DBSCAN}, \cite{DBSCAN}) as an initial coarse filter.
+
+A spatiotemporal distance metric between pick $i$ and pick $j$ is formulated:
+\begin{equation}
+  D_{\mathrm{DBSCAN}}(i, j) = \frac{|t_i - t_j|}{\Delta t_{\mathrm{max}}} + \frac{\|\mathbf{s}_i - \mathbf{s}_j\|_2}{\Delta s_{\mathrm{max}}},
+\end{equation}
+where $\mathbf{s} = (x, y)$ denotes station coordinates, $\Delta t_{\mathrm{max}}$ is the maximum allowable travel-time difference across the network aperture, and $\Delta s_{\mathrm{max}}$ is the inter-station distance threshold. Picks grouped into candidate DBSCAN clusters with minimum size $N_{\mathrm{min}} \ge 4$ are passed to the Gaussian Mixture Model, while isolated noise points are discarded.
+
+\subsubsection{Probabilistic Mixture Model Formulation}
+Let $\mathbf{X} = \{\mathbf{x}_1, \dots, \mathbf{x}_N\}$ represent the set of observed phase picks within a candidate window, where each observation $\mathbf{x}_n = (t_n, \mathbf{s}_n, p_n, \rho_n)$ includes arrival time $t_n$, station coordinates $\mathbf{s}_n$, phase type $p_n \in \{\mathrm{P}, \mathrm{S}\}$, and pick amplitude or certainty $\rho_n$.
+
+Assuming $K$ candidate earthquake clusters plus an outlier noise class ($k=0$), the likelihood of observing pick $\mathbf{x}_n$ is formulated as a mixture density:
+\begin{equation}
+  p(\mathbf{x}_n \mid \mathbf{\Theta}) = \pi_0 p_{\mathrm{noise}}(\mathbf{x}_n) + \sum_{k=1}^K \pi_k \mathcal{N}\left(t_n \mid \mu_{nk}, \sigma_{nk}^2\right) p(\rho_n \mid m_k, \mathbf{s}_n),
+\end{equation}
+where $\pi_k$ is the mixing proportion ($\sum_{k=0}^K \pi_k = 1$), $\mathcal{N}(t_n \mid \mu_{nk}, \sigma_{nk}^2)$ represents the Gaussian travel-time likelihood, and $p(\rho_n \mid m_k, \mathbf{s}_n)$ models the pick amplitude given event magnitude $m_k$.
+
+The expected arrival time $\mu_{nk}$ is determined by the theoretical kinematic travel time from hypocenter $\boldsymbol{\xi}_k = (x_k, y_k, z_k)^T$ and origin time $T_0^k$:
+\begin{equation}
+  \mu_{nk} = T_0^k + \mathcal{T}_{p_n}\left(\boldsymbol{\xi}_k, \mathbf{s}_n\right) \approx T_0^k + \frac{\|\boldsymbol{\xi}_k - \mathbf{s}_n\|_2}{v_{p_n}},
+\end{equation}
+where $v_{p_n}$ is the effective apparent body-wave velocity ($v_{\mathrm{P}} \approx 6.0\,\mathrm{km/s}$, $v_{\mathrm{S}} \approx 3.45\,\mathrm{km/s}$ for the Friuli crustal model). The variance $\sigma_{nk}^2$ accounts for unmodeled 3D velocity heterogeneity and pick timing jitter.
+
+\subsubsection{Expectation-Maximization (EM) Optimization}
+Model parameters $\mathbf{\Theta} = \{T_0^k, \boldsymbol{\xi}_k, m_k, \pi_k\}$ are optimized iteratively using the Expectation-Maximization algorithm (\cite{bishop2006pattern}):
+\begin{itemize}
+  \item \textbf{E-Step (Posterior Assignment)}: Compute the responsibility $\gamma_{nk} \in [0, 1]$ that cluster $k$ generated pick $n$:
+  \begin{equation}
+    \gamma_{nk} = \frac{\pi_k p(\mathbf{x}_n \mid \boldsymbol{\theta}_k)}{\pi_0 p_{\mathrm{noise}}(\mathbf{x}_n) + \sum_{j=1}^K \pi_j p(\mathbf{x}_n \mid \boldsymbol{\theta}_j)}.
+  \end{equation}
+  \item \textbf{M-Step (Parameter Update)}: Update cluster mixing weights and source parameters to maximize the expected complete-data log-likelihood:
+  \begin{equation}
+    \pi_k^{\mathrm{new}} = \frac{1}{N} \sum_{n=1}^N \gamma_{nk}, \quad N_k = \sum_{n=1}^N \gamma_{nk}.
+  \end{equation}
+  Hypocenter $\boldsymbol{\xi}_k$ and origin time $T_0^k$ are updated by minimizing the weighted travel-time misfit via the Gauss-Newton or Levenberg-Marquardt algorithm:
+  \begin{equation}
+    \left(\boldsymbol{\xi}_k, T_0^k\right)^{\mathrm{new}} = \arg\min_{\boldsymbol{\xi}, T_0} \sum_{n=1}^N \gamma_{nk} \left( \frac{t_n - T_0 - \mathcal{T}_{p_n}(\boldsymbol{\xi}, \mathbf{s}_n)}{\sigma_{nk}} \right)^2.
+  \end{equation}
+\end{itemize}
+
+Iterations terminate when the incremental increase in total log-likelihood satisfies $\Delta \log \mathcal{L} < 10^{-4}$ or a maximum of $100$ iterations is reached.
+
+\subsection{PyOcto: High-Throughput Octree 4D Origin-Space Associator}
+While GaMMA delivers high association fidelity for moderately sized pick sets, its runtime scales rapidly in large-scale retrospective workflows processing millions of picks. PyOcto (\cite{PyOcto}) addresses this computational bottleneck by re-framing association as a hierarchical branch-and-bound search directly in four-dimensional origin space $(x, y, z, t)$.
+
+\subsubsection{4D Origin Space Partitioning and Priority Queue Search}
+Rather than iterating over combinatorial pick subsets, PyOcto partitions the spatial hypocenter domain into an octree (recursive decomposition into 8 spatial octants) combined with uniform temporal intervals $\Delta t_{\mathrm{bin}}$. Each 4D search node represents a bounding box:
+\begin{equation}
+  \mathcal{B} = [x_{\mathrm{min}}, x_{\mathrm{max}}] \times [y_{\mathrm{min}}, y_{\mathrm{max}}] \times [z_{\mathrm{min}}, z_{\mathrm{max}}] \times [t_{\mathrm{min}}, t_{\mathrm{max}}].
+\end{equation}
+
+Candidate nodes are managed within a priority queue ordered by their prospective pick support score. For each extracted node, the algorithm performs one of three operations:
+\begin{enumerate}
+  \item \textbf{Prune / Discard}: If the theoretical upper bound on pick support within $\mathcal{B}$ falls below physical admissibility thresholds ($N_{\mathrm{picks}} < N_{\mathrm{min}}$), the node and all its descendants are pruned immediately.
+  \item \textbf{Refine / Split}: If the node contains sufficient pick support but spatial dimensions exceed the convergence resolution (e.g., cell size $> 2\,\mathrm{km}$), it is subdivided into eight smaller spatial sub-octants.
+  \item \textbf{Localize \& Form Event}: If the node reaches terminal spatial resolution, a localized optimization verifies travel-time consistency; if confirmed, a new earthquake event is instantiated and its associated picks are flagged.
+\end{enumerate}
+
+\subsubsection{Monotonic Early Pruning and Travel-Time Querying}
+PyOcto achieves orders-of-magnitude acceleration through monotonic pruning criteria. For any 4D node $\mathcal{B}$ and seismic station $\mathbf{s}_i$, the minimum and maximum possible travel times from anywhere inside the node are bounded by:
+\begin{align}
+  t_{i, \mathrm{min}}^{\mathrm{P}} &= t_{\mathrm{min}} + \min_{\mathbf{x} \in \mathcal{B}} \mathcal{T}_{\mathrm{P}}(\mathbf{x}, \mathbf{s}_i), \\
+  t_{i, \mathrm{max}}^{\mathrm{P}} &= t_{\mathrm{max}} + \max_{\mathbf{x} \in \mathcal{B}} \mathcal{T}_{\mathrm{P}}(\mathbf{x}, \mathbf{s}_i).
+\end{align}
+
+Travel times $\mathcal{T}_{\mathrm{P}}(\mathbf{x}, \mathbf{s}_i)$ are queried from precomputed 1D or 3D travel-time lookup tables using high-speed bilinear grid interpolation. An observed pick at station $\mathbf{s}_i$ with arrival time $t_{\mathrm{obs}}$ is admissible for node $\mathcal{B}$ if and only if:
+\begin{equation}
+  t_{i, \mathrm{min}}^{\mathrm{phase}} - \epsilon_{\mathrm{tol}} \le t_{\mathrm{obs}} \le t_{i, \mathrm{max}}^{\mathrm{phase}} + \epsilon_{\mathrm{tol}},
+\end{equation}
+where $\epsilon_{\mathrm{tol}}$ is a pick-uncertainty tolerance ($0.5\,\mathrm{s}$). Because the number of admissible picks decreases monotonically as spatial nodes are subdivided:
+\begin{equation}
+  N_{\mathrm{picks}}(\mathcal{B}_{\mathrm{child}}) \le N_{\mathrm{picks}}(\mathcal{B}_{\mathrm{parent}}),
+\end{equation}
+any branch failing the threshold ($N_{\mathrm{picks}} < 5$, $N_{\mathrm{P}} < 3$, $N_{\mathrm{S}} < 2$) can be pruned without risk of discarding valid physical hypocenters.
+
+\subsubsection{Equal Differential Time Refinement and Deduplication}
+For terminal nodes passing pruning, the event hypocenter and origin time are refined using an Equal Differential Time (EDT) misfit minimization. Once an event is confirmed:
+\begin{enumerate}
+  \item Associated picks are matched to the event and their weights in subsequent candidate nodes are depreciated to prevent duplicate event creation.
+  \item Overlapping temporal processing blocks are reconciled via spatial-temporal deduplication: events originating within $\Delta t < 1.5\,\mathrm{s}$ and spatial distance $\Delta d < 5.0\,\mathrm{km}$ are merged into a single canonical event entry.
+\end{enumerate}
+
+% =============================================================================
+% SECTION 4: HYPOCENTER LOCATION
+% =============================================================================
+\section{Non-Linear Hypocenter Location with NonLinLoc}
+\label{sec:hypocenter_location}
+
+Although associative clustering engines (GaMMA and PyOcto) produce initial hypocenter approximations during phase assignment, high-precision seismotectonic analysis requires rigorous hypocentral determination using dedicated non-linear relocation codes and regional velocity structures.
+
+Linearized inversion methods (such as Hypo71 \cite{Hypo71} and HypoInverse \cite{HypoInverse}) rely on first-order Taylor series expansions of travel-time equations around an initial trial hypocenter $\mathbf{x}_0$:
+\begin{equation}
+  t_i^{\mathrm{obs}} - t_i^{\mathrm{calc}}(\mathbf{x}_0) \approx \left. \frac{\partial t_i}{\partial x} \right|_{\mathbf{x}_0} \Delta x + \left. \frac{\partial t_i}{\partial y} \right|_{\mathbf{x}_0} \Delta y + \left. \frac{\partial t_i}{\partial z} \right|_{\mathbf{x}_0} \Delta z + \Delta T_0.
+\end{equation}
+In structurally complex or mountainous settings such as the Alps-Dinarides junction in Northeastern Italy, the travel-time objective function is non-linear and frequently multimodal. Linearized gradient solvers can easily become trapped in spurious local minima, produce unphysical negative depths (airquakes), or severely underestimate location uncertainties when network azimuthal gap angles exceed $180^{\circ}$.
+
+To ensure physical validity and comprehensive uncertainty quantification, this pipeline integrates the \textbf{NonLinLoc} (Non-Linear Location) software suite (\cite{NonLinLoc}).
+
+\subsection{Probabilistic Inversion and Equal Differential Time (EDT) Formulation}
+NonLinLoc implements a Bayesian formulation wherein the solution to the inverse earthquake location problem is represented by the complete posterior Probability Density Function (PDF) over the spatial coordinates $\mathbf{x} = (x, y, z)$ and origin time $T_0$:
+\begin{equation}
+  P(\mathbf{x}, T_0 \mid \mathbf{d}) = \frac{\rho(\mathbf{x}, T_0) L(\mathbf{x}, T_0 \mid \mathbf{d})}{\int \int \rho(\mathbf{x}', T_0') L(\mathbf{x}', T_0' \mid \mathbf{d}) d\mathbf{x}' dT_0'},
+\end{equation}
+where $\rho(\mathbf{x}, T_0)$ is the prior probability distribution (enforcing geographic and depth bounds) and $L(\mathbf{x}, T_0 \mid \mathbf{d})$ is the likelihood function.
+
+\subsubsection{Equal Differential Time Formulation}
+A central innovation in NonLinLoc is the Equal Differential Time (\ac{EDT}) formulation (\cite{NonLinLoc}), which analytically decouples origin time estimation from spatial hypocenter search. The EDT likelihood at a trial spatial location $\mathbf{x}$ is formulated over all unique pairs of observed phase arrival times $(i, j)$:
+\begin{equation}
+  \mathrm{EDT}_{ij}(\mathbf{x}) = \left( t_i^{\mathrm{obs}} - t_j^{\mathrm{obs}} \right) - \left( \mathcal{T}_i(\mathbf{x}) - \mathcal{T}_j(\mathbf{x}) \right),
+\end{equation}
+where $\mathcal{T}_i(\mathbf{x})$ is the calculated travel time from trial point $\mathbf{x}$ to station $i$. Notice that origin time $T_0$ cancels out:
+\begin{equation}
+  (t_i^{\mathrm{obs}} - T_0) - (t_j^{\mathrm{obs}} - T_0) = t_i^{\mathrm{obs}} - t_j^{\mathrm{obs}}.
+\end{equation}
+
+The spatial likelihood function under Gaussian observational uncertainties is given by:
+\begin{equation}
+  L_{\mathrm{EDT}}(\mathbf{x}) \propto \left[ \sum_{i=1}^N \sum_{j=1}^N \frac{1}{\sqrt{\sigma_i^2 + \sigma_j^2}} \exp\left( - \frac{\left( \mathrm{EDT}_{ij}(\mathbf{x}) \right)^2}{2(\sigma_i^2 + \sigma_j^2)} \right) \right]^S,
+\end{equation}
+where $S$ is a scaling exponent and $\sigma_i$ is the combined uncertainty of pick timing and velocity modeling. Because each station pair defines an independent hyperbolic spatial constraint surface, the EDT estimator is robust against outlier picks: a single corrupt arrival time degrades only the pairs containing that station, leaving the intersecting consensus of all remaining station pairs unaffected.
+
+Once the optimal spatial hypocenter $\hat{\mathbf{x}}$ is resolved, the origin time is computed via a weighted average of individual station origin estimates:
+\begin{equation}
+  \hat{T}_0 = \frac{\sum_{i=1}^N w_i \left( t_i^{\mathrm{obs}} - \mathcal{T}_i(\hat{\mathbf{x}}) \right)}{\sum_{i=1}^N w_i}.
+\end{equation}
+
+\subsection{Oct-Tree Importance Sampling Global Grid Search}
+To explore the 3D spatial likelihood surface without evaluating millions of regular grid nodes, NonLinLoc uses an adaptive \textbf{Oct-Tree} importance sampling search:
+\begin{enumerate}
+  \item The regional domain (e.g., $200 \times 200 \times 40\,\mathrm{km}$) is initialized as a coarse 3D bounding cell.
+  \item The likelihood function $L_{\mathrm{EDT}}(\mathbf{x})$ is evaluated at the cell center and eight vertices.
+  \item Cells exhibiting integrated likelihood values exceeding a threshold fraction of the current global maximum are recursively subdivided into eight equal sub-cells.
+  \item Inactive, low-probability regions (such as distant aseismic crustal blocks) remain sampled at coarse resolution, while computational effort concentrates dynamically in the high-gradient focal zone.
+\end{enumerate}
+This yields an exact, grid-free mapping of the spatial posterior PDF with orders-of-magnitude fewer forward evaluations than brute-force grid searches.
+
+\subsection{Regional 1D Velocity Model for Friuli Venezia Giulia}
+Travel times $\mathcal{T}_i(\mathbf{x})$ are generated on a dense 3D lookup grid using the finite-difference solution of the Eikonal equation developed by Podvin and Lecomte. The forward solver uses a calibrated 1D layered P- and S-wave velocity model representative of the complex crustal structure of the Friuli-Slovenia border region (\cite{SMINO}), detailed in Table~\ref{tab:velocity_model}.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Calibrated 1D crustal velocity model for the Friuli-Venezia Giulia region.}
+  \label{tab:velocity_model}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{l c c c X}
+      \toprule
+      \textbf{Layer Boundary} & \textbf{Top Depth} [$\mathrm{km}$] & $v_{\mathrm{P}}$ [$\mathrm{km/s}$]\tnote{a} & $v_{\mathrm{S}}$ [$\mathrm{km/s}$]\tnote{b} & \textbf{Geological / Tectonic Interpretation} \\
+      \midrule
+      Layer 1 (Sedimentary cover) & $0.0$ & $5.40$ & $3.00$ & [Analyst-Normalized] Quaternary / Mesozoic carbonate platform \\
+      Layer 2 (Upper crystalline crust) & $6.0$ & $5.85$ & $3.35$ & [Analyst-Normalized] Deformed Southalpine basement \\
+      Layer 3 (Middle crust) & $12.0$ & $6.15$ & $3.55$ & [Analyst-Normalized] Intermediate felsic-mafic crust \\
+      Layer 4 (Lower crust) & $24.0$ & $6.65$ & $3.80$ & [Analyst-Normalized] Granulitic lower crustal layer \\
+      Layer 5 (Upper mantle / Moho) & $38.0$ & $8.00$ & $4.55$ & [Analyst-Normalized] Sub-Moho lithospheric mantle ($V_P/V_S = 1.76$) \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item[a] P-wave velocities correspond to regional operational parameters used in the OGS network bulletin (\cite{SMINO}).
+      \item[b] S-wave velocities are constrained via a regional average velocity ratio $V_{\mathrm{P}}/V_{\mathrm{S}} = 1.75$--$1.76$.
+      \item Evidence Anchor: Velocity table ingested by NonLinLoc grid generation scripts (\texttt{Grid2Time}) in the pipeline.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+
+\subsection{Statistical Output and Uncertainty Metrics}
+For every successfully relocated earthquake, NonLinLoc produces three complementary point estimates and full posterior covariance statistics:
+\begin{itemize}
+  \item \textbf{Maximum Likelihood Hypocenter}: The spatial coordinate $\mathbf{x}_{\mathrm{ML}}$ that maximizes the posterior likelihood function.
+  \item \textbf{Expectation Hypocenter}: The probability-weighted spatial centroid:
+  \begin{equation}
+    \mathbf{x}_{\mathrm{exp}} = \int_{\mathbb{R}^3} \mathbf{x} P(\mathbf{x} \mid \mathbf{d}) d\mathbf{x}.
+  \end{equation}
+  \item \textbf{Confidence Ellipsoid}: The second central moments of the posterior PDF yield the $3 \times 3$ spatial covariance matrix:
+  \begin{equation}
+    \mathbf{C}_{\mathbf{x}} = \int_{\mathbb{R}^3} (\mathbf{x} - \mathbf{x}_{\mathrm{exp}})(\mathbf{x} - \mathbf{x}_{\mathrm{exp}})^T P(\mathbf{x} \mid \mathbf{d}) d\mathbf{x}.
+  \end{equation}
+  Eigendecomposition of $\mathbf{C}_{\mathbf{x}}$ yields the principal axes, orientations, and lengths of the $68\%$ and $95\%$ confidence ellipsoids, defining horizontal error $ERH = \sqrt{\sigma_x^2 + \sigma_y^2}$ and vertical depth error $ERZ = \sigma_z$.
+\end{itemize}
+
+% =============================================================================
+% SECTION 5: MAGNITUDE ESTIMATION
+% =============================================================================
+\section{Calibrated Local Magnitude ($M_L$) Estimation}
+\label{sec:magnitude_estimation}
+
+The final stage of the automated pipeline computes the Richter local magnitude ($M_L$) for each located event. Local magnitude remains the foundational scale for seismic risk assessment, civil protection alerting, and routine seismic catalog compilation at OGS.
+
+\subsection{Physical Measurement Workflow}
+Local magnitude calculation is implemented in \texttt{OGS/src/ogsmagnitude.py} through the module \texttt{OGSLocalMagnitude}. For each event with confirmed hypocenter $(\hat{\mathbf{x}}, \hat{T}_0)$, continuous waveforms from all contributing stations undergo the following steps:
+\begin{enumerate}
+  \item \textbf{Waveform Extraction and S-Windowing}: Traces from horizontal components ($N$ and $E$) are cut into an event window beginning at the predicted P-arrival time and extending past the theoretical S-arrival by $30\,\mathrm{s}$ to encompass peak S-wave and early surface-wave energy.
+  \item \textbf{Instrument Response Deconvolution}: The raw digitizer counts $c(t)$ are converted to true ground displacement $u(t)$ in meters by deconvolving the complex instrument transfer function $H_{\mathrm{inst}}(\omega)$:
+  \begin{equation}
+    U(\omega) = \frac{C(\omega)}{H_{\mathrm{inst}}(\omega)} \cdot W_{\mathrm{bandpass}}(\omega),
+  \end{equation}
+  where $W_{\mathrm{bandpass}}(\omega)$ is a 4-pole Butterworth bandpass pre-filter ($0.5$--$25.0\,\mathrm{Hz}$) preventing low-frequency noise amplification during spectral division.
+  \item \textbf{Wood-Anderson Torsion Seismograph Simulation}: Ground displacement is convolved with the transfer function $H_{\mathrm{WA}}(\omega)$ of a standard Wood-Anderson torsion seismograph (natural period $T_0 = 0.8\,\mathrm{s}$, damping ratio $h = 0.8$, static magnification $V = 2080$):
+  \begin{equation}
+    H_{\mathrm{WA}}(\omega) = \frac{-V \omega^2}{-\omega^2 + 2 j h \omega_0 \omega + \omega_0^2}, \quad \omega_0 = \frac{2\pi}{T_0}.
+  \end{equation}
+  This produces synthesized Wood-Anderson traces $u_{\mathrm{WA}, N}(t)$ and $u_{\mathrm{WA}, E}(t)$ in millimeters ($10^{-3}\,\mathrm{m}$).
+  \item \textbf{Peak Amplitude Extraction}: The maximum zero-to-peak amplitude is identified within the S-wave time window on both horizontal components:
+  \begin{equation}
+    A_N = \max_{t} |u_{\mathrm{WA}, N}(t)|, \quad A_E = \max_{t} |u_{\mathrm{WA}, E}(t)|.
+  \end{equation}
+  Following the OGS network formulation (\cite{SMINO}), the horizontal components are combined via their geometric mean:
+  \begin{equation}
+    A = \exp\left( \frac{\log A_N + \log A_E}{2} \right) = \sqrt{A_N \cdot A_E}.
+  \end{equation}
+\end{enumerate}
+
+\subsection{Regional Attenuation Curve and Station Calibration}
+The local magnitude at a given station $s$ is computed using the general Richter attenuation relation:
+\begin{equation}
+  M_{L, s} = \log_{10} A_s - \log_{10} A_0(r_s) + c_{5, s},
+\end{equation}
+where $A_s$ is the synthesized Wood-Anderson amplitude in millimeters, $r_s = \sqrt{\Delta_{\mathrm{epi}}^2 + z^2}$ is the 3D hypocentral distance in kilometers (guarded against $r < 0.01\,\mathrm{km}$ singularity), $-\log_{10} A_0(r)$ is the empirical distance-dependent attenuation function, and $c_{5, s}$ is an empirical station site correction factor.
+
+In accordance with the calibrated Alpine attenuation parameters implemented in \texttt{OGS/src/ogsmagnitude.py} (lines 21--23 and 70--75), the reference attenuation curve is defined as:
+\begin{equation}
+  \log_{10} A_0(r) = c_0 + c_1 \log_{10}(r) + c_2 \log_{10}(r \cdot c_3 + c_4),
+\end{equation}
+with empirical calibration constants:
+\begin{equation}
+  c_0 = -18.0471, \quad c_1 = 1.105, \quad c_2 = 147.111, \quad c_3 = 4.015 \times 10^{-5}, \quad c_4 = 1.33885.
+\end{equation}
+Station corrections $c_{5, s}$ compensate for local lithological amplification, sedimentary basin resonance, and sensor coupling variations across the OGS network.
+
+\subsection{Signal-to-Noise Screening and Robust Outlier Rejection}
+To eliminate spurious amplitudes caused by anthropogenic noise spikes or unmasked telemetry glitches, two quality-control filters are enforced:
+\begin{enumerate}
+  \item \textbf{SNR Screening}: An amplitude measurement is accepted only if the pre-event Signal-to-Noise Ratio exceeds a strict threshold:
+  \begin{equation}
+    \mathrm{SNR}_s = \frac{\mathrm{RMS}(S_{\mathrm{window}})}{\mathrm{RMS}(\mathrm{Noise}_{\mathrm{pre-P}})} \ge 1.3.
+  \end{equation}
+  \item \textbf{Median Absolute Deviation (MAD) Trimming}: When three or more valid station magnitudes are available ($N_{\mathrm{stat}} \ge 3$), the network median is computed:
+  \begin{equation}
+    M_{L, \mathrm{med}} = \mathrm{median}\left(\{M_{L, s}\}_{s=1}^{N_{\mathrm{stat}}}\right).
+  \end{equation}
+  The Median Absolute Deviation is calculated as:
+  \begin{equation}
+    \mathrm{MAD} = \mathrm{median}\left( \Big| M_{L, s} - M_{L, \mathrm{med}} \Big| \right).
+  \end{equation}
+  Any station magnitude deviating by more than five times the MAD ($|M_{L, s} - M_{L, \mathrm{med}}| > 5 \times \mathrm{MAD}$) is classified as an outlier and pruned.
+\end{enumerate}
+
+The final event local magnitude is reported as the mean of the retained station magnitudes:
+\begin{equation}
+  M_L = \frac{1}{N_{\mathrm{valid}}} \sum_{s \in \mathcal{S}_{\mathrm{valid}}} M_{L, s},
+\end{equation}
+with the standard error of the mean quantifying observational uncertainty:
+\begin{equation}
+  \sigma_{M_L} = \frac{\sigma_{\mathrm{sample}}}{\sqrt{N_{\mathrm{valid}} - 1}} = \frac{1}{\sqrt{N_{\mathrm{valid}} - 1}} \sqrt{\frac{1}{N_{\mathrm{valid}}} \sum_{s=1}^{N_{\mathrm{valid}}} \left(M_{L, s} - M_L\right)^2}.
+\end{equation}
+
+% =============================================================================
+% SECTION 6: PIPELINE SYNTHESIS
+% =============================================================================
+\section{Pipeline Data Contracts and Architectural Synthesis}
+\label{sec:pipeline_synthesis}
+
+The procedural pipeline operates as a modular, feed-forward processing graph. Table~\ref{tab:pipeline_synthesis} synthesizes each pipeline stage, detailing its input and output data contracts, underlying computational engine, and epistemic classification.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Architectural synthesis of the core computational seismic processing pipeline.}
+  \label{tab:pipeline_synthesis}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{l l l l X}
+      \toprule
+      \textbf{Pipeline Stage} & \textbf{Primary Input} & \textbf{Primary Output} & \textbf{Computational Engine} & \textbf{Epistemic Class\tnote{a}} \\
+      \midrule
+      0. Preprocessing & Raw MSEED files & Normalized arrays ($100\,\mathrm{Hz}$) & ObsPy / NumPy & [Analyst-Normalized] \\
+      1. Phase Picking & 3-component windows & P \& S pick probabilities & PhaseNet / EQTransformer & [Model Forecast / Hypothesis] \\
+      2. Association & Unstructured picks & Associated event clusters & GaMMA / PyOcto & [Model Forecast / Hypothesis] \\
+      3. Hypocenter Location & Associated picks & Posterior PDF & NonLinLoc (EDT) & [Derived Index / Metric] \\
+      4. Magnitude Estimation & Synthesized Wood-Anderson & Calibrated $M_L \pm \sigma_{M_L}$ & \texttt{OGSLocalMagnitude} & [Derived Index / Metric] \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item[a] Epistemic tagging distinguishes empirical inputs from statistical model predictions and deterministic inversions.
+      \item Target \& Scope: Complete operational workflow from raw continuous telemetry to publication-ready catalog entries.
+      \item Notice how epistemic classes transition from normalized physical observations to probabilistic predictions, and finally to derived physical metrics.
+      \item Evidence Anchor: Configured via Hydra YAML schemas in \texttt{OGS/config/} and orchestrated by \texttt{OGS/src/UNITSThesis.py}.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+
+This rigorous separation of concerns ensures that picker architectures, associator heuristics, velocity models, or attenuation relations can be individually updated, calibrated, or benchmarked without altering the upstream data engineering or downstream scientific evaluation layers.

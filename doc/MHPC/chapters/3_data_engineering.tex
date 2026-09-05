@@ -1,0 +1,420 @@
+% =============================================================================
+% Data Engineering
+% =============================================================================
+\label{chap:data_engineering}
+
+The development of an automated seismic catalog requires robust data 
+engineering infrastructure capable of handling heterogeneous data sources, 
+legacy file formats, and large-scale data volumes. This section describes the 
+data engineering framework developed, encompassing data acquisition, 
+multi-format parsing, catalog aggregation, and visualization components.
+
+\section{Software Architecture}
+
+The data engineering pipeline follows a modular, object-oriented design 
+implemented in Python, leveraging established seismological libraries and 
+modern data science tools. The architecture is organized around a central 
+constants module that provides configuration parameters, utility functions, 
+and standardized interfaces used throughout the processing chain.
+
+\subsection{Central Configuration Module}
+The \texttt{ogsconstants} module serves as the central repository for all 
+constants, configuration parameters, and utility functions used throughout the 
+pipeline. This design pattern ensures consistency across all processing stages 
+and facilitates maintenance. The module provides:
+
+\begin{itemize}
+  \item \textbf{Global Configuration}: MPI rank and size for parallel 
+  processing, GPU device allocation for machine learning inference, and 
+  numerical epsilon values for floating-point comparisons
+
+  \item \textbf{Date/Time Standards}: Standardized format strings following 
+  Python's \texttt{strftime} conventions (e.g., \texttt{YYMMDD}, 
+  \texttt{YYYYMMDD}, ISO 8601 formats), along with time delta constants for 
+  event detection, pick matching, and data segmentation
+
+  \item \textbf{Seismic Phase Identifiers}: Standard labels for P-wave 
+  (primary) and S-wave (secondary) arrivals, probability thresholds for 
+  machine learning detections, and SEED naming conventions for channel 
+  identification
+
+  \item \textbf{Data Column Headers}: Standardized column names for pandas 
+  DataFrames, ensuring consistent data structures across all parsing and 
+  analysis modules
+
+  \item \textbf{Geographic Definitions}: Polygon boundaries defining the OGS 
+  study region in Northeastern Italy, geographic zone codes (Friuli, Veneto, 
+  Slovenia, Alto Adige, etc.), and event type classifications
+
+  \item \textbf{FDSN Client Endpoints}: URLs for international data centers 
+  (INGV, IRIS, GFZ, ETH, ORFEUS, GEOFON) and OGS-specific internal servers, 
+  with a priority-ordered default client list
+\end{itemize}
+
+\subsection{Weight Conversion}
+The pipeline implements the standard weight conversion table for pick quality 
+assessment. Table~\ref{tab:h71_weights} presents the mapping between 
+analyst-assigned weight codes and corresponding timing uncertainties in 
+seconds.
+
+\begin{table}[h]
+  \centering
+  \caption{Weight codes and corresponding timing uncertainties used by the OGS}
+  \label{tab:h71_weights}
+  \begin{tabular}{ccc}
+    \hline
+    \textbf{Weight} & \textbf{Uncertainty (s)} & \textbf{Interpretation} \\
+    \hline
+    0 & $<$ 0.01 & Impulsive onset, very clear \\
+    1 & 0.01 -- 0.04 & Clear onset \\
+    2 & 0.04 -- 0.20 & Fairly clear onset \\
+    3 & 0.20 -- 1.00 & Emergent onset \\
+    4 & $\geq$ 1.00 & Poor quality pick \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\section{Data Acquisition}
+
+The data acquisition component provides automated retrieval of seismic 
+waveforms from distributed FDSN (Federation of Digital Seismograph Networks) 
+web services. The implementation supports both rectangular and circular domain 
+specifications for geographic selection.
+
+\subsection{FDSN Mass Downloader}
+The acquisition module leverages ObsPy's \texttt{MassDownloader} facility to 
+efficiently retrieve continuous waveform data from multiple data centers. The 
+system supports:
+
+\begin{itemize}
+  \item \textbf{Rectangular Domains}: Geographic bounding boxes specified by 
+  minimum/maximum longitude and latitude coordinates, suitable for regional 
+  studies with well-defined spatial boundaries
+
+  \item \textbf{Circular Domains}: Center point with minimum and maximum radii, 
+  useful for studies focused on specific source regions or volcanic systems
+
+  \item \textbf{Multi-Client Querying}: Automatic fallback through a 
+  prioritized list of FDSN data centers (OGS internal, INGV, GFZ, IRIS, ETH, 
+  ORFEUS) to maximize data availability
+\end{itemize}
+
+\subsection{Temporal Segmentation}
+To prevent server timeouts and enable efficient parallel downloading, the 
+acquisition module segments requests on a daily basis. For each day in the 
+requested date range, the system:
+
+\begin{enumerate}
+  \item Computes the appropriate time window (full day or centered clip)
+  \item Constructs a hierarchical output directory structure organized by 
+  year, month, and day
+  \item Applies channel priority filters (HH, EH, HN, HG, details in section 
+  \ref{subsec:ChannelPriorities}) to select the highest-quality available data.
+  \item Enforces minimum interstation distance constraints to avoid 
+  redundant co-located recordings
+\end{enumerate}
+
+The directory organization follows the pattern:
+\begin{verbatim}
+{base_directory}/{YYYY}/{MM}/{DD}/
+\end{verbatim}
+facilitating efficient data access and incremental processing.
+
+\subsection{Channel Selection Priorities}
+\label{subsec:ChannelPriorities}
+The acquisition system implements a channel priority scheme optimized for 
+regional earthquake monitoring:
+
+\begin{enumerate}
+  \item \textbf{HH[ZNE]}: High-gain broadband sensors (primary)
+  \item \textbf{EH[ZNE]}: Extremely short-period sensors
+  \item \textbf{HN[ZNE]}: High-gain accelerometers
+  \item \textbf{HG[ZNE]}: High-gain seismometers
+\end{enumerate}
+
+Location code priorities ensure consistent station identification across 
+networks with varying metadata conventions.
+
+\section{Multi-Format Catalog Parsing}
+
+The OGS seismic monitoring network has accumulated decades of earthquake 
+observations stored in standard file formats. The data engineering 
+framework provides a unified interface for parsing these data sources through 
+an extensible class hierarchy.
+
+\subsection{Abstract Base Class Design}
+The \texttt{OGSDataFile} class serves as an abstract base for all 
+format-specific parsers. It provides:
+
+\begin{itemize}
+  \item \textbf{Regex-Based Extraction}: Configurable regular expression 
+  patterns for extracting seismic picks (phase arrivals) and events 
+  (earthquake hypocenters) from text-based data files
+
+  \item \textbf{Geographic Filtering}: Polygon-based spatial filtering using 
+  matplotlib's Path containment testing to select events within the region 
+  of interest
+
+  \item \textbf{Temporal Filtering}: Date range subsetting for extracting 
+  specific time periods from multi-year catalog files
+
+  \item \textbf{Parquet Output}: Persistence of parsed data in Apache Parquet 
+  columnar format for efficient storage and fast I/O operations
+
+  \item \textbf{Debug Utilities}: Progressive regex testing to identify 
+  which capture group fails during parsing, facilitating format adaptation 
+  and error diagnosis
+\end{itemize}
+
+Subclasses must define format-specific regex patterns 
+(\texttt{RECORD\_EXTRACTOR\_LIST} for picks, \texttt{EVENT\_EXTRACTOR\_LIST} 
+for events) and implement the \texttt{read()} method for file parsing.
+
+\subsection{Supported File Formats}
+The framework supports four primary OGS catalog and input phase formats, each 
+handled by a dedicated parser class. Table~\ref{tab:file_formats} summarizes 
+the supported formats and their contents.
+
+\begin{table}[h]
+\centering
+\caption{Supported OGS catalog and input phase formats and their parser
+         implementations}
+\label{tab:file_formats}
+\begin{tabular}{llp{7cm}}
+\hline
+\textbf{Extension} & \textbf{Parser Class} & \textbf{Content Description} \\
+\hline
+.hpl & \texttt{DataFileHPL} & Catalog and input phase picks with hypocenter 
+  locations, magnitude estimates, quality metrics, and analyst notes \\
+.dat & \texttt{DataFileDAT} & Input phase picks (P and S wave arrival times) in 
+  fixed-width format with onset quality, polarity, and weight codes \\
+.txt & \texttt{DataFileTXT} & Hypocenter location with local magnitude (ML) 
+  and duration magnitude (MD) estimates \\
+.pun & \texttt{DataFilePUN} & Legacy punch card format containing event 
+  hypocenters with quality metrics \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{HPL Format Parser}
+The HPL (Hypocenter Location) format is the most complete OGS catalog format, 
+containing comprehensive event and pick information. The parser extracts:
+
+\begin{itemize}
+  \item \textbf{Event Headers}: Origin time, latitude, longitude, depth, 
+  magnitude, number of picks, azimuthal gap, RMS residual, horizontal and 
+  vertical errors, quality metric
+
+  \item \textbf{Phase Records}: Station code, P-wave onset quality and 
+  polarity, P-wave weight, P-wave arrival time, S-wave onset and weight, 
+  S-wave arrival time
+
+  \item \textbf{Metadata}: Geographic zone classification (Friuli, Veneto, 
+  Slovenia, etc.), event type (local earthquake, explosion, landslide), 
+  localization status, analyst notes
+\end{itemize}
+
+\subsection{DAT Format Parser}
+The DAT format stores phase picks in a fixed-width column structure derived 
+from legacy mainframe systems. Each record contains:
+
+\begin{itemize}
+  \item Station code (4 characters, right-padded)
+  \item P-wave onset quality indicator (e=emergent, i=impulsive, ?=uncertain)
+  \item P-wave first motion polarity (+/-/c/d for compression/dilatation)
+  \item P-wave weight (0-4 quality scale)
+  \item Date-time in compact YYMMDDHHMM format
+  \item P-wave arrival time in seconds and centiseconds
+  \item Optional S-wave data (time, onset, polarity, weight)
+  \item Geographic zone and event type codes
+\end{itemize}
+
+\subsection{TXT Format Parser}
+The TXT format contains event magnitude information in a simple text structure. 
+The parser extracts:
+
+\begin{itemize}
+  \item Local magnitude (ML) estimates
+  \item Duration magnitude (MD) estimates
+  \item Geographic zone and event type codes
+\end{itemize}
+
+\subsection{PUN Format Parser}
+The PUN (punch card) format is a legacy output format containing event 
+summaries. The parser extracts coordinates in degrees-minutes format and 
+converts to decimal degrees, along with quality metrics (GAP, DMIN, RMS, 
+ERH, ERZ) and quality classification codes.
+
+\subsection{Catalog Aggregation and Merging}
+
+The \texttt{DataCatalog} class provides multi-format support and catalog merging 
+capabilities, automatically dispatching to the appropriate format-specific parser 
+based on file extension.
+
+\subsection{Automatic Format Detection}
+The aggregator maintains a mapping between file extensions and parser classes:
+
+\begin{verbatim}
+.hpl → DataFileHPL (hypocenter locations)
+.dat → DataFileDAT (phase picks)
+.txt → DataFileTXT (magnitude information)
+.pun → DataFilePUN (punch card events)
+\end{verbatim}
+
+This design allows transparent processing of mixed-format input directories 
+without explicit format specification.
+
+\subsection{Merge Logic}
+When the merge option is enabled, the aggregator consolidates data from 
+multiple input files into a unified catalog:
+
+\begin{enumerate}
+  \item \textbf{Picks}: Simple concatenation from all input files, with 
+  consistent column naming and data type enforcement
+
+  \item \textbf{Events}: Outer join on time and location, with format-specific 
+  attribute handling:
+  \begin{itemize}
+    \item TXT files contribute magnitude data (ML, MD)
+    \item PUN files contribute hypocenter locations
+    \item HPL files provide primary event information and associated picks
+  \end{itemize}
+\end{enumerate}
+
+\subsection{Output Organization}
+Merged catalogs are persisted in a date-based directory structure:
+
+\begin{verbatim}
+{output}/.all/assignments/{YYYY}-{MM}-{DD}  (picks)
+{output}/.all/events/{YYYY}-{MM}-{DD}       (events)
+\end{verbatim}
+
+The use of Apache Parquet format provides efficient columnar storage with 
+built-in compression, enabling fast analytical queries on large catalogs.
+
+
+
+\begin{comment}
+\section{Visualization Framework}
+
+Although the visualization utilities described below constitute 
+general-purpose tools applicable across multiple stages of the workflow, 
+they are presented here for completeness as they were developed as part 
+of the data engineering infrastructure.
+
+The visualization module provides a comprehensive set of plotting utilities 
+optimized for seismic data analysis and catalog comparison.
+
+\subsection{Base Plotter Class}
+All visualization classes inherit from a common base that provides:
+\begin{itemize}
+  \item Consistent figure sizing and font configuration
+  \item Automated output path construction
+  \item High-resolution (300 DPI) figure export in multiple formats 
+  (PNG, PDF, EPS)
+  \item OGS institutional color palette (blue: \#163771, pink: \#E4007C, 
+  green: \#00e468, orange: \#FF8C00)
+\end{itemize}
+
+\subsection{Specialized Plotters}
+The framework includes purpose-built visualization classes:
+
+\begin{itemize}
+  \item \textbf{Line Plotter}: Time series visualization with multi-trace 
+  overlay support
+
+  \item \textbf{Event Plotter}: Waveform section displays organized by 
+  epicentral distance, with automatic trace normalization, bandpass filtering, 
+  and pick annotation
+
+  \item \textbf{Stream Plotter}: Individual waveform visualization with 
+  channel labeling
+
+  \item \textbf{Day Plotter}: Cumulative event counts over time for 
+  catalog completeness assessment
+
+  \item \textbf{Map Plotter}: Geographic visualization using Cartopy 
+  projections, with support for:
+  \begin{itemize}
+    \item Rectangular and circular study region boundaries
+    \item OGS polygon region overlay
+    \item Station and event scatter plots with custom markers
+    \item Inset regional context maps
+    \item Coastlines, borders, and ocean features
+  \end{itemize}
+
+  \item \textbf{Scatter Plotter}: Generic scatter plot with aspect ratio 
+  control and multi-series support
+
+  \item \textbf{Histogram Plotter}: Distribution visualization with 
+  optional curve fitting, suitable for magnitude-frequency analysis
+
+  \item \textbf{Confusion Matrix Plotter}: Performance evaluation displays 
+  using scikit-learn's \texttt{ConfusionMatrixDisplay}
+\end{itemize}
+
+\subsection{Geodetic Distance Calculations}
+The visualization module includes optimized vectorized functions for computing 
+hypocentral distances:
+
+\begin{equation}
+  d = \sqrt{d_{\text{horizontal}}^2 + \Delta z^2}
+\end{equation}
+
+where $d_{\text{horizontal}}$ is computed using the WGS84 ellipsoid, enabling 
+accurate distance-ordered waveform section displays.
+\end{comment}
+
+\section{Data Storage Strategy}
+
+The data engineering framework employs a hierarchical storage strategy 
+optimized for both archival and analytical access patterns.
+
+\subsection{Raw Data Storage}
+Waveform data are stored in MiniSEED format (the seismological community 
+standard) organized by date hierarchy. This structure facilitates:
+\begin{itemize}
+  \item Incremental acquisition without file locking conflicts
+  \item Date-based parallel processing
+  \item Efficient archival and backup operations
+\end{itemize}
+
+\subsection{Processed Data Storage}
+Catalog data (picks and events) are stored in Apache Parquet format, providing:
+\begin{itemize}
+  \item Columnar compression (typically 5-10x reduction)
+  \item Predicate pushdown for efficient filtering
+  \item Schema evolution support for format updates
+  \item Direct integration with pandas and Spark
+\end{itemize}
+
+\subsection{Intermediate Results}
+Symbolic links are used to share intermediate results between processing 
+stages, reducing storage requirements on shared HPC filesystems while 
+maintaining clear provenance tracking.
+
+\section{Quality Assurance}
+
+The data engineering framework incorporates multiple quality assurance 
+mechanisms:
+
+\begin{itemize}
+  \item \textbf{Input Validation}: Path existence checks, file extension 
+  verification, and date range validation before processing
+
+  \item \textbf{Parse Error Logging}: Detailed logging of unparseable 
+  records with line numbers and partial match information for debugging
+
+  \item \textbf{Progressive Regex Debugging}: Automated identification 
+  of failing capture groups when parsing malformed input
+
+  \item \textbf{Geographic Filtering}: Polygon containment testing to 
+  exclude events outside the region of interest
+
+  \item \textbf{Duplicate Detection}: Temporal proximity checking during 
+  catalog merging to identify and flag potential duplicates
+\end{itemize}
+
+% =============================================================================
+% End of Data Engineering Chapter
+% =============================================================================

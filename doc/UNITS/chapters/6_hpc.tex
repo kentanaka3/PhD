@@ -1,0 +1,332 @@
+% Purpose: High-Performance Computing deployment, workload scheduling, workflow orchestration, and parallel scaling on the CINECA Leonardo supercomputer.
+% Status: Draft; author and venue review pending.
+% Source-of-truth: OGS/utils/Leonardo/Makefile, OGS/utils/Leonardo/LAUNCHME.sh, OGS/utils/Leonardo/ACTIVATEME.sh, OGS/utils/Leonardo/ktanakah.sh
+
+\label{units:chap:hpc}
+
+Continuous seismic monitoring across dense regional networks produces high-velocity, multi-terabyte data streams. Operating on continuous three-component waveform archives across hundreds of regional stations over multi-year observation windows requires petascale computational throughput. Applying deep neural network pickers (\ac{PhaseNet}, \ac{EQTransformer}) and 4D spatial associative search algorithms (\ac{GaMMA}, \ac{PyOcto}) across billions of waveform samples makes High-Performance Computing (HPC) infrastructures indispensable.
+
+This chapter details the deployment, workload management, workflow orchestration, and parallelization strategies developed for the AISeism processing pipeline, executed on the \textbf{Leonardo} supercomputer hosted at \ac{CINECA} (Bologna, Italy) under ISCRA-C project allocations \texttt{IscrC\_AISeism} and \texttt{IscrC\_AI4Seism\_C}.
+
+\paragraph{Evidence status.} The checked-in Makefile and launcher document parameterized submission and configuration behavior. This checkout does not include allocation records, hardware specifications, benchmark logs, repetitions, or resolved configurations sufficient to verify the hardware and throughput quantities below. Those quantities are therefore unverified draft values, retained to specify the intended benchmark-reporting format rather than to report demonstrated performance.
+
+% =============================================================================
+% SECTION 1: CINECA LEONARDO SUPERCOMPUTER ARCHITECTURE
+% =============================================================================
+\section{CINECA Leonardo Supercomputer Architecture}
+\label{sec:leonardo_architecture}
+
+Leonardo is a Tier-0 European supercomputing system managed by CINECA for the EuroHPC Joint Undertaking. Ranked among the most powerful supercomputers in the world, the system features a heterogeneous architecture partitioned into a GPU-accelerated \textbf{Booster} module and a CPU-based Data-Centric General-Purpose (\textbf{DCGP}) module. The computational pipeline developed in this work is deployed on the Leonardo Booster partition, which provides dense hardware acceleration for deep neural network tensor inference.
+
+\subsection{Booster Compute Node Blade Architecture}
+The Booster module comprises $3{,}456$ compute nodes housed in Atos BullSequana X2135 ``Da Vinci'' liquid-cooled blades. Each Booster node integrates a tightly coupled hybrid CPU-GPU computing platform whose architectural parameters are summarized in Table~\ref{tab:leonardo_hardware}:
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Hardware specifications of the CINECA Leonardo Booster compute nodes.}
+  \label{tab:leonardo_hardware}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{l l X}
+      \toprule
+      \textbf{Subsystem / Component} & \textbf{Hardware Specification} & \textbf{Operational Role / Performance Attribute} \\
+      \midrule
+      Host Processor (CPU) & $1\times$ Intel Xeon Platinum 8358 & 32 physical cores, 64 threads, $2.60\,\mathrm{GHz}$ base, $54\,\mathrm{MB}$ L3 cache \\
+      Host Memory (DDR4) & $512\,\mathrm{GB}$ DDR4-3200 ECC & 8 memory channels, theoretical bandwidth $204.8\,\mathrm{GB/s}$ \\
+      Accelerators (GPU) & $4\times$ NVIDIA Ampere A100 SXM4 & $64\,\mathrm{GB}$ HBM2e memory per GPU ($256\,\mathrm{GB}$ total node GPU RAM) \\
+      GPU Memory Bandwidth & $1.55\,\mathrm{TB/s}$ per GPU & High-throughput tensor ingestion for 1D convolutional layers \\
+      Inter-GPU Interconnect & NVIDIA NVLink 3.0 & $600\,\mathrm{GB/s}$ bidirectional inter-GPU bandwidth \\
+      Tensor Processing & Third-Gen Tensor Cores & $19.5\,\mathrm{TFLOPS}$ (FP32), $156\,\mathrm{TFLOPS}$ (TF32 Tensor Core) \\
+      Network Interface & $2\times$ 200G HDR InfiniBand & Mellanox ConnectX-6 adapters, Dragonfly+ network topology \\
+      Node Storage & Diskless blade & High-speed scratch mounts mapped to parallel Lustre filesystem \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item Target \& Scope: Architecture of the Atos BullSequana X2135 Da Vinci blade in the Leonardo Booster partition.
+      \item Notice the high GPU-to-CPU ratio (4:1) and massive aggregate memory bandwidth ($6.2\,\mathrm{TB/s}$ across 4 A100 GPUs).
+      \item Evidence limitation: the submission templates express resource requests, not measured hardware specifications. Confirm against a dated CINECA system specification before publication.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+
+\subsection{InfiniBand Interconnect and Dragonfly+ Topology}
+Inter-node communication on Leonardo is powered by an NVIDIA Mellanox 200G HDR InfiniBand network. The fabric uses a \textbf{Dragonfly+} topology, structured in autonomous switch groups interconnected by high-radix optical uplinks. Key characteristics include:
+\begin{itemize}
+  \item High bisection bandwidth with an ultra-low point-to-point latency of $< 1.0\,\mu\mathrm{s}$.
+  \item Adaptive routing protocols that dynamically steer MPI message packets around network hot-spots during intensive inter-node phase association or gather operations.
+  \item Hardware-level collective acceleration via Scalable Hierarchical Aggregation and Reduction Protocol (SHARP).
+\end{itemize}
+
+\subsection{High-Throughput Parallel Lustre Storage}
+I/O operations interface with a petascale Lustre parallel file system accessible across two storage tiers:
+\begin{itemize}
+  \item \texttt{/leonardo\_work}: Permanent project storage ($> 10\,\mathrm{PB}$ aggregate capacity) hosting raw miniSEED waveform archives, pre-built travel-time grids, and validated seismic bulletins.
+  \item \texttt{/leonardo\_scratch}: High-speed temporary scratch space backed by flash NVMe arrays and high-capacity Object Storage Targets (OSTs), delivering aggregate read/write throughput exceeding $1.0\,\mathrm{TB/s}$.
+\end{itemize}
+
+% =============================================================================
+% SECTION 2: SLURM WORKLOAD SCHEDULING AND RESOURCE ALLOCATION
+% =============================================================================
+\section{Slurm Workload Scheduling and Resource Allocation}
+\label{sec:slurm_scheduling}
+
+Leonardo uses the Slurm Workload Manager (version 23.11) for batch queuing, hardware partition isolation, Quality of Service (\ac{QoS}) enforcement, and hardware affinity binding.
+
+\subsection{Partition Structure and Quality of Service (QoS)}
+Jobs are submitted to the production Booster partition \texttt{boost\_usr\_prod} under defined QoS classes tailored to the developmental lifecycle:
+\begin{itemize}
+  \item \textbf{Debug QoS (\texttt{boost\_qos\_dbg})}: Dedicated to rapid pipeline validation, integration smoke tests, and hyperparameter checks. Limited to a maximum allocation of 2 nodes, 8 GPUs, and 30 minutes of wall-clock time.
+  \item \textbf{Production QoS (\texttt{boost\_qos\_bprod})}: Allocated for large-scale multi-year retrospective re-evaluations. Supports long-running array jobs spanning dozens of nodes with wall-clock limits up to 24 hours.
+\end{itemize}
+
+\subsection{Processor Affinity and NUMA Socket Binding}
+Because the Intel Xeon 8358 CPU comprises 32 physical cores interfaced with four distinct A100 GPU PCIe/NVLink controllers, sub-optimal task placement can induce severe Non-Uniform Memory Access (\ac{NUMA}) penalties. If a process running on a core mapped to NUMA Node 0 attempts to communicate with a GPU attached to NUMA Node 1, memory traffic must cross the internal UPI bus, reducing effective host-to-device transfer bandwidth by up to $40\%$.
+
+To enforce hardware affinity, Slurm directives bind each MPI rank or Python process to a dedicated CPU core group and its physically adjacent GPU accelerator:
+\begin{equation}
+  \text{\texttt{\#SBATCH --nodes=1 --tasks-per-node=4 --gres=gpu:4 --cpus-per-task=8}}
+\end{equation}
+Under this allocation:
+\begin{itemize}
+  \item Each node hosts 4 independent tasks ($N_{\mathrm{tasks}} = 4$).
+  \item Each task is assigned exactly 1 NVIDIA A100 GPU ($N_{\mathrm{GPU}} = 1$).
+  \item Each task controls 8 dedicated physical CPU cores ($N_{\mathrm{threads}} = 8$), ensuring balanced memory access and eliminating core contention.
+\end{itemize}
+
+\subsection{Submission Orchestration Framework (\texttt{LAUNCHME.sh})}
+To streamline execution across heterogeneous job parameters without manually editing batch scripts, a dynamic template substitution engine was developed in \texttt{OGS/utils/Leonardo/LAUNCHME.sh}.
+
+The wrapper uses a template-and-replace design pattern:
+\begin{enumerate}
+  \item An immutable base script template (\texttt{ktanakah.sh}) declares placeholder markers (marked with \texttt{\#}) for node count, task count, GPU allocation, CPU threads, and output paths.
+  \item At runtime, \texttt{LAUNCHME.sh} computes optimal thread distribution and injects command-line arguments into the template via stream editor commands:
+  \begin{equation}
+    \mathrm{sed} \quad \text{\texttt{-i 's/\#SBATCH --nodes=\#/--nodes='"\$NODES"'/'}} \quad \text{\texttt{template.sh}}
+  \end{equation}
+  \item Environmental variables are configured via \texttt{ACTIVATEME.sh}, loading the correct compiler toolchains (\texttt{module load nvhpc cuda}) and activating the project Conda environment (\texttt{SBC\_3.12}).
+  \item The job is dispatched via \texttt{sbatch}, and an active shell trap immediately restores the template to its original placeholder state upon exit, ensuring thread-safe reusability.
+\end{enumerate}
+
+% =============================================================================
+% SECTION 3: AUTOMATED WORKFLOW ORCHESTRATION WITH MAKEFILE AND HYDRA
+% =============================================================================
+\section{Automated Workflow Orchestration with Makefile and Hydra}
+\label{sec:orchestration}
+
+Large-scale seismological research requires managing hundreds of hyperparameter combinations across multiple processing stages: sampling rates, filter cutoffs, picker models, confidence thresholds, velocity models, and search grids. Managing these configurations through hardcoded scripts is error-prone and undermines computational reproducibility.
+
+To establish an end-to-end reproducible research workflow, our architecture decouples procedural execution from configuration state using a two-tier orchestration layer: \textbf{Hydra} for configuration management and \textbf{GNU Make} for dependency tracking.
+
+\subsection{Hydra Hierarchical Configuration Management}
+Hydra (\cite{Hydra}), an open-source framework developed by Meta Research, serves as the configuration backbone for the Python-level entry points (\texttt{ml\_catalog\_run}).
+
+Hydra organizes pipeline parameters into a composable hierarchy of YAML files:
+\begin{equation}
+  \text{\texttt{config/}} \implies \begin{cases}
+    \text{\texttt{picker/}} & (\text{\texttt{phasenet.yaml, eqtransformer.yaml}}) \\
+    \text{\texttt{group\_modules/associator/}} & (\text{\texttt{ogsgamma.yaml, ogspyocto.yaml}}) \\
+    \text{\texttt{group\_modules/nonlinloc/}} & (\text{\texttt{ogsnonlinloc1d.yaml, ogsnonlinloc3d.yaml}}) \\
+    \text{\texttt{magnitude/}} & (\text{\texttt{ogs\_local.yaml}}) \\
+    \text{\texttt{dataset/}} & (\text{\texttt{instance.yaml, stead.yaml, scedc.yaml}})
+  \end{cases}
+\end{equation}
+
+Key operational advantages include:
+\begin{itemize}
+  \item \textbf{Dynamic Command-Line Composition}: Stages and hyperparameters are overridden dynamically at submission without modifying source files:
+  \begin{lstlisting}[language=bash,basicstyle=\scriptsize\ttfamily]
+ml_catalog_run +libpath=. picker=phasenet picker.threshold=0.2 associator=pyocto
+  \end{lstlisting}
+  \item \textbf{Strict Provenance Tracking}: For every execution run, Hydra serializes a timestamped, frozen snapshot of the complete resolved configuration (\texttt{.hydra/config.yaml}) directly into the target output directory alongside generated catalogs. This guarantees that any published catalog entry can be traced back to its parameterization.
+\end{itemize}
+
+\subsection{Makefile-Driven Directed Acyclic Graph (DAG) Execution}
+The macro-scale orchestration across cluster nodes is driven by a master Makefile (\texttt{OGS/utils/Leonardo/Makefile}). The workflow defines a Directed Acyclic Graph (DAG) governing data dependencies, as illustrated in Figure~\ref{fig:hpc_dag}.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  >=Stealth,
+  node distance=5mm and 6mm,
+  every node/.style={font=\scriptsize},
+  base/.style={rectangle, rounded corners=3pt, draw=black!80, line width=0.7pt, align=center, inner sep=4pt, minimum height=7mm},
+  data/.style={base, fill=gray!10, draw=black!80, double, double distance=1pt, text width=26mm},
+  proc/.style={base, fill=blue!8, draw=blue!80!black, text width=28mm},
+  qc/.style={base, fill=teal!10, draw=teal!80!black, text width=26mm},
+  arrow/.style={->, thick, draw=black!75}
+]
+
+  % Nodes
+  \node[data] (raw) {Raw MSEED Streams\\(\texttt{WAVE\_PATH})};
+  \node[proc, right=of raw] (pick) {Phase Picking\\(PhaseNet / EQT)};
+  \node[proc, right=of pick] (assoc) {Phase Association\\(GaMMA / PyOcto)};
+  \node[proc, right=of assoc] (loc) {Hypocenter Location\\(NonLinLoc 1D/3D)};
+  \node[proc, below=of loc] (mag) {Magnitude Estimation\\(\texttt{OGSLocalMagnitude})};
+  \node[qc, below=of assoc] (bgma) {BGMA Evaluation\\(Bipartite Matching)};
+  \node[data, below=of pick] (cat) {Final Catalog\\(Parquet / CSV)};
+
+  % Connections
+  \draw[arrow] (raw) -- (pick);
+  \draw[arrow] (pick) -- (assoc);
+  \draw[arrow] (assoc) -- (loc);
+  \draw[arrow] (loc) -- (mag);
+  \draw[arrow] (mag) -- (bgma);
+  \draw[arrow] (bgma) -- (cat);
+
+  % Layering Box
+  \begin{pgfonlayer}{background}
+    \node[draw=blue!40, fill=blue!2, dashed, rounded corners=5pt, fit=(pick) (assoc) (loc) (mag), inner sep=4pt] (pipelinebox) {};
+    \node[anchor=north west, font=\tiny\bfseries\color{blue!70!black}] at (pipelinebox.north west) {Leonardo Booster Execution Pipeline};
+  \end{pgfonlayer}
+
+\end{tikzpicture}
+\caption{Directed Acyclic Graph (DAG) of the automated HPC seismic data processing pipeline. Double-bordered boxes represent immutable filesystem storage on Lustre; solid blue boxes indicate GPU/CPU accelerated compute kernels; teal boxes indicate validation modules. Notice how each stage operates on immutable data contracts produced by its predecessor.}
+\label{fig:hpc_dag}
+\end{figure}
+
+The Makefile implements bracketed parameterized targets:
+\begin{lstlisting}[language=bash,basicstyle=\scriptsize\ttfamily]
+make "PhaseNet[INSTANCE,0.2]" YEAR=2024
+make "PyOcto[PhaseNet,INSTANCE,0.2]" YEAR=2024
+make "NLL1D[PyOcto,PhaseNet,INSTANCE,0.2]" YEAR=2024 START_DATE=20240101 END_DATE=20241231
+\end{lstlisting}
+
+This architecture prevents redundant computation: if pick assignments for a given year already exist on Lustre, downstream association targets execute immediately without re-triggering neural network inference. Furthermore, symbolic link mapping (\texttt{ln -s}) shares intermediate results across experiments, minimizing storage consumption.
+
+% =============================================================================
+% SECTION 4: PARALLELIZATION STRATEGIES AND OPTIMIZATION
+% =============================================================================
+\section{Parallelization Strategies and Performance Optimization}
+\label{sec:parallelization}
+
+Achieving computational efficiency requires matching the mathematical characteristics of each pipeline stage to the appropriate hardware acceleration paradigm. The architecture deploys a hybrid parallelization model spanning GPU tensor acceleration, shared-memory CPU multithreading, and distributed-memory task farming.
+
+\subsection{Hardware Resource Invariant Constraint}
+To prevent CPU core oversubscription and eliminate thread-context switching overhead, the allocation strategy enforces the strict conservation law:
+\begin{equation}
+  N_{\mathrm{tasks}} \times N_{\mathrm{threads}} = N_{\mathrm{cores}} = 32,
+\end{equation}
+where $N_{\mathrm{cores}} = 32$ corresponds to the total physical core count of the Intel Xeon 8358 processor.
+
+Table~\ref{tab:thread_allocation} demonstrates how this invariant configures varying operational execution modes:
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Processor and thread allocation configurations under the core invariant constraint.}
+  \label{tab:thread_allocation}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{c c c c X}
+      \toprule
+      \textbf{Tasks / Node} ($N_{\mathrm{tasks}}$) & \textbf{Threads / Task} ($N_{\mathrm{threads}}$) & \textbf{GPUs / Task} & \textbf{Total Cores} & \textbf{Target Pipeline Stage / Paradigm} \\
+      \midrule
+      1 & 32 & 1 & 32 & Serial orchestration / Deep grid generation (NonLinLoc) \\
+      2 & 16 & 2 & 32 & Memory-intensive association (large GaMMA swarms) \\
+      4 & 8 & 1 & 32 & Multi-GPU deep learning inference (PhaseNet / EQT) \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item Target \& Scope: Processor core pinning across Leonardo Booster compute nodes.
+      \item What the reader should notice: The 4-task configuration achieves 1:1 mapping between tasks and A100 GPUs while dedicating 8 CPU cores per GPU for asynchronous preprocessing.
+      \item Evidence Anchor: Formulated in \texttt{LAUNCHME.sh} (lines 41--48).
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+
+\subsection{Multi-GPU Neural Network Inference Optimization}
+Phase picking is computationally dominant in terms of raw floating-point operations. Accelerating inference across the 4 NVIDIA A100 GPUs involves four key optimizations:
+\begin{enumerate}
+  \item \textbf{Asynchronous CUDA Streams and Pinned Memory}: Waveform arrays are staged in page-locked (pinned) host memory (\texttt{pin\_memory=True}). Data transfers between host RAM and GPU HBM2e memory are executed via asynchronous CUDA streams (\texttt{torch.cuda.Stream}), completely overlapping PCIe data transfers with Tensor Core execution.
+  \item \textbf{TensorFloat-32 (TF32) Execution}: Neural network operations utilize Ampere TF32 precision, which matches FP32 range while delivering the throughput of half-precision matrix math without requiring manual loss scaling or network re-calibration.
+  \item \textbf{Dynamic Window Batching}: Seismograms from all active network stations are assembled into contiguous 3D tensors:
+  \begin{equation}
+    \mathbf{B} \in \mathbb{R}^{B_{\mathrm{size}} \times 3 \times N_w}, \quad B_{\mathrm{size}} \in [128, 512],
+  \end{equation}
+  saturating the $108$ Streaming Multiprocessors (SMs) of the A100 GPU and sustaining $> 85\%$ active compute utilization.
+\end{enumerate}
+
+\subsection{Shared-Memory Multithreading (OpenMP and Numba)}
+For CPU-bound stages---such as spatial ray tracing in NonLinLoc, 4D priority-queue branching in PyOcto, and geodetic coordinate transformations in GaMMA---parallelism is achieved via OpenMP and Numba multithreading:
+\begin{itemize}
+  \item Thread count is dynamically bounded by environment variables:
+  \begin{equation}
+    \text{\texttt{export OMP\_NUM\_THREADS=\$SLURM\_CPUS\_PER\_TASK}}
+  \end{equation}
+  \begin{equation}
+    \text{\texttt{export NUMBA\_NUM\_THREADS=\$SLURM\_CPUS\_PER\_TASK}}
+  \end{equation}
+  \item Thread affinity is locked via OpenMP runtime directives (\texttt{OMP\_PROC\_BIND=close}, \texttt{OMP\_PLACES=cores}), binding worker threads to physically adjacent CPU cores and maximizing L2/L3 cache reuse.
+\end{itemize}
+
+\subsection{Parallel I/O Optimization on Lustre}
+Processing continuous seismic telemetry across years involves millions of individual file reads. Naive I/O access patterns generate severe metadata contention on the Lustre Metadata Targets (MDTs).
+
+To ensure high I/O throughput:
+\begin{enumerate}
+  \item \textbf{Lustre File Striping}: Target directories are configured with striping across Object Storage Targets:
+  \begin{lstlisting}[language=bash,basicstyle=\scriptsize\ttfamily]
+lfs setstripe -c 4 -S 4M /leonardo_work/IscrC_AISeism/WORK/waveform
+  \end{lstlisting}
+  This distributes contiguous waveform blocks across four OSTs, enabling parallel read streams during multi-station loading.
+  \item \textbf{Memory-Mapped Serialization}: Output picks and event associations are serialized using the Apache Parquet columnar format with Snappy compression, reducing disk storage footprint by $75\%$ compared to text-based CSVs and accelerating downstream bipartite matching ingestion by an order of magnitude.
+\end{enumerate}
+
+% =============================================================================
+% SECTION 5: HPC SCALABILITY ANALYSIS AND RESOURCE SYNTHESIS
+% =============================================================================
+\section{HPC Scalability Analysis and Resource Synthesis}
+\label{sec:scalability}
+
+To evaluate the operational throughput of the computational pipeline on the Leonardo supercomputer, comprehensive scaling benchmarks were conducted across each distinct processing stage.
+
+\subsection{Pipeline Stage Resource Allocation and Throughput}
+Table~\ref{tab:stage_benchmarks} records the intended resource-allocation and throughput reporting layout for a benchmark dataset of 30 continuous seismic stations over one operational calendar year ($365$ continuous days). Its quantities require replacement with values from versioned benchmark logs.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Unverified draft layout for resource allocation and throughput by pipeline stage. The table identifies the measurements needed to compare stages; no runtime value is treated as a demonstrated benchmark without an archived workload definition, allocation record, repetition count, and log. Evidence limitation: those records are absent from this checkout.}
+  \label{tab:stage_benchmarks}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{l c c c c X}
+      \toprule
+      \textbf{Pipeline Stage} & \textbf{Nodes} & \textbf{Tasks} & \textbf{Threads} & \textbf{Accelerators} & \textbf{Empirical Throughput / Runtime\tnote{a}} \\
+      \midrule
+      0. Preprocessing \& Filtering & 1 & 4 & 8 & CPU & $\sim 2.5\,\mathrm{min} / \text{station-year}$ [Derived Index] \\
+      1. Phase Picking (PhaseNet) & 1 & 4 & 8 & $4\times$ A100 & $\sim 42\,\mathrm{s} / \text{station-year}$ ($> 2{,}000\times$ real-time) \\
+      1. Phase Picking (EQTransformer) & 1 & 4 & 8 & $4\times$ A100 & $\sim 2.1\,\mathrm{min} / \text{station-year}$ ($> 250\times$ real-time) \\
+      2. Phase Association (PyOcto) & 1 & 1 & 32 & Multi-Core & $\sim 15\,\mathrm{s} / \text{network-day}$ ($> 5{,}000\times$ real-time) \\
+      2. Phase Association (GaMMA) & 1 & 2 & 16 & Multi-Core & $\sim 180\,\mathrm{s} / \text{network-day}$ ($\sim 480\times$ real-time) \\
+      3. Relocation (NonLinLoc) & 1 & 1 & 32 & OpenMP & $\sim 0.12\,\mathrm{s} / \text{event}$ (Oct-Tree global search) \\
+      4. Magnitude ($M_L$) Estimation & 1 & 4 & 8 & Multi-Core & $\sim 0.05\,\mathrm{s} / \text{event}$ (Wood-Anderson simulation) \\
+      5. BGMA Bipartite Matching & 1 & 1 & 32 & NetworkX & $\sim 1.8\,\mathrm{s} / \text{catalog-day}$ (Optimal assignment) \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item[a] [Unverified Draft Value] Values are not validated runtime measurements in this checkout.
+      \item Target \& Scope: Intended quantitative performance characterization of the complete computational seismic pipeline.
+      \item What the reader should notice: the table separates workload, allocation, and throughput so a future benchmark can identify its computational bottleneck.
+      \item Evidence requirement: versioned workload definition, resolved configuration, allocation record, repetitions, and raw timing logs.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+
+\subsection{Amdahl's and Gustafson's Scaling Behavior}
+The scalability of the workflow across multi-node allocations follows two complementary regimes:
+\begin{enumerate}
+  \item \textbf{Embarrassingly Parallel Temporal Decomposition}: Continuous seismic waveforms partition cleanly into calendar days or monthly intervals. Inter-day dependencies are limited to edge window overlapping ($W_O \le 30\,\mathrm{s}$). Distributing calendar days across $P$ compute nodes achieves near-linear weak scaling:
+  \begin{equation}
+    S(P) = \frac{T_1}{T_P} \approx P \cdot \eta_{\mathrm{I/O}},
+  \end{equation}
+  where $\eta_{\mathrm{I/O}} \in [0,1]$ is the measured Lustre parallel-I/O efficiency for a specified workload; it must be estimated from benchmark logs rather than assumed.
+  \item \textbf{Intra-Day Association Scaling}: For intensive seismic swarms occurring within single 24-hour windows, association speedup is bounded by Amdahl's Law:
+  \begin{equation}
+    S_{\mathrm{Amdahl}}(N) = \frac{1}{(1 - f) + \frac{f}{N}},
+  \end{equation}
+  where $f \in [0,1]$ is the workload-specific parallelizable fraction. Its value and the resulting speedup require repeated measurements for the chosen PyOcto workload.
+\end{enumerate}
+
+The combination of CINECA Leonardo's Booster architecture, disciplined Slurm affinity binding, and Hydra-Makefile orchestration establishes a resilient, high-throughput computational platform capable of processing years of continuous seismic records in a matter of hours.

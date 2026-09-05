@@ -1,0 +1,183 @@
+\chapter{Pipeline Configuration}
+\label{app:config}
+
+The following YAML configuration file defines the complete computational pipeline for automated seismic phase picking and earthquake catalog generation. This configuration instantiates all modules described in Chapter~\ref{chap:Pipeline}, including data access, phase picking, event association, hypocenter location, and magnitude estimation.
+
+\begin{lstlisting}[language=yaml,firstnumber=1]
+log_level: DEBUG
+output_path: catalogs/OGS
+data:
+  _target_: ml_catalog.data.SquirrelDataSource
+  env: ogsDB
+  persistent: v1
+  check: false
+  paths:
+  - /Volumes/Expansion/KEN/waveforms/
+  - /Users/admin/Desktop/OGS_Catalog/station/
+  channel_priorities:
+  - HH?
+  - EH?
+  - HN?
+  - HG?
+  - BH?
+  starttime: '2024-03-20'
+  endtime: '2024-06-20'
+  velocity_model:
+    _target_: pandas.read_csv
+    filepath_or_buffer: OGS/data/ogs1d.csv
+group_modules:
+  picker:
+    _target_: ml_catalog.modules.SeisBenchPicker
+    model:
+      _target_: seisbench.models.PhaseNet.from_pretrained
+      name: phd_ken_tanaka
+    classify_args:
+      P_threshold: 0.1
+      S_threshold: 0.1
+      batch_size: 16384
+    amplitude_extractor:
+      _target_: OGS.src.ogspicker.OGSAmplitudeExtractor
+  associator:
+    _target_: ml_catalog.modules.GammaAssociator
+    crs:
+      _target_: pyproj.crs.CRS.from_user_input
+      value: +proj=sterea +lon_0=12 +lat_0=46 +units=km +type=crs
+    config:
+      dims:
+      - x(km)
+      - y(km)
+      - z(km)
+      use_dbscan: true
+      use_amplitude: false
+      x(km):
+      - -300
+      - 400
+      y(km):
+      - -350
+      - 250
+      z(km):
+      - 0
+      - 40
+      vel:
+        p: 5.85
+        s: 3.28
+      method: BGMM
+      oversample_factor: 5
+      dbscan_eps: 13.4
+      dbscan_min_samples: 3
+      min_picks_per_eq: 5
+      min_p_picks_per_eq: 3
+      min_s_picks_per_eq: 2
+      covariance_prior_pre:
+      - 5.0
+      - 5.0
+      max_sigma11: 1.0
+  qcpicks:
+    _target_: OGS.src.ogsqc.OGSPickStatQC
+    total_picks: 6
+    p_and_s_picks: 3
+  nonlinloc:
+    _target_: ml_catalog.modules.NonLinLoc
+    _convert_: partial
+    CONTROL:
+    - 1
+    - 42
+    TRANS:
+    - TRANS_MERC
+    - WGS-84
+    - 44.3
+    - 9.5
+    - 0.0
+    VGTYPE:
+    - - P
+    - - S
+    VGGRID:
+    - 2
+    - 9000
+    - 550
+    - 0.0
+    - 0.0
+    - -5.0
+    - 0.1
+    - 0.1
+    - 0.1
+    - SLOW_LEN
+    GTMODE:
+    - GRID2D
+    - ANGLES_YES
+    GT_PLFD:
+    - 0.001
+    - 0
+    LOCSIG:
+    - ML Catalog
+    LOCHYPOUT:
+    - SAVE_NLLOC_ALL
+    - SAVE_HYPOINV_SUM
+    LOCSEARCH:
+    - OCT
+    - 50
+    - 50
+    - 5
+    - 0.01
+    - 50000
+    - 5000
+    - 1
+    - 1
+    LOCGRID:
+    - 600
+    - 450
+    - 50
+    - 0
+    - 0
+    - 0
+    - 1
+    - 1
+    - 1
+    - PROB_DENSITY
+    - SAVE
+    LOCMETH:
+    - EDT_OT_WT
+    - 9999.0
+    - 4
+    - -1
+    - -1
+    - -1
+    - 10
+    - -1.0
+    - 1
+    LOCGAU:
+    - 0.15
+    - 1.0
+    LOCGAU2:
+    - 0.05
+    - 0.1
+    - 3.0
+    LOCQUAL2ERR:
+    - 0.1
+    - 0.5
+    - 1.0
+    - 2.0
+    - 99999.9
+  magnitude:
+    _target_: OGS.src.ogsmagnitude.OGSLocalMagnitude
+    station_corrections:
+      _target_: pandas.read_csv
+      filepath_or_buffer: OGS/data/Magnitude/LocalMagnitude/mag_correction.csv
+    ignore_stations:
+      _target_: pandas.read_csv
+      filepath_or_buffer: OGS/data/Magnitude/LocalMagnitude/ignore_stations.csv
+merge_module:
+  _target_: ml_catalog.base.MergeEvents
+joint_modules: {}
+builder:
+  outputs:
+  - events
+  - assignments
+cluster:
+  _target_: dask.distributed.LocalCluster
+  n_workers: 1
+  threads_per_worker: 1
+  processes: false
+  dashboard_address: :8989
+libpath: .
+\end{lstlisting}

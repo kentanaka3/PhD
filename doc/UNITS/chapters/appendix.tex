@@ -1,0 +1,400 @@
+% Purpose: Historical Hydra YAML example and parameter dictionaries, with explicit separation from the current checked-in configuration.
+% Status: Draft | Under Review; configuration provenance pending.
+% Source-of-truth: OGS/config/, doc/MHPC/chapters/appendix.tex, ml_catalog configuration schemas.
+
+\label{chap:appendix}
+
+\chapter{Pipeline Configuration and Parameter Reference}
+\label{units:app:config}
+
+This appendix provides the complete, production-grade \textbf{Hydra} (\cite{Hydra}) configuration file and associated parameter dictionaries governing the automated machine-learning seismic processing pipeline. The pipeline architecture decouples procedural execution logic from runtime parameters, instantiating all components dynamically via reflection (\texttt{\_target\_} bindings): continuous waveform data ingestion via Pyrocko \texttt{SquirrelDataSource}, deep-learning phase picking via \texttt{SeisBenchPicker}, Bayesian spatiotemporal association via \texttt{GammaAssociator}, pick quality control via \texttt{OGSPickStatQC}, non-linear probabilistic hypocenter relocation via \texttt{NonLinLoc}, calibrated Richter local magnitude estimation via \texttt{OGSLocalMagnitude}, and asynchronous distributed execution via a \texttt{Dask} cluster.
+
+Section~\ref{sec:app_yaml} presents the complete, executable YAML configuration manifest. Sections~\ref{sec:app_data_params} through~\ref{sec:app_loc_mag_params} provide detailed parameter dictionaries formatted in publication-grade \texttt{booktabs} tables, documenting parameter names, data types, configured values, epistemic categories, and operational physical semantics.
+
+% =============================================================================
+% SECTION 1: PRODUCTION HYDRA YAML MANIFEST
+% =============================================================================
+\section{Historical Hydra YAML Example and Current Configuration Boundary}
+\label{sec:app_yaml}
+
+The following listing is an unverified historical configuration example retained to explain the intended parameter structure. It is not the exact configuration of a reproducible run and must not be executed as-is. In particular, it differs from the current checked-in configuration in data-source binding, waveform paths, velocity-model path, and GaMMA parameters. A publication-ready appendix must replace it with an archived resolved Hydra configuration, its hash, code revision, command, run identifier, and reviewer approval.
+
+\begin{lstlisting}[language=yaml,basicstyle=\ttfamily\scriptsize,frame=single,caption={Unverified historical Hydra configuration example. The listing illustrates configuration fields but differs from the current checked-in YAML and is not evidence of a production run.},label={lst:production_hydra_yaml}]
+log_level: DEBUG
+output_path: catalogs/OGS
+data:
+  _target_: ml_catalog.data.SquirrelDataSource
+  env: ogsDB
+  persistent: v1
+  check: false
+  paths:
+  - /leonardo_work/IscrC_AISeism/WORK/waveform/
+  - /leonardo_work/IscrC_AISeism/PhD/OGS/data/station/
+  channel_priorities:
+  - HH?
+  - EH?
+  - HN?
+  - HG?
+  - BH?
+  starttime: '2024-03-20'
+  endtime: '2024-06-20'
+  velocity_model:
+    _target_: pandas.read_csv
+    filepath_or_buffer: OGS/data/ogs1d.csv
+group_modules:
+  picker:
+    _target_: ml_catalog.modules.SeisBenchPicker
+    model:
+      _target_: seisbench.models.PhaseNet.from_pretrained
+      name: phd_ken_tanaka
+    classify_args:
+      P_threshold: 0.1
+      S_threshold: 0.1
+      batch_size: 16384
+    amplitude_extractor:
+      _target_: OGS.src.ogspicker.OGSAmplitudeExtractor
+  associator:
+    _target_: ml_catalog.modules.GammaAssociator
+    crs:
+      _target_: pyproj.crs.CRS.from_user_input
+      value: +proj=sterea +lon_0=12 +lat_0=46 +units=km +type=crs
+    config:
+      dims:
+      - x(km)
+      - y(km)
+      - z(km)
+      use_dbscan: true
+      use_amplitude: false
+      x(km):
+      - -300
+      - 400
+      y(km):
+      - -350
+      - 250
+      z(km):
+      - 0
+      - 40
+      vel:
+        p: 5.85
+        s: 3.28
+      method: BGMM
+      oversample_factor: 5
+      dbscan_eps: 13.4
+      dbscan_min_samples: 3
+      min_picks_per_eq: 5
+      min_p_picks_per_eq: 3
+      min_s_picks_per_eq: 2
+      covariance_prior_pre:
+      - 5.0
+      - 5.0
+      max_sigma11: 1.0
+  qcpicks:
+    _target_: OGS.src.ogsqc.OGSPickStatQC
+    total_picks: 6
+    p_and_s_picks: 3
+  nonlinloc:
+    _target_: ml_catalog.modules.NonLinLoc
+    _convert_: partial
+    CONTROL:
+    - 1
+    - 42
+    TRANS:
+    - TRANS_MERC
+    - WGS-84
+    - 44.3
+    - 9.5
+    - 0.0
+    VGTYPE:
+    - - P
+    - - S
+    VGGRID:
+    - 2
+    - 9000
+    - 550
+    - 0.0
+    - 0.0
+    - -5.0
+    - 0.1
+    - 0.1
+    - 0.1
+    - SLOW_LEN
+    GTMODE:
+    - GRID2D
+    - ANGLES_YES
+    GT_PLFD:
+    - 0.001
+    - 0
+    LOCSIG:
+    - ML Catalog
+    LOCHYPOUT:
+    - SAVE_NLLOC_ALL
+    - SAVE_HYPOINV_SUM
+    LOCSEARCH:
+    - OCT
+    - 50
+    - 50
+    - 5
+    - 0.01
+    - 50000
+    - 5000
+    - 1
+    - 1
+    LOCGRID:
+    - 600
+    - 450
+    - 50
+    - 0
+    - 0
+    - 0
+    - 1
+    - 1
+    - 1
+    - PROB_DENSITY
+    - SAVE
+    LOCMETH:
+    - EDT_OT_WT
+    - 9999.0
+    - 4
+    - -1
+    - -1
+    - -1
+    - 10
+    - -1.0
+    - 1
+    LOCGAU:
+    - 0.15
+    - 1.0
+    LOCGAU2:
+    - 0.05
+    - 0.1
+    - 3.0
+    LOCQUAL2ERR:
+    - 0.1
+    - 0.5
+    - 1.0
+    - 2.0
+    - 99999.9
+  magnitude:
+    _target_: OGS.src.ogsmagnitude.OGSLocalMagnitude
+    station_corrections:
+      _target_: pandas.read_csv
+      filepath_or_buffer: OGS/data/Magnitude/LocalMagnitude/mag_correction.csv
+    ignore_stations:
+      _target_: pandas.read_csv
+      filepath_or_buffer: OGS/data/Magnitude/LocalMagnitude/ignore_stations.csv
+merge_module:
+  _target_: ml_catalog.base.MergeEvents
+joint_modules: {}
+builder:
+  outputs:
+  - events
+  - assignments
+cluster:
+  _target_: dask.distributed.LocalCluster
+  n_workers: 1
+  threads_per_worker: 1
+  processes: false
+  dashboard_address: :8989
+libpath: .
+\end{lstlisting}
+
+% =============================================================================
+% SECTION 2: DATA SOURCE AND PICKER PARAMETER DICTIONARIES
+% =============================================================================
+\section{Data Ingestion and Phase Picker Parameter Dictionaries}
+\label{sec:app_data_params}
+
+Table~\ref{tab:app_data_dictionary} documents the parameters governing waveform and station metadata ingestion via Pyrocko Squirrel. Table~\ref{tab:app_picker_dictionary} details the operational parameters for deep-learning phase picking.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Configuration parameter dictionary for waveform data ingestion (\texttt{SquirrelDataSource}).}
+  \label{tab:app_data_dictionary}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{l l l c X}
+      \toprule
+      \textbf{Parameter} & \textbf{Data Type} & \textbf{Configured Value} & \textbf{Epistemic Tag\tnote{a}} & \textbf{Operational Semantics / Description} \\
+      \midrule
+      \texttt{\_target\_} & Class Path & \texttt{SquirrelDataSource} & [System Architecture] & Pyrocko Squirrel high-performance waveform database interface \\
+      \texttt{env} & String & \texttt{ogsDB} & [System Architecture] & Local SQLite database environment tag for indexing metadata \\
+      \texttt{persistent} & String & \texttt{v1} & [System Architecture] & Database cache persistence schema version \\
+      \texttt{check} & Boolean & \texttt{false} & [System Architecture] & Bypasses runtime SHA-256 trace checksums to accelerate I/O \\
+      \texttt{paths} & List[Path] & Lustre waveform \& XML & [Observed] & Storage endpoints for continuous miniSEED and StationXML \\
+      \texttt{channel\_priorities} & List[Regex] & \texttt{[HH?, EH?, HN?, ...]} & [Analyst-Normalized] & Sensor hierarchy: High-Gain Broadband $\to$ Short-Period $\to$ Accelerometer \\
+      \texttt{starttime} & ISO Date & \texttt{'2024-03-20'} & [Observed] & Beginning timestamp of continuous observation horizon (00:00:00 UTC) \\
+      \texttt{endtime} & ISO Date & \texttt{'2024-06-20'} & [Observed] & Terminating timestamp of continuous observation horizon (23:59:59 UTC) \\
+      \texttt{velocity\_model} & CSV Target & \texttt{OGS/data/ogs1d.csv} & [Analyst-Normalized] & Regional 1D crustal velocity profile ingested into pandas \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item[a] Epistemic tagging: \texttt{[System Architecture]} denotes runtime infrastructure bindings; \texttt{[Observed]} denotes empirical sensor files; \texttt{[Analyst-Normalized]} denotes regional observatory conventions.
+      \item Target \& Scope: Ingestion and caching settings for multi-station miniSEED waveform streams.
+      \item What the reader should notice: The channel priority hierarchy guarantees high-gain broadband streams are selected preferentially while preserving strong-motion channels during clipping.
+      \item Evidence Anchor: Formulated in \texttt{ml\_catalog.data.SquirrelDataSource}.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Configuration parameter dictionary for deep-learning phase picking (\texttt{SeisBenchPicker}).}
+  \label{tab:app_picker_dictionary}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{l l l c X}
+      \toprule
+      \textbf{Parameter} & \textbf{Data Type} & \textbf{Configured Value} & \textbf{Epistemic Tag} & \textbf{Operational Semantics / Description} \\
+      \midrule
+      \texttt{\_target\_} & Class Path & \texttt{SeisBenchPicker} & [System Architecture] & Modular picker wrapping SeisBench pre-trained PyTorch models \\
+      \texttt{model.\_target\_} & Class Method & \texttt{PhaseNet.from\_pretrained} & [Model Architecture] & Instantiates PhaseNet 1D U-Net neural architecture \\
+      \texttt{model.name} & String & \texttt{phd\_ken\_tanaka} & [Model Architecture] & Model checkpoint fine-tuned on the Italian INSTANCE corpus \\
+      \texttt{P\_threshold} & Float & $0.1$ (Baseline) & [Model Hypothesis] & Minimum posterior probability threshold for P-wave peak acceptance \\
+      \texttt{S\_threshold} & Float & $0.1$ (Baseline) & [Model Hypothesis] & Minimum posterior probability threshold for S-wave peak acceptance \\
+      \texttt{batch\_size} & Integer & \num{16384} & [System Architecture] & Inference window batch size saturating NVIDIA A100 Tensor Cores \\
+      \texttt{amplitude\_extractor} & Class Path & \texttt{OGSAmplitudeExtractor} & [Derived Metric] & Extracts zero-to-peak amplitude for downstream local magnitude \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item Target \& Scope: Neural network inference parameters for continuous phase onset detection.
+      \item What the reader should notice: Large batch sizing (\num{16384}) maximizes GPU tensor core occupancy, achieving $>2{,}000\times$ real-time inference throughput.
+      \item Evidence Anchor: Implemented in \texttt{OGS/src/ogspicker.py}.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+
+% =============================================================================
+% SECTION 3: PHASE ASSOCIATOR AND QC PARAMETER DICTIONARIES
+% =============================================================================
+\section{Phase Associator and Quality Control Parameter Dictionaries}
+\label{sec:app_assoc_qc_params}
+
+Table~\ref{tab:app_gamma_dictionary} documents the parameters governing the Bayesian Gaussian Mixture Model Associator (\texttt{GammaAssociator}). Table~\ref{tab:app_qc_dictionary} outlines the quality-control gates enforced by \texttt{OGSPickStatQC}.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Configuration parameter dictionary for Bayesian phase association (\texttt{GammaAssociator}).}
+  \label{tab:app_gamma_dictionary}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{l l l c X}
+      \toprule
+      \textbf{Parameter} & \textbf{Data Type} & \textbf{Configured Value} & \textbf{Epistemic Tag} & \textbf{Operational Semantics / Description} \\
+      \midrule
+      \texttt{crs.value} & Proj4 String & \texttt{+proj=sterea ...} & [Analyst-Normalized] & Conformal stereographic projection centered at $(12^\circ\,\mathrm{E}, 46^\circ\,\mathrm{N})$ \\
+      \texttt{dims} & List[String] & \texttt{[x(km), y(km), z(km)]} & [System Architecture] & Spatial coordinate axes in kilometers for distance calculations \\
+      \texttt{x(km), y(km)} & Pair[Float] & $[-300, 400], [-350, 250]$ & [Analyst-Normalized] & Lateral spatial bounding box enclosing regional network aperture \\
+      \texttt{z(km)} & Pair[Float] & $[0, 40]$ & [Analyst-Normalized] & Seismogenic crustal depth search range ($0\text{--}40\,\unit{\kilo\meter}$) \\
+      \texttt{vel.p, vel.s} & Float [$\unit{\kilo\meter/\second}$] & $5.85, 3.28$ & [Analyst-Normalized] & Apparent body-wave velocities for initial half-space travel times \\
+      \texttt{method} & String & \texttt{BGMM} & [Model Architecture] & Bayesian Gaussian Mixture Model with Dirichlet process priors \\
+      \texttt{use\_dbscan} & Boolean & \texttt{true} & [System Architecture] & Enables spatiotemporal DBSCAN pre-clustering to discard noise \\
+      \texttt{dbscan\_eps} & Float [$\unit{\second}$] & $13.4$ & [Model Hypothesis] & Maximum spatiotemporal distance threshold for DBSCAN connectivity \\
+      \texttt{dbscan\_min\_samples} & Integer & $3$ & [Model Hypothesis] & Minimum neighboring picks required to seed a DBSCAN cluster \\
+      \texttt{oversample\_factor} & Integer & $5$ & [System Architecture] & Time oversampling multiplier during EM initialization \\
+      \texttt{min\_picks\_per\_eq} & Integer & $5$ & [Analyst-Normalized] & Minimum total picks required to instantiate an earthquake event \\
+      \texttt{min\_p\_picks\_per\_eq} & Integer & $3$ & [Analyst-Normalized] & Minimum P-wave arrivals required per associated event \\
+      \texttt{min\_s\_picks\_per\_eq} & Integer & $2$ & [Analyst-Normalized] & Minimum S-wave arrivals required to constrain focal depth \\
+      \texttt{covariance\_prior\_pre} & Pair[Float] & $[5.0, 5.0]$ & [Model Hypothesis] & Prior variance scale for horizontal and vertical travel-time misfits \\
+      \texttt{max\_sigma11} & Float & $1.0$ & [Model Hypothesis] & Maximum allowable primary eigenvalue for cluster spatial covariance \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item Target \& Scope: Clustering and spatial domain constraints for Bayesian phase association.
+      \item What the reader should notice: The requirement for at least 3 P and 2 S picks ensures that candidate events possess sufficient degrees of freedom for initial hypocentral stability.
+      \item Evidence Anchor: The current source is \texttt{OGS/config/group\_modules/associator/ogsgamma.yaml}; values in this table describe the historical example and require run-level confirmation.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Configuration parameter dictionary for pick quality control (\texttt{OGSPickStatQC}).}
+  \label{tab:app_qc_dictionary}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{l l l c X}
+      \toprule
+      \textbf{Parameter} & \textbf{Data Type} & \textbf{Configured Value} & \textbf{Epistemic Tag} & \textbf{Operational Semantics / Description} \\
+      \midrule
+      \texttt{\_target\_} & Class Path & \texttt{OGSPickStatQC} & [System Architecture] & Post-association quality control module \\
+      \texttt{total\_picks} & Integer & $6$ & [Analyst-Normalized] & Minimum associated picks required for event survival into location \\
+      \texttt{p\_and\_s\_picks} & Integer & $3$ & [Analyst-Normalized] & Minimum stations recording both P and S arrivals \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item Target \& Scope: Quality-control filter gating associated event hypotheses prior to NonLinLoc inversion.
+      \item What the reader should notice: Enforcing 3 co-located P and S stations eliminates unconstrained hypocenters with infinite trade-offs between depth and origin time.
+      \item Evidence Anchor: Implemented in \texttt{OGS/src/ogsqc.py}.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+
+% =============================================================================
+% SECTION 4: LOCATION AND MAGNITUDE PARAMETER DICTIONARIES
+% =============================================================================
+\section{Hypocenter Location and Magnitude Parameter Dictionaries}
+\label{sec:app_loc_mag_params}
+
+Table~\ref{tab:app_nll_dictionary} specifies the NonLinLoc inversion cards. Table~\ref{tab:app_mag_cluster_dictionary} details local magnitude estimation and Dask parallel cluster parameters.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Configuration parameter dictionary for non-linear hypocenter location (\texttt{NonLinLoc}).}
+  \label{tab:app_nll_dictionary}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{l l l c X}
+      \toprule
+      \textbf{NLL Card} & \textbf{Data Type} & \textbf{Configured Value} & \textbf{Epistemic Tag} & \textbf{Operational Semantics / Description} \\
+      \midrule
+      \texttt{TRANS} & Statement & \texttt{TRANS\_MERC WGS-84 ...} & [Analyst-Normalized] & Transverse Mercator projection; origin $(9.5^\circ\,\mathrm{E}, 44.3^\circ\,\mathrm{N})$ \\
+      \texttt{VGGRID} & Grid Spec & $9000 \times 550$, $0.1\,\unit{\kilo\meter}$ & [System Architecture] & High-resolution 2D velocity lookup grid ($100\,\unit{\meter}$ node spacing) \\
+      \texttt{GTMODE} & Mode & \texttt{GRID2D ANGLES\_YES} & [System Architecture] & Computes take-off angles and ray paths via Podvin-Lecomte solver \\
+      \texttt{LOCSEARCH} & Search Spec & \texttt{OCT 50 50 5 0.01 ...} & [Model Architecture] & Oct-Tree importance sampling: initial cells, max nodes (\num{50000}) \\
+      \texttt{LOCGRID} & Grid Bounds & $600 \times 450 \times 50\,\unit{\kilo\meter}$ & [Analyst-Normalized] & 3D search domain enclosing regional crustal volume down to $50\,\unit{\kilo\meter}$ \\
+      \texttt{LOCMETH} & Inversion & \texttt{EDT\_OT\_WT 9999.0 4 ...} & [Model Architecture] & Equal Differential Time formulation; minimum 4 station pairs \\
+      \texttt{LOCGAU} & Error Spec & $0.15\,\unit{\second}, 1.0\,\unit{\second}$ & [Analyst-Normalized] & Correlation length and theoretical crustal travel-time error \\
+      \texttt{LOCQUAL2ERR} & List[Float] & \texttt{[0.1, 0.5, 1.0, 2.0, ...]} & [Analyst-Normalized] & Maps pick weight classes (0--4) to observational uncertainties in seconds \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item Target \& Scope: NonLinLoc probabilistic relocation cards under the 1D crustal model.
+      \item What the reader should notice: The EDT formulation decouples origin time from spatial coordinates, rendering hypocentral convergence robust against outlier picks.
+      \item Evidence Anchor: The current source is \texttt{OGS/config/group\_modules/nonlinloc/ogsnonlinloc1d.yaml}; values in this table describe the historical example and require run-level confirmation.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Configuration parameter dictionary for magnitude estimation and Dask execution.}
+  \label{tab:app_mag_cluster_dictionary}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{l l l c X}
+      \toprule
+      \textbf{Parameter} & \textbf{Data Type} & \textbf{Configured Value} & \textbf{Epistemic Tag} & \textbf{Operational Semantics / Description} \\
+      \midrule
+      \texttt{magnitude.\_target\_} & Class Path & \texttt{OGSLocalMagnitude} & [System Architecture] & Synthetic Wood-Anderson Richter local magnitude engine \\
+      \texttt{station\_corrections} & CSV Target & \texttt{mag\_correction.csv} & [Analyst-Normalized] & Empirical station site correction terms ($c_{5, s}$) \\
+      \texttt{ignore\_stations} & CSV Target & \texttt{ignore\_stations.csv} & [Analyst-Normalized] & Blacklisted noisy or uncalibrated accelerometric stations \\
+      \texttt{cluster.\_target\_} & Class Path & \texttt{LocalCluster} & [System Architecture] & Distributed memory Dask task scheduler \\
+      \texttt{n\_workers} & Integer & $1$ & [System Architecture] & Worker process count per MPI task allocation \\
+      \texttt{processes} & Boolean & \texttt{false} & [System Architecture] & Uses thread-based worker model to share in-memory waveform arrays \\
+      \texttt{dashboard\_address} & Port String & \texttt{:8989} & [System Architecture] & Interactive web telemetry dashboard for tracking real-time execution \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item Target \& Scope: Automated local magnitude calculation and asynchronous job scheduling.
+      \item What the reader should notice: Thread-based worker execution eliminates multi-gigabyte memory copying of raw waveform streams during parallel station processing.
+      \item Evidence Anchor: Implemented in \texttt{OGS/src/ogsmagnitude.py} and \texttt{OGS/config/config.yaml}.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+

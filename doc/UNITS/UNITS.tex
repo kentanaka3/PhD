@@ -1,0 +1,292 @@
+% Purpose: Root LaTeX document for the PhD thesis in Applied Geophysics / Earth Science and Fluid Mechanics (UniTS / OGS / SISSA).
+% Status: Draft; under review by supervisors and academic committee.
+% Source-of-truth: OGS/src/, doc/UNITS/lib.bib
+
+\documentclass[12pt, a4paper]{report}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[table]{xcolor}
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!70!black,
+  citecolor=blue!70!black,
+  urlcolor=blue!70!black
+}
+\usepackage{geometry}
+\geometry{
+  a4paper,
+  left=25mm,
+  right=25mm,
+  top=25mm,
+  bottom=25mm,
+  bindingoffset=5mm,
+  headheight=15pt
+}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{graphicx}
+\graphicspath{ {../imgs/} }
+\usepackage{amsmath, amsfonts, amssymb}
+\usepackage{epstopdf}
+\usepackage[
+  style=authoryear,
+  backend=biber,
+  maxbibnames=99,
+  maxcitenames=1,
+  minnames=1,
+  sorting=nyt,
+  natbib=true,
+  url=true,
+  doi=true,
+  eprint=false,
+  isbn=false,
+]{biblatex}
+\addbibresource{lib.bib}
+\usepackage{booktabs, caption, subcaption}
+\captionsetup{
+  labelfont=bf,
+  singlelinecheck=false,
+  labelsep=space,
+  skip=4pt
+}
+\usepackage{threeparttable}
+\usepackage{tabularx}
+\usepackage{siunitx}
+\usepackage{multicol, multirow}
+\usepackage{comment}
+\usepackage{acro}
+\usepackage{pdflscape}
+\usepackage[none]{hyphenat}
+\usepackage{float}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, calc, fit, backgrounds, shapes.geometric}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+% Semantic mathematical operators
+\DeclareMathOperator{\argmin}{arg\,min}
+\DeclareMathOperator{\argmax}{arg\,max}
+
+% Use this only when a referenced scientific figure is unavailable at build time.
+\newcommand{\MissingFigure}[1]{%
+  \fbox{\begin{minipage}[c][0.26\textheight][c]{0.82\textwidth}\centering
+  \textbf{Figure unavailable}\\[0.5em]\small #1
+  \end{minipage}}%
+}
+
+% Listings color definitions and styles
+\colorlet{punct}{red!60!black}
+\definecolor{background}{HTML}{EEEEEE}
+\definecolor{delim}{RGB}{20,105,176}
+\colorlet{numb}{magenta!60!black}
+
+\lstdefinelanguage{yaml}{
+  basicstyle=\normalfont\ttfamily\small,
+  numbers=left,
+  numberstyle=\scriptsize,
+  stepnumber=1,
+  numbersep=8pt,
+  showstringspaces=false,
+  breaklines=true,
+  frame=lines,
+  backgroundcolor=\color{background},
+  literate=
+    *{0}{{{\color{numb}0}}}{1}
+    {1}{{{\color{numb}1}}}{1}
+    {2}{{{\color{numb}2}}}{1}
+    {3}{{{\color{numb}3}}}{1}
+    {4}{{{\color{numb}4}}}{1}
+    {5}{{{\color{numb}5}}}{1}
+    {6}{{{\color{numb}6}}}{1}
+    {7}{{{\color{numb}7}}}{1}
+    {8}{{{\color{numb}8}}}{1}
+    {9}{{{\color{numb}9}}}{1}
+    {:}{{{\color{punct}{:}}}}{1}
+    {,}{{{\color{punct}{,}}}}{1}
+    {\{}{{{\color{delim}{\{}}}}{1}
+    {\}}{{{\color{delim}{\}}}}}{1}
+    {[}{{{\color{delim}{[}}}}{1}
+    {]}{{{\color{delim}{]}}}}{1},
+}
+
+\newenvironment{absolutelynopagebreak}
+  {\par\nobreak\vfil\penalty0\vfilneg\vtop\bgroup}
+  {\par\xdef\tpd{\the\prevdepth}\egroup\prevdepth=\tpd}
+
+% Acronym declarations
+\DeclareAcronym{ML}{short = ML, long = Machine Learning}
+\DeclareAcronym{CNN}{short = CNN, long = Convolutional Neural Network}
+\DeclareAcronym{RNN}{short = RNN, long = Recurrent Neural Network}
+\DeclareAcronym{OGS}{short = OGS, long = Istituto Nazionale di Oceanografia e di Geofisica Sperimentale}
+\DeclareAcronym{CRS}{short = CRS, long = Centro di Ricerche Sismologiche}
+\DeclareAcronym{UniTS}{short = UniTS, long = Università degli Studi di Trieste}
+\DeclareAcronym{SISSA}{short = SISSA, long = Scuola Internazionale Superiore di Studi Avanzati}
+\DeclareAcronym{CINECA}{short = CINECA, long = Consorzio Interuniversitario per il Calcolo Automatico dell'Italia Nord Orientale}
+\DeclareAcronym{PNRR}{short = PNRR, long = Piano Nazionale di Ripresa e Resilienza}
+\DeclareAcronym{TeRABIT}{short = TeRABIT, long = Terabit Network for Research and Academic Big Data in Italy}
+\DeclareAcronym{INGV}{short = INGV, long = Istituto Nazionale di Geofisica e Vulcanologia}
+\DeclareAcronym{INSTANCE}{short = INSTANCE, long = Italian Seismic Dataset for Machine Learning, cite=INSTANCE}
+\DeclareAcronym{SCEDC}{short = SCEDC, long = Southern California Earthquake Data Center, cite=SCEDC}
+\DeclareAcronym{STEAD}{short = STEAD, long = STanford EArthquake Dataset, cite=STEAD}
+\DeclareAcronym{GaMMA}{short = GaMMA, long = Gaussian Mixture Model Associator, cite=GaMMA}
+\DeclareAcronym{EQTransformer}{short = EQTransformer, long = Earthquake Transformer, cite=EQTransformer}
+\DeclareAcronym{PyOcto}{short = PyOcto, long = High-Throughput Octree-Based Seismic Phase Associator, cite=PyOcto}
+\DeclareAcronym{NonLinLoc}{short = NonLinLoc, long = Non-Linear Earthquake Location Algorithm, cite=NonLinLoc}
+\DeclareAcronym{BPGMA}{short = BPGMA, long = Bipartite Graph Matching Assessment}
+\DeclareAcronym{KNN}{short = KNN, long = K-Nearest Neighbors}
+\DeclareAcronym{SVM}{short = SVM, long = Support Vector Machine}
+\DeclareAcronym{RF}{short = RF, long = Random Forest}
+\DeclareAcronym{LSTM}{short = LSTM, long = Long Short-Term Memory}
+\DeclareAcronym{GRU}{short = GRU, long = Gated Recurrent Unit}
+\DeclareAcronym{MLP}{short = MLP, long = Multilayer Perceptron}
+\DeclareAcronym{PCA}{short = PCA, long = Principal Component Analysis}
+\DeclareAcronym{SVD}{short = SVD, long = Singular Value Decomposition}
+\DeclareAcronym{FFT}{short = FFT, long = Fast Fourier Transform}
+\DeclareAcronym{STFT}{short = STFT, long = Short-Time Fourier transform}
+\DeclareAcronym{FN}{short = FN, long = False Negative}
+\DeclareAcronym{MS}{short = MS, long = Missed}
+\DeclareAcronym{FP}{short = FP, long = False Positive}
+\DeclareAcronym{PS}{short = PS, long = Proposed}
+\DeclareAcronym{TN}{short = TN, long = True Negative}
+\DeclareAcronym{TP}{short = TP, long = True Positive}
+\DeclareAcronym{MH}{short = MH, long = Matched}
+\DeclareAcronym{F1}{short = F1, long = F1 Score}
+\DeclareAcronym{FDR}{short = FDR, long = False Discovery Rate}
+\DeclareAcronym{SNR}{short = SNR, long = Signal-to-Noise Ratio}
+\DeclareAcronym{DL}{short = DL, long = Deep Learning}
+\DeclareAcronym{HPC}{short = HPC, long = High-Performance Computing}
+\DeclareAcronym{MPI}{short = MPI, long = Message Passing Interface}
+\DeclareAcronym{CUDA}{short = CUDA, long = Compute Unified Device Architecture}
+\DeclareAcronym{API}{short = API, long = Application Programming Interface}
+\DeclareAcronym{AIC}{short = AIC, long = Akaike Information Criterion}
+\DeclareAcronym{STA/LTA}{short = STA/LTA, long = Short-Time Average/Long-Time Average}
+\DeclareAcronym{GPU}{short = GPU, long = Graphics Processing Unit}
+\DeclareAcronym{CPU}{short = CPU, long = Central Processing Unit}
+\DeclareAcronym{RAM}{short = RAM, long = Random Access Memory}
+\DeclareAcronym{SSD}{short = SSD, long = Solid State Drive}
+\DeclareAcronym{HDD}{short = HDD, long = Hard Disk Drive}
+\DeclareAcronym{CM}{short = CM, long = Confusion Matrix}
+\DeclareAcronym{SMINO}{short = SMINO, long = Sistema di Monitoraggio terrestre dell'Italia Nord Orientale}
+\DeclareAcronym{FVG}{short = FVG, long = Friuli Venezia Giulia}
+\DeclareAcronym{ARSO}{short = ARSO, long = Agencija Republike Slovenije za okolje}
+\DeclareAcronym{DBSCAN}{short = DBSCAN, long = Density-Based Spatial Clustering of Applications with Noise}
+\DeclareAcronym{DOI}{short = DOI, long = Digital Object Identifier}
+\DeclareAcronym{EDT}{short = EDT, long = Equal Differential Time}
+\DeclareAcronym{EIDA}{short = EIDA, long = European Integrated Data Archive}
+\DeclareAcronym{EM}{short = EM, long = Expectation-Maximization}
+\DeclareAcronym{FDSN}{short = FDSN, long = International Federation of Digital Seismograph Networks}
+\DeclareAcronym{HypoDD}{short = HypoDD, long = Hypocenter Double-Difference}
+\DeclareAcronym{KPI}{short = KPI, long = Key Performance Indicator}
+\DeclareAcronym{NUMA}{short = NUMA, long = Non-Uniform Memory Access}
+\DeclareAcronym{ORFEUS}{short = ORFEUS, long = Observatories and Research Facilities for European Seismology}
+\DeclareAcronym{PhaseNet}{short = PhaseNet, long = PhaseNet}
+\DeclareAcronym{QoS}{short = QoS, long = Quality of Service}
+\DeclareAcronym{SED}{short = SED, long = Swiss Seismological Service}
+
+\usepackage[onehalfspacing]{setspace}
+
+\begin{document}
+  \begin{titlepage}
+    \begin{singlespace}
+      \begin{center}
+        \includegraphics[height=2.0cm]{SISSA.png}\hfill
+        \includegraphics[height=2.2cm]{MHPC.png}\hfill
+        \includegraphics[height=2.0cm]{ICTP.jpg}
+        \vspace{1.0cm}
+
+        {\scshape\Large Università degli Studi di Trieste \par}
+        \vspace{0.3cm}
+        {\scshape\large Dipartimento di Matematica e Geoscienze \par}
+        \vspace{0.2cm}
+        {\scshape\normalsize In collaboration with Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS) \par}
+        {\scshape\normalsize and Scuola Internazionale Superiore di Studi Avanzati (SISSA) \par}
+        \vspace{0.8cm}
+        {\scshape\normalsize PhD Program in Earth Science and Fluid Mechanics / Applied Geophysics \par}
+        {\scshape\small Cycle XXXVII / XXXVIII \par}
+        \vspace{1.0cm}
+
+        {\huge\bfseries Procedural Machine Learning Pipeline for Earthquake Pick 
+        Detection and Phase Association using High-Performance 
+        Computing infrastructures \par}
+        \vspace{1.2cm}
+
+        {\large PhD Dissertation \par}
+      \end{center}
+
+      \vspace{1.0cm}
+      \vfill
+      \begin{minipage}{0.48\textwidth}
+        \textit{Supervisors}:\par
+        Dr. \textsc{Monica Sugan} (OGS CRS)\par
+        Dr. \textsc{Serafina Di Gioia} (OGS CRS)
+      \end{minipage}
+      \hfill
+      \begin{minipage}{0.48\textwidth}
+        \begin{flushright}
+          \textit{Candidate}:\par
+          Ken \textsc{Tanaka Hernández}
+        \end{flushright}
+      \end{minipage}
+
+      \vfill
+      \begin{center}
+        {\large Academic Year 2023 -- 2024 \par}
+        \vspace{0.5cm}
+        \includegraphics[height=1.2cm]{MHPCBanner.png}
+      \end{center}
+    \end{singlespace}
+  \end{titlepage}
+
+  \pagenumbering{gobble}
+  \chapter*{Acknowledgements}
+  \input{chapters/acknowledgement.tex}
+  \newpage
+
+  \input{chapters/abstract.tex}
+  \newpage
+
+  \pagenumbering{roman}
+  \tableofcontents
+  \begin{singlespace}
+    \listoffigures
+    \listoftables
+    \printacronyms
+  \end{singlespace}
+
+  \chapter{Introduction}
+  \pagenumbering{arabic}
+  \input{chapters/1_introduction.tex}
+
+  \chapter{Datasets}
+  \input{chapters/2_datasets.tex}
+
+  \chapter{Data Engineering}
+  \input{chapters/3_data_engineering.tex}
+
+  \chapter{Computational Pipeline}
+  \input{chapters/4_pipeline.tex}
+
+  \chapter{Pipeline Evaluation Framework}
+  \input{chapters/5_methodology.tex}
+
+  \chapter{HPC Implementation}
+  \input{chapters/6_hpc.tex}
+
+  \chapter{Results}
+  \input{chapters/7_results.tex}
+
+  \chapter{Conclusion}
+  \input{chapters/8_conclusion.tex}
+
+  \chapter*{Data and Resources}
+  \addcontentsline{toc}{chapter}{Data and Resources}
+  \input{chapters/9_data_resources.tex}
+
+  \appendix
+  \input{chapters/appendix.tex}
+
+  \printbibliography
+\end{document}

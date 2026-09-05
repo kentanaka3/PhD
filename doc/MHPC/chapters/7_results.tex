@@ -1,0 +1,1031 @@
+\label{chap:Results}
+This chapter presents a structured evaluation of the seismic monitoring 
+pipeline under multiple model configurations and parameter settings. The 
+analysis is structured hierarchically, beginning with the picker module, 
+followed by the associator and location modules, and concluding with the 
+magnitude estimation and catalog recall assessments. We interpret the results 
+in the broader context of operational seismology and ML based detection, 
+highlighting the trade-offs between recall, \ac{FDR}, timing accuracy, and 
+location reliability. In each subsection we systematically vary key 
+hyperparameters (the choice of training datasets and detection probability 
+thresholds for P- and S-phase detection) and analyze their influence on the 
+performance metrics such as recall, timing accuracy, and consistency with the 
+reference OGS catalog. Together, these results characterize the trade-offs 
+between sensitivity and specificity inherent in automated seismic monitoring 
+systems. Throughout this chapter, all comparisons are made against the manually 
+reviewed OGS reference catalog.
+
+\section{Picker}
+The picker module is the first critical step in our seismic event detection 
+pipeline. Its role is to identify P- and S-wave arrivals in continuous waveform 
+data, providing the foundation upon which association, location, and magnitude 
+estimation depend. In this section, we present the results of the evaluation of 
+the picker module as a function of different training datasets and detection
+thresholds. We focus on the comparative behavior of PhaseNet and EQTransformer,
+two state-of-the-art deep learning models for P- and S-phase detection. These 
+models have been trained on different datasets (INSTANCE, STEAD, SCEDC and the
+original training set) to assess how training data composition influences
+generalization to the OGS seismic network. We report the pick recall, as well
+as the pick time residuals between our results and the OGS catalog as a
+function of these parameters.
+
+Two main questions guide this analysis:
+\begin{enumerate}
+  \item How sensitive is picker performance to the choice of training dataset, 
+  particularly with respect to domain mismatch between the training data and 
+  the OGS evaluation region?
+  \item How does the detection threshold mediate the trade-off between 
+  recall (recovering as many catalog picks as possible) and \ac{FDR} 
+  (limiting the number of spurious or poorly timed picks)?
+\end{enumerate}
+
+\subsection{Influence of Training Datasets}
+Table~\ref{tab:picker_recall_datasets} offers a comparative overview of
+picker performance when trained on different datasets. The OGS reference
+catalog contains 7,129 manually reviewed picks (4,126~P and 3,003~S) over the
+93-day evaluation period, recorded across 266~stations in 18~networks. Note 
+that small discrepancies in the total pick counts across confusion matrices 
+arise from the bipartite matching procedure, which evaluates each model's 
+output independently against the catalog. The pick-level confusion matrices 
+(Table~\ref{tab:picker_recall_datasets}) quantify each model's ability to 
+recover these catalog picks, while Table~\ref{tab:picker_recall_scores} 
+summarizes the per-phase and combined recall scores.
+
+\subsubsection{Confusion Matrix Analysis}
+The confusion matrices in Table~\ref{tab:picker_recall_datasets} display, for
+each model--dataset pair, the number of matched (MH), missed (MS), and proposed
+(PS) picks, decomposed by P- and S-phase. Each cell encodes the complete
+detection profile of the corresponding configuration.
+
+\paragraph{INSTANCE-trained models.}
+PhaseNet (INSTANCE) matches 3,932 of 4,126~P picks (recall~0.953, only 
+190~$MS_P$ and 4~$\epsilon_{PS}$) and 2,757 of 3,003~S picks (recall~0.918, 
+236~$MS_S$ and 10~$\epsilon_{SP}$), achieving a combined recall of 0.938. The 
+confusion matrix shows that its proposed picks picks volume is 1,972,866, 
+indicating a large but manageable background of candidate detections from which 
+downstream association modules must select. EQTransformer (INSTANCE) attains 
+marginally higher figures on P-phase (3,965~$MH_P$, recall~0.961, 155~$MS_P$ 
+and 6~$\epsilon_{PS}$) and identical S-phase recall (2,764~$MH_S$, 
+recall~0.920, 236~$MS_S$ and 3~$\epsilon_{SP}$), yielding a combined recall of 
+0.944. Its proposed pick count is lower at 1,364,149, roughly $31\%$ fewer than 
+PhaseNet (INSTANCE), which may reflect EQTransformer's more conservative 
+internal detection logic. These two INSTANCE-trained models detect 
+substantially more catalog picks than any other training-dataset variant.
+
+\paragraph{SCEDC-trained models.}
+PhaseNet (SCEDC) matches 3,679~P picks (recall~0.892, 385~$MS_P$ and 
+62~$\epsilon_{PS}$) and 2,471~S picks (recall~0.823, 433~$MS_S$ and 
+99~$\epsilon_{SP}$), for a combined recall of 0.863. EQTransformer (SCEDC) 
+performs better with 3,921~$MH_P$ (recall~0.95) and 2,682~$MH_S$ 
+(recall~0.893), achieving a combined recall of 0.926. However, the confusion 
+matrices reveal the critical weakness of the SCEDC training set: PhaseNet 
+(SCEDC) generates 23.1 million proposed picks and EQTransformer (SCEDC) nearly 
+30 million, roughly 12$\times$ to 22$\times$ more than the INSTANCE-trained 
+models. This massive over-detection inflates the apparent recall while burying
+matched picks in an overwhelming volume of proposed picks, rendering the output 
+impractical for downstream processing without aggressive pre-filtering. The 
+SCEDC dataset, composed of Southern California seismicity, introduces a severe 
+domain mismatch with the Alpine-Dinaric tectonic setting of the OGS network, 
+manifesting as an inability to discriminate noise from signal in this context.
+
+\paragraph{Original training sets.}
+PhaseNet (Original) shows a distinctive asymmetric profile visible in its 
+confusion matrix: P recall is high at 0.956 (3,943~$MH_P$, only 175~$MS_P$ and
+8~$\epsilon_{PS}$), but S recall drops to 0.858 (2,577~$MH_S$, 402~$MS_S$ and 
+24~$\epsilon_{SP}$). Interestingly, its proposed picks volume is 10.4~million, 
+substantially larger than the INSTANCE variant, suggesting that the original 
+model generates more spurious detections in addition to missing true 
+S-arrivals. EQTransformer (Original) exhibits uniformly reduced performance on 
+both phases (P: 0.864, 3,563~$MH_P$, 558~$MS_P$ and 5~$\epsilon_{PS}$; S: 
+0.843, 2,532~$MH_S$, 467~$MS_S$ and 4~$\epsilon_{SP}$; combined: 0.855) but 
+with a relatively modest proposed picks volume of 651,963, indicating a 
+conservative detection strategy that sacrifices sensitivity.
+
+\paragraph{STEAD-trained models.}
+The STEAD-trained pickers perform worst for this network. PhaseNet (STEAD) 
+recovers only 2,929~P picks (recall~0.71, 1,181~$MS_P$ and 16~$\epsilon_{PS}$) 
+and 2,424~S picks (recall~0.807, 564~$MS_S$ and 15~$\epsilon_{SP}$), for a
+combined recall of 0.75. The confusion matrix reveals the lowest proposed picks 
+volume of any PhaseNet variant (978,247), confirming that STEAD training 
+produces an under-sensitive model that misses a substantial fraction of real 
+arrivals while also generating fewer candidates overall. EQTransformer (STEAD) 
+fares somewhat better (P: 0.841, 3,470~$MH_P$, 651~$MS_P$, and 
+5~$\epsilon_{PS}$; S: 0.825, 2,478~$MH_S$, 520~$MS_S$, and 5~$\epsilon_{SP}$; 
+combined: 0.834) with 677,327~proposed picks, but remains well below the 
+INSTANCE-trained models.\\
+
+The INSTANCE dataset includes stations and events from Northeastern Italy
+(including OGS stations), which likely contributes to the strong domain
+alignment. The STEAD dataset, composed predominantly of global teleseismic and 
+regional recordings with different noise characteristics, produces the least 
+sensitive pickers for this network. Table~\ref{tab:picker_recall_scores}
+summarizes the recall scores, confirming the INSTANCE advantage across both 
+architectures.
+
+\subsubsection{Pick Time Residual Analysis}
+The pick time residual histograms in Table~\ref{tab:picker_timeres_datasets}
+quantify the timing accuracy of each model by showing the distribution of
+$\delta t = t_{\text{detected}} - t_{\text{catalog}}$ for all matched picks,
+separately for P- and S-phases. These histograms reveal both the central
+tendency (systematic bias) and the spread (precision) of each model's timing.
+
+\paragraph{PhaseNet (INSTANCE).}
+The P-phase residual histogram is sharply peaked near zero with a slight
+negative bias: mean~$= -0.021$\,s, MAE~$= 0.066$\,s, RMSE~$= 0.107$\,s. The 
+S-phase histogram is broader with a positive bias: mean~$= 0.054$\,s,
+MAE~$= 0.116$\,s, RMSE~$= 0.16$\,s. The larger S-phase scatter reflects the 
+intrinsic difficulty of timing S-arrivals, which emerge from the P-coda and are
+typically less impulsive. The standard deviation of 0.151\,s for S-picks
+compared to 0.105\,s for P-picks quantifies this phase-dependent uncertainty 
+difference.
+
+\paragraph{EQTransformer (INSTANCE).}
+The P-phase residual histogram shows near-zero bias (mean~$= 0.003$\,s) but
+slightly wider spread than PhaseNet: MAE~$= 0.075$\,s, RMSE~$= 0.114$\,s.
+The S-phase residuals exhibit a more pronounced positive bias 
+(mean~$=0.091$\,s, MAE~$= 0.134$\,s, RMSE~$= 0.179$\,s). Despite 
+EQTransformer's marginally higher overall recall (0.944 vs.\ 0.938), PhaseNet's 
+superior timing precision, 12\% lower P-phase MAE and 16\% lower S-phase MAE, 
+makes it the more suitable choice for operational use, where accurate pick 
+timing is crucial for successful association and location.
+
+\paragraph{Non-INSTANCE models.}
+Among the non-INSTANCE models, the time residual histograms reveal
+characteristic biases linked to domain mismatch:
+\begin{itemize}
+  \item \textbf{PhaseNet (Original):} exhibits the largest systematic S-phase
+    bias of any variant (mean~$=0.146$\,s, MAE~$=0.156$\,s, RMSE~$=0.200$\,s), 
+    while its P-phase shows a positive bias of $0.046$\,s (MAE~$= 0.081$\,s).
+  \item \textbf{PhaseNet (STEAD):} produces P residuals comparable to INSTANCE 
+    (mean~$=-0.018$\,s, MAE~$=0.065$\,s) but at much lower recall (0.710 vs. 
+    0.953), so the narrow histogram is partly an artifact of detecting only the 
+    clearest arrivals. S-phase bias is moderate ($0.098$\,s, MAE~$=0.128$\,s).
+  \item \textbf{EQTransformer (SCEDC):} shows a large S-phase bias
+    (mean~$=0.131$\,s, MAE~$=0.156$\,s, RMSE~$=0.201$\,s).
+  \item \textbf{EQTransformer (Original):} achieves the smallest P-phase bias 
+    among EQTransformer variants (mean~$=-0.013$\,s, MAE~$= 0.071$\,s).
+\end{itemize}
+
+The timing advantage of INSTANCE-trained models is operationally significant: 
+downstream association and location modules rely on sub-sample precision, so 
+even differences of $\sim$0.02\,s in MAE can affect event characterization 
+quality.
+
+Based on these results, PhaseNet trained on INSTANCE is selected as the picker 
+module for all subsequent analyses: it combines the second-highest overall 
+recall (0.938) with the best timing accuracy across both P and S phases, making 
+it the most suitable configuration for the OGS network.
+
+\begin{table}
+  \centering
+  \caption{Recall scores for PhaseNet and EQTransformer models trained on 
+  different data sets (detection threshold: prob $\geq$ 0.1).}
+  \label{tab:picker_recall_scores}
+  \begin{tabular}{c|c|c|c|c|c|c|c|c|c|}
+    \setlength\heavyrulewidth{2pt} % does it have to be soooo wide?
+    \setlength\extrarowheight{2pt}
+    \setlength\tabcolsep{0pt}
+    \multirow{2}{*}{Recall} & \multicolumn{3}{c|}{PhaseNet} & \multicolumn{3}{c|}{EQTransformer} \\
+    & P & S & Tot & P & S & Tot \\
+    \hline
+    \textbf{INSTANCE} & \textbf{0.953} & \textbf{0.918} & \textbf{0.938} & \textbf{0.961} & \textbf{0.920} & \textbf{0.944} \\
+    SCEDC             & 0.892 & 0.823 & 0.863 & 0.950 & 0.893 & 0.926 \\
+    Original          & 0.956 & 0.858 & 0.915 & 0.864 & 0.843 & 0.855 \\
+    STEAD             & 0.710 & 0.807 & 0.750 & 0.841 & 0.825 & 0.834 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\newpage
+\begin{table}[H]
+  \centering
+  \begin{tabular}{c|c|c|}
+    & PhaseNet & EQTransformer \\\hline
+    Original & \includegraphics[width=0.35\textwidth]{OGSCatalog/OGSPhaseNet_ORIGINAL/img/.all_SeisBenchPicker_PicksConfMtx.pdf} & \includegraphics[width=0.35\textwidth]{OGSCatalog/OGSEQTransformer_ORIGINAL/img/.all_SeisBenchPicker_PicksConfMtx.pdf} \\\hline
+    INSTANCE & \includegraphics[width=0.35\textwidth]{OGSCatalog/GaMMA0.1/img/.all_SeisBenchPicker_PicksConfMtx.pdf} & \includegraphics[width=0.35\textwidth]{OGSCatalog/OGSEQTransformer_INSTANCE/img/.all_SeisBenchPicker_PicksConfMtx.pdf} \\\hline
+    STEAD & \includegraphics[width=0.35\textwidth]{OGSCatalog/OGSPhaseNet_STEAD/img/.all_SeisBenchPicker_PicksConfMtx.pdf} & \includegraphics[width=0.35\textwidth]{OGSCatalog/OGSEQTransformer_STEAD/img/.all_SeisBenchPicker_PicksConfMtx.pdf}\\\hline
+    SCEDC & \includegraphics[width=0.35\textwidth]{OGSCatalog/OGSPhaseNet_SCEDC/img/.all_SeisBenchPicker_PicksConfMtx.pdf} & \includegraphics[width=0.35\textwidth]{OGSCatalog/OGSEQTransformer_SCEDC/img/.all_SeisBenchPicker_PicksConfMtx.pdf} \\\hline
+  \end{tabular}
+  \caption{Pick-level recall for PhaseNet and EQTransformer trained on four
+  distinct datasets (detection threshold: prob $\geq$ 0.1).}
+  \label{tab:picker_recall_datasets}
+\end{table}
+
+\newpage
+\subsubsection{Pick Time Difference}
+The pick time residual histograms in Table~\ref{tab:picker_timeres_datasets}
+present the distribution of timing differences
+($\delta t = t_{\text{detected}} - t_{\text{catalog}}$) for each model and
+training dataset combination. Positive residuals indicate that the automated
+pick arrives later than the manual catalog time; negative residuals indicate
+earlier picks. The width of each histogram reflects the precision of the model, 
+while its center quantifies systematic bias.
+\begin{table}[H]
+  \centering
+  \begin{tabular}{c|c|c|}
+    & PhaseNet & EQTransformer \\\hline
+    Original & \includegraphics[width=0.4\textwidth]{OGSCatalog/OGSPhaseNet_ORIGINAL/img/.all_SeisBenchPicker_PicksTimeDiff.pdf} & \includegraphics[width=0.4\textwidth]{OGSCatalog/OGSEQTransformer_ORIGINAL/img/.all_SeisBenchPicker_PicksTimeDiff.pdf} \\\hline
+    INSTANCE & \includegraphics[width=0.4\textwidth]{OGSCatalog/GaMMA0.1/img/.all_SeisBenchPicker_PicksTimeDiff.pdf} & \includegraphics[width=0.4\textwidth]{OGSCatalog/OGSEQTransformer_INSTANCE/img/.all_SeisBenchPicker_PicksTimeDiff.pdf} \\\hline
+    STEAD & \includegraphics[width=0.4\textwidth]{OGSCatalog/OGSPhaseNet_STEAD/img/.all_SeisBenchPicker_PicksTimeDiff.pdf} & \includegraphics[width=0.4\textwidth]{OGSCatalog/OGSEQTransformer_STEAD/img/.all_SeisBenchPicker_PicksTimeDiff.pdf} \\\hline
+    SCEDC & \includegraphics[width=0.4\textwidth]{OGSCatalog/OGSPhaseNet_SCEDC/img/.all_SeisBenchPicker_PicksTimeDiff.pdf} & \includegraphics[width=0.4\textwidth]{OGSCatalog/OGSEQTransformer_SCEDC/img/.all_SeisBenchPicker_PicksTimeDiff.pdf} \\\hline
+  \end{tabular}
+  \caption{Pick time residuals ($\delta t$, detected minus catalog times) for 
+  PhaseNet (INSTANCE) and EQTransformer trained on different datasets
+  (detection threshold: prob $\geq$ 0.1).}
+  \label{tab:picker_timeres_datasets}
+\end{table}
+\newpage
+\subsection{Influence of Detection Thresholds}
+Deep learning phase pickers apply a probability threshold to accept or reject a
+candidate phase detection. Here we systematically evaluate its effect on
+PhaseNet (INSTANCE) and EQTransformer (INSTANCE) across three settings: 0.1,
+0.2, and 0.3. The left columns of Tables~\ref{tab:phasenet_thresholds}
+and~\ref{tab:eqt_thresholds} show the confusion matrices at each threshold,
+while the right columns display the corresponding pick time residual
+histograms.
+
+\subsubsection{PhaseNet (INSTANCE) Threshold Sweep}
+For PhaseNet (INSTANCE) (Table~\ref{tab:phasenet_thresholds}), raising the
+threshold from 0.1 to 0.3 reduces total recall from 0.938 to 0.897. Examining
+the confusion matrices row-by-row:
+\begin{itemize}
+  \item \textbf{Threshold 0.1:} 3,932~$MH_P$ (recall~0.953), 2,757~$MH_S$ 
+    (recall~0.918), combined recall~0.938, with 1,972,866~PS.
+  \item \textbf{Threshold 0.2:} 3,887~$MH_P$ (recall~0.942), 2,669~$MH_S$ 
+    (recall~0.889), combined recall~0.920, with 790,480~PS, a 60\% reduction 
+    from threshold 0.1.
+  \item \textbf{Threshold 0.3:} 3,835~$MH_P$ (recall~0.929), 2,561~$MH_S$ 
+    (recall~0.853), combined recall~0.897, with 398,815~PS, a factor of 
+    $\sim$5$\times$ reduction from threshold 0.1.
+\end{itemize}
+The S-phase recall declines more steeply than P-phase recall (6.6 percentage 
+points vs.\ 2.4 percentage points from 0.1 to 0.3), confirming that S-wave 
+detections are more threshold-sensitive due to their generally lower confidence 
+scores.
+
+The time residual histograms in the right column of
+Table~\ref{tab:phasenet_thresholds} show remarkable stability across
+thresholds. The P-phase MAE remains virtually constant at $\sim$0.065\,s 
+(0.066\,s at 0.1, 0.065\,s at 0.2, 0.065\,s at 0.3), with the mean bias stable 
+at $-0.021$\,s and median at $-0.020$\,s. The S-phase MAE improves marginally 
+from 0.116\,s to 0.110\,s as the threshold rises, with RMSE decreasing from 
+0.160\,s to 0.153\,s. This confirms that higher thresholds primarily filter out 
+poorly timed or spurious picks without degrading timing quality for the 
+retained detections. The histogram shapes narrow slightly at higher thresholds,
+indicating that low-confidence picks, which tend to have larger timing errors, 
+are preferentially removed.
+
+This threshold-dependent trade-off is critical for operational monitoring: 
+lower thresholds enhance sensitivity to weak events, whereas higher thresholds 
+favor accurate timing for downstream association algorithms.
+\begin{table}[H]
+  \centering
+  \begin{tabular}{c|c|c|c|}
+    & Confusion Matrix & Time Residual Histogram \\\hline
+    0.1 & \includegraphics[width=0.35\textwidth]{OGSCatalog/GaMMA0.1/img/.all_SeisBenchPicker_PicksConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.1/img/.all_SeisBenchPicker_PicksTimeDiff.pdf}\\\hline
+    0.2 & \includegraphics[width=0.35\textwidth]{OGSCatalog/GaMMA0.2/img/.all_SeisBenchPicker_PicksConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.2/img/.all_SeisBenchPicker_PicksTimeDiff.pdf}\\\hline
+    0.3 & \includegraphics[width=0.35\textwidth]{OGSCatalog/GaMMA0.3/img/.all_SeisBenchPicker_PicksConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.3/img/.all_SeisBenchPicker_PicksTimeDiff.pdf}\\\hline
+  \end{tabular}
+  \caption{[PhaseNet (INSTANCE)] Picker recall and pick time difference as a 
+  function of P and S detection thresholds (0.1, 0.2, 0.3).}
+  \label{tab:phasenet_thresholds}
+\end{table}
+
+\newpage
+\subsubsection{EQTransformer (INSTANCE) Threshold Sweep}
+Table~\ref{tab:eqt_thresholds} presents the corresponding analysis for
+EQTransformer (INSTANCE). The same general pattern holds, with recall
+decreasing monotonically as the threshold rises:
+\begin{itemize}
+  \item \textbf{Threshold 0.1:} 3,965~$MH_P$ (recall~0.961), 2,764~$MH_S$ 
+  (recall~0.920), combined 0.944, with 1,364,149~PS.
+  \item \textbf{Threshold 0.2:} 3,934~$MH_P$ (recall~0.953), 2,687~$MH_S$ 
+  (recall~0.895), combined 0.929, with 632,974~PS.
+  \item \textbf{Threshold 0.3:} 3,888~$MH_P$ (recall~0.942), 2,619~$MH_S$ 
+  (recall~0.872), combined 0.913, with 366,570~PS.
+\end{itemize}
+The recall decline from 0.1 to 0.3 is slightly smaller than PhaseNet's, with 
+the S-phase experiencing a steeper drop than the P-phase, mirroring the 
+phase-dependent sensitivity observed with PhaseNet.
+
+EQTransformer's P-phase timing is nearly threshold-invariant: MAE={0.075, 
+0.074, 0.074}\,s across thresholds \{0.1, 0.2, 0.3\}, with mean bias stable at 
+$+$0.003\,s. The S-phase MAE improves slightly from 0.134\,s to 0.129\,s, with 
+RMSE decreasing from 0.179\,s to 0.174\,s. Compared with PhaseNet (INSTANCE) at 
+each threshold level, EQTransformer retains marginally higher recall (by 
+0.5--1.4 percentage points) but consistently exhibits larger timing residuals, 
+approximately 15\% higher P-phase MAE and 18\% higher S-phase MAE. This 
+confirms the fundamental architectural trade-off: EQTransformer's attention 
+mechanism achieves slightly broader detection sensitivity at the cost of 
+reduced timing precision.
+\begin{table}[H]
+  \centering
+  \begin{tabular}{c|c|c|}
+    & Confusion Matrix & Time Residual Histogram \\\hline
+    0.1 & \includegraphics[width=0.35\textwidth]{OGSCatalog/OGSEQTransformer_INSTANCE/img/.all_SeisBenchPicker_PicksConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/OGSEQTransformer_INSTANCE/img/.all_SeisBenchPicker_PicksTimeDiff.pdf}\\\hline
+    0.2 & \includegraphics[width=0.35\textwidth]{OGSCatalog/OGSEQTransformer_INSTANCE_TP0.2S0.2/img/.all_SeisBenchPicker_PicksConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/OGSEQTransformer_INSTANCE_TP0.2S0.2/img/.all_SeisBenchPicker_PicksTimeDiff.pdf}\\\hline
+    0.3 & \includegraphics[width=0.35\textwidth]{OGSCatalog/OGSEQTransformer_INSTANCE_TP0.3S0.3/img/.all_SeisBenchPicker_PicksConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/OGSEQTransformer_INSTANCE_TP0.3S0.3/img/.all_SeisBenchPicker_PicksTimeDiff.pdf}\\\hline
+  \end{tabular}
+  \caption{[EQTransformer (INSTANCE)] Picker recall and pick time difference as 
+  a function of P and S detection thresholds (0.1, 0.2, 0.3).}
+  \label{tab:eqt_thresholds}
+\end{table}
+
+\newpage
+\section{Associator}
+Having established that PhaseNet trained on INSTANCE yields the best balance of 
+recall and timing precision, the next question is how effectively association 
+algorithms group its output picks into coherent seismic events. The associator 
+module is the second critical step in our seismic event detection pipeline: it 
+groups detected phase picks into coherent seismic events by enforcing 
+spatiotemporal consistency among picks to form events and intentionally 
+discards isolated or inconsistent picks that cannot be reliably attributed to 
+any event. Its effectiveness determines how many of the 380 OGS catalog events 
+the pipeline can recover. After fixing the picker to PhaseNet (INSTANCE), we 
+evaluate two associators, GaMMA and PyOcto, as a function of pick detection 
+thresholds (0.1, 0.2, 0.3). We report:
+\begin{enumerate}
+  \item Pick-level recall after association (how many matched picks survive),
+  \item Event-level recall (how many of the 380 catalog events are recovered),
+  \item Event time residuals, and
+  \item Spatial residuals (epicentral distance and depth differences).
+\end{enumerate}
+A key distinction emerges: while the raw picker detects $\sim$6,689
+true-positive picks (3,932 P $+$ 2,757 S at threshold 0.1), the associators 
+retain only the subset that forms consistent event hypotheses, necessarily 
+reducing pick-level recall but filtering the massive proposed picks volume 
+($\sim$2 million at threshold 0.1) down to manageable event counts of 
+$\sim$1,000--1,700 events.
+
+\subsection{GaMMA}
+The GaMMA associator is designed to probabilistically associate picks into
+events by jointly modeling pick timing uncertainties and tentative source
+locations. Tables~\ref{tab:gamma_picks} and~\ref{tab:gamma_events} present the 
+pick-level and event-level results after GaMMA processing, respectively.
+
+\subsubsection{Pick-Level Results}
+The confusion matrices in Table~\ref{tab:gamma_picks} reveal the substantial
+filtering that GaMMA imposes on the raw PhaseNet output:
+\begin{itemize}
+  \item \textbf{Threshold 0.1:} GaMMA retains 2,949 of 4,126~P picks (P recall 
+    0.715) and 2,081 of 3,003~S picks (S recall 0.693), for a combined pick 
+    recall of 0.706, substantially lower than the raw PhaseNet (INSTANCE) 
+    output (0.938). This indicates that GaMMA discards $\sim$25\% of 
+    true-positive picks during association. The 32,946 proposed picks that 
+    survive association represent a dramatic reduction from the $\sim$2~million 
+    raw PhaseNet proposals, filtering the pick set by a factor of 
+    $\sim$60$\times$.
+  \item \textbf{Threshold 0.2:} Pick recall decreases to 0.696 (P: 0.708,
+    2,921~$MH_P$; S: 0.680, 2,041~$MH_S$), with proposed picks reduced to
+    25,168.
+  \item \textbf{Threshold 0.3:} Pick recall falls further to 0.665 (P: 0.683, 
+    2,820~$MH_P$; S: 0.640, 1,921~$MH_S$), losing an additional 289 matched 
+    picks relative to threshold 0.1. Proposed picks decrease to 19,538.
+\end{itemize}
+
+The time residual histograms in the right column of Table~\ref{tab:gamma_picks}
+show that GaMMA preferentially retains well-timed arrivals. The P-phase MAE
+improves from 0.064\,s (at 0.1) to 0.062\,s (at 0.3), with the mean bias stable 
+at approximately $-0.017$\,s to $-0.020$\,s. The S-phase residuals remain 
+consistent: MAE ranges from 0.111\,s (at 0.1) to 0.107\,s (at 0.3), with a 
+positive bias of approximately $0.052$\,s. These values are comparable to or 
+slightly better than the raw PhaseNet residuals, confirming that GaMMA's 
+probabilistic filtering selectively discards poorly timed picks.
+
+\subsubsection{Event-Level Results}
+The event-level confusion matrices in Table~\ref{tab:gamma_events} show that
+GaMMA achieves high recall despite the aggressive pick-level filtering:
+\begin{itemize}
+  \item \textbf{Threshold 0.1:} 365 of 380 catalog events are matched
+    (recall~0.961), with only 15~$MS_E$. GaMMA proposes 1,060 additional events 
+    absent from the OGS catalog (event \ac{FDR}~0.744).
+  \item \textbf{Threshold 0.2:} 363~$MH_E$ (recall~0.955), 17~$MS_E$, 
+    851~$PS_E$ (\ac{FDR}~0.701).
+  \item \textbf{Threshold 0.3:} 360~$MH_E$ (recall~0.947), 20~$MS_E$, 
+    688~$PS_E$ (\ac{FDR}~0.656).
+\end{itemize}
+
+The event time residual histograms in the right column of
+Table~\ref{tab:gamma_events} reveal a consistent positive bias in GaMMA's 
+origin time estimates: the mean origin time difference is $0.484$\,s at 
+threshold 0.1 (MAE~$= 0.536$\,s, RMSE~$= 0.627$\,s, median~$= 0.493$\,s), 
+improving slightly to $0.450$\,s at threshold 0.3 (MAE~$= 0.501$\,s, 
+RMSE~$= 0.581$\,s). This systematic positive bias means that GaMMA's estimated 
+origin times are consistently later than the OGS catalog values by 
+approximately 0.5\,s, which is a consequence of GaMMA's internal origin-time 
+estimation methodology that differs from the manual processing workflow.
+
+\subsubsection{Spatial Residuals}
+The epicentral distance and depth difference histograms (landscape table
+following Table~\ref{tab:gamma_events}) characterize GaMMA's preliminary
+location accuracy. At threshold 0.1, the mean epicentral distance difference is 
+1.56\,km (median 1.10\,km, 90th percentile 3.30\,km), indicating that most 
+GaMMA-located events fall within 1--3\,km of their OGS catalog positions. The 
+depth residuals show a slight negative bias (mean~$= -0.78$\,km, 
+median~$= -0.75$\,km), with a standard deviation of 3.38\,km and 90th 
+percentile ranging from $-4.87$\,km to $+2.89$\,km. At higher thresholds, the 
+spatial residuals improve modestly (median epicentral distance 1.01\,km at 
+threshold 0.3), as cleaner pick sets yield more constrained events.
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{c|c|c|}
+    & Confusion Matrix & Time Residual Histogram \\
+    \hline
+    0.1 & \includegraphics[width=0.35\textwidth]{OGSCatalog/GaMMA0.1/img/.all_OGSPickStatQC_PicksConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.1/img/.all_OGSPickStatQC_PicksTimeDiff.pdf} \\\hline
+    0.2 & \includegraphics[width=0.35\textwidth]{OGSCatalog/GaMMA0.2/img/.all_OGSPickStatQC_PicksConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.2/img/.all_OGSPickStatQC_PicksTimeDiff.pdf} \\\hline
+    0.3 & \includegraphics[width=0.35\textwidth]{OGSCatalog/GaMMA0.3/img/.all_OGSPickStatQC_PicksConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.3/img/.all_OGSPickStatQC_PicksTimeDiff.pdf} \\\hline
+  \end{tabular}
+  \caption{[PhaseNet (INSTANCE) | GaMMA] Pick recall and pick time difference 
+  as a function of P and S thresholds.}
+  \label{tab:gamma_picks}
+\end{table}
+
+\newpage
+\begin{table}[H]
+  \centering
+  \begin{tabular}{c|c|c|}
+    & Confusion Matrix & Time Residual Histogram \\\hline
+    0.1 & \includegraphics[width=0.35\textwidth]{OGSCatalog/GaMMA0.1/img/.all_OGSPickStatQC_EventsConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.1/img/.all_OGSPickStatQC_EventsTimeDiff.pdf} \\\hline
+    0.2 & \includegraphics[width=0.35\textwidth]{OGSCatalog/GaMMA0.2/img/.all_OGSPickStatQC_EventsConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.2/img/.all_OGSPickStatQC_EventsTimeDiff.pdf} \\\hline
+    0.3 & \includegraphics[width=0.35\textwidth]{OGSCatalog/GaMMA0.3/img/.all_OGSPickStatQC_EventsConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.3/img/.all_OGSPickStatQC_EventsTimeDiff.pdf} \\\hline
+  \end{tabular}
+  \caption{[PhaseNet (INSTANCE) | GaMMA] Event recall and event time difference 
+  as a function of P and S thresholds.}
+  \label{tab:gamma_events}
+\end{table}
+
+\newpage
+\begin{landscape}
+  \begin{table}[H]
+    \centering
+    \begin{tabular}{c|c|c|}
+      & Epicentral Distance Difference & Depth Difference \\\hline
+      0.1 & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.1/img/.all_OGSPickStatQC_EpiDistDiff.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.1/img/.all_OGSPickStatQC_DepthDiff.pdf} \\\hline
+      0.2 & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.2/img/.all_OGSPickStatQC_EpiDistDiff.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.2/img/.all_OGSPickStatQC_DepthDiff.pdf} \\\hline
+      0.3 & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.3/img/.all_OGSPickStatQC_EpiDistDiff.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.3/img/.all_OGSPickStatQC_DepthDiff.pdf} \\\hline
+    \end{tabular}
+    \caption{[PhaseNet (INSTANCE) | GaMMA] Epicentral distance and depth
+    differences as a function of P and S thresholds.}
+  \end{table}
+\end{landscape}
+
+\newpage
+\subsection{PyOcto}
+PyOcto implements a velocity-model-aware association strategy, clustering picks
+in both time and space using travel-time predictions to identify candidate
+events. Tables~\ref{tab:pyocto_picks} and~\ref{tab:pyocto_events} present the
+pick-level and event-level results after PyOcto processing, evaluated at the
+same thresholds as GaMMA for direct comparison.
+
+\subsubsection{Pick-Level Results}
+The confusion matrices in Table~\ref{tab:pyocto_picks} demonstrate that
+PyOcto's velocity-model-aware approach is substantially less aggressive in
+filtering true-positive picks compared to GaMMA:
+\begin{itemize}
+  \item \textbf{Threshold 0.1:} PyOcto retains 3,875 of 4,126~P picks (P 
+    recall~0.939) and 2,589 of 3,003~S picks (S recall~0.862), achieving a 
+    combined pick recall of 0.907, substantially higher than GaMMA's 0.706. 
+    PyOcto preserves 94\% of $MH_P$, compared with GaMMA's 72\%, demonstrating 
+    that its spatial-consistency criterion is less aggressive than GaMMA's 
+    probabilistic filtering. However, PyOcto also retains 51,485 proposed 
+    picks, roughly 56\% more than GaMMA's 32,946, reflecting the trade-off 
+    between pick retention and selectivity.
+  \item \textbf{Threshold 0.2:} 3,813~$MH_P$ (recall~0.924), 2,530~$MH_S$
+    (recall~0.842), combined recall~0.89, with 37,460 proposed picks.
+  \item \textbf{Threshold 0.3:} 3,759~$MH_P$ (recall~0.911), 2,435~$MH_S$
+    (recall~0.811), combined recall~0.869, with 28,352 proposed picks, a 
+    $\sim$45\% reduction from threshold 0.1.
+\end{itemize}
+
+The time residual histograms in the right column of
+Table~\ref{tab:pyocto_picks} are nearly identical to the raw PhaseNet values:
+P-phase MAE~$\approx 0.066$\,s (mean~$= -0.021$\,s), S-phase 
+MAE~$\approx 0.115$\,s (mean~$=0.056$\,s) at threshold 0.1, improving slightly 
+to P MAE~$= 0.064$\,s and S MAE~$= 0.110$\,s at threshold 0.3.
+
+\subsubsection{Event-Level Results}
+At the event level (Table~\ref{tab:pyocto_events}), PyOcto achieves identical 
+recall to GaMMA at threshold 0.1: 365 of 380~events (recall~0.961), with 15 
+missed events. The decline at higher thresholds is slightly steeper than 
+GaMMA's:
+\begin{itemize}
+  \item \textbf{Threshold 0.2:} 361~$MH_E$ (recall~0.950), 19~$MS_E$,
+    933~$PS_E$ (\ac{FDR}~0.721).
+  \item \textbf{Threshold 0.3:} 356~$MH_E$ (recall~0.937), 24~$MS_E$,
+    730~$PS_E$ (\ac{FDR}~0.672).
+\end{itemize}
+PyOcto proposes more events than GaMMA at each threshold (1,298 vs. 1,060 at 
+0.1), yielding a higher event FDR of 0.781, which may include a larger fraction 
+of genuine uncataloged micro-seismicity given PyOcto's stricter spatial 
+constraints.
+
+\paragraph{Cross-configuration FDR comparison.}
+Across both associators and all thresholds, event-level \ac{FDR} remains high,
+ranging from 0.656 (GaMMA, threshold~0.3) to 0.781 (PyOcto, threshold~0.1). At
+the default threshold of 0.1, GaMMA produces roughly 2.9~$PS_E$ per matched
+event, while PyOcto produces 3.6. Raising the threshold to 0.3 reduces these
+ratios to $\sim$1.9 for GaMMA and $\sim$2.1 for PyOcto, demonstrating that
+stricter detection thresholds provide a direct mechanism for \ac{FDR} reduction
+at the cost of modest recall loss. However, these \ac{FDR} values should be
+interpreted with caution: as noted in Section~\ref{chap:Methodology}, the
+metric is computed against the OGS reference catalog, which is itself
+incomplete below $M_L \approx 1$. A substantial fraction of the proposed events
+may therefore represent genuine uncataloged micro-seismicity rather than false
+detections, meaning the true operational false-positive rate is likely lower
+than the nominal \ac{FDR} suggests.
+
+The event time residual histograms reveal a contrasting systematic bias
+compared to GaMMA: PyOcto's origin time estimates are consistently earlier than 
+the OGS catalog, with mean~$= -0.421$\,s.
+
+\subsubsection{Spatial Residuals}
+The epicentral distance and depth difference histograms
+(Table~\ref{tab:pyocto_spatial}) reveal PyOcto's spatial accuracy. At threshold 
+0.1, the median epicentral distance difference is 1.29\,km (mean~1.65\,km, 90th 
+percentile 3.32\,km), comparable to GaMMA's 1.10\,km. However, the depth 
+residuals show markedly different behavior: PyOcto's mean depth difference is 
+near zero ($-0.02$\,km), but with a much larger standard deviation of 5.03\,km 
+compared to GaMMA's 3.38\,km. The 10th--90th percentile range spans from
+$-7.89$\,km to $+5.02$\,km, substantially wider than GaMMA's range of 
+$-4.87$\,km to $+2.89$\,km. This suggests that while PyOcto achieves unbiased 
+depth estimates on average, its depth uncertainties are larger for individual 
+events, a trade-off for retaining more events and picks.
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{c|c|c|}
+    & Confusion Matrix & Time Residual Histogram \\\hline
+    0.1 & \includegraphics[width=0.35\textwidth]{OGSCatalog/PyOcto0.1/img/.all_OGSPickStatQC_PicksConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.1/img/.all_OGSPickStatQC_PicksTimeDiff.pdf} \\\hline
+    0.2 & \includegraphics[width=0.35\textwidth]{OGSCatalog/PyOcto0.2/img/.all_OGSPickStatQC_PicksConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.2/img/.all_OGSPickStatQC_PicksTimeDiff.pdf} \\\hline
+    0.3 & \includegraphics[width=0.35\textwidth]{OGSCatalog/PyOcto0.3/img/.all_OGSPickStatQC_PicksConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.3/img/.all_OGSPickStatQC_PicksTimeDiff.pdf} \\\hline
+  \end{tabular}
+  \caption{[PhaseNet (INSTANCE) | PyOcto] Pick recall and pick time difference 
+  as a function of P and S thresholds.}
+  \label{tab:pyocto_picks}
+\end{table}
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{c|c|c|}
+    & Confusion Matrix & Time Residual Histogram \\\hline
+    0.1 & \includegraphics[width=0.35\textwidth]{OGSCatalog/PyOcto0.1/img/.all_OGSPickStatQC_EventsConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.1/img/.all_OGSPickStatQC_EventsTimeDiff.pdf} \\\hline
+    0.2 & \includegraphics[width=0.35\textwidth]{OGSCatalog/PyOcto0.2/img/.all_OGSPickStatQC_EventsConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.2/img/.all_OGSPickStatQC_EventsTimeDiff.pdf} \\\hline
+    0.3 & \includegraphics[width=0.35\textwidth]{OGSCatalog/PyOcto0.3/img/.all_OGSPickStatQC_EventsConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.3/img/.all_OGSPickStatQC_EventsTimeDiff.pdf} \\\hline
+  \end{tabular}
+  \caption{[PhaseNet (INSTANCE) | PyOcto] Event recall and event time 
+  difference as a function of P and S thresholds.}
+  \label{tab:pyocto_events}
+\end{table}
+
+\newpage
+\begin{landscape}
+  \begin{table}[H]
+    \centering
+    \begin{tabular}{c|c|c|}
+      & Epicentral Distance Difference & Depth Difference \\\hline
+      0.1 & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.1/img/.all_OGSPickStatQC_EpiDistDiff.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.1/img/.all_OGSPickStatQC_DepthDiff.pdf} \\\hline
+      0.2 & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.2/img/.all_OGSPickStatQC_EpiDistDiff.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.2/img/.all_OGSPickStatQC_DepthDiff.pdf} \\\hline
+      0.3 & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.3/img/.all_OGSPickStatQC_EpiDistDiff.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.3/img/.all_OGSPickStatQC_DepthDiff.pdf} \\\hline
+    \end{tabular}
+    \caption{[PhaseNet (INSTANCE) | PyOcto] Epicentral distance and depth
+    differences as a function of P and S thresholds.}
+    \label{tab:pyocto_spatial}
+  \end{table}
+\end{landscape}
+
+\newpage
+\section{NonLinLoc}
+\label{sec:nonlinloc}
+After evaluating the associator modules independently, we now examine the
+combined performance of each associator followed by NonLinLoc (NonLinear
+Location) as the location engine. NonLinLoc inverts associated picks for
+earthquake hypocenters and origin times using a probabilistic non-linear
+search. NonLinLoc is a widely used probabilistic location algorithm that can
+utilize both 1D and 3D velocity models. We use a 1D layered velocity model for
+all configurations to enable a controlled comparison of how each associator's
+output survives the location stage.
+
+\subsection{1D Velocity Model}
+This stage reveals a striking divergence between the two associators. At the
+association level, GaMMA and PyOcto achieve identical event recall (96.1\%,
+365 of 380 events). After NonLinLoc location, however, GaMMA+NonLinLoc retains
+only 280~$MH_E$ (recall~0.737), while PyOcto+NonLinLoc retains 366
+events (recall~0.963). GaMMA loses 85 catalog events, nearly a quarter, during
+location, whereas PyOcto actually recovers one additional event (366 vs. 365 at 
+association), presumably because its pick sets yield more robust hypocentral 
+solutions that occasionally match catalog events not previously associated.
+
+\subsubsection{GaMMA}
+The GaMMA+NonLinLoc 1D pathway shows a large recall drop relative to the
+association stage. The confusion matrices in Table~\ref{tab:gamma_nll1d_events}
+quantify this loss at each threshold:
+\begin{itemize}
+  \item \textbf{Threshold 0.1:} Only 280 of 380 catalog events are successfully 
+    located (recall~0.737), down from 365 at association, a loss of 85 events (23\% relative drop). The 810~$PS_E$ that
+    survive location (down from 1,060 at association) give an event \ac{FDR} of 
+    0.743.
+  \item \textbf{Threshold 0.2:} Recall decreases further to 0.716 (272~$MH_E$, 
+    108~$MS_E$), with 669~$PS_E$ (\ac{FDR}~0.711).
+  \item \textbf{Threshold 0.3:} Recall slightly recovers to 0.732 (278~$MH_E$, 
+    102~$MS_E$), with 535~$PS_E$ (\ac{FDR}~0.658), as the cleaner pick set 
+    partially compensates for reduced input volume.
+\end{itemize}
+
+The origin time residual histograms in the right column of
+Table~\ref{tab:gamma_nll1d_events} show a marked improvement over the
+association-stage estimates. The NonLinLoc inversion largely eliminates GaMMA's 
+$0.5$\,s systematic bias: the mean origin time residual at threshold 0.1 is 
+only $-0.062$\,s (MAE~$= 0.161$\,s, RMSE~$= 0.210$\,s, median~$= -0.066$\,s). 
+At threshold 0.2, the residuals tighten further (MAE~$= 0.150$\,s, 
+RMSE~$= 0.208$\,s), and at threshold 0.3 the MAE is 0.154\,s. The residual 
+histograms are approximately Gaussian and centered near zero, confirming that 
+NonLinLoc's probabilistic inversion effectively re-estimates origin times 
+independent of the associator's preliminary values.
+
+\paragraph{Post-location FDR.}
+Notably, the NonLinLoc location stage does not substantially reduce event-level
+\ac{FDR} for the GaMMA pathway. At threshold~0.1, \ac{FDR} changes only from
+0.744 at association to 0.743 after location, indicating that NonLinLoc
+removes matched and proposed events in comparable proportions. The same
+behavior is observed at higher thresholds: \ac{FDR} is 0.711 at threshold~0.2
+and 0.658 at threshold~0.3. Therefore, for GaMMA+NonLinLoc, the primary lever
+for controlling post-location proposed event volume is the picker probability
+threshold rather than the location step itself.
+
+\paragraph{Spatial residuals.}
+The epicentral distance and depth difference histograms
+(Table~\ref{tab:gamma_nll1d_spatial}) demonstrate substantial improvement over 
+the association-stage locations. At threshold 0.1:
+\begin{itemize}
+  \item \textbf{Epicentral distance:} median 0.67\,km (mean~1.11\,km,
+    RMSE~1.75\,km), with 90\% of events located within 2.68\,km of the OGS 
+    catalog position. This represents a $\sim$39\% improvement in median 
+    epicentral accuracy compared to GaMMA's association-level estimates (median 
+    1.10\,km).
+  \item \textbf{Depth:} mean $0.50$\,km (median $0.72$\,km, std 2.75\,km), 
+    with the interquartile range spanning $-0.40$\,km to $+1.99$\,km. The 
+    positive bias indicates that NonLinLoc consistently places events slightly 
+    deeper than the OGS catalog.
+\end{itemize}
+At threshold 0.3, the median epicentral distance remains stable (0.66\,km) 
+while depth scatter is slightly reduced (std~2.71\,km), confirming that higher 
+thresholds produce marginally cleaner location estimates.
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{c|c|c|}
+    & Confusion Matrix & Time Residual Histogram \\\hline
+    0.1 & \includegraphics[width=0.35\textwidth]{OGSCatalog/GaMMA0.1/img/.all_OGSLocalMagnitude_EventsConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.1/img/.all_OGSLocalMagnitude_EventsTimeDiff.pdf} \\\hline
+    0.2 & \includegraphics[width=0.35\textwidth]{OGSCatalog/GaMMA0.2/img/.all_OGSLocalMagnitude_EventsConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.2/img/.all_OGSLocalMagnitude_EventsTimeDiff.pdf} \\\hline
+    0.3 & \includegraphics[width=0.35\textwidth]{OGSCatalog/GaMMA0.3/img/.all_OGSLocalMagnitude_EventsConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.3/img/.all_OGSLocalMagnitude_EventsTimeDiff.pdf} \\\hline
+  \end{tabular}
+  \caption{[PhaseNet (INSTANCE) | GaMMA | NonLinLoc 1D] Event detection and 
+  origin time accuracy using 1D velocity model. Left column: event-level 
+  confusion matrices comparing NonLinLoc-located events against the OGS 
+  reference catalog. Right column: origin time residuals between the automated 
+  workflow and OGS solutions.}
+  \label{tab:gamma_nll1d_events}
+\end{table}
+
+\newpage
+\begin{landscape}
+  \begin{table}[H]
+    \centering
+    \begin{tabular}{c|c|c|}
+      & Epicentral Distance Difference & Depth Difference \\\hline
+      0.1 & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.1/img/.all_OGSLocalMagnitude_EpiDistDiff.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.1/img/.all_OGSLocalMagnitude_DepthDiff.pdf} \\\hline
+      0.2 & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.2/img/.all_OGSLocalMagnitude_EpiDistDiff.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.2/img/.all_OGSLocalMagnitude_DepthDiff.pdf} \\\hline
+      0.3 & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.3/img/.all_OGSLocalMagnitude_EpiDistDiff.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/GaMMA0.3/img/.all_OGSLocalMagnitude_DepthDiff.pdf} \\\hline
+    \end{tabular}
+    \caption{[PhaseNet (INSTANCE) | GaMMA | NonLinLoc 1D] Epicentral distance 
+    and depth differences as a function of P and S thresholds.}
+    \label{tab:gamma_nll1d_spatial}
+  \end{table}
+\end{landscape}
+
+\subsubsection{PyOcto}
+In contrast, the PyOcto+NonLinLoc 1D pathway
+(Table~\ref{tab:pyocto_nll1d_events}) preserves nearly all associated events
+through the location stage. The confusion matrices show:
+\begin{itemize}
+  \item \textbf{Threshold 0.1:} 366 of 380 catalog events are located
+    (recall~0.963), with only 14~$MS_E$, essentially matching the 365 events 
+    from association while recovering one additional event. The 1,304~$PS_E$ 
+    (\ac{FDR}~0.781) suggest abundant new detections beyond the OGS catalog.
+  \item \textbf{Threshold 0.2:} 359~$MH_E$ (recall~0.945), 21~$MS_E$, 
+    947~$PS_E$ (\ac{FDR}~0.725).
+  \item \textbf{Threshold 0.3:} 353~$MH_E$ (recall~0.929), 27~$MS_E$, 
+    734~$PS_E$ (\ac{FDR}~0.675).
+\end{itemize}
+Even at the most restrictive threshold, PyOcto+NonLinLoc locates 73 more
+catalog events than GaMMA+NonLinLoc at threshold 0.1 (353 vs. 280).\\
+
+The origin time residual histograms show characteristics similar to the GaMMA 
+pathway after NonLinLoc inversion: mean~$= -0.061$\,s at threshold 0.1 
+(MAE~$=0.171$\,s, RMSE~$=0.236$\,s, median~$=-0.069$\,s). At threshold 0.3, the 
+residuals tighten (MAE~$=0.145$\,s, RMSE~$=0.196$\,s), representing the best 
+origin time accuracy across all configurations. The slight negative bias
+($\sim -0.06$\,s) is common to both pathways after NonLinLoc processing,
+suggesting a systematic difference between the automated and manual
+origin-time estimation procedures.
+
+\paragraph{Post-location FDR.}
+Notably, the NonLinLoc location stage does not substantially reduce \ac{FDR}
+for either pathway. GaMMA+NonLinLoc retains an \ac{FDR} of 0.743 at
+threshold~0.1 (compared to 0.744 at association), because the location step
+removes matched and proposed events in roughly equal proportion.
+PyOcto+NonLinLoc likewise maintains an \ac{FDR} of 0.781, identical to the
+association stage, indicating that virtually all of PyOcto's proposed event
+hypotheses survive NonLinLoc inversion. This persistence suggests that the
+proposed events possess internally consistent pick sets and plausible
+hypocentral solutions, strengthening the hypothesis that many represent genuine
+seismicity below the OGS catalog completeness threshold rather than spurious
+associations. As thresholds rise to 0.3, \ac{FDR} decreases to 0.658
+(GaMMA+NonLinLoc) and 0.675 (PyOcto+NonLinLoc), confirming that threshold
+tuning remains the primary lever for controlling the proposed-event volume in
+the final catalog.
+
+\paragraph{Spatial residuals.}
+The epicentral distance and depth difference histograms
+(Table~\ref{tab:pyocto_nll1d_spatial}) reveal that PyOcto+NonLinLoc achieves 
+comparable spatial accuracy to GaMMA+NonLinLoc for the events that both locate, 
+but crucially does so for a much larger event set:
+\begin{itemize}
+  \item \textbf{Epicentral distance (0.1):} median~0.72\,km (mean~1.17\,km, 
+    RMSE~1.81\,km), with the 90th percentile at 2.75\,km. These values are 
+    slightly larger than GaMMA's (median~0.67\,km) because PyOcto locates 86 
+    additional events, many of which are smaller or more peripheral events with 
+    inherently larger location uncertainties.
+  \item \textbf{Depth (0.1):} mean~$0.15$\,km (median~$0.68$\,km,
+    std~3.22\,km). The interquartile range ($-0.86$\,km to $+1.89$\,km) is 
+    wider than GaMMA's, again reflecting the inclusion of harder-to-locate 
+    events.
+  \item \textbf{Threshold 0.3:} Spatial accuracy improves: median epicentral 
+    distance decreases to 0.62\,km (mean~0.99\,km), and depth standard 
+    deviation narrows to 2.76\,km, approaching GaMMA+NonLinLoc levels.
+\end{itemize}
+
+PyOcto's velocity-model-aware association ensures that retained picks are
+spatially coherent from the outset, so NonLinLoc's inversion converges for 
+virtually every event hypothesis. The slightly larger spatial residuals 
+compared to GaMMA are a direct consequence of PyOcto's higher event retention.
+\begin{table}[H]
+  \centering
+  \begin{tabular}{c|c|c|}
+    & Confusion Matrix & Time Residual Histogram \\\hline
+    0.1 & \includegraphics[width=0.35\textwidth]{OGSCatalog/PyOcto0.1/img/.all_OGSLocalMagnitude_EventsConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.1/img/.all_OGSLocalMagnitude_EventsTimeDiff.pdf} \\\hline
+    0.2 & \includegraphics[width=0.35\textwidth]{OGSCatalog/PyOcto0.2/img/.all_OGSLocalMagnitude_EventsConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.2/img/.all_OGSLocalMagnitude_EventsTimeDiff.pdf} \\\hline
+    0.3 & \includegraphics[width=0.35\textwidth]{OGSCatalog/PyOcto0.3/img/.all_OGSLocalMagnitude_EventsConfMtx.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.3/img/.all_OGSLocalMagnitude_EventsTimeDiff.pdf} \\\hline
+  \end{tabular}
+  \caption{[PhaseNet (INSTANCE) | PyOcto | NonLinLoc 1D] Event detection and 
+  origin time accuracy using 1D velocity model, compared against the OGS 
+  reference catalog.}
+  \label{tab:pyocto_nll1d_events}
+\end{table}
+
+\newpage
+\begin{landscape}
+  \begin{table}[H]
+    \centering
+    \begin{tabular}{c|c|c|}
+      & Epicentral Distance Difference & Depth Difference \\\hline
+      0.1 & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.1/img/.all_OGSLocalMagnitude_EpiDistDiff.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.1/img/.all_OGSLocalMagnitude_DepthDiff.pdf} \\\hline
+      0.2 & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.2/img/.all_OGSLocalMagnitude_EpiDistDiff.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.2/img/.all_OGSLocalMagnitude_DepthDiff.pdf} \\\hline
+      0.3 & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.3/img/.all_OGSLocalMagnitude_EpiDistDiff.pdf} & \includegraphics[width=0.55\textwidth]{OGSCatalog/PyOcto0.3/img/.all_OGSLocalMagnitude_DepthDiff.pdf} \\\hline
+    \end{tabular}
+    \caption{[PhaseNet (INSTANCE) | PyOcto | NonLinLoc 1D] Epicentral distance 
+    and depth differences as a function of P and S thresholds.}
+    \label{tab:pyocto_nll1d_spatial}
+  \end{table}
+\end{landscape}
+
+\newpage
+\section{Magnitude Estimation}
+With the location stage revealing a clear advantage for the PyOcto pathway in
+event retention, we now assess magnitude estimation by comparing the local
+magnitudes computed by each PhaseNet (INSTANCE)+Associator+NonLinLoc
+combination against the OGS reference catalog. For each matched event the 
+magnitude residual is
+\[
+  \Delta M_L = M_{L,\,\text{detected}} - M_{L,\,\text{catalog}}.
+\]
+
+Because magnitude estimation acts on located events, its reach is directly 
+governed by the NonLinLoc recall. For GaMMA+NonLinLoc (280~$MH_E$ at threshold 
+0.1), magnitudes are computed on a substantially smaller subset of the catalog 
+than for PyOcto+NonLinLoc (366~$MH_E$).
+
+\subsection{GaMMA}
+The left column of Table~\ref{tab:gamma_magnitude} shows the magnitude
+distribution of matched events compared to the OGS catalog, while the right
+column displays the magnitude residuals. At threshold 0.1, the 280 matched 
+events yield an overall magnitude residual of mean~$\Delta M_L = -0.193$ (MAE 
+$= 0.225$, RMSE $= 0.316$, median~$= -0.108$). The negative mean indicates a 
+systematic underestimation of magnitudes by the automated pipeline, most
+pronounced below $M_L \approx 2$.
+
+The residual scatter plots in the right column reveal a
+magnitude-dependent pattern:
+\begin{itemize}
+  \item For $M_L \gtrsim 2$, automated and catalog magnitudes agree well, with 
+    residuals concentrated within $\pm 0.3$ magnitude units.
+  \item Below $M_L \approx 2$, the residual distribution broadens considerably 
+    and exhibits a bimodal structure, with one cluster near zero and another 
+    showing systematic underestimation by 0.3--0.8 magnitude units.
+\end{itemize}
+This bimodality likely arises from differences in the station subsets used by 
+the automated and manual analyses.
+
+At thresholds 0.2 and 0.3, the magnitude residual statistics remain stable 
+(mean $\Delta M_L \approx -0.18$ to $-0.19$, MAE $\approx 0.22$).
+\begin{table}[H]
+  \centering
+  \begin{tabular}{c|c|c|}
+    & Magnitude distribution & Magnitude residuals \\\hline
+    0.1 & \includegraphics[width=0.3\textwidth]{OGSCatalog/GaMMA0.1/img/.all_OGSLocalMagnitude_MagLDist.pdf} & \includegraphics[width=0.6\textwidth]{OGSCatalog/GaMMA0.1/img/.all_OGSLocalMagnitude_MagLDiff.pdf} \\\hline
+    0.2 & \includegraphics[width=0.3\textwidth]{OGSCatalog/GaMMA0.2/img/.all_OGSLocalMagnitude_MagLDist.pdf} & \includegraphics[width=0.6\textwidth]{OGSCatalog/GaMMA0.2/img/.all_OGSLocalMagnitude_MagLDiff.pdf} \\\hline
+    0.3 & \includegraphics[width=0.3\textwidth]{OGSCatalog/GaMMA0.3/img/.all_OGSLocalMagnitude_MagLDist.pdf} & \includegraphics[width=0.6\textwidth]{OGSCatalog/GaMMA0.3/img/.all_OGSLocalMagnitude_MagLDiff.pdf} \\\hline
+  \end{tabular}
+  \caption{[PhaseNet (INSTANCE) | GaMMA | NonLinLoc 1D] Magnitude estimation 
+  performance across detection thresholds.}
+  \label{tab:gamma_magnitude}
+\end{table}
+
+\subsection{PyOcto}
+Table~\ref{tab:pyocto_magnitude} presents the magnitude estimation results for 
+the PyOcto+NonLinLoc pathway, which benefits from a substantially larger 
+matched-event set. At threshold 0.1, the 366~$MH_E$ yield 
+mean~$\Delta M_L = -0.190$ (MAE $= 0.224$, RMSE $= 0.313$, median~$= -0.117$).
+
+The magnitude distribution plots in the left column show that PyOcto recovers a 
+more complete magnitude--frequency distribution, including more events in the 
+$M_L < 1$ range where GaMMA's location failures create gaps. The residual 
+scatter plots in the right column display the same magnitude-dependent pattern 
+as GaMMA: tight agreement above $M_L \approx 2$ and increasing scatter below, 
+with the characteristic bimodal structure at low magnitudes.
+
+At higher thresholds, the PyOcto pathway shows slight improvement in residual 
+statistics: mean~$\Delta M_L$ improves from $-0.190$ (threshold 0.1) to 
+$-0.174$ (threshold 0.3), with MAE decreasing from $0.224$ to $0.218$ and 
+median from $-0.117$ to $-0.099$. This marginal improvement reflects the 
+preferential removal of poorly constrained low-magnitude events at higher 
+thresholds, which have the largest magnitude residuals.
+\begin{table}[H]
+  \centering
+  \begin{tabular}{c|c|c|}
+    & Magnitude distribution & Magnitude residuals \\\hline
+    0.1 & \includegraphics[width=0.3\textwidth]{OGSCatalog/PyOcto0.1/img/.all_OGSLocalMagnitude_MagLDist.pdf} & \includegraphics[width=0.6\textwidth]{OGSCatalog/PyOcto0.1/img/.all_OGSLocalMagnitude_MagLDiff.pdf} \\\hline
+    0.2 & \includegraphics[width=0.3\textwidth]{OGSCatalog/PyOcto0.2/img/.all_OGSLocalMagnitude_MagLDist.pdf} & \includegraphics[width=0.6\textwidth]{OGSCatalog/PyOcto0.2/img/.all_OGSLocalMagnitude_MagLDiff.pdf} \\\hline
+    0.3 & \includegraphics[width=0.3\textwidth]{OGSCatalog/PyOcto0.3/img/.all_OGSLocalMagnitude_MagLDist.pdf} & \includegraphics[width=0.6\textwidth]{OGSCatalog/PyOcto0.3/img/.all_OGSLocalMagnitude_MagLDiff.pdf} \\\hline
+  \end{tabular}
+  \caption{[PhaseNet (INSTANCE) | PyOcto | NonLinLoc 1D] Magnitude estimation 
+  performance across detection thresholds.}
+  \label{tab:pyocto_magnitude}
+\end{table}
+
+\newpage
+\section{Missing Picks and Events}
+\subsection{Magnitude Distribution}
+To further analyze which events the pipeline fails to detect, we examine the
+magnitude distributions of missed (MS) and proposed (PS) events 
+(Table~\ref{tab:msps_magnitude}). A systematic understanding of which events
+are lost, and where new detections appear, is essential for assessing the
+operational completeness of the automated system. For the matching, we use a 
+tolerance of 2 seconds in origin time and 8\,km in epicentral distance.
+
+\paragraph{GaMMA+NonLinLoc missed events.}
+At threshold 0.1, GaMMA+NonLinLoc misses 100 catalog events, distributed as
+follows: 46 with $M_L < 1$, 43 with $1 \leq M_L < 2$, 11 with $2 \leq M_L < 3$.
+At threshold 0.3, the missed count is 102, with 50 below $M_L = 1$, 45 between 
+$M_L = 1$ and $M_L = 2$, and 7 with $M_L \geq 2$. The near-constancy of the 
+missed-event count across thresholds suggests that GaMMA's location failures 
+are the dominant source of loss, not the picker threshold.
+
+\paragraph{PyOcto+NonLinLoc missed events.}
+PyOcto misses far fewer events: only 14 at threshold 0.1 (6 with $M_L < 1$, 2 
+with $1 \leq M_L < 2$, 6 with $2 \leq M_L < 3$). At threshold 0.3, $MS_E$ rise 
+to 27 (11 with $M_L < 1$, 8 with $1 \leq M_L < 2$, 8 with $2 \leq M_L < 3$). A 
+verification of all events with $M_L > 2$ confirms their inclusion in the ML 
+catalog; however, they occur at distances exceeding the threshold defined for 
+the matching criteria and lie near the boundary of the study area.
+
+\paragraph{Proposed events.}
+Proposed events (1,304 for PyOcto; 810 for GaMMA, at threshold 0.1) are 
+distributed throughout the monitoring area, with concentrations that may 
+indicate genuine micro-seismicity clusters below the OGS catalog detection 
+threshold. The spatial distributions of these missed and proposed events are 
+shown in Figs.~\ref{fig:gamma_eventsFalse} and~\ref{fig:pyocto_eventsFalse}. A 
+spurious event with $M_L \geq 10$ located near the center of the network by 
+PyOcto+NonLinLoc at threshold 0.1 is a clear outlier in the magnitude 
+distribution and is likely a misassociation or a processing artifact, as no 
+such event exists in the GaMMA+NonLinLoc results. This event should be flagged 
+for manual review.
+
+\begin{landscape}
+  \begin{table}[H]
+    \centering
+    \begin{tabular}{c|c|c|}
+      & [GaMMA | NonLinLoc 1D] & [PyOcto | NonLinLoc 1D] \\\hline
+      0.1 & \includegraphics[width=0.5\textwidth]{OGSCatalog/GaMMA0.1/img/.all_OGSLocalMagnitude_MSPSMagLDist.pdf} & \includegraphics[width=0.5\textwidth]{OGSCatalog/PyOcto0.1/img/.all_OGSLocalMagnitude_MSPSMagLDist.pdf} \\\hline
+      0.2 & \includegraphics[width=0.5\textwidth]{OGSCatalog/GaMMA0.2/img/.all_OGSLocalMagnitude_MSPSMagLDist.pdf} & \includegraphics[width=0.5\textwidth]{OGSCatalog/PyOcto0.2/img/.all_OGSLocalMagnitude_MSPSMagLDist.pdf} \\\hline
+      0.3 & \includegraphics[width=0.5\textwidth]{OGSCatalog/GaMMA0.3/img/.all_OGSLocalMagnitude_MSPSMagLDist.pdf} & \includegraphics[width=0.5\textwidth]{OGSCatalog/PyOcto0.3/img/.all_OGSLocalMagnitude_MSPSMagLDist.pdf} \\\hline
+    \end{tabular}
+    \caption{Magnitude distribution of missed (MS) and proposed (PS) events 
+    as a function of P and S thresholds. MS events are OGS catalog entries not 
+    matched by the automated system; PS events are automated detections absent 
+    from the OGS catalog.}
+    \label{tab:msps_magnitude}
+  \end{table}
+\end{landscape}
+
+\newpage
+\begin{figure}
+  \centering
+  \includegraphics[width=.9\textwidth]{OGSCatalog/GaMMA0.1/img/.all_OGSLocalMagnitude_EventsFalse.pdf}
+  \caption{[PhaseNet (INSTANCE) | GaMMA | NonLinLoc 1D] Spatial distribution 
+  of missed (blue) and proposed (pink) events at detection threshold 0.1.}
+  \label{fig:gamma_eventsFalse}
+\end{figure}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=.9\textwidth]{OGSCatalog/PyOcto0.1/img/.all_OGSLocalMagnitude_EventsFalse.pdf}
+  \caption{[PhaseNet (INSTANCE) | PyOcto | NonLinLoc 1D] Spatial distribution 
+  of missed (blue) and proposed (pink) events at detection threshold 0.1.
+  PyOcto misses only 14 events concentrated at the periphery of the Bullettin 
+  area (red polygon). Proposed events (1,304) are distributed throughout the 
+  monitoring area, with concentrations that may indicate genuine 
+  micro-seismicity clusters below the OGS catalog detection threshold.}
+  \label{fig:pyocto_eventsFalse}
+\end{figure}
+
+\begin{comment}
+  
+\newpage
+\section{Risk Management Implications}
+From a risk-management perspective, the choice of picker thresholds and
+association parameters determines the balance between catalog recall
+(lower MS) and operational FDR (lower PS). The analysis in this
+chapter suggests two practical operating modes:
+\begin{itemize}
+  \item Surveillance mode (24/7 monitoring): moderate thresholds (e.g., P/S
+    in the 0.2--0.3 range) with PyOcto or GaMMA tuned for low PS. This
+    minimizes false alarms and analyst load while maintaining sensitivity
+    to felt events and most M\,$\gtrsim$\,2 microseismicity.
+  \item Response mode (after felt mainshock or in swarm): relaxed thresholds
+    to prioritize recall and situational awareness, with automated
+    QC (e.g., minimum station count, timing residual gates) to filter the
+    highest-confidence detections for rapid dissemination.
+\end{itemize}
+
+Timing precision (narrow residuals) directly improves phase association and
+location, leading to more reliable impact assessment (e.g., faster, more
+accurate epicentral mapping to support civil protection decisions). Magnitude
+bias and scatter influence downstream hazard indicators (frequency--magnitude
+statistics and aftershock productivity), so periodic calibration against the
+OGS catalog is recommended.
+
+\subsection{Operational Recommendations}
+\begin{itemize}
+  \item Picker: Use PhaseNet trained on INSTANCE as default; validate new
+    deployments with time-residual diagnostics and MS/PS distributions.
+  \item Associator: Prefer PyOcto in dense local networks or swarm scenarios;
+    prefer GaMMA where probabilistic treatment of uncertainty is
+    advantageous (sparser coverage, noisier picks).
+  \item Thresholds: Start at 0.2--0.3 for P and S; adjust per-station or
+    per-region if systematic MS/PS patterns appear in quality-control
+    dashboards.
+  \item QC gates: Enforce minimum station count, maximum per-station residual,
+    and P/S ordering checks before publishing events.
+  \item Review loop: Track KPIs (recall, FDR, lead time) and re-tune monthly
+    or after major configuration changes.
+\end{itemize}
+
+\subsection{Limitations and Future Work}
+Integration of other associators (e.g., REAL) and consistent 3D velocity models 
+across all workflows are active areas of development. Magnitude calibration 
+against multiple reference scales and robust uncertainty quantification (e.g., 
+ensemble pickers/associators) will further enhance reliability for operational 
+risk management.
+
+\paragraph{Comparative summary.} For day-to-day surveillance, PhaseNet (INSTANCE)
+plus PyOcto or GaMMA at P/S thresholds of 0.2--0.3 provides a balanced trade-off
+between recall and FDR, with PyOcto often preferred in dense
+local networks and GaMMA in noisier or sparser conditions. Incorporating 3D
+velocity models generally improves event matching and timing residuals across
+all workflows.
+
+\begin{table}[H]
+  \centering
+  \caption{At-a-glance qualitative comparison of association/location workflows 
+  at typical P/S thresholds (0.2--0.3). Categories summarize observed behavior 
+  in this study; use KPI dashboards to refine per-network settings.}
+  \label{tab:algo_comparison}
+  \begin{tabular}{l|c|c|c|l}
+    Algorithm & Latency & Recall & FDR & Best for \\\hline
+    GaMMA  & Medium & High & Low--Medium & Sparse/noisy networks; probabilistic uncertainty handling \\
+    PyOcto & Low    & Medium--High & Low & Dense local networks; swarm sequences \\
+  \end{tabular}
+\end{table}
+\end{comment}
