@@ -198,15 +198,12 @@ validate_frontmatter() { # 68
     <<< "$frontmatter")
   while IFS= read -r key; do
     [[ -n "$key" ]] || continue
-    case "$key" in
-      @($ALLOWED_KEYS_PATTERN_GITHUB))
-        printf '[+] Valid field: %s\n' "$key"
-        ;;
-      *)
-        printf '[!] INVALID FIELD DETECTED: %s\n' "$key" >&2
-        ((errors += 1))
-        ;;
-    esac
+    if [[ "$key" =~ ^($ALLOWED_KEYS_PATTERN_GITHUB)$ ]]; then
+      printf '[+] Valid field: %s\n' "$key"
+    else
+      printf '[!] INVALID FIELD DETECTED: %s\n' "$key" >&2
+      ((errors += 1))
+    fi
   done <<< "$declared_keys"
 
   if ! has_key description "$frontmatter"; then

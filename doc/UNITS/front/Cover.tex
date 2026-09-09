@@ -1,0 +1,53 @@
+% Purpose: Title page for the UniTS PhD dissertation.
+% Status: Draft; institutional metadata requires author review
+% before submission.
+% Source-of-truth: doc/UNITS/UNITS.tex, doc/imgs/units_logo.png
+
+\newcommand\BackgroundPicFront{
+  \put(-4,0){
+    \parbox[b][\paperheight]{\paperwidth}{
+      \vfill
+      \centering
+      {\transparent{0.07}\includegraphics[width=\paperwidth,
+      height=\paperheight,keepaspectratio]{units_logo.png}}
+      \vfill
+    }
+  }
+}
+
+\title{\acf{AI} and \acf{ML} on Big Data Seismology}
+\author{Ken Tanaka Hernández}
+
+\begin{titlepage}
+  \begin{center}
+    \AddToShipoutPicture{\BackgroundPicFront}
+    {\LARGE\bfseries UNIVERSITA DEGLI STUDI DI TRIESTE\par}
+    \vspace{5mm}
+    {\Large\bfseries\acf{MIGe}\par}
+    \vspace{1cm}
+    \includegraphics[width=6cm,height=6cm,keepaspectratio]{units_logo.png}\par
+    \vspace{1cm}
+    {\LARGE PhD in \acf{ADSAI}\par}
+    \vspace{1cm}
+    {\LARGE\bfseries\thetitle\par}
+    \vspace{1cm}
+    {\large\today\par}
+    \vfill
+    {\large
+      \setlength{\tabcolsep}{12pt}
+      \begin{tabularx}{\linewidth}{
+          >{\raggedleft\arraybackslash}p{0.2\linewidth}
+          >{\raggedright\arraybackslash}X
+        }
+        Candidate & Supervisors \\
+        \bfseries \theauthor & \bfseries Dr. Monica Sugan (\acf{OGS};
+        \acf{CRS}) \\ [5mm]
+        & \bfseries Dr. Alejandro Rodriguez García (\acf{UniTS};
+        \acf{ADSAI}) \\ [1cm]
+      \end{tabularx}
+    }
+    Academic Year 2023/2024
+  \end{center}
+\end{titlepage}
+\ClearShipoutPicture
+\restoregeometry

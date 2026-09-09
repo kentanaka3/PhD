@@ -116,7 +116,7 @@ fail() { # 6
 # usage
 # -----
 # Print command-line usage information.
-usage() { # 21
+usage() { # 19
   cat <<EOF
 Usage: $SCRIPT COMMAND [OPTIONS] <path-to-agent-or-skill-file>
 
@@ -255,15 +255,12 @@ validate_frontmatter_github() { # 68
     <<< "$frontmatter")
   while IFS= read -r key; do
     [[ -n "$key" ]] || continue
-    case "$key" in
-      @($ALLOWED_KEYS_PATTERN_GITHUB))
-        printf '[+] Valid field: %s\n' "$key"
-        ;;
-      *)
-        printf '[!] INVALID FIELD DETECTED: %s\n' "$key" >&2
-        ((errors += 1))
-        ;;
-    esac
+    if [[ "$key" =~ ^($ALLOWED_KEYS_PATTERN_GITHUB)$ ]]; then
+      printf '[+] Valid field: %s\n' "$key"
+    else
+      printf '[!] INVALID FIELD DETECTED: %s\n' "$key" >&2
+      ((errors += 1))
+    fi
   done <<< "$declared_keys"
 
   if ! has_key description "$frontmatter"; then
@@ -330,15 +327,12 @@ validate_frontmatter_gemini() { # 93
     <<< "$frontmatter")
   while IFS= read -r key; do
     [[ -n "$key" ]] || continue
-    case "$key" in
-      @($ALLOWED_KEYS_PATTERN_GEMINI))
-        printf '[+] Valid field: %s\n' "$key"
-        ;;
-      *)
-        printf '[!] INVALID FIELD DETECTED: %s\n' "$key" >&2
-        ((errors += 1))
-        ;;
-    esac
+    if [[ "$key" =~ ^($ALLOWED_KEYS_PATTERN_GEMINI)$ ]]; then
+      printf '[+] Valid field: %s\n' "$key"
+    else
+      printf '[!] INVALID FIELD DETECTED: %s\n' "$key" >&2
+      ((errors += 1))
+    fi
   done <<< "$declared_keys"
 
   if ! has_key name "$frontmatter"; then
@@ -422,7 +416,7 @@ validate_frontmatter_gemini() { # 93
 # validate_frontmatter_claude
 # ---------------------------
 # Validate Claude Code subagent or skill frontmatter fields.
-validate_frontmatter_claude() { # 92
+validate_frontmatter_claude() { # 89
   local -r frontmatter="$1"
   local declared_keys key perm_val effort_val turns_val shell_val bool_key bool_val errors=0
 
@@ -430,15 +424,12 @@ validate_frontmatter_claude() { # 92
     <<< "$frontmatter")
   while IFS= read -r key; do
     [[ -n "$key" ]] || continue
-    case "$key" in
-      @($ALLOWED_KEYS_PATTERN_CLAUDE))
-        printf '[+] Valid field: %s\n' "$key"
-        ;;
-      *)
-        printf '[!] INVALID FIELD DETECTED: %s\n' "$key" >&2
-        ((errors += 1))
-        ;;
-    esac
+    if [[ "$key" =~ ^($ALLOWED_KEYS_PATTERN_CLAUDE)$ ]]; then
+      printf '[+] Valid field: %s\n' "$key"
+    else
+      printf '[!] INVALID FIELD DETECTED: %s\n' "$key" >&2
+      ((errors += 1))
+    fi
   done <<< "$declared_keys"
 
   if ! has_key description "$frontmatter"; then
@@ -478,14 +469,10 @@ validate_frontmatter_claude() { # 92
   if has_key maxTurns "$frontmatter"; then
     turns_val=$(get_field_value maxTurns "$frontmatter")
     turns_val=$(strip_quotes "$turns_val")
-    case "$turns_val" in
-      +([0-9]))
-        ;;
-      *)
-        printf '[!] SCHEMA ERROR: maxTurns must be a positive integer, got: %s\n' "$turns_val" >&2
-        ((errors += 1))
-        ;;
-    esac
+    if [[ ! "$turns_val" =~ ^[0-9]+$ ]]; then
+      printf '[!] SCHEMA ERROR: maxTurns must be a positive integer, got: %s\n' "$turns_val" >&2
+      ((errors += 1))
+    fi
   fi
 
   if has_key shell "$frontmatter"; then
@@ -522,7 +509,7 @@ validate_frontmatter_claude() { # 92
 # run_target
 # ----------
 # Validate one agent or skill file against the selected runtime schema.
-run_target() { # 19
+run_target() { # 21
   local -r target_type="$1"
   local -r target_file="$2"
   local frontmatter
@@ -547,7 +534,7 @@ run_target() { # 19
 # main
 # ----
 # Parse arguments, validate prerequisites, and dispatch the validator.
-main() { # 40
+main() { # 51
   require_command awk
   require_command date
   require_command printf

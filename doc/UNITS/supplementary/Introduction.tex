@@ -1,0 +1,294 @@
+% Purpose: Derive the homogeneous isotropic elastodynamic wave equation and its
+% P- and S-wave modes used in the Introduction.
+% Status: Draft; derivation and notation require academic review.
+% Source-of-truth: doc/UNITS/front/Introduction.tex, Eq.
+% (momentum_conservation) and Eq. (hooke_law).
+
+\section*{Derivation of the Isotropic Elastodynamic Wave Equation}
+\addcontentsline{toc}{section}{
+  Derivation of the Isotropic Elastodynamic Wave Equation
+}
+\label{sec:supp_derivation_wave_equation}
+
+Let $\Omega \subseteq \mathbb{R}^{3}$ be the spatial domain while time
+$t\in\mathbb{R}$, with indices $i,j,k\in\{1,2,3\}$ following the Einstein
+summation convention \ie{repeated indices are summed}. The displacement is
+$\mathbf{u}(\mathbf{x},t)$; the density $\rho(\mathbf{x}) > 0$, and the Lamé
+parameters $\lambda(\mathbf{x}), \mu(\mathbf{x}) > 0$ are spatially constant
+material parameters. Thus, the derivation concerns a homogeneous, isotropic,
+linear-elastic medium; it follows the standard continuum-elastodynamics
+treatment in \cite{AkiRichards1980}.
+\begin{equation}
+  \nabla \cdot \boldsymbol{\sigma} + \mathbf{f} = \rho
+  \frac{\partial^2 \mathbf{u}}{\partial t^2}
+  \label{eq:supp_cauchy_momentum}
+\end{equation}
+
+\subsection*{Kinematics and constitutive relation}
+
+The infinitesimal strain, its trace, and isotropic Hooke law are
+\begin{equation*}
+  \begin{aligned}
+    \epsilon_{ij}
+    & = \frac{1}{2}\left(\frac{\partial u_i}{\partial x_j}
+    + \frac{\partial u_j}{\partial x_i}\right) = \epsilon_{ji},
+    & \epsilon_{kk} & = \frac{\partial u_k}{\partial x_k}
+    = \nabla \cdot \mathbf{u}, \\
+    \sigma_{ij} & = \lambda\delta_{ij}\epsilon_{kk} + 2\mu\epsilon_{ij} \\
+    & = \lambda\delta_{ij}\frac{\partial u_k}{\partial x_k}
+    + \mu\left(\frac{\partial u_i}{\partial x_j}
+    + \frac{\partial u_j}{\partial x_i}\right),
+  \end{aligned}
+\end{equation*}
+where $\delta_{ij}$ is the Kronecker delta.
+
+\subsection*{Equation of motion}
+
+Since $\partial_{x_j}\lambda = \partial_{x_j}\mu = 0$, differentiation with
+respect to $x_j$ gives
+\begin{equation}
+  \begin{aligned}
+    \frac{\partial\sigma_{ij}}{\partial x_j} & = \frac{\partial}{\partial x_j}
+    \left[\lambda\delta_{ij}\frac{\partial u_k}{\partial x_k}
+      + \mu\left(\frac{\partial u_i}{\partial x_j}
+    + \frac{\partial u_j}{\partial x_i}\right)\right] \\
+    & = \lambda\frac{\partial}{\partial x_i}
+    \left(\frac{\partial u_k}{\partial x_k}\right)
+    + \mu\frac{\partial^2u_i}{\partial x_j\partial x_j}
+    + \mu\frac{\partial}{\partial x_i}
+    \left(\frac{\partial u_j}{\partial x_j}\right) \\
+    & = (\lambda + \mu)\frac{\partial}{\partial x_i}
+    \left(\frac{\partial u_k}{\partial x_k}\right) + \mu\nabla^2u_i.
+  \end{aligned}
+  \label{eq:supp_stress_divergence}
+\end{equation}
+The interchange
+$\partial_{x_j}\partial_{x_i}u_j = \partial_{x_i}\partial_{x_j}u_j$ used in
+the second line is valid because the displacement components are assumed to be
+twice continuously differentiable, $u_j\in C^2(\Omega \times \mathbb{R})$.
+Spatially constant $\lambda$ and $\mu$ separately justify taking those
+coefficients outside the spatial derivatives.
+
+Newton's second law applied to a differential volume gives a force balance per
+unit volume. Its inertial term is mass density times acceleration,
+$\rho\partial_t^2u_i$. The stress-divergence term
+$\partial_{x_j}\sigma_{ij}$ is the $i$th component of the net internal force
+transmitted across the volume boundary. The remaining term $f_i$ is an
+externally prescribed body force per unit volume, for example an equivalent
+force representation of a seismic source. Thus, for each $i\in\{1,2,3\}$,
+conservation of linear momentum gives
+\begin{equation}
+  \begin{aligned}
+    \rho\frac{\partial^2u_i}{\partial t^2}
+    & = \frac{\partial\sigma_{ij}}{\partial x_j} + f_i, \\
+    \rho\frac{\partial^2\mathbf{u}}{\partial t^2}
+    & = (\lambda + \mu)\nabla(\nabla \cdot \mathbf{u})
+    + \mu\nabla^2\mathbf{u} + \mathbf{f}.
+  \end{aligned}
+  \label{eq:supp_navier_cauchy}
+\end{equation}
+The first line is the component-wise balance. Substituting
+\eqref{eq:supp_stress_divergence} into it and collecting the three
+components produces the second line, the vector Navier--Cauchy equation in
+\eqref{eq:navier_cauchy} of the main text.
+
+\subsection*{P- and S-wave projections}
+
+For source-free body-wave modes, set $\mathbf{f} = \mathbf{0}$. In an unbounded
+homogeneous medium \ie{one with no physical boundaries and with a smooth
+displacement field that decays sufficiently rapidly at infinity}, the Helmholtz
+decomposition expresses $\mathbf{u}(\mathbf{x},t)$ through a scalar potential
+$\phi$ and a vector potential $\boldsymbol{\psi}$ \cite{MorseFeshbach1953}.
+The Coulomb gauge $\nabla \cdot \boldsymbol{\psi} = 0$, together with the
+stated decay condition, excludes nonzero harmonic residuals:
+\begin{equation*}
+  \begin{aligned}
+    \mathbf{u} = \mathbf{u}_\mathrm{P} + \mathbf{u}_\mathrm{S}
+    & = \nabla\phi + \nabla \times \boldsymbol{\psi},
+    &\nabla \cdot \boldsymbol{\psi}& = 0, \\
+    \nabla \cdot \mathbf{u}& = \nabla^2\phi,
+    &\nabla \times \mathbf{u}& = -\nabla^2\boldsymbol{\psi}.
+  \end{aligned}
+\end{equation*}
+Taking the divergence of \eqref{eq:supp_navier_cauchy} gives
+\begin{equation*}
+  \begin{aligned}
+    \rho\frac{\partial^2}{\partial t^2}(\nabla \cdot \mathbf{u})
+    & = (\lambda + \mu)\nabla^2(\nabla \cdot \mathbf{u})
+    +\mu\nabla^2(\nabla \cdot \mathbf{u}) \\
+    & = (\lambda + 2\mu)\nabla^2(\nabla \cdot \mathbf{u}), \\
+    \frac{\partial^2}{\partial t^2}(\nabla^2\phi)
+    & = \frac{\lambda + 2\mu}{\rho}\nabla^2(\nabla^2\phi).
+  \end{aligned}
+\end{equation*}
+Equivalently,
+\begin{equation*}
+  \nabla^2\left[
+    \frac{\partial^2\phi}{\partial t^2} -
+    \frac{\lambda + 2\mu}{\rho}\nabla^2\phi
+  \right] = 0.
+\end{equation*}
+The bracketed residual is harmonic. The gauge and decay conditions exclude a
+nonzero harmonic residual, so the scalar potential satisfies
+\begin{equation}
+  \begin{aligned}
+    \frac{\partial^2\phi}{\partial t^2} & = \alpha^2\nabla^2\phi,
+    &\alpha^2& = \frac{\lambda + 2\mu}{\rho}.
+  \end{aligned}
+  \label{eq:supp_p_wave_equation}
+\end{equation}
+
+Taking the curl of \eqref{eq:supp_navier_cauchy} gives
+\begin{equation*}
+  \begin{aligned}
+    \rho\nabla \times \frac{\partial^2\mathbf{u}}{\partial t^2}
+    & = (\lambda + \mu)\nabla \times \nabla(\nabla \cdot \mathbf{u})
+    +\mu\nabla \times \nabla^2\mathbf{u} \\
+    & = \mathbf{0} + \mu\nabla^2(\nabla \times \mathbf{u}) \\
+    & = \mu\nabla^2(\nabla \times \mathbf{u}).
+  \end{aligned}
+\end{equation*}
+The first term vanishes because the curl of a gradient is zero \ie{
+$\nabla \times \nabla f = 0$ for any smooth scalar field $f$}. The temporal
+derivatives commute with curl, and curl commutes with the Laplacian because the
+field is sufficiently smooth. Therefore,
+\begin{equation*}
+  \begin{aligned}
+    \rho\frac{\partial^2}{\partial t^2}(\nabla \times \mathbf{u})
+    & = \mu\nabla^2(\nabla \times \mathbf{u}), \\
+    \rho\frac{\partial^2}{\partial t^2}(-\nabla^2\boldsymbol{\psi})
+    & = \mu\nabla^2(-\nabla^2\boldsymbol{\psi}), \\
+    - \rho\nabla^2\frac{\partial^2\boldsymbol{\psi}}{\partial t^2}
+    & = -\mu\nabla^4\boldsymbol{\psi}.
+  \end{aligned}
+\end{equation*}
+Equivalently,
+\begin{equation*}
+  \nabla^2\left[\frac{\partial^2\boldsymbol{\psi}}{\partial t^2}
+    - \frac{\mu}{\rho}\nabla^2\boldsymbol{\psi}
+  \right] = \mathbf{0}.
+\end{equation*}
+The bracketed vector residual is harmonic. Under the same gauge and decay
+conditions, it vanishes, so the shear potential satisfies
+\begin{equation}
+  \begin{aligned}
+    \frac{\partial^2\boldsymbol{\psi}}{\partial t^2}
+    & = \beta^2\nabla^2\boldsymbol{\psi},
+    &\beta^2& = \frac{\mu}{\rho}.
+  \end{aligned}
+  \label{eq:supp_s_wave_equation}
+\end{equation}
+Thus the P mode depends on the bulk-plus-shear stiffness $\lambda + 2\mu$
+whereas the S mode only depends on the shear modulus $\mu$. Under the
+main text's conventional conditions $\rho > 0$, $\lambda > 0$, and $\mu > 0$,
+\begin{equation*}
+  \alpha^2 - \beta^2 = \frac{\lambda + \mu}{\rho} > 0
+  \quad\Longrightarrow\quad \alpha > \beta.
+\end{equation*}
+
+\subsection*{Alternative curl--curl formulation}
+
+The preceding divergence and curl projections establish the scalar and vector
+potential equations directly. The equivalent curl--curl formulation below
+reconstructs the same separation at the displacement level, making explicit how
+volumetric and rotational motions enter the source-free Navier--Cauchy equation
+under the same gauge and decay conditions.
+
+Using the vector identity for the Laplacian of a vector field,
+\begin{equation*}
+  \nabla^2\mathbf{u}
+  = \nabla(\nabla \cdot \mathbf{u}) - \nabla \times (\nabla \times \mathbf{u})
+\end{equation*}
+the source-free Navier--Cauchy equation \eqref{eq:supp_navier_cauchy} becomes
+\begin{equation}
+  \begin{aligned}
+    \rho\frac{\partial^2\mathbf{u}}{\partial t^2}
+    & = (\lambda + \mu)\nabla(\nabla \cdot \mathbf{u})
+    + \mu\nabla^2\mathbf{u} \\
+    & = (\lambda + \mu)\nabla(\nabla \cdot \mathbf{u})
+    + \mu\left[\nabla(\nabla \cdot \mathbf{u})
+    - \nabla \times (\nabla \times \mathbf{u})\right] \\
+    & = (\lambda + 2\mu)\nabla(\nabla \cdot \mathbf{u})
+    - \mu\nabla \times (\nabla \times \mathbf{u}).
+  \end{aligned}
+  \label{eq:supp_curl_curl_navier_cauchy}
+\end{equation}
+The first term is the irrotational force associated with volumetric dilation or
+compression. The second is the rotational force associated with equivoluminal
+shear deformation.
+
+Substitution into \eqref{eq:supp_curl_curl_navier_cauchy} gives
+\begin{equation*}
+  \begin{aligned}
+    \rho\frac{\partial^2}{\partial t^2}
+    \left(\nabla\phi + \nabla \times \boldsymbol{\psi}\right)
+    & = (\lambda + 2\mu)\nabla(\nabla^2\phi) - \mu\nabla \times \nabla \times
+    \left(\nabla \times \boldsymbol{\psi}\right), \\
+    \nabla \times \nabla \times \boldsymbol{\psi}
+    & = \nabla(\nabla \cdot \boldsymbol{\psi}) - \nabla^2\boldsymbol{\psi}
+    = -\nabla^2\boldsymbol{\psi}, \\
+    \nabla \times \nabla \times \left(\nabla \times \boldsymbol{\psi}\right)
+    & = -\nabla^2\left(\nabla \times \boldsymbol{\psi}\right).
+  \end{aligned}
+\end{equation*}
+Consequently, the irrotational and solenoidal contributions satisfy
+\begin{equation}
+  \nabla\left[\rho\frac{\partial^2\phi}{\partial t^2}
+  - (\lambda + 2\mu)\nabla^2\phi\right]
+  + \nabla \times \left[\rho\frac{\partial^2\boldsymbol{\psi}}{\partial t^2}
+  - \mu\nabla^2\boldsymbol{\psi}\right] = \mathbf{0}.
+  \label{eq:supp_helmholtz_decoupling}
+\end{equation}
+Taking the divergence of \eqref{eq:supp_helmholtz_decoupling} gives the
+harmonic scalar residual derived above. Taking its curl gives a vanishing
+double curl of the vector residual; the Coulomb gauge makes that residual
+divergence-free, so the vector identity implies that it is harmonic as well.
+Under the stated decay condition, both residuals vanish. Therefore,
+\eqref{eq:supp_helmholtz_decoupling} recovers the previously obtained
+independent potential equations:
+\begin{equation}
+  \rho\frac{\partial^2\phi}{\partial t^2} = (\lambda + 2\mu)\nabla^2\phi,\qquad
+  \rho\frac{\partial^2\boldsymbol{\psi}}{\partial t^2} =
+  \mu\nabla^2\boldsymbol{\psi}.
+\end{equation}
+
+\subsection*{Plane-wave check}
+
+Let $\mathbf{k}_\phi, \mathbf{k}_\psi \in \mathbb{R}^{3}$ be the wave vectors,
+the angular frequencies be $\omega_\phi > 0$ and $\omega_\psi > 0$, the scalar
+amplitude be $A\in\mathbb{C}$, and $\mathbf{B}\in\mathbb{C}^{3}$ the vector
+amplitude with $\mathbf{k}_\psi \cdot \mathbf{B} = 0$. For
+\begin{equation*}
+  \begin{aligned}
+    \phi & = A\exp\!\left(\mathrm{i}(\mathbf{k}_\phi \cdot \mathbf{x} -
+    \omega_\phi t)\right),
+    &\boldsymbol{\psi} & = \mathbf{B}\exp\!\left(
+    \mathrm{i}(\mathbf{k}_\psi \cdot \mathbf{x} - \omega_\psi t)\right), \\
+    \frac{\partial^2\phi}{\partial t^2} & = -\omega_\phi^2\phi,
+    &\nabla^2\phi & = -\lVert\mathbf{k}_\phi\rVert^2\phi, \\
+    \frac{\partial^2\boldsymbol{\psi}}{\partial t^2}
+    & = -\omega_\psi^2\boldsymbol{\psi},
+    &\nabla^2\boldsymbol{\psi}
+    & = -\lVert\mathbf{k}_\psi\rVert^2\boldsymbol{\psi}.
+  \end{aligned}
+\end{equation*}
+Substitution into the two potential equations (\eqref{eq:supp_p_wave_equation},
+\eqref{eq:supp_s_wave_equation}) gives
+\begin{equation}
+  \omega_\phi^2 = \alpha^2\lVert\mathbf{k}_\phi\rVert^2,
+  \qquad v_{\mathrm{P}} =
+  \frac{\omega_\phi}{\lVert\mathbf{k}_\phi\rVert} = \alpha.
+  \label{eq:supp_p_dispersion}
+\end{equation}
+The same substitution for $\boldsymbol{\psi}$ gives
+\begin{equation}
+  \omega_\psi^2 = \beta^2\lVert\mathbf{k}_\psi\rVert^2,
+  \qquad v_{\mathrm{S}} =
+  \frac{\omega_\psi}{\lVert\mathbf{k}_\psi\rVert} = \beta.
+  \label{eq:supp_s_dispersion}
+\end{equation}
+These relations reproduce the P- and S-wave velocities stated in
+\eqref{eq:wave_velocities}. The result is limited to the homogeneous,
+isotropic, linear-elastic, source-free body-wave derivation; interfaces,
+attenuation, anisotropy, and free-surface effects require additional boundary
+conditions and constitutive terms.

@@ -330,7 +330,7 @@ Scientific documentation specialist agents must anchor claims in the host projec
 
 When prose conflicts with implementation, document the implementation boundary and record the unresolved decision for human review. Do not silently broaden the source behavior to match the prose.
 
-## Compilation, validation, and workflow
+## Text-first editing and validation workflow
 
 Follow a disciplined, safe compilation and validation workflow:
 

@@ -205,15 +205,12 @@ validate_frontmatter() { # 93
     <<< "$frontmatter")
   while IFS= read -r key; do
     [[ -n "$key" ]] || continue
-    case "$key" in
-      @($ALLOWED_KEYS_PATTERN_GEMINI))
-        printf '[+] Valid field: %s\n' "$key"
-        ;;
-      *)
-        printf '[!] INVALID FIELD DETECTED: %s\n' "$key" >&2
-        ((errors += 1))
-        ;;
-    esac
+    if [[ "$key" =~ ^($ALLOWED_KEYS_PATTERN_GEMINI)$ ]]; then
+      printf '[+] Valid field: %s\n' "$key"
+    else
+      printf '[!] INVALID FIELD DETECTED: %s\n' "$key" >&2
+      ((errors += 1))
+    fi
   done <<< "$declared_keys"
 
   if ! has_key name "$frontmatter"; then

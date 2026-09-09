@@ -1,0 +1,8 @@
+OpenAlex service terms notice
+
+Timestamp: 2026-09-07T19:41:58Z
+
+This workspace uses the OpenAlex API/CLI for scholarly literature discovery.
+Please review the OpenAlex API terms at https://developers.openalex.org/
+and verify the license and reuse conditions of each paper before distributing
+or publishing retrieved content.
