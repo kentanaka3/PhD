@@ -106,26 +106,56 @@ DEPENDENCIES:
   - sklearn: Clustering algorithms and metrics
   - dadapy: Advanced density peak clustering
 
-AUTHOR: AI2Seism Project
+AUTHORS:
+  - 健
+  - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+    Centro di Ricerche Sismologiche (CRS)
+  - Università degli Studi di Trieste (UniTS)
+    Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+    Applied Data Science and Artificial Intelligence (ADSAI)
+  - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+    Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
 =============================================================================
 """
 
 # =============================================================================
 # STANDARD LIBRARY IMPORTS
 # =============================================================================
+from sklearn.metrics import (
+    # -------------------------------------------------------------------------
+    # Unsupervised metrics (require only X and labels, no ground truth)
+    # -------------------------------------------------------------------------
+    silhouette_score,               # Mean silhouette coefficient [-1, 1]
+    calinski_harabasz_score,        # Variance ratio criterion (higher=better)
+    davies_bouldin_score,           # Average similarity ratio (lower=better)
+
+    # -------------------------------------------------------------------------
+    # Supervised metrics (require ground truth labels y_true)
+    # -------------------------------------------------------------------------
+    adjusted_rand_score,            # Rand index adjusted for chance
+    normalized_mutual_info_score,   # Normalized mutual information
+    adjusted_mutual_info_score,     # AMI adjusted for chance
+    homogeneity_score,              # Clusters contain only one class
+    completeness_score,             # Class members in same cluster
+    v_measure_score,                # Harmonic mean of homogeneity/completeness
+    fowlkes_mallows_score,          # Geometric mean of precision/recall
+
+    # Utility
+    pairwise_distances,             # Compute distance matrix
+)
 import warnings                       # Warning system for non-fatal errors
 from abc import ABC, abstractmethod   # Abstract base class support
 from importlib import import_module   # Optional dependency loading
 from typing import (                  # Type hints for better IDE support
-  Optional,                           # Optional type annotation
-  Tuple,                              # Tuple type annotation
-  Union,                              # Union of multiple types
-  Any,                                # Any type (escape hatch)
-  List,                               # List type annotation
-  Callable,                           # Function type annotation
-  Dict,                               # Dictionary type annotation
-  Literal,                            # Narrow string literal types
-  cast                                # Explicit type narrowing
+    Optional,                         # Optional type annotation
+    Tuple,                            # Tuple type annotation
+    Union,                            # Union of multiple types
+    Any,                              # Any type (escape hatch)
+    List,                             # List type annotation
+    Callable,                         # Function type annotation
+    Dict,                             # Dictionary type annotation
+    Literal,                          # Narrow string literal types
+    cast                              # Explicit type narrowing
 )
 
 # =============================================================================
@@ -143,10 +173,10 @@ from matplotlib.figure import Figure  # Figure type for type hints
 
 # Scientific computing (for ADP pipeline)
 from sklearn.neighbors import NearestNeighbors  # k-NN distance computation
-from scipy.special import gammaln               # Log-Gamma for volume prefactor
-from scipy.optimize import curve_fit            # 2NN intrinsic-dimension fit
+from scipy.special import gammaln     # Log-Gamma for volume prefactor
+from scipy.optimize import curve_fit  # 2NN intrinsic-dimension fit
 
-from ogsconstants import labels_to_colormap, setup_logger
+from ogsutils import labels_to_colormap, setup_logger
 
 # =============================================================================
 # SCIKIT-LEARN CLUSTERING ALGORITHMS
@@ -154,17 +184,17 @@ from ogsconstants import labels_to_colormap, setup_logger
 # Import all supported clustering algorithms from sklearn
 
 from sklearn.cluster import (
-  KMeans,                         # Standard K-Means clustering
-  MiniBatchKMeans,                # Mini-batch variant for large data
-  AffinityPropagation,            # Message-passing exemplar clustering
-  MeanShift,                      # Mode-seeking density clustering
-  SpectralClustering,             # Graph Laplacian-based clustering
-  AgglomerativeClustering,        # Hierarchical bottom-up clustering
-  DBSCAN,                         # Density-based spatial clustering
-  OPTICS,                         # Ordering points clustering
-  Birch,                          # Balanced iterative clustering
-  BisectingKMeans,                # Divisive hierarchical K-Means
-  FeatureAgglomeration,           # Feature-space hierarchical clustering
+    KMeans,                   # Standard K-Means clustering
+    MiniBatchKMeans,          # Mini-batch variant for large data
+    AffinityPropagation,      # Message-passing exemplar clustering
+    MeanShift,                # Mode-seeking density clustering
+    SpectralClustering,       # Graph Laplacian-based clustering
+    AgglomerativeClustering,  # Hierarchical bottom-up clustering
+    DBSCAN,                   # Density-based spatial clustering
+    OPTICS,                   # Ordering points clustering
+    Birch,                    # Balanced iterative clustering
+    BisectingKMeans,          # Divisive hierarchical K-Means
+    FeatureAgglomeration,     # Feature-space hierarchical clustering
 )
 
 HDBSCAN: Optional[Any]
@@ -186,10 +216,10 @@ HDBSCAN = _load_hdbscan()
 
 AgglomerativeLinkage = Literal['ward', 'complete', 'average', 'single']
 VALID_AGGLOMERATIVE_LINKAGES: Tuple[AgglomerativeLinkage, ...] = (
-  'ward',
-  'complete',
-  'average',
-  'single',
+    'ward',
+    'complete',
+    'average',
+    'single',
 )
 
 
@@ -198,36 +228,14 @@ def _validate_agglomerative_linkage(linkage: str) -> AgglomerativeLinkage:
   if linkage not in VALID_AGGLOMERATIVE_LINKAGES:
     options = ", ".join(VALID_AGGLOMERATIVE_LINKAGES)
     raise ValueError(
-      f"Invalid linkage '{linkage}'. Expected one of: {options}.")
+        f"Invalid linkage '{linkage}'. Expected one of: {options}."
+    )
   return cast(AgglomerativeLinkage, linkage)
 
 # =============================================================================
 # SCIKIT-LEARN CLUSTERING EVALUATION METRICS
 # =============================================================================
 # Import metrics for evaluating clustering quality
-
-from sklearn.metrics import (
-  # -------------------------------------------------------------------------
-  # Unsupervised metrics (require only X and labels, no ground truth)
-  # -------------------------------------------------------------------------
-  silhouette_score,               # Mean silhouette coefficient [-1, 1]
-  calinski_harabasz_score,        # Variance ratio criterion (higher=better)
-  davies_bouldin_score,           # Average similarity ratio (lower=better)
-
-  # -------------------------------------------------------------------------
-  # Supervised metrics (require ground truth labels y_true)
-  # -------------------------------------------------------------------------
-  adjusted_rand_score,            # Rand index adjusted for chance
-  normalized_mutual_info_score,   # Normalized mutual information
-  adjusted_mutual_info_score,     # AMI adjusted for chance
-  homogeneity_score,              # Clusters contain only one class
-  completeness_score,             # Class members in same cluster
-  v_measure_score,                # Harmonic mean of homogeneity/completeness
-  fowlkes_mallows_score,          # Geometric mean of precision/recall
-
-  # Utility
-  pairwise_distances,             # Compute distance matrix
-)
 
 
 # =============================================================================
@@ -369,16 +377,17 @@ class BaseClusterer(ABC):
 
   @property
   def optimize_metric(self) -> Callable[
-    [np.ndarray, Callable[[np.ndarray, np.ndarray], Optional[float]]],
-    Tuple[dict, Optional[float], Dict[Any, Optional[float]]]]:
+      [np.ndarray, Callable[[np.ndarray, np.ndarray], Optional[float]]],
+      Tuple[dict, Optional[float], Dict[Any, Optional[float]]]
+  ]:
     """Return the optimizer callable for this clusterer."""
     return self.__class__._optimize_metric
 
   @staticmethod
   def _optimize_metric(
-    X: np.ndarray,
-    metric: Callable[[np.ndarray, np.ndarray], Optional[float]],
-    **kwargs
+      X: np.ndarray,
+      metric: Callable[[np.ndarray, np.ndarray], Optional[float]],
+      **kwargs
   ) -> Tuple[dict, Optional[float], Dict[Any, Optional[float]]]:
     """
     Default optimizer: no-op for algorithms without a tuning routine.
@@ -426,23 +435,25 @@ class BaseClusterer(ABC):
 
     return labels
 
-  def plot(self,
-    X: Optional[np.ndarray] = None,
-    feature_x: int = 0,
-    feature_y: int = 1,
-    ax: Optional[Axes] = None,
-    title: Optional[str] = None,
-    xlabel: str = "Feature 1",
-    ylabel: str = "Feature 2",
-    point_size: Union[int, np.ndarray] = 20,
-    alpha: float = 0.7,
-    show_legend: bool = True,
-    show_noise: bool = True,
-    noise_color: str = "gray",
-    noise_alpha: float = 0.3,
-    figsize: Tuple[int, int] = (10, 8),
-    colorbar: bool = True,
-    **scatter_kwargs) -> Axes:
+  def plot(
+      self,
+      X: Optional[np.ndarray] = None,
+      feature_x: int = 0,
+      feature_y: int = 1,
+      ax: Optional[Axes] = None,
+      title: Optional[str] = None,
+      xlabel: str = "Feature 1",
+      ylabel: str = "Feature 2",
+      point_size: Union[int, np.ndarray] = 20,
+      alpha: float = 0.7,
+      show_legend: bool = True,
+      show_noise: bool = True,
+      noise_color: str = "gray",
+      noise_alpha: float = 0.3,
+      figsize: Tuple[int, int] = (10, 8),
+      colorbar: bool = True,
+      **scatter_kwargs
+  ) -> Axes:
     """
     Create 2D scatter plot of clustering results.
 
@@ -497,7 +508,7 @@ class BaseClusterer(ABC):
     # Validate that model has been fitted
     if self.labels_ is None:
       raise ValueError(
-        "Model must be fitted before plotting. Call fit() first."
+          "Model must be fitted before plotting. Call fit() first."
       )
 
     # Use provided data or fall back to stored data
@@ -527,14 +538,17 @@ class BaseClusterer(ABC):
       noise_size = base_scatter_kwargs.get("s", point_size)
 
       ax.scatter(
-        x_data[noise_mask],
-        y_data[noise_mask],
-        c=noise_color,
-        s=noise_size if isinstance(noise_size, int) else noise_size[noise_mask],
-        alpha=noise_alpha,
-        label="Noise",
-        marker="x",  # X marker distinguishes noise
-        **noise_kwargs
+          x_data[noise_mask],
+          y_data[noise_mask],
+          c=noise_color,
+          s=(
+              noise_size if isinstance(noise_size, int)
+              else noise_size[noise_mask]
+          ),
+          alpha=noise_alpha,
+          label="Noise",
+          marker="x",  # X marker distinguishes noise
+          **noise_kwargs
       )
 
     # Plot cluster points with colormap
@@ -545,21 +559,24 @@ class BaseClusterer(ABC):
       encoded, unique, cmap, norm = labels_to_colormap(cluster_labels)
 
       # Extract kwargs without 's' (size handled separately)
-      cluster_kwargs = {k: v for k, v in base_scatter_kwargs.items()
-        if k != "s"}
+      cluster_kwargs = {
+          k: v for k, v in base_scatter_kwargs.items() if k != "s"
+      }
       cluster_size = base_scatter_kwargs.get("s", point_size)
 
       # Create scatter plot with colormap
       sc = ax.scatter(
-        x_data[cluster_mask],
-        y_data[cluster_mask],
-        c=encoded,
-        s=cluster_size if isinstance(cluster_size, int) else
-          cluster_size[cluster_mask],
-        alpha=alpha,
-        cmap=cmap,
-        norm=norm,
-        **cluster_kwargs
+          x_data[cluster_mask],
+          y_data[cluster_mask],
+          c=encoded,
+          s=(
+              cluster_size if isinstance(cluster_size, int)
+              else cluster_size[cluster_mask]
+          ),
+          alpha=alpha,
+          cmap=cmap,
+          norm=norm,
+          **cluster_kwargs
       )
 
       # Add colorbar showing cluster labels
@@ -579,20 +596,21 @@ class BaseClusterer(ABC):
 
     return ax
 
-  def plot_3d(self,
-    X: Optional[np.ndarray] = None,
-    feature_x: int = 0,
-    feature_y: int = 1,
-    feature_z: int = 2,
-    ax: Optional[Union[Axes, Axes3D]] = None,
-    title: Optional[str] = None,
-    xlabel: str = "Feature 1",
-    ylabel: str = "Feature 2",
-    zlabel: str = "Feature 3",
-    point_size: Union[int, np.ndarray] = 20,
-    alpha: float = 0.7,
-    figsize: Tuple[int, int] = (12, 10),
-    **scatter_kwargs
+  def plot_3d(
+      self,
+      X: Optional[np.ndarray] = None,
+      feature_x: int = 0,
+      feature_y: int = 1,
+      feature_z: int = 2,
+      ax: Optional[Union[Axes, Axes3D]] = None,
+      title: Optional[str] = None,
+      xlabel: str = "Feature 1",
+      ylabel: str = "Feature 2",
+      zlabel: str = "Feature 3",
+      point_size: Union[int, np.ndarray] = 20,
+      alpha: float = 0.7,
+      figsize: Tuple[int, int] = (12, 10),
+      **scatter_kwargs
   ) -> Axes:
     """
     Create 3D scatter plot of clustering results.
@@ -633,7 +651,7 @@ class BaseClusterer(ABC):
     # Validate that model has been fitted
     if self.labels_ is None:
       raise ValueError(
-        "Model must be fitted before plotting. Call fit() first."
+          "Model must be fitted before plotting. Call fit() first."
       )
 
     # Use provided data or fall back to stored data
@@ -660,23 +678,24 @@ class BaseClusterer(ABC):
       encoded, unique, cmap, norm = labels_to_colormap(cluster_labels)
 
       # Extract kwargs and handle size separately
-      cluster_kwargs = {k: v for k, v in base_scatter_kwargs.items()
-        if k != "s"}
+      cluster_kwargs = {
+          k: v for k, v in base_scatter_kwargs.items() if k != "s"
+      }
       cluster_size = base_scatter_kwargs.get("s", point_size)
       cluster_kwargs["s"] = (
-        cluster_size if isinstance(cluster_size, int)
-        else cluster_size[cluster_mask]
+          cluster_size if isinstance(cluster_size, int)
+          else cluster_size[cluster_mask]
       )
 
       # Create 3D scatter plot
       ax.scatter(
-        data[cluster_mask, feature_x],
-        data[cluster_mask, feature_y],
-        data[cluster_mask, feature_z],
-        c=encoded,
-        alpha=alpha,
-        cmap=cmap,
-        **cluster_kwargs
+          data[cluster_mask, feature_x],
+          data[cluster_mask, feature_y],
+          data[cluster_mask, feature_z],
+          c=encoded,
+          alpha=alpha,
+          cmap=cmap,
+          **cluster_kwargs
       )
 
     # Set axis labels
@@ -782,10 +801,12 @@ class BaseClusteringScores(ABC):
   corresponding sklearn metric function.
   """
 
-  def __init__(self,
-    X: np.ndarray,
-    labels: np.ndarray,
-    y_true: Optional[np.ndarray] = None):
+  def __init__(
+      self,
+      X: np.ndarray,
+      labels: np.ndarray,
+      y_true: Optional[np.ndarray] = None
+  ) -> None:
     """
     Initialize the metric with data and labels.
 
@@ -1120,7 +1141,8 @@ class PAkDensitySeparationScore(BaseClusteringScores):
       density peak clustering
     },
     author={
-      d'Errico, Michele and Facco, Enrico and Laio, Alessandro and Rodriguez, Alessandro
+      d'Errico, Michele and Facco, Enrico and Laio, Alessandro and Rodriguez,
+      Alessandro
     },
     journal={Information Sciences},
     volume={560},
@@ -1142,13 +1164,13 @@ class PAkDensitySeparationScore(BaseClusteringScores):
   """
 
   def __init__(
-    self,
-    X: np.ndarray,
-    labels: np.ndarray,
-    y_true: Optional[np.ndarray] = None,
-    maxk: Optional[int] = None,
-    Dthr: float = 23.92812698,
-    n_jobs: int = -1,
+      self,
+      X: np.ndarray,
+      labels: np.ndarray,
+      y_true: Optional[np.ndarray] = None,
+      maxk: Optional[int] = None,
+      Dthr: float = 23.92812698,
+      n_jobs: int = -1,
   ):
     super().__init__(X, labels, y_true)
     self._maxk = maxk
@@ -1172,11 +1194,11 @@ class PAkDensitySeparationScore(BaseClusteringScores):
 
   @staticmethod
   def _compute_nn_distances(
-    X: np.ndarray, maxk: int, n_jobs: int
+      X: np.ndarray, maxk: int, n_jobs: int
   ) -> Tuple[np.ndarray, np.ndarray]:
     """Compute k-NN distances using sklearn NearestNeighbors."""
     nn = NearestNeighbors(
-      n_neighbors=maxk + 1, metric='euclidean', n_jobs=n_jobs
+        n_neighbors=maxk + 1, metric='euclidean', n_jobs=n_jobs
     )
     nn.fit(X)
     distances, dist_indices = nn.kneighbors(X)
@@ -1192,7 +1214,7 @@ class PAkDensitySeparationScore(BaseClusteringScores):
 
   @staticmethod
   def _estimate_intrinsic_dim(
-    distances: np.ndarray, mu_fraction: float = 0.9
+      distances: np.ndarray, mu_fraction: float = 0.9
   ) -> float:
     """Estimate intrinsic dimension via the 2NN ratio method."""
     eps = np.finfo(np.float64).eps
@@ -1216,7 +1238,7 @@ class PAkDensitySeparationScore(BaseClusteringScores):
 
   @staticmethod
   def _compute_kstar_adaptive(
-    distances: np.ndarray, d: float, maxk: int, Dthr: float
+      distances: np.ndarray, d: float, maxk: int, Dthr: float
   ) -> np.ndarray:
     """Compute adaptive k* via likelihood-ratio test."""
     N = distances.shape[0]
@@ -1238,20 +1260,20 @@ class PAkDensitySeparationScore(BaseClusteringScores):
     has_exceed = np.any(exceeds, axis=1)
     first_idx = np.argmax(exceeds, axis=1)
     kstar = np.where(
-      has_exceed,
-      k_vals[first_idx].astype(np.int64),
-      np.int64(maxk),
+        has_exceed,
+        k_vals[first_idx].astype(np.int64),
+        np.int64(maxk),
     )
     return np.maximum(kstar, np.int64(3))
 
   @staticmethod
   def _density_pak(
-    distances: np.ndarray, kstar: np.ndarray, d: float, N: int
+      distances: np.ndarray, kstar: np.ndarray, d: float, N: int
   ) -> Tuple[np.ndarray, np.ndarray]:
     """PAk log-density via Newton-Raphson ML on shell-volume likelihood."""
     eps = np.finfo(np.float64).eps
     prefactor = np.exp(
-      d / 2.0 * np.log(np.pi) - gammaln((d + 2.0) / 2.0)
+        d / 2.0 * np.log(np.pi) - gammaln((d + 2.0) / 2.0)
     )
     kstar_f = np.maximum(kstar.astype(np.float64), 2.0)
     kmax = int(np.max(kstar))
@@ -1267,7 +1289,7 @@ class PAkDensitySeparationScore(BaseClusteringScores):
     #   1/np.sqrt(kstar_f)          — Cramér–Rao lower bound (σ_CR = 1/√k*)
     #   np.sqrt(2.0/(kstar_f-1.0))  — intermediate approximation
     log_den_err = np.sqrt(
-      (4.0 * kstar_f + 2.0) / (kstar_f * np.maximum(kstar_f - 1.0, 1.0))
+        (4.0 * kstar_f + 2.0) / (kstar_f * np.maximum(kstar_f - 1.0, 1.0))
     )
 
     # kNN starting root for Newton-Raphson
@@ -1343,7 +1365,7 @@ class PAkDensitySeparationScore(BaseClusteringScores):
       maxk = self._maxk if self._maxk is not None else min(100, N - 1)
       maxk = min(maxk, N - 1)
       distances, dist_indices = self._compute_nn_distances(
-        X, maxk, self._n_jobs
+          X, maxk, self._n_jobs
       )
 
       # --- Step 2: Intrinsic dimension ---
@@ -1364,13 +1386,13 @@ class PAkDensitySeparationScore(BaseClusteringScores):
       if np.any(nan_mask):
         eps = np.finfo(np.float64).eps
         prefactor = np.exp(
-          d / 2.0 * np.log(np.pi) - gammaln((d + 2.0) / 2.0)
+            d / 2.0 * np.log(np.pi) - gammaln((d + 2.0) / 2.0)
         )
         kstar_f = np.maximum(kstar.astype(np.float64), 1.0)
         dc = np.maximum(distances[np.arange(N), kstar], eps)
         knn_den = np.log(kstar_f) - np.log(prefactor) - d * np.log(dc)
         knn_err = np.sqrt(
-          (4.0 * kstar_f + 2.0) / (kstar_f * np.maximum(kstar_f - 1.0, 1.0))
+            (4.0 * kstar_f + 2.0) / (kstar_f * np.maximum(kstar_f - 1.0, 1.0))
         )
         log_den[nan_mask] = knn_den[nan_mask]
         log_den_err[nan_mask] = knn_err[nan_mask]
@@ -1386,8 +1408,8 @@ class PAkDensitySeparationScore(BaseClusteringScores):
         densities = log_den[idx_in_cluster]
         peak_idx = idx_in_cluster[np.argmax(densities)]
         cluster_peaks[int(c)] = (
-          float(log_den[peak_idx]),
-          float(log_den_err[peak_idx]),
+            float(log_den[peak_idx]),
+            float(log_den_err[peak_idx]),
         )
       self.cluster_peak_densities_ = cluster_peaks
 
@@ -1416,7 +1438,7 @@ class PAkDensitySeparationScore(BaseClusteringScores):
         # Border density = min(ρ_i, ρ_j) per edge
         border_rho_arr = np.minimum(log_den[row_idx], log_den[j_idx])
         border_err_arr = np.sqrt(
-          log_den_err[row_idx]**2 + log_den_err[j_idx]**2
+            log_den_err[row_idx]**2 + log_den_err[j_idx]**2
         )
 
         # Canonical pair keys (min, max)
@@ -1483,7 +1505,7 @@ class PAkDensitySeparationScore(BaseClusteringScores):
 
         # Combined uncertainty (peak errors + saddle error)
         combined_err = np.sqrt(
-          err_peak_ci**2 + err_peak_cj**2 + err_saddle**2
+            err_peak_ci**2 + err_peak_cj**2 + err_saddle**2
         )
 
         # Z-score: how many standard deviations the density drops
@@ -1516,12 +1538,12 @@ class PAkDensitySeparationScore(BaseClusteringScores):
   # -------------------------------------------------------------------
 
   def _plot_dendrogram(
-    self,
-    ax: Optional[Axes] = None,
-    figsize: Tuple[int, int] = (12, 8),
-    cmap: str = "viridis",
-    logscale: bool = True,
-    title: str = "PAk Density Topography Dendrogram",
+      self,
+      ax: Optional[Axes] = None,
+      figsize: Tuple[int, int] = (12, 8),
+      cmap: str = "viridis",
+      logscale: bool = True,
+      title: str = "PAk Density Topography Dendrogram",
   ) -> Axes:
     """
     Plot a dendrogram of the dataset topography based on PAk density.
@@ -1560,7 +1582,7 @@ class PAkDensitySeparationScore(BaseClusteringScores):
     """
     if self.log_den_ is None:
       raise ValueError(
-        "compute() must be called before plotting the dendrogram."
+          "compute() must be called before plotting the dendrogram."
       )
 
     labels = self.labels
@@ -1568,7 +1590,7 @@ class PAkDensitySeparationScore(BaseClusteringScores):
 
     # --- Gather cluster info ---
     unique_labels = np.array(sorted(
-      [l for l in np.unique(labels) if l >= 0]
+        [l for l in np.unique(labels) if l >= 0]
     ))
     n_clusters = len(unique_labels)
     label_to_idx = {int(l): i for i, l in enumerate(unique_labels)}
@@ -1609,7 +1631,8 @@ class PAkDensitySeparationScore(BaseClusteringScores):
     # Single-linkage iterative merging
     # Track which original clusters belong to each active set
     active = list(range(n_clusters))
-    members = [[i] for i in range(n_clusters)]  # members[i] = list of orig clusters
+    # members[i] = list of orig clusters
+    members = [[i] for i in range(n_clusters)]
     merges = []  # (child_a, child_b, merge_distance, size)
 
     # For the dendrogram we track nodes: first n_clusters are leaves
@@ -1619,7 +1642,8 @@ class PAkDensitySeparationScore(BaseClusteringScores):
     current_dist = Dis_mat.copy()
     active_set = list(range(n_clusters))
 
-    merge_nodes = []  # list of (left_node, right_node, merge_height, new_node_id)
+    # list of (left_node, right_node, merge_height, new_node_id)
+    merge_nodes = []
     node_members = {i: [i] for i in range(n_clusters)}
 
     while len(active_set) > 1:
@@ -1699,10 +1723,14 @@ class PAkDensitySeparationScore(BaseClusteringScores):
     for left, right, m_height, nid in merge_nodes:
       # Left child: vertical line from child height to merge height,
       # then horizontal to merge x
-      left_y = peak_densities[left] if left < n_clusters else \
-        [mh for l, r, mh, n in merge_nodes if n == left][0]
-      right_y = peak_densities[right] if right < n_clusters else \
-        [mh for l, r, mh, n in merge_nodes if n == right][0]
+      left_y = (
+          peak_densities[left] if left < n_clusters
+          else [mh for l, r, mh, n in merge_nodes if n == left][0]
+      )
+      right_y = (
+          peak_densities[right] if right < n_clusters
+          else [mh for l, r, mh, n in merge_nodes if n == right][0]
+      )
 
       lx = node_x[left]
       rx = node_x[right]
@@ -1717,14 +1745,13 @@ class PAkDensitySeparationScore(BaseClusteringScores):
     # Draw cluster nodes (colored scatter)
     for i in range(n_clusters):
       ax.scatter(
-        x_pos[i], peak_densities[i],
-        c=[colors[i]], s=100, zorder=5, edgecolors='black', linewidths=0.5
+          x_pos[i], peak_densities[i], c=[colors[i]], s=100, zorder=5,
+          edgecolors='black', linewidths=0.5
       )
       ax.annotate(
-        str(int(unique_labels[i])),
-        (x_pos[i], peak_densities[i]),
-        textcoords="offset points", xytext=(0, 8),
-        ha='center', fontsize=8, fontweight='bold'
+          str(int(unique_labels[i])), (x_pos[i], peak_densities[i]),
+          textcoords="offset points", xytext=(0, 8), ha='center', fontsize=8,
+          fontweight='bold'
       )
 
     ax.set_ylabel(r"$\ln(\rho)$  [log-density]")
@@ -1736,11 +1763,11 @@ class PAkDensitySeparationScore(BaseClusteringScores):
     return ax
 
   def _plot_network(
-    self,
-    ax: Optional[Axes] = None,
-    figsize: Tuple[int, int] = (10, 8),
-    cmap: str = "viridis",
-    title: str = "PAk Cluster Network (MDS Topology)",
+      self,
+      ax: Optional[Axes] = None,
+      figsize: Tuple[int, int] = (10, 8),
+      cmap: str = "viridis",
+      title: str = "PAk Cluster Network (MDS Topology)",
   ) -> Axes:
     """
     Plot a network representation of the dataset topography.
@@ -1774,7 +1801,7 @@ class PAkDensitySeparationScore(BaseClusteringScores):
     """
     if self.log_den_ is None:
       raise ValueError(
-        "compute() must be called before plotting the network."
+          "compute() must be called before plotting the network."
       )
 
     from sklearn import manifold
@@ -1785,7 +1812,7 @@ class PAkDensitySeparationScore(BaseClusteringScores):
 
     # --- Gather cluster info ---
     unique_labels = np.array(sorted(
-      [l for l in np.unique(labels) if l >= 0]
+        [l for l in np.unique(labels) if l >= 0]
     ))
     n_clusters = len(unique_labels)
     label_to_idx = {int(l): i for i, l in enumerate(unique_labels)}
@@ -1823,8 +1850,8 @@ class PAkDensitySeparationScore(BaseClusteringScores):
 
     # --- MDS embedding ---
     mds = manifold.MDS(
-      n_components=2, dissimilarity='precomputed', random_state=42,
-      normalized_stress='auto'
+        n_components=2, dissimilarity='precomputed', random_state=42,
+        normalized_stress='auto'
     )
     coords = mds.fit_transform(d_dis)
 
@@ -1859,7 +1886,7 @@ class PAkDensitySeparationScore(BaseClusteringScores):
 
       if segments:
         lc = LineCollection(
-          segments, linewidths=linewidths, colors='gray', alpha=0.5
+            segments, linewidths=linewidths, colors='gray', alpha=0.5
         )
         ax.add_collection(lc)
 
@@ -1867,15 +1894,13 @@ class PAkDensitySeparationScore(BaseClusteringScores):
     sizes = 20.0 * np.sqrt(populations)
     for i in range(n_clusters):
       ax.scatter(
-        coords[i, 0], coords[i, 1],
-        c=[colors[i]], s=sizes[i], zorder=5,
-        edgecolors='black', linewidths=0.5
+          coords[i, 0], coords[i, 1], c=[colors[i]], s=sizes[i], zorder=5,
+          edgecolors='black', linewidths=0.5
       )
       ax.annotate(
-        str(int(unique_labels[i])),
-        (coords[i, 0], coords[i, 1]),
-        textcoords="offset points", xytext=(5, 5),
-        ha='left', fontsize=9, fontweight='bold'
+          str(int(unique_labels[i])), (coords[i, 0], coords[i, 1]),
+          textcoords="offset points", xytext=(5, 5), ha='left', fontsize=9,
+          fontweight='bold'
       )
 
     ax.set_title(title)
@@ -1887,12 +1912,12 @@ class PAkDensitySeparationScore(BaseClusteringScores):
     return ax
 
   def _plot_decisionGraph(
-    self,
-    ax: Optional[Axes] = None,
-    figsize: Tuple[int, int] = (10, 8),
-    title: str = "PAk Decision Graph",
-    point_size: int = 20,
-    alpha: float = 0.7,
+      self,
+      ax: Optional[Axes] = None,
+      figsize: Tuple[int, int] = (10, 8),
+      title: str = "PAk Decision Graph",
+      point_size: int = 20,
+      alpha: float = 0.7,
   ) -> Axes:
     """
     Plot the decision graph using log-density (g = log_den - log_den_err) as
@@ -1926,7 +1951,7 @@ class PAkDensitySeparationScore(BaseClusteringScores):
     """
     if self.log_den_ is None:
       raise ValueError(
-        "compute() must be called before plotting the decision graph."
+          "compute() must be called before plotting the decision graph."
       )
 
     X = self.X
@@ -1982,17 +2007,15 @@ class PAkDensitySeparationScore(BaseClusteringScores):
       if c < 0:
         mask = labels == c
         ax.scatter(
-          g[mask], delta[mask],
-          c='lightgray', s=point_size * 0.5, alpha=alpha * 0.5,
-          label='noise', zorder=2
+            g[mask], delta[mask], c='lightgray', s=point_size * 0.5,
+            alpha=alpha * 0.5, label='noise', zorder=2
         )
       else:
         mask = labels == c
         color = colormap(int(c) % 10)
         ax.scatter(
-          g[mask], delta[mask],
-          c=[color], s=point_size, alpha=alpha,
-          label=f'Cluster {int(c)}', zorder=3
+            g[mask], delta[mask], c=[color], s=point_size, alpha=alpha,
+            label=f'Cluster {int(c)}', zorder=3
         )
 
     # Highlight cluster centers (peaks)
@@ -2002,16 +2025,15 @@ class PAkDensitySeparationScore(BaseClusteringScores):
         idx_in_cluster = np.where(cmask)[0]
         peak_idx = idx_in_cluster[np.argmax(log_den[idx_in_cluster])]
         ax.scatter(
-          g[peak_idx], delta[peak_idx],
-          c='red', s=point_size * 5, marker='*', zorder=10,
-          edgecolors='black', linewidths=0.5
+            g[peak_idx], delta[peak_idx], c='red', s=point_size * 5,
+            marker='*', zorder=10, edgecolors='black', linewidths=0.5
         )
 
     ax.set_xlabel(r"$\rho$  [conservative log-density $g = \ln\rho - \sigma$]")
     ax.set_ylabel(r"$\delta$  [distance to nearest higher-density point]")
     ax.set_title(title)
     ax.legend(
-      bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8, framealpha=0.8
+        bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8, framealpha=0.8
     )
     ax.grid(True, alpha=0.3)
 
@@ -2047,13 +2069,14 @@ class CentroidClusterer(BaseClusterer):
   inherit from this class instead of ``BaseClusterer`` directly.
   """
 
-  def plot(self,
-    show_centers: bool = True,
-    center_marker: str = "X",
-    center_size: int = 200,
-    center_color: str = "red",
-    *args,
-    **kwargs
+  def plot(
+      self,
+      show_centers: bool = True,
+      center_marker: str = "X",
+      center_size: int = 200,
+      center_color: str = "red",
+      *args,
+      **kwargs
   ) -> Axes:
     """
     Plot clustering results with optional cluster centers overlay.
@@ -2083,14 +2106,9 @@ class CentroidClusterer(BaseClusterer):
       feature_x = kwargs.get('feature_x', 0)
       feature_y = kwargs.get('feature_y', 1)
       ax.scatter(
-        centers[:, feature_x],
-        centers[:, feature_y],
-        c=center_color,
-        marker=center_marker,
-        s=center_size,
-        edgecolors="black",
-        linewidths=2,
-        label="Centers"
+          centers[:, feature_x], centers[:, feature_y], c=center_color,
+          marker=center_marker, s=center_size, edgecolors="black",
+          linewidths=2, label="Centers"
       )
       ax.legend()
     return ax
@@ -2163,15 +2181,18 @@ class OGSMiniBatchKMeans(CentroidClusterer):
     Additional arguments passed to sklearn.cluster.MiniBatchKMeans.
   """
 
-  def _create_model(self,
-    n_clusters: int = 8,
-    batch_size: int = 1024,
-    **kwargs
+  def _create_model(
+      self,
+      n_clusters: int = 8,
+      batch_size: int = 1024,
+      **kwargs
   ) -> MiniBatchKMeans:
     """Create sklearn MiniBatchKMeans instance."""
-    return MiniBatchKMeans(n_clusters=n_clusters,
-      batch_size=batch_size,
-      **kwargs)
+    return MiniBatchKMeans(
+        n_clusters=n_clusters,
+        batch_size=batch_size,
+        **kwargs
+    )
 
 
 class OGSBisectingKMeans(CentroidClusterer):
@@ -2264,10 +2285,11 @@ class OGSDBSCAN(BaseClusterer):
   >>> n_noise = list(labels).count(-1)
   """
 
-  def _create_model(self,
-    eps: float = 0.5,
-    min_samples: int = 5,
-    **kwargs
+  def _create_model(
+      self,
+      eps: float = 0.5,
+      min_samples: int = 5,
+      **kwargs
   ) -> DBSCAN:
     """Create sklearn DBSCAN instance with specified parameters."""
     return DBSCAN(eps=eps, min_samples=min_samples, **kwargs)
@@ -2310,13 +2332,10 @@ class OGSDBSCAN(BaseClusterer):
 
       # Draw circles around core samples
       ax.scatter(
-        data[core_mask, feature_x],
-        data[core_mask, feature_y],
-        facecolors='none',
-        edgecolors='black',
-        s=100,
-        linewidths=1.5,
-        label="Core samples")
+          data[core_mask, feature_x], data[core_mask, feature_y],
+          facecolors='none', edgecolors='black', s=100, linewidths=1.5,
+          label="Core samples"
+      )
       ax.legend()
     return ax
 
@@ -2360,8 +2379,8 @@ class OGSHDBSCAN(BaseClusterer):
     """Create an available HDBSCAN instance."""
     if HDBSCAN is None:
       raise ImportError(
-        "HDBSCAN is unavailable. Install scikit-learn with HDBSCAN support "
-        "or install the 'hdbscan' package.")
+          "HDBSCAN is unavailable. Install scikit-learn with HDBSCAN support "
+          "or install the 'hdbscan' package.")
     return HDBSCAN(min_cluster_size=min_cluster_size, **kwargs)
 
   def plot(self, show_probabilities: bool = False, *args, **kwargs) -> Axes:
@@ -2441,10 +2460,11 @@ class OGSOPTICS(BaseClusterer):
     """Plot OPTICS clustering results."""
     return super().plot(*args, **kwargs)
 
-  def plot_reachability(self,
-    ax: Optional[Axes] = None,
-    figsize: Tuple[int, int] = (12, 4),
-    title: str = "OPTICS Reachability Plot"
+  def plot_reachability(
+      self,
+      ax: Optional[Axes] = None,
+      figsize: Tuple[int, int] = (12, 4),
+      title: str = "OPTICS Reachability Plot"
   ) -> Axes:
     """
     Plot the reachability diagram.
@@ -2596,21 +2616,22 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
 
   _VALID_DENSITY_METHODS = frozenset({'PAk', 'kNN', 'kstarNN', 'kpeaks'})
 
-  def __init__(self,
-    Z: float = 1.65,
-    halo: bool = False,
-    density_method: str = 'PAk',
-    k: int = 10,
-    Dthr: float = 23.92812698,
-    maxk: Optional[int] = None,
-    n_jobs: int = -1,
-    **kwargs
+  def __init__(
+      self,
+      Z: float = 1.65,
+      halo: bool = False,
+      density_method: str = 'PAk',
+      k: int = 10,
+      Dthr: float = 23.92812698,
+      maxk: Optional[int] = None,
+      n_jobs: int = -1,
+      **kwargs
   ):
     """Initialize Advanced Density Peaks clusterer."""
     if density_method not in self._VALID_DENSITY_METHODS:
       raise ValueError(
-        "density_method must be one of "
-        f"{sorted(self._VALID_DENSITY_METHODS)}, got '{density_method}'"
+          "density_method must be one of "
+          f"{sorted(self._VALID_DENSITY_METHODS)}, got '{density_method}'"
       )
 
     self._Z = Z
@@ -2646,7 +2667,7 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
   # =========================================================================
 
   def _compute_nn_distances(
-    self, X: np.ndarray, maxk: int, n_jobs: int
+      self, X: np.ndarray, maxk: int, n_jobs: int
   ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Compute k-nearest-neighbor distances using sklearn.
@@ -2667,16 +2688,18 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
     dist_indices : np.ndarray, shape (N, maxk+1)
       Indices of neighbors. Column 0 is self-index.
     """
-    distances, dist_indices = PAkDensitySeparationScore._compute_nn_distances(X, maxk, n_jobs)
+    distances, dist_indices = PAkDensitySeparationScore._compute_nn_distances(
+        X, maxk, n_jobs
+    )
     # OGSAdvancedDensityPeaks additionally warns about zero distances
     eps = np.finfo(np.float64).eps
     zero_mask = distances[:, 1:] <= eps
     if np.any(zero_mask):
       n_zeros = int(np.sum(zero_mask))
       warnings.warn(
-        f"Found {n_zeros} zero neighbor distances. "
-        "Dataset may contain duplicate points.",
-        RuntimeWarning,
+          f"Found {n_zeros} zero neighbor distances. "
+          "Dataset may contain duplicate points.",
+          RuntimeWarning,
       )
     return distances, dist_indices
 
@@ -2685,7 +2708,7 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
   # =========================================================================
 
   def _estimate_intrinsic_dim(
-    self, distances: np.ndarray, mu_fraction: float = 0.9
+      self, distances: np.ndarray, mu_fraction: float = 0.9
   ) -> float:
     """
     Estimate intrinsic dimension using the 2NN ratio method.
@@ -2717,7 +2740,7 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
   # =========================================================================
 
   def _compute_kstar_adaptive(
-    self, distances: np.ndarray, d: float, maxk: int, Dthr: float
+      self, distances: np.ndarray, d: float, maxk: int, Dthr: float
   ) -> np.ndarray:
     """
     Compute optimal neighborhood size k* for each point.
@@ -2751,13 +2774,13 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
   # =========================================================================
 
   def _compute_density_dispatch(
-    self,
-    distances: np.ndarray,
-    dist_indices: np.ndarray,
-    kstar: np.ndarray,
-    d: float,
-    N: int,
-    maxk: int,
+      self,
+      distances: np.ndarray,
+      dist_indices: np.ndarray,
+      kstar: np.ndarray,
+      d: float,
+      N: int,
+      maxk: int,
   ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Dispatch to the configured density estimator.
@@ -2796,7 +2819,7 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
   # ---- 4a. kNN density (fixed-k, closed-form) ----
 
   def _density_knn(
-    self, distances: np.ndarray, kstar: np.ndarray, d: float, N: int
+      self, distances: np.ndarray, kstar: np.ndarray, d: float, N: int
   ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Fixed-k kNN log-density estimate.
@@ -2808,7 +2831,7 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
     """
     eps = np.finfo(np.float64).eps
     prefactor = np.exp(
-      d / 2.0 * np.log(np.pi) - gammaln((d + 2.0) / 2.0)
+        d / 2.0 * np.log(np.pi) - gammaln((d + 2.0) / 2.0)
     )
     kstar_f = np.maximum(kstar.astype(np.float64), 1.0)
 
@@ -2822,7 +2845,7 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
   # ---- 4b. kstarNN density (adaptive-k, closed-form) ----
 
   def _density_kstarnn(
-    self, distances: np.ndarray, kstar: np.ndarray, d: float, N: int
+      self, distances: np.ndarray, kstar: np.ndarray, d: float, N: int
   ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Adaptive-k* kNN log-density estimate.
@@ -2835,7 +2858,7 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
   # ---- 4c. PAk density (shell-volume Newton-Raphson ML) ----
 
   def _density_pak(
-    self, distances: np.ndarray, kstar: np.ndarray, d: float, N: int
+      self, distances: np.ndarray, kstar: np.ndarray, d: float, N: int
   ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Point-Adaptive k-NN (PAk) log-density via Newton-Raphson ML.
@@ -2866,11 +2889,11 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
   # =========================================================================
 
   def _find_density_modes(
-    self,
-    g: np.ndarray,
-    kstar: np.ndarray,
-    dist_indices: np.ndarray,
-    N: int,
+      self,
+      g: np.ndarray,
+      kstar: np.ndarray,
+      dist_indices: np.ndarray,
+      N: int,
   ) -> Tuple[List[int], dict]:
     """
     Find local density maxima as initial cluster centers.
@@ -2945,13 +2968,13 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
   # =========================================================================
 
   def _assign_clusters(
-    self,
-    g: np.ndarray,
-    centers: List[int],
-    removed: dict,
-    dist_indices: np.ndarray,
-    kstar: np.ndarray,
-    N: int,
+      self,
+      g: np.ndarray,
+      centers: List[int],
+      removed: dict,
+      dist_indices: np.ndarray,
+      kstar: np.ndarray,
+      N: int,
   ) -> Tuple[np.ndarray, List[List[int]]]:
     """
     Assign each point to a cluster via steepest ascent on g.
@@ -3022,7 +3045,7 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
         assigned_mask3 = cluster_assignment[all_nbs] >= 0
         if np.any(assigned_mask3):
           cluster_assignment[i] = cluster_assignment[
-            all_nbs[assigned_mask3][0]
+              all_nbs[assigned_mask3][0]
           ]
         else:
           cluster_assignment[i] = 0
@@ -3041,15 +3064,15 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
   # =========================================================================
 
   def _find_saddle_points(
-    self,
-    cluster_assignment: np.ndarray,
-    log_den: np.ndarray,
-    log_den_err: np.ndarray,
-    dist_indices: np.ndarray,
-    kstar: np.ndarray,
-    centers: List[int],
-    N: int,
-    n_clusters: int,
+      self,
+      cluster_assignment: np.ndarray,
+      log_den: np.ndarray,
+      log_den_err: np.ndarray,
+      dist_indices: np.ndarray,
+      kstar: np.ndarray,
+      centers: List[int],
+      N: int,
+      n_clusters: int,
   ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Find saddle points (border densities) between cluster pairs.
@@ -3107,16 +3130,16 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
   # =========================================================================
 
   def _multimodality_test(
-    self,
-    Z: float,
-    centers: List[int],
-    log_den: np.ndarray,
-    log_den_err: np.ndarray,
-    log_den_bord: np.ndarray,
-    log_den_bord_err: np.ndarray,
-    cluster_assignment: np.ndarray,
-    cl_struct: List[List[int]],
-    n_clusters: int,
+      self,
+      Z: float,
+      centers: List[int],
+      log_den: np.ndarray,
+      log_den_err: np.ndarray,
+      log_den_bord: np.ndarray,
+      log_den_bord_err: np.ndarray,
+      cluster_assignment: np.ndarray,
+      cl_struct: List[List[int]],
+      n_clusters: int,
   ) -> Tuple[List[int], np.ndarray, List[List[int]], np.ndarray,
              np.ndarray, int]:
     """
@@ -3212,17 +3235,17 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
   # =========================================================================
 
   def _finalize(
-    self,
-    halo: bool,
-    centers: List[int],
-    cluster_assignment: np.ndarray,
-    cl_struct: List[List[int]],
-    log_den: np.ndarray,
-    log_den_bord: np.ndarray,
-    log_den_bord_err: np.ndarray,
-    bord_indices: np.ndarray,
-    n_clusters_orig: int,
-    N: int,
+      self,
+      halo: bool,
+      centers: List[int],
+      cluster_assignment: np.ndarray,
+      cl_struct: List[List[int]],
+      log_den: np.ndarray,
+      log_den_bord: np.ndarray,
+      log_den_bord_err: np.ndarray,
+      bord_indices: np.ndarray,
+      n_clusters_orig: int,
+      N: int,
   ) -> Tuple[np.ndarray, np.ndarray, int, np.ndarray, np.ndarray,
              np.ndarray, List[List[int]]]:
     """
@@ -3262,7 +3285,7 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
 
     # Final centers
     final_centers = np.array(
-      [centers[old_id] for old_id in surviving], dtype=np.int64
+        [centers[old_id] for old_id in surviving], dtype=np.int64
     )
 
     # Final border matrices
@@ -3304,12 +3327,12 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
   # =========================================================================
 
   def _density_kpeaks(
-    self,
-    distances: np.ndarray,
-    dist_indices: np.ndarray,
-    kstar: np.ndarray,
-    d: float,
-    N: int,
+      self,
+      distances: np.ndarray,
+      dist_indices: np.ndarray,
+      kstar: np.ndarray,
+      d: float,
+      N: int,
   ) -> Tuple[np.ndarray, np.ndarray]:
     """
     k-peaks density estimator.
@@ -3366,9 +3389,9 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
     # --- Input validation ---
     if N < 3:
       warnings.warn(
-        f"Too few samples ({N}) for ADP clustering. "
-        "Returning all points as cluster 0.",
-        RuntimeWarning,
+          f"Too few samples ({N}) for ADP clustering. "
+          "Returning all points as cluster 0.",
+          RuntimeWarning,
       )
       self.labels_ = np.zeros(N, dtype=np.int64)
       self.n_clusters_ = 1
@@ -3376,8 +3399,8 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
 
     if np.any(~np.isfinite(X)):
       raise ValueError(
-        "Input data contains NaN or Inf values. "
-        "Clean the data before clustering."
+          "Input data contains NaN or Inf values. "
+          "Clean the data before clustering."
       )
 
     # --- Configure neighborhood size ---
@@ -3406,24 +3429,24 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
       kstar = self._compute_kstar_adaptive(distances, d, maxk, self._Dthr)
     self.kstar_ = kstar
     self.logger.debug(
-      "k* range: [%d, %d], median=%.0f",
-      np.min(kstar), np.max(kstar), np.median(kstar),
+        "k* range: [%d, %d], median=%.0f",
+        np.min(kstar), np.max(kstar), np.median(kstar),
     )
 
     # --- Step 4: Density estimation ---
     self.logger.debug("Step 4: Estimating density (%s)...",
                       self._density_method)
     log_den, log_den_err = self._compute_density_dispatch(
-      distances, dist_indices, kstar, d, N, maxk
+        distances, dist_indices, kstar, d, N, maxk
     )
 
     # Guard against NaN
     nan_mask = ~np.isfinite(log_den)
     if np.any(nan_mask):
       warnings.warn(
-        f"Found {np.sum(nan_mask)} NaN/Inf in density. "
-        "Falling back to kNN density.",
-        RuntimeWarning,
+          f"Found {np.sum(nan_mask)} NaN/Inf in density. "
+          "Falling back to kNN density.",
+          RuntimeWarning,
       )
       log_den, log_den_err = self._density_knn(distances, kstar, d, N)
 
@@ -3439,8 +3462,8 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
 
     if n_centers == 0:
       warnings.warn(
-        "No density modes found. Assigning all points to cluster 0.",
-        RuntimeWarning,
+          "No density modes found. Assigning all points to cluster 0.",
+          RuntimeWarning,
       )
       self.labels_ = np.zeros(N, dtype=np.int64)
       self.n_clusters_ = 1
@@ -3457,22 +3480,22 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
     # --- Step 6: Assign clusters ---
     self.logger.debug("Step 6: Assigning clusters via steepest ascent...")
     cluster_assignment, cl_struct = self._assign_clusters(
-      g, centers, removed, dist_indices, kstar, N
+        g, centers, removed, dist_indices, kstar, N
     )
 
     # --- Step 7: Find saddle points ---
     self.logger.debug("Step 7: Finding saddle points...")
     log_den_bord, log_den_bord_err, bord_indices = self._find_saddle_points(
-      cluster_assignment, log_den, log_den_err, dist_indices, kstar, centers,
-      N, n_centers
+        cluster_assignment, log_den, log_den_err, dist_indices, kstar, centers,
+        N, n_centers
     )
 
     # --- Step 8: Multimodality test ---
     self.logger.debug("Step 8: Multimodality test (merging)...")
     (centers, cluster_assignment, cl_struct, log_den_bord, log_den_bord_err,
      n_final) = self._multimodality_test(
-      self._Z, centers, log_den, log_den_err, log_den_bord, log_den_bord_err,
-      cluster_assignment, cl_struct, n_centers
+        self._Z, centers, log_den, log_den_err, log_den_bord, log_den_bord_err,
+        cluster_assignment, cl_struct, n_centers
     )
     self.logger.debug("After merging: %d clusters", n_final)
 
@@ -3480,8 +3503,8 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
     self.logger.debug("Step 9: Finalizing labels...")
     (labels, final_centers, n_final, final_bord, final_bord_err,
      final_bord_idx, final_cl_struct) = self._finalize(
-      self._halo, centers, cluster_assignment, cl_struct, log_den,
-      log_den_bord, log_den_bord_err, bord_indices, n_centers, N
+        self._halo, centers, cluster_assignment, cl_struct, log_den,
+        log_den_bord, log_den_bord_err, bord_indices, n_centers, N
     )
 
     # --- Store results ---
@@ -3518,18 +3541,19 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
     """Plot Advanced Density Peaks clustering results."""
     return super().plot(*args, **kwargs)
 
-  def plot_density(self,
-    X: Optional[np.ndarray] = None,
-    feature_x: int = 0,
-    feature_y: int = 1,
-    ax: Optional[Axes] = None,
-    title: str = "ADP Log-Density Landscape",
-    xlabel: str = "Feature 1",
-    ylabel: str = "Feature 2",
-    point_size: int = 20,
-    alpha: float = 0.8,
-    figsize: Tuple[int, int] = (10, 8),
-    cmap: str = "viridis",
+  def plot_density(
+      self,
+      X: Optional[np.ndarray] = None,
+      feature_x: int = 0,
+      feature_y: int = 1,
+      ax: Optional[Axes] = None,
+      title: str = "ADP Log-Density Landscape",
+      xlabel: str = "Feature 1",
+      ylabel: str = "Feature 2",
+      point_size: int = 20,
+      alpha: float = 0.8,
+      figsize: Tuple[int, int] = (10, 8),
+      cmap: str = "viridis",
   ) -> Axes:
     """
     Plot the estimated log-density landscape.
@@ -3577,27 +3601,27 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
       fig, ax = plt.subplots(figsize=figsize)
 
     scatter = ax.scatter(
-      data[:, feature_x],
-      data[:, feature_y],
-      c=self.log_den_,
-      s=point_size,
-      alpha=alpha,
-      cmap=cmap,
+        data[:, feature_x],
+        data[:, feature_y],
+        c=self.log_den_,
+        s=point_size,
+        alpha=alpha,
+        cmap=cmap,
     )
     plt.colorbar(scatter, ax=ax, label="Log density")
 
     if self.cluster_centers_ is not None and self.data_ is not None:
       centers = self.data_[self.cluster_centers_]
       ax.scatter(
-        centers[:, feature_x],
-        centers[:, feature_y],
-        c='red',
-        s=point_size * 8,
-        marker='*',
-        edgecolors='black',
-        linewidths=0.8,
-        zorder=5,
-        label="Cluster centers",
+          centers[:, feature_x],
+          centers[:, feature_y],
+          c='red',
+          s=point_size * 8,
+          marker='*',
+          edgecolors='black',
+          linewidths=0.8,
+          zorder=5,
+          label="Cluster centers",
       )
       ax.legend()
 
@@ -3606,11 +3630,12 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
     ax.set_title(title)
     return ax
 
-  def plot_cluster_borders(self,
-    ax: Optional[Axes] = None,
-    figsize: Tuple[int, int] = (8, 6),
-    title: str = "ADP Saddle-Point Density Between Clusters",
-    cmap: str = "YlOrRd",
+  def plot_cluster_borders(
+      self,
+      ax: Optional[Axes] = None,
+      figsize: Tuple[int, int] = (8, 6),
+      title: str = "ADP Saddle-Point Density Between Clusters",
+      cmap: str = "YlOrRd",
   ) -> Axes:
     """
     Plot heatmap of saddle-point densities between clusters.
@@ -3637,7 +3662,7 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
     """
     if self.log_den_bord_ is None:
       raise ValueError(
-        "Border densities not available. Fit the model first."
+          "Border densities not available. Fit the model first."
       )
 
     if ax is None:
@@ -3660,8 +3685,8 @@ class OGSAdvancedDensityPeaks(BaseClusterer):
         val = self.log_den_bord_[i, j]
         if np.isfinite(val):
           ax.text(
-            j, i, f"{val:.1f}",
-            ha='center', va='center', fontsize=8, color='black',
+              j, i, f"{val:.1f}",
+              ha='center', va='center', fontsize=8, color='black',
           )
 
     return ax
@@ -3827,12 +3852,12 @@ class OGSAdvancedDensityPeaksPP(OGSAdvancedDensityPeaks):
   # =========================================================================
 
   def _fused_mode_and_assignment(
-    self,
-    g: np.ndarray,
-    kstar: np.ndarray,
-    dist_indices: np.ndarray,
-    N: int,
-    maxk: int,
+      self,
+      g: np.ndarray,
+      kstar: np.ndarray,
+      dist_indices: np.ndarray,
+      N: int,
+      maxk: int,
   ) -> Tuple[np.ndarray, List[int], List[List[int]]]:
     """
     Fused mode detection and cluster assignment via Union-Find.
@@ -3976,15 +4001,15 @@ class OGSAdvancedDensityPeaksPP(OGSAdvancedDensityPeaks):
   # =========================================================================
 
   def _find_saddle_points(
-    self,
-    cluster_assignment: np.ndarray,
-    log_den: np.ndarray,
-    log_den_err: np.ndarray,
-    dist_indices: np.ndarray,
-    kstar: np.ndarray,
-    centers: List[int],
-    N: int,
-    n_clusters: int,
+      self,
+      cluster_assignment: np.ndarray,
+      log_den: np.ndarray,
+      log_den_err: np.ndarray,
+      dist_indices: np.ndarray,
+      kstar: np.ndarray,
+      centers: List[int],
+      N: int,
+      n_clusters: int,
   ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Vectorized saddle-point detection between cluster pairs.
@@ -4029,22 +4054,22 @@ class OGSAdvancedDensityPeaksPP(OGSAdvancedDensityPeaks):
     maxk = dist_indices.shape[1] - 1
 
     # ── Sub-step 1: Neighbor-cluster matrix (N, maxk) ────────────────
-    neighbor_indices = dist_indices[:, 1:maxk + 1]          # (N, maxk)
-    neighbor_clusters = cluster_assignment[neighbor_indices] # (N, maxk)
+    neighbor_indices = dist_indices[:, 1:maxk + 1]            # (N, maxk)
+    neighbor_clusters = cluster_assignment[neighbor_indices]  # (N, maxk)
 
     # ── Sub-step 2: k* validity mask ─────────────────────────────────
-    col_idx = np.arange(maxk)[np.newaxis, :]                # (1, maxk)
-    valid_mask = col_idx < kstar[:, np.newaxis]             # (N, maxk)
+    col_idx = np.arange(maxk)[np.newaxis, :]                  # (1, maxk)
+    valid_mask = col_idx < kstar[:, np.newaxis]               # (N, maxk)
 
     # ── Sub-step 3: Boolean inter-cluster edge tensor ────────────────
     # B[i,r] = True iff neighbor r of point i belongs to a different cluster
     # AND both labels are non-negative AND r < k*_i.
-    point_clusters = cluster_assignment[:, np.newaxis]      # (N, 1)
+    point_clusters = cluster_assignment[:, np.newaxis]        # (N, 1)
     is_border = (
-      (neighbor_clusters != point_clusters)
-      & valid_mask
-      & (point_clusters >= 0)
-      & (neighbor_clusters >= 0)
+        (neighbor_clusters != point_clusters)
+        & valid_mask
+        & (point_clusters >= 0)
+        & (neighbor_clusters >= 0)
     )
 
     # ── Sub-step 4: First inter-cluster neighbor (argmax trick) ──────
@@ -4122,16 +4147,16 @@ class OGSAdvancedDensityPeaksPP(OGSAdvancedDensityPeaks):
   # =========================================================================
 
   def _multimodality_test(
-    self,
-    Z: float,
-    centers: List[int],
-    log_den: np.ndarray,
-    log_den_err: np.ndarray,
-    log_den_bord: np.ndarray,
-    log_den_bord_err: np.ndarray,
-    cluster_assignment: np.ndarray,
-    cl_struct: List[List[int]],
-    n_clusters: int,
+      self,
+      Z: float,
+      centers: List[int],
+      log_den: np.ndarray,
+      log_den_err: np.ndarray,
+      log_den_bord: np.ndarray,
+      log_den_bord_err: np.ndarray,
+      cluster_assignment: np.ndarray,
+      cl_struct: List[List[int]],
+      n_clusters: int,
   ) -> Tuple[List[int], np.ndarray, List[List[int]], np.ndarray,
              np.ndarray, int]:
     r"""
@@ -4323,12 +4348,12 @@ class OGSAdvancedDensityPeaksPP(OGSAdvancedDensityPeaks):
   # =========================================================================
 
   def _density_kpeaks(
-    self,
-    distances: np.ndarray,
-    dist_indices: np.ndarray,
-    kstar: np.ndarray,
-    d: float,
-    N: int,
+      self,
+      distances: np.ndarray,
+      dist_indices: np.ndarray,
+      kstar: np.ndarray,
+      d: float,
+      N: int,
   ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Vectorized k-peaks density estimator.
@@ -4424,9 +4449,9 @@ class OGSAdvancedDensityPeaksPP(OGSAdvancedDensityPeaks):
     # --- Input validation ---
     if N < 3:
       warnings.warn(
-        f"Too few samples ({N}) for ADP++ clustering. "
-        "Returning all points as cluster 0.",
-        RuntimeWarning,
+          f"Too few samples ({N}) for ADP++ clustering. "
+          "Returning all points as cluster 0.",
+          RuntimeWarning,
       )
       self.labels_ = np.zeros(N, dtype=np.int64)
       self.n_clusters_ = 1
@@ -4434,8 +4459,8 @@ class OGSAdvancedDensityPeaksPP(OGSAdvancedDensityPeaks):
 
     if np.any(~np.isfinite(X)):
       raise ValueError(
-        "Input data contains NaN or Inf values. "
-        "Clean the data before clustering."
+          "Input data contains NaN or Inf values. "
+          "Clean the data before clustering."
       )
 
     # --- Configure neighborhood size ---
@@ -4468,15 +4493,15 @@ class OGSAdvancedDensityPeaksPP(OGSAdvancedDensityPeaks):
     self.logger.debug("Step 4: Estimating density (%s)...",
                       self._density_method)
     log_den, log_den_err = self._compute_density_dispatch(
-      distances, dist_indices, kstar, d, N, maxk
+        distances, dist_indices, kstar, d, N, maxk
     )
 
     nan_mask = ~np.isfinite(log_den)
     if np.any(nan_mask):
       warnings.warn(
-        f"Found {np.sum(nan_mask)} NaN/Inf in density. "
-        "Falling back to kNN density.",
-        RuntimeWarning,
+          f"Found {np.sum(nan_mask)} NaN/Inf in density. "
+          "Falling back to kNN density.",
+          RuntimeWarning,
       )
       log_den, log_den_err = self._density_knn(distances, kstar, d, N)
 
@@ -4485,19 +4510,19 @@ class OGSAdvancedDensityPeaksPP(OGSAdvancedDensityPeaks):
 
     # --- Steps 5+6 (FUSED): Union-Find mode detection + assignment ---
     self.logger.debug(
-      "Steps 5+6: Fused Union-Find mode detection + assignment..."
+        "Steps 5+6: Fused Union-Find mode detection + assignment..."
     )
     g = log_den - log_den_err
     cluster_assignment, centers, cl_struct = self._fused_mode_and_assignment(
-      g, kstar, dist_indices, N, maxk
+        g, kstar, dist_indices, N, maxk
     )
     n_centers = len(centers)
     self.logger.debug("Found %d initial centers", n_centers)
 
     if n_centers == 0:
       warnings.warn(
-        "No density modes found. Assigning all points to cluster 0.",
-        RuntimeWarning,
+          "No density modes found. Assigning all points to cluster 0.",
+          RuntimeWarning,
       )
       self.labels_ = np.zeros(N, dtype=np.int64)
       self.n_clusters_ = 1
@@ -4514,17 +4539,17 @@ class OGSAdvancedDensityPeaksPP(OGSAdvancedDensityPeaks):
     # --- Step 7: Saddle points (vectorized override) ---
     self.logger.debug("Step 7: Vectorized saddle-point detection...")
     log_den_bord, log_den_bord_err, bord_indices = self._find_saddle_points(
-      cluster_assignment, log_den, log_den_err,
-      dist_indices, kstar, centers, N, n_centers
+        cluster_assignment, log_den, log_den_err,
+        dist_indices, kstar, centers, N, n_centers
     )
 
     # --- Step 8: Vectorized multimodality test (override) ---
     self.logger.debug("Step 8: Vectorized multimodality test (merging)...")
     (centers, cluster_assignment, cl_struct,
      log_den_bord, log_den_bord_err, n_final) = self._multimodality_test(
-      self._Z, centers, log_den, log_den_err,
-      log_den_bord, log_den_bord_err,
-      cluster_assignment, cl_struct, n_centers
+        self._Z, centers, log_den, log_den_err,
+        log_den_bord, log_den_bord_err,
+        cluster_assignment, cl_struct, n_centers
     )
     self.logger.debug("After merging: %d clusters", n_final)
 
@@ -4533,9 +4558,9 @@ class OGSAdvancedDensityPeaksPP(OGSAdvancedDensityPeaks):
     (labels, final_centers, n_final,
      final_bord, final_bord_err, final_bord_idx,
      final_cl_struct) = self._finalize(
-      self._halo, centers, cluster_assignment, cl_struct,
-      log_den, log_den_bord, log_den_bord_err,
-      bord_indices, n_centers, N
+        self._halo, centers, cluster_assignment, cl_struct,
+        log_den, log_den_bord, log_den_bord_err,
+        bord_indices, n_centers, N
     )
 
     # --- Store results ---
@@ -4613,27 +4638,35 @@ class OGSAgglomerative(BaseClusterer):
     Distances at each merge (requires compute_distances=True).
   """
 
-  def _create_model(self,
-    n_clusters: int = 2,
-    linkage: str = 'ward',
-    **kwargs) -> AgglomerativeClustering:
-      """Create sklearn AgglomerativeClustering instance."""
-      validated_linkage = _validate_agglomerative_linkage(linkage)
-      return AgglomerativeClustering(
+  def _create_model(
+      self,
+      n_clusters: int = 2,
+      linkage: str = 'ward',
+      metric: str = 'euclidean',
+      compute_distances: bool = False,
+      **kwargs
+  ) -> AgglomerativeClustering:
+    """Create sklearn AgglomerativeClustering instance."""
+    validated_linkage = _validate_agglomerative_linkage(linkage)
+    return AgglomerativeClustering(
         n_clusters=n_clusters,
         linkage=validated_linkage,
-        **kwargs)
+        metric=metric,
+        compute_distances=compute_distances,
+        **kwargs
+    )
 
   def plot(self, *args, **kwargs) -> Axes:
     """Plot Agglomerative Clustering results."""
     return super().plot(*args, **kwargs)
 
-  def plot_dendrogram(self,
-    ax: Optional[Axes] = None,
-    figsize: Tuple[int, int] = (12, 8),
-    truncate_mode: str = 'lastp',
-    p: int = 30,
-    **dendrogram_kwargs
+  def plot_dendrogram(
+      self,
+      ax: Optional[Axes] = None,
+      figsize: Tuple[int, int] = (12, 8),
+      truncate_mode: str = 'lastp',
+      p: int = 30,
+      **dendrogram_kwargs
   ) -> Axes:
     """
     Plot dendrogram for hierarchical clustering.
@@ -4668,8 +4701,9 @@ class OGSAgglomerative(BaseClusterer):
 
     # Check that distances were computed
     if not hasattr(self.model, 'distances_') or self.model.distances_ is None:
-      raise ValueError("Dendrogram requires distances. "
-                       "Refit with compute_distances=True.")
+      raise ValueError(
+          "Dendrogram requires distances. Refit with compute_distances=True."
+      )
 
     if ax is None:
       fig, ax = plt.subplots(figsize=figsize)
@@ -4683,19 +4717,22 @@ class OGSAgglomerative(BaseClusterer):
       current_count = 0
       for child_idx in merge:
         current_count += (
-          1 if child_idx < n_samples else counts[child_idx - n_samples]
+            1 if child_idx < n_samples else counts[child_idx - n_samples]
         )
       counts[i] = current_count
 
     linkage_matrix = np.column_stack(
-      [self.model.children_, self.model.distances_, counts]).astype(float)
+        [self.model.children_, self.model.distances_, counts]
+    ).astype(float)
 
     # Plot dendrogram
-    dendrogram(linkage_matrix,
-      ax=ax,
-      truncate_mode=truncate_mode,
-      p=p,
-      **dendrogram_kwargs)
+    dendrogram(
+        linkage_matrix,
+        ax=ax,
+        truncate_mode=truncate_mode,
+        p=p,
+        **dendrogram_kwargs
+    )
 
     ax.set_title(f"Dendrogram ({self._kwargs.get('linkage', 'ward')} linkage)")
     ax.set_xlabel("Sample index (or cluster size)")
@@ -4727,9 +4764,10 @@ class OGSFeatureAgglomeration(BaseClusterer):
     Transform data to reduced feature space using cluster means.
   """
 
-  def _create_model(self,
-    n_clusters: int = 2,
-    **kwargs
+  def _create_model(
+      self,
+      n_clusters: int = 2,
+      **kwargs
   ) -> FeatureAgglomeration:
     """Create sklearn FeatureAgglomeration instance."""
     return FeatureAgglomeration(n_clusters=n_clusters, **kwargs)
@@ -4789,9 +4827,10 @@ class OGSFeatureAgglomeration(BaseClusterer):
     encoded, unique, cmap, norm = labels_to_colormap(self.labels_)
 
     # Bar chart with each bar representing a feature, colored by cluster
-    ax.bar(range(n_features),
-      np.ones(n_features),
-      color=[cmap(norm(e)) for e in encoded])
+    ax.bar(
+        range(n_features), np.ones(n_features),
+        color=[cmap(norm(e)) for e in encoded]
+    )
     ax.set_xlabel("Feature Index")
     ax.set_ylabel("Cluster Assignment")
     ax.set_title(kwargs.get('title', 'Feature Agglomeration Clusters'))
@@ -4850,19 +4889,21 @@ class OGSAffinityPropagation(BaseClusterer):
     The affinity matrix used for clustering.
   """
 
-  def _create_model(self,
-    damping: float = 0.5,
-    **kwargs
+  def _create_model(
+      self,
+      damping: float = 0.5,
+      **kwargs
   ) -> AffinityPropagation:
     """Create sklearn AffinityPropagation instance."""
     return AffinityPropagation(damping=damping, **kwargs)
 
-  def plot(self,
-    show_exemplars: bool = True,
-    exemplar_marker: str = "D",
-    exemplar_size: int = 150,
-    *args,
-    **kwargs
+  def plot(
+      self,
+      show_exemplars: bool = True,
+      exemplar_marker: str = "D",
+      exemplar_size: int = 150,
+      *args,
+      **kwargs
   ) -> Axes:
     """
     Plot Affinity Propagation results with exemplars.
@@ -4894,15 +4935,9 @@ class OGSAffinityPropagation(BaseClusterer):
       indices = self.model.cluster_centers_indices_
 
       ax.scatter(
-        data[indices, feature_x],
-        data[indices, feature_y],
-        c='red',
-        marker=exemplar_marker,
-        s=exemplar_size,
-        edgecolors='black',
-        linewidths=2,
-        label="Exemplars",
-        zorder=10
+          data[indices, feature_x], data[indices, feature_y], c='red',
+          marker=exemplar_marker, s=exemplar_size, edgecolors='black',
+          linewidths=2, label="Exemplars", zorder=10
       )
       ax.legend()
     return ax
@@ -4956,13 +4991,14 @@ class OGSMeanShift(BaseClusterer):
     """Create sklearn MeanShift instance."""
     return MeanShift(**kwargs)
 
-  def plot(self,
-    show_centers: bool = True,
-    center_marker: str = "X",
-    center_size: int = 200,
-    center_color: str = "red",
-    *args,
-    **kwargs
+  def plot(
+      self,
+      show_centers: bool = True,
+      center_marker: str = "X",
+      center_size: int = 200,
+      center_color: str = "red",
+      *args,
+      **kwargs
   ) -> Axes:
     """
     Plot Mean Shift clustering results.
@@ -4994,14 +5030,10 @@ class OGSMeanShift(BaseClusterer):
       feature_x = kwargs.get('feature_x', 0)
       feature_y = kwargs.get('feature_y', 1)
       ax.scatter(
-        centers[:, feature_x],
-        centers[:, feature_y],
-        c=center_color,
-        marker=center_marker,
-        s=center_size,
-        edgecolors='black',
-        linewidths=2,
-        label="Centers")
+          centers[:, feature_x], centers[:, feature_y], c=center_color,
+          marker=center_marker, s=center_size, edgecolors='black',
+          linewidths=2, label="Centers"
+      )
       ax.legend()
 
     return ax
@@ -5123,15 +5155,19 @@ class OGSBirch(BaseClusterer):
   2. Apply final clustering (e.g., AgglomerativeClustering) to subclusters
   """
 
-  def _create_model(self,
-    n_clusters: int = 3,
-    threshold: float = 0.5,
-    **kwargs) -> Birch:
-      """Create sklearn Birch instance."""
-      return Birch(n_clusters=n_clusters, threshold=threshold, **kwargs)
+  def _create_model(
+      self,
+      n_clusters: int = 3,
+      threshold: float = 0.5,
+      **kwargs
+  ) -> Birch:
+    """Create sklearn Birch instance."""
+    return Birch(n_clusters=n_clusters, threshold=threshold, **kwargs)
 
-  def plot(self, show_subcluster_centers: bool = False, *args,
-    **kwargs
+  def plot(
+      self,
+      show_subcluster_centers: bool = False, *args,
+      **kwargs
   ) -> Axes:
     """
     Plot BIRCH clustering results.
@@ -5157,13 +5193,8 @@ class OGSBirch(BaseClusterer):
       feature_x = kwargs.get('feature_x', 0)
       feature_y = kwargs.get('feature_y', 1)
       ax.scatter(
-        centers[:, feature_x],
-        centers[:, feature_y],
-        c='orange',
-        marker='s',
-        s=50,
-        alpha=0.6,
-        label="Subcluster centers"
+          centers[:, feature_x], centers[:, feature_y], c='orange', marker='s',
+          s=50, alpha=0.6, label="Subcluster centers"
       )
       ax.legend()
 
@@ -5201,23 +5232,23 @@ def get_all_eval_metrics() -> dict[str, dict[str, type]]:
   >>> score = silhouette_cls(X, labels).compute()
   """
   return {
-    "UnsupervisedScores": {
-      # Unsupervised metrics (require only X and labels)
-      "SilhouetteScore": SilhouetteScore,
-      "CalinskiHarabaszScore": CalinskiHarabaszScore,
-      "DaviesBouldinScore": DaviesBouldinScore,
-      "PAkDensitySeparationScore": PAkDensitySeparationScore,
-    },
-    "SupervisedScores": {
-      # Supervised metrics (require X, labels, AND y_true)
-      "AdjustedRandScore": AdjustedRandScore,
-      "NormalizedMutualInfoScore": NormalizedMutualInfoScore,
-      "AdjustedMutualInfoScore": AdjustedMutualInfoScore,
-      "HomogeneityScore": HomogeneityScore,
-      "CompletenessScore": CompletenessScore,
-      "VMeasureScore": VMeasureScore,
-      "FowlkesMallowsScore": FowlkesMallowsScore,
-    }
+      "UnsupervisedScores": {
+          # Unsupervised metrics (require only X and labels)
+          "SilhouetteScore": SilhouetteScore,
+          "CalinskiHarabaszScore": CalinskiHarabaszScore,
+          "DaviesBouldinScore": DaviesBouldinScore,
+          "PAkDensitySeparationScore": PAkDensitySeparationScore,
+      },
+      "SupervisedScores": {
+          # Supervised metrics (require X, labels, AND y_true)
+          "AdjustedRandScore": AdjustedRandScore,
+          "NormalizedMutualInfoScore": NormalizedMutualInfoScore,
+          "AdjustedMutualInfoScore": AdjustedMutualInfoScore,
+          "HomogeneityScore": HomogeneityScore,
+          "CompletenessScore": CompletenessScore,
+          "VMeasureScore": VMeasureScore,
+          "FowlkesMallowsScore": FowlkesMallowsScore,
+      }
   }
 
 
@@ -5265,20 +5296,20 @@ def get_all_clusterers() -> dict[str, type[BaseClusterer]]:
     - Birch
   """
   return {
-    'AdvancedDensityPeaks': OGSAdvancedDensityPeaks,
-    'AdvancedDensityPeaksPP': OGSAdvancedDensityPeaksPP,
-    'AffinityPropagation': OGSAffinityPropagation,
-    'Agglomerative': OGSAgglomerative,
-    'Birch': OGSBirch,
-    'BisectingKMeans': OGSBisectingKMeans,
-    'DBSCAN': OGSDBSCAN,
-    'FeatureAgglomeration': OGSFeatureAgglomeration,
-    'HDBSCAN': OGSHDBSCAN,
-    'KMeans': OGSKMeans,
-    'MeanShift': OGSMeanShift,
-    'MiniBatchKMeans': OGSMiniBatchKMeans,
-    'OPTICS': OGSOPTICS,
-    'Spectral': OGSSpectralClustering,
+      'AdvancedDensityPeaks': OGSAdvancedDensityPeaks,
+      'AdvancedDensityPeaksPP': OGSAdvancedDensityPeaksPP,
+      'AffinityPropagation': OGSAffinityPropagation,
+      'Agglomerative': OGSAgglomerative,
+      'Birch': OGSBirch,
+      'BisectingKMeans': OGSBisectingKMeans,
+      'DBSCAN': OGSDBSCAN,
+      'FeatureAgglomeration': OGSFeatureAgglomeration,
+      'HDBSCAN': OGSHDBSCAN,
+      'KMeans': OGSKMeans,
+      'MeanShift': OGSMeanShift,
+      'MiniBatchKMeans': OGSMiniBatchKMeans,
+      'OPTICS': OGSOPTICS,
+      'Spectral': OGSSpectralClustering,
   }
 
 
@@ -5358,9 +5389,10 @@ class OGSClusteringZoo:
   - Z_range: (min, max, step) for AdvancedDensityPeaks Z parameter
   """
 
-  def __init__(self,
-    metadata: Optional[dict[str, Any]] = None,
-    verbose: bool = False
+  def __init__(
+      self,
+      metadata: Optional[dict[str, Any]] = None,
+      verbose: bool = False
   ) -> None:
     """
     Initialize the clustering zoo with configuration.
@@ -5380,14 +5412,16 @@ class OGSClusteringZoo:
     # Build available algorithms dictionary
     CLUSTERS = get_all_clusterers()
     self._algorithms: dict[str, type[BaseClusterer]] = {
-      name: CLUSTERS[name] for name in self.metadata_algorithms
+        name: CLUSTERS[name] for name in self.metadata_algorithms
     } if self.metadata_algorithms else CLUSTERS
 
     # Build available metrics dictionary
-    METRICS = {k: v for group in get_all_eval_metrics().values()
-      for k, v in group.items()}
+    METRICS = {
+        k: v for group in get_all_eval_metrics().values()
+        for k, v in group.items()
+    }
     self._metrics: dict[str, type[BaseClusteringScores]] = {
-      n: METRICS[n] for n in self.metadata_eval_metrics
+        n: METRICS[n] for n in self.metadata_eval_metrics
     } if self.metadata_eval_metrics else {}
 
   # -------------------------------------------------------------------------
@@ -5610,13 +5644,13 @@ class OGSClusteringZoo:
 
     # MeanShift bandwidth
     if self.metadata_bandwidth_value is not None and algo_name in {
-      "MeanShift"
+        "MeanShift"
     }:
       myDict["bandwidth"] = self.metadata_bandwidth_value
 
     # AffinityPropagation damping
     if self.metadata_damping_value is not None and algo_name in {
-      "AffinityPropagation"
+        "AffinityPropagation"
     }:
       myDict["damping"] = self.metadata_damping_value
 
@@ -5626,74 +5660,77 @@ class OGSClusteringZoo:
 
     # Distance metric for algorithms that support it
     if self.metadata_metric not in {None, ""} and algo_name in {
-      "Agglomerative",
-      "FeatureAgglomeration",
-      "DBSCAN",
-      "OPTICS",
-      "HDBSCAN"
+        "Agglomerative",
+        "FeatureAgglomeration",
+        "DBSCAN",
+        "OPTICS",
+        "HDBSCAN"
     }:
       myDict["metric"] = self.metadata_metric
 
     # HDBSCAN min_cluster_size
     if self.metadata_min_cluster_size_value is not None and algo_name in {
-      "HDBSCAN"
+        "HDBSCAN"
     }:
       myDict["min_cluster_size"] = self.metadata_min_cluster_size_value
 
     # min_samples for density-based algorithms
     if self.metadata_min_samples_value is not None and algo_name in {
-      "OPTICS",
-      "DBSCAN",
-      "HDBSCAN"
+        "OPTICS",
+        "DBSCAN",
+        "HDBSCAN"
     }:
       myDict["min_samples"] = self.metadata_min_samples_value
 
     # n_clusters for centroid-based algorithms
     if self.metadata_num_clusters_value is not None and algo_name in {
-      "KMeans",
-      "MiniBatchKMeans",
-      "BisectingKMeans",
-      "Agglomerative",
-      "FeatureAgglomeration",
-      "Spectral",
-      "Birch",
+        "KMeans",
+        "MiniBatchKMeans",
+        "BisectingKMeans",
+        "Agglomerative",
+        "FeatureAgglomeration",
+        "Spectral",
+        "Birch",
     }:
       myDict["n_clusters"] = self.metadata_num_clusters_value
 
     # Parallelization for supported algorithms
     if self.metadata_n_jobs_value is not None and algo_name in {
-      "DBSCAN",
-      "OPTICS",
-      "Spectral",
-      "HDBSCAN"
+        "DBSCAN",
+        "OPTICS",
+        "Spectral",
+        "HDBSCAN"
     }:
       myDict["n_jobs"] = self.metadata_n_jobs_value
 
     # Random state for reproducibility
     if self.metadata_random_state_value is not None and algo_name in {
-      "KMeans",
-      "MiniBatchKMeans",
-      "BisectingKMeans",
-      "Spectral",
-      "AffinityPropagation",
+        "KMeans",
+        "MiniBatchKMeans",
+        "BisectingKMeans",
+        "Spectral",
+        "AffinityPropagation",
     }:
       myDict["random_state"] = self.metadata_random_state_value
 
     # AdvancedDensityPeaks Z parameter
     if self.metadata_Z_value is not None and algo_name in {
-      "AdvancedDensityPeaks", "AdvancedDensityPeaksPP"
+        "AdvancedDensityPeaks",
+        "AdvancedDensityPeaksPP"
     }:
       myDict["Z"] = self.metadata_Z_value
 
     return myDict
 
-  def _optimize_param(self,
-    param_name: str,
-    algo_name: str,
-    X: np.ndarray,
-    metric_name: str,
-    values: List[Any],
-    base_kwargs: dict) -> dict[str, Any]:
+  def _optimize_param(
+      self,
+      param_name: str,
+      algo_name: str,
+      X: np.ndarray,
+      metric_name: str,
+      values: List[Any],
+      base_kwargs: dict
+  ) -> dict[str, Any]:
     """
     Optimize a single clustering parameter based on a metric.
 
@@ -5734,8 +5771,9 @@ class OGSClusteringZoo:
     for val in values:
       # Fit model with current parameter value
       score = self._metrics[metric_name](
-        X, cluster_cls(**base_kwargs, **{param_name: val},
-          verbose=self.verbose).fit_predict(X)
+          X, cluster_cls(
+              **base_kwargs, **{param_name: val}, verbose=self.verbose
+          ).fit_predict(X)
       ).compute()
       scores[val] = score
 
@@ -5745,7 +5783,7 @@ class OGSClusteringZoo:
       # Update best if this score is better
       # DaviesBouldin is lower-is-better, others are higher-is-better
       if best_score is None or (score <= best_score if metric_name in {
-        "DaviesBouldinScore"
+          "DaviesBouldinScore"
       } else score >= best_score):
         best_score, best_val = score, val
 
@@ -5754,22 +5792,24 @@ class OGSClusteringZoo:
       return {}
 
     # Refit with best parameter
-    best_clusterer = cluster_cls(**{**base_kwargs, param_name: best_val},
-      verbose=self.verbose)
+    best_clusterer = cluster_cls(
+        **{**base_kwargs, param_name: best_val}, verbose=self.verbose
+    )
     best_clusterer.fit_predict(X)
 
     return {
-      param_name: best_val,
-      "clusterer": best_clusterer,
-      "score": best_score,
-      "scores_by_param": scores,
-      "labels": best_clusterer.labels_
+        param_name: best_val,
+        "clusterer": best_clusterer,
+        "score": best_score,
+        "scores_by_param": scores,
+        "labels": best_clusterer.labels_
     }
 
-  def _optimize_for_metric(self,
-    algo_name: str,
-    X: np.ndarray,
-    metric_name: str
+  def _optimize_for_metric(
+      self,
+      algo_name: str,
+      X: np.ndarray,
+      metric_name: str
   ) -> dict[str, Any]:
     """
     Optimize clustering parameters for a given evaluation metric.
@@ -5807,12 +5847,13 @@ class OGSClusteringZoo:
       values = iter_range(self.metadata_cluster_size_range)
       if values:
         param_name = "min_cluster_size"
-    elif algo_name in {"KMeans", "MiniBatchKMeans", "BisectingKMeans",
-      "Agglomerative", "FeatureAgglomeration",
-      "Spectral", "Birch"}:
-        values = iter_range(self.metadata_num_clusters_range)
-        if values:
-          param_name = "n_clusters"
+    elif algo_name in {
+        "KMeans", "MiniBatchKMeans", "BisectingKMeans", "Agglomerative",
+        "FeatureAgglomeration", "Spectral", "Birch"
+    }:
+      values = iter_range(self.metadata_num_clusters_range)
+      if values:
+        param_name = "n_clusters"
     elif algo_name in {"DBSCAN"}:
       values = iter_range(self.metadata_eps_range)
       if values:
@@ -5836,34 +5877,30 @@ class OGSClusteringZoo:
 
     # Perform optimization
     params = self._optimize_param(
-      param_name,
-      algo_name,
-      X,
-      metric_name,
-      values,
-      base_kwargs
+        param_name, algo_name, X, metric_name, values, base_kwargs
     )
 
     # Log optimization results
     self.logger.info(
-      "Optimized %s for %s: %s = %s with score %s", metric_name, algo_name,
-      param_name, params.get(param_name), params.get('score'),
+        "Optimized %s for %s: %s = %s with score %s", metric_name, algo_name,
+        param_name, params.get(param_name), params.get('score'),
     )
     for key, value in params.get("scores_by_param", {}).items():
       self.logger.debug("    %s: %s", key, value)
 
     # Add metadata to results
     params = {
-      "algorithm": algo_name,
-      "eval_metric": metric_name,
-      **base_kwargs,
-      **params
+        "algorithm": algo_name,
+        "eval_metric": metric_name,
+        **base_kwargs,
+        **params
     }
     return params
 
-  def _init_figure(self,
-    figsize: Tuple[int, int] = (16, 12),
-    **kwargs
+  def _init_figure(
+      self,
+      figsize: Tuple[int, int] = (16, 12),
+      **kwargs
   ) -> dict[str, Tuple[Figure, np.ndarray]]:
     """
     Initialize comparison figure(s) with subplots for each algorithm.
@@ -5911,19 +5948,20 @@ class OGSClusteringZoo:
     if self._metrics:
       for metric_name in self._metrics:
         figures[metric_name] = build_figure(
-          f"Clustering Algorithm Comparison ({metric_name})"
+            f"Clustering Algorithm Comparison ({metric_name})"
         )
       return figures
     else:
       return {"": build_figure("Clustering Algorithm Comparison")}
 
-  def run(self,
-    X: Optional[np.ndarray] = None,
-    figsize: Tuple[int, int] = (16, 8),
-    feature_x: int = 0,
-    feature_y: int = 1,
-    y_true: Optional[np.ndarray] = None,
-    **common_kwargs
+  def run(
+      self,
+      X: Optional[np.ndarray] = None,
+      figsize: Tuple[int, int] = (16, 8),
+      feature_x: int = 0,
+      feature_y: int = 1,
+      y_true: Optional[np.ndarray] = None,
+      **common_kwargs
   ) -> None:
     """
     Compare multiple clustering algorithms on the same dataset.
@@ -5979,25 +6017,21 @@ class OGSClusteringZoo:
       if self._metrics:
         # Optimize for each evaluation metric
         for metric_name in self._metrics:
-          params = self._optimize_for_metric(
-            algo_name,
-            X,
-            metric_name
-          )
+          params = self._optimize_for_metric(algo_name, X, metric_name)
           DATA.setdefault(metric_name, {})[algo_name] = params
       else:
         # No optimization, just run with default/configured params
         clusterer: BaseClusterer = self.create(
-          algo_name,
-          **self._metadata.get(algo_name, {}),
-          **self._cluster_kwargs(algo_name)
+            algo_name,
+            **self._metadata.get(algo_name, {}),
+            **self._cluster_kwargs(algo_name)
         )
         params: dict[str, Any] = {
-          "algorithm": algo_name,
-          "clusterer": clusterer,
-          "eval_metric": metric_name,
-          "labels": clusterer.fit_predict(X),
-          **self._cluster_kwargs(algo_name)
+            "algorithm": algo_name,
+            "clusterer": clusterer,
+            "eval_metric": metric_name,
+            "labels": clusterer.fit_predict(X),
+            **self._cluster_kwargs(algo_name)
         }
         DATA.setdefault(metric_name, {})[algo_name] = params
 
@@ -6012,17 +6046,15 @@ class OGSClusteringZoo:
           continue
         clusterer: BaseClusterer = params["clusterer"]
         clusterer.plot(
-          X=X,
-          feature_x=feature_x,
-          feature_y=feature_y,
-          ax=ax,
-          **common_kwargs
+            X=X, feature_x=feature_x, feature_y=feature_y, ax=ax,
+            **common_kwargs
         )
 
-  def _finalize_figure(self,
-    fig: Figure,
-    ax: np.ndarray,
-    **kwargs
+  def _finalize_figure(
+      self,
+      fig: Figure,
+      ax: np.ndarray,
+      **kwargs
   ) -> None:
     """Apply final layout adjustments to figure."""
     plt.tight_layout()
@@ -6112,145 +6144,171 @@ class ManifoldBenchmark:
     theta = rng.uniform(0, 2 * np.pi, (N, 2))
     r = rng.uniform(0, 1, (N, 2))
     X_int = np.column_stack([
-      r[:, 0] * np.cos(theta[:, 0]), r[:, 0] * np.sin(theta[:, 0]),
-      r[:, 1] * np.cos(theta[:, 1]), r[:, 1] * np.sin(theta[:, 1]),
+        r[:, 0] * np.cos(theta[:, 0]), r[:, 0] * np.sin(theta[:, 0]),
+        r[:, 1] * np.cos(theta[:, 1]), r[:, 1] * np.sin(theta[:, 1]),
     ])
     X_int[:, 2:] *= 0.3
     R = ManifoldBenchmark._random_rotation(4, 6, rng)
     return X_int @ R.T, 4
 
   @staticmethod
-  def gen_M4(N: int = 10_000, seed: int = 42):
+  def gen_M4(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """M4: Nonlinear d=4, D=8."""
     rng = np.random.RandomState(seed)
-    return ManifoldBenchmark._nonlinear_embed(
-      rng.uniform(0, 1, (N, 4)), 8, rng), 4
+    return (
+        ManifoldBenchmark._nonlinear_embed(rng.uniform(0, 1, (N, 4)), 8, rng),
+        4
+    )
 
   @staticmethod
-  def gen_M5(N: int = 10_000, seed: int = 42):
+  def gen_M5(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """M5: 2D helix surface in R^3."""
     rng = np.random.RandomState(seed)
     t = rng.uniform(0, 4 * np.pi, N)
     s = rng.uniform(0.5, 1.5, N)
-    return np.column_stack([s * np.cos(t), s * np.sin(t),
-                            t / (4 * np.pi)]), 2
+    return (
+        np.column_stack([s * np.cos(t), s * np.sin(t), t / (4 * np.pi)]), 2
+    )
 
   @staticmethod
-  def gen_M6(N: int = 10_000, seed: int = 42):
+  def gen_M6(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """M6: Nonlinear d=6, D=36."""
     rng = np.random.RandomState(seed)
-    return ManifoldBenchmark._nonlinear_embed(
-      rng.uniform(0, 1, (N, 6)), 36, rng), 6
+    return (
+        ManifoldBenchmark._nonlinear_embed(rng.uniform(0, 1, (N, 6)), 36, rng),
+        6
+    )
 
   @staticmethod
-  def gen_M7(N: int = 10_000, seed: int = 42):
+  def gen_M7(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """M7: Swiss-Roll d=2, D=3."""
     rng = np.random.RandomState(seed)
     t = 1.5 * np.pi * (1 + 2 * rng.uniform(0, 1, N))
     h = rng.uniform(0, 10, N)
-    return np.column_stack([t * np.cos(t), h, t * np.sin(t)]), 2
+    return (np.column_stack([t * np.cos(t), h, t * np.sin(t)]), 2)
 
   @staticmethod
-  def gen_M9(N: int = 10_000, seed: int = 42):
+  def gen_M9(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """M9: Uniform 20-cube (d=D=20)."""
-    rng = np.random.RandomState(seed)
-    return rng.uniform(0, 1, (N, 20)), 20
+    return (np.random.RandomState(seed).uniform(0, 1, (N, 20)), 20)
 
   @staticmethod
-  def gen_M10a(N: int = 10_000, seed: int = 42):
+  def gen_M10a(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """M10a: 10-cube in R^11."""
     rng = np.random.RandomState(seed)
     R = ManifoldBenchmark._random_rotation(10, 11, rng)
-    return rng.uniform(0, 1, (N, 10)) @ R.T, 10
+    return (rng.uniform(0, 1, (N, 10)) @ R.T, 10)
 
   @staticmethod
-  def gen_M10b(N: int = 10_000, seed: int = 42):
+  def gen_M10b(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """M10b: 17-cube in R^18."""
     rng = np.random.RandomState(seed)
     R = ManifoldBenchmark._random_rotation(17, 18, rng)
-    return rng.uniform(0, 1, (N, 17)) @ R.T, 17
+    return (rng.uniform(0, 1, (N, 17)) @ R.T, 17)
 
   @staticmethod
-  def gen_M10c(N: int = 10_000, seed: int = 42):
+  def gen_M10c(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """M10c: 24-cube in R^25."""
     rng = np.random.RandomState(seed)
     R = ManifoldBenchmark._random_rotation(24, 25, rng)
-    return rng.uniform(0, 1, (N, 24)) @ R.T, 24
+    return (rng.uniform(0, 1, (N, 24)) @ R.T, 24)
 
   @staticmethod
-  def gen_M10d(N: int = 10_000, seed: int = 42):
+  def gen_M10d(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """M10d: 70-cube in R^71."""
     rng = np.random.RandomState(seed)
     R = ManifoldBenchmark._random_rotation(70, 71, rng)
-    return rng.uniform(0, 1, (N, 70)) @ R.T, 70
+    return (rng.uniform(0, 1, (N, 70)) @ R.T, 70)
 
   @staticmethod
-  def gen_M11(N: int = 10_000, seed: int = 42):
+  def gen_M11(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """M11: Möbius band ×10 twists, d=2, D=3."""
     rng = np.random.RandomState(seed)
     u = rng.uniform(0, 2 * np.pi, N)
     v = rng.uniform(-0.5, 0.5, N)
     n_tw = 10
-    return np.column_stack([
-      (1 + v * np.cos(n_tw * u / 2)) * np.cos(u),
-      (1 + v * np.cos(n_tw * u / 2)) * np.sin(u),
-      v * np.sin(n_tw * u / 2),
-    ]), 2
+    return (
+        np.column_stack([
+            (1 + v * np.cos(n_tw * u / 2)) * np.cos(u),
+            (1 + v * np.cos(n_tw * u / 2)) * np.sin(u),
+            v * np.sin(n_tw * u / 2),
+        ]),
+        2
+    )
 
   @staticmethod
-  def gen_M12(N: int = 10_000, seed: int = 42):
+  def gen_M12(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """M12: Isotropic Gaussian d=D=20."""
-    rng = np.random.RandomState(seed)
-    return rng.randn(N, 20), 20
+    return (np.random.RandomState(seed).randn(N, 20), 20)
 
   @staticmethod
-  def gen_M13(N: int = 10_000, seed: int = 42):
+  def gen_M13(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """M13: 1D helix curve in R^3."""
     rng = np.random.RandomState(seed)
     t = np.sort(rng.uniform(0, 4 * np.pi, N))
-    return np.column_stack([np.cos(t), np.sin(t), t / (4 * np.pi)]), 1
+    return (np.column_stack([np.cos(t), np.sin(t), t / (4 * np.pi)]), 1)
 
   @staticmethod
-  def gen_MN1(N: int = 10_000, seed: int = 42):
+  def gen_MN1(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """MN1: Nonlinear d=18, D=72."""
     rng = np.random.RandomState(seed)
-    return ManifoldBenchmark._nonlinear_embed(
-      rng.uniform(0, 1, (N, 18)), 72, rng), 18
+    return (
+        ManifoldBenchmark._nonlinear_embed(
+            rng.uniform(0, 1, (N, 18)), 72, rng
+        ),
+        18
+    )
 
   @staticmethod
-  def gen_MN2(N: int = 10_000, seed: int = 42):
+  def gen_MN2(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """MN2: Nonlinear d=24, D=96."""
     rng = np.random.RandomState(seed)
-    return ManifoldBenchmark._nonlinear_embed(
-      rng.uniform(0, 1, (N, 24)), 96, rng), 24
+    return (
+        ManifoldBenchmark._nonlinear_embed(
+            rng.uniform(0, 1, (N, 24)), 96, rng
+        ),
+        24
+    )
 
   @staticmethod
-  def gen_Mbeta(N: int = 10_000, seed: int = 42):
+  def gen_Mbeta(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """Mβ: Nonlinear d=10, D=40."""
     rng = np.random.RandomState(seed)
-    return ManifoldBenchmark._nonlinear_embed(
-      rng.uniform(0, 1, (N, 10)), 40, rng), 10
+    return (
+        ManifoldBenchmark._nonlinear_embed(
+            rng.uniform(0, 1, (N, 10)), 40, rng
+        ),
+        10
+    )
 
   @staticmethod
-  def gen_MP3(N: int = 10_000, seed: int = 42):
+  def gen_MP3(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """MP3: Nonlinear d=3, D=12."""
     rng = np.random.RandomState(seed)
-    return ManifoldBenchmark._nonlinear_embed(
-      rng.uniform(0, 1, (N, 3)), 12, rng), 3
+    return (
+        ManifoldBenchmark._nonlinear_embed(
+            rng.uniform(0, 1, (N, 3)), 12, rng
+        ),
+        3
+    )
 
   @staticmethod
-  def gen_MP6(N: int = 10_000, seed: int = 42):
+  def gen_MP6(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """MP6: Nonlinear d=6, D=21."""
     rng = np.random.RandomState(seed)
-    return ManifoldBenchmark._nonlinear_embed(
-      rng.uniform(0, 1, (N, 6)), 21, rng), 6
+    return (
+        ManifoldBenchmark._nonlinear_embed(rng.uniform(0, 1, (N, 6)), 21, rng),
+        6
+    )
 
   @staticmethod
-  def gen_MP9(N: int = 10_000, seed: int = 42):
+  def gen_MP9(N: int = 10_000, seed: int = 42) -> Tuple[np.ndarray, int]:
     """MP9: Nonlinear d=9, D=30."""
     rng = np.random.RandomState(seed)
-    return ManifoldBenchmark._nonlinear_embed(
-      rng.uniform(0, 1, (N, 9)), 30, rng), 9
+    return (
+        ManifoldBenchmark._nonlinear_embed(rng.uniform(0, 1, (N, 9)), 30, rng),
+        9
+    )
 
   # -----------------------------------------------------------------------
   # Registry — display order for the 7 × 3 grid
@@ -6350,7 +6408,8 @@ class ManifoldBenchmark:
       # 2) PAk on 2-cluster
       N_per = self.N // 2
       X_cl, lab_true, _ = self.make_two_cluster(
-        gen_func, N_per=N_per, sep=20.0, seed=self.seed)
+          gen_func, N_per=N_per, sep=20.0, seed=self.seed
+      )
       maxk_pak = min(80, N_per - 1)
       scorer = PAkDensitySeparationScore(X_cl, lab_true, maxk=maxk_pak)
       pak_score = scorer.compute()
@@ -6362,7 +6421,8 @@ class ManifoldBenchmark:
       # 3) ADP++ unsupervised
       maxk_adp = min(100, self.N - 1)
       adp = OGSAdvancedDensityPeaksPP(
-        Z=Z, density_method='PAk', maxk=maxk_adp, halo=False)
+          Z=Z, density_method='PAk', maxk=maxk_adp, halo=False
+      )
       with warnings.catch_warnings():
         warnings.simplefilter('ignore', RuntimeWarning)
         adp_labels = adp.fit_predict(X)
@@ -6376,11 +6436,9 @@ class ManifoldBenchmark:
               f'  ({elapsed:.1f}s)')
 
       self.results.append(dict(
-        name=name, desc=desc, d=d, D=D,
-        pak_score=pak_score, d_est_pak=d_est_pak,
-        n_clust=n_clust, d_est_adp=d_est_adp,
-        adp_labels=adp_labels, log_den=log_den,
-        elapsed=elapsed,
+          name=name, desc=desc, d=d, D=D, pak_score=pak_score,
+          d_est_pak=d_est_pak, n_clust=n_clust, d_est_adp=d_est_adp,
+          adp_labels=adp_labels, log_den=log_den, elapsed=elapsed,
       ))
 
     if verbose:
@@ -6409,8 +6467,9 @@ class ManifoldBenchmark:
   # 3 plotting methods — each returns a Figure
   # -----------------------------------------------------------------------
 
-  def plot_geometry(self, ax: Optional[np.ndarray] = None,
-                    **kwargs) -> Figure:
+  def plot_geometry(
+      self, ax: Optional[np.ndarray] = None, **kwargs
+  ) -> Figure:
     """
     Plot a 7 × 3 grid of manifold geometry coloured by first coordinate.
 
@@ -6429,12 +6488,13 @@ class ManifoldBenchmark:
     else:
       fig = ax.flat[0].figure
     fig.suptitle(
-      f'21 Benchmark Manifolds  —  N = {self.N:,}\n'
-      '(PCA → 2D for D > 3;  native coords for D ≤ 3)',
-      fontsize=16, fontweight='bold', y=0.995,
+        f'21 Benchmark Manifolds  —  N = {self.N:,}\n'
+        '(PCA → 2D for D > 3;  native coords for D ≤ 3)',
+        fontsize=16, fontweight='bold', y=0.995,
     )
     for idx, (r, X2, xl, yl) in enumerate(
-        zip(self.results, self._X2d, self._xlabels, self._ylabels)):
+        zip(self.results, self._X2d, self._xlabels, self._ylabels)
+    ):
       row, col = divmod(idx, NCOLS)
       a = ax[row, col]
       c = X2[:, 0]
@@ -6446,16 +6506,19 @@ class ManifoldBenchmark:
       s_str = (f'S={r["pak_score"]:.2f}'
                if r['pak_score'] is not None else 'S=None')
       a.set_title(
-        f'{r["name"]}  —  {r["desc"]}\n'
-        f'd={r["d"]}, D={r["D"]}, d̂={r["d_est_pak"]:.1f}, {s_str}',
-        fontsize=9, fontweight='bold',
+          f'{r["name"]}  —  {r["desc"]}\n'
+          f'd={r["d"]}, D={r["D"]}, d̂={r["d_est_pak"]:.1f}, {s_str}',
+          fontsize=9, fontweight='bold',
       )
       a.set_aspect('equal', adjustable='datalim')
-    fig.tight_layout(rect=[0, 0, 1, 0.98])
+    fig.tight_layout(rect=(0, 0, 1, 0.98))
     return fig
 
-  def plot_density(self, ax: Optional[np.ndarray] = None,
-                   **kwargs) -> Figure:
+  def plot_density(
+      self,
+      ax: Optional[np.ndarray] = None,
+      **kwargs
+  ) -> Figure:
     """
     Plot a 7 × 3 grid of ADP++ log-density landscape.
 
@@ -6469,12 +6532,13 @@ class ManifoldBenchmark:
     else:
       fig = ax.flat[0].figure
     fig.suptitle(
-      f'ADP++ Log-Density Landscape  —  N = {self.N:,}\n'
-      '(PAk density estimator;  colour = log ρ̂)',
-      fontsize=16, fontweight='bold', y=0.995,
+        f'ADP++ Log-Density Landscape  —  N = {self.N:,}\n'
+        '(PAk density estimator;  colour = log ρ̂)',
+        fontsize=16, fontweight='bold', y=0.995,
     )
     for idx, (r, X2, xl, yl) in enumerate(
-        zip(self.results, self._X2d, self._xlabels, self._ylabels)):
+        zip(self.results, self._X2d, self._xlabels, self._ylabels)
+    ):
       row, col = divmod(idx, NCOLS)
       a = ax[row, col]
       sc = a.scatter(X2[:, 0], X2[:, 1], c=r['log_den'], cmap='viridis',
@@ -6486,16 +6550,17 @@ class ManifoldBenchmark:
       a.set_ylabel(yl, fontsize=8)
       a.tick_params(labelsize=7)
       a.set_title(
-        f'{r["name"]}  —  {r["desc"]}\n'
-        f'd̂={r["d_est_adp"]:.1f}, K={r["n_clust"]}',
-        fontsize=9, fontweight='bold',
+          f'{r["name"]}  —  {r["desc"]}\n'
+          f'd̂={r["d_est_adp"]:.1f}, K={r["n_clust"]}',
+          fontsize=9, fontweight='bold',
       )
       a.set_aspect('equal', adjustable='datalim')
     fig.tight_layout(rect=[0, 0, 1, 0.98])
     return fig
 
-  def plot_clusters(self, ax: Optional[np.ndarray] = None,
-                    Z: float = 1.65, **kwargs) -> Figure:
+  def plot_clusters(
+      self, ax: Optional[np.ndarray] = None, Z: float = 1.65, **kwargs
+  ) -> Figure:
     """
     Plot a 7 × 3 grid of ADP++ cluster assignments.
 
@@ -6509,12 +6574,13 @@ class ManifoldBenchmark:
     else:
       fig = ax.flat[0].figure
     fig.suptitle(
-      f'ADP++ Cluster Assignment  —  N = {self.N:,}\n'
-      f'(Z = {Z}, PAk density, unsupervised)',
-      fontsize=16, fontweight='bold', y=0.995,
+        f'ADP++ Cluster Assignment  —  N = {self.N:,}\n'
+        f'(Z = {Z}, PAk density, unsupervised)',
+        fontsize=16, fontweight='bold', y=0.995,
     )
     for idx, (r, X2, xl, yl) in enumerate(
-        zip(self.results, self._X2d, self._xlabels, self._ylabels)):
+        zip(self.results, self._X2d, self._xlabels, self._ylabels)
+    ):
       row, col = divmod(idx, NCOLS)
       a = ax[row, col]
       labels = r['adp_labels']
@@ -6529,9 +6595,9 @@ class ManifoldBenchmark:
       a.set_ylabel(yl, fontsize=8)
       a.tick_params(labelsize=7)
       a.set_title(
-        f'{r["name"]}  —  {r["desc"]}\n'
-        f'd̂={r["d_est_adp"]:.1f}, K={r["n_clust"]} clusters',
-        fontsize=9, fontweight='bold',
+          f'{r["name"]}  —  {r["desc"]}\n'
+          f'd̂={r["d_est_adp"]:.1f}, K={r["n_clust"]} clusters',
+          fontsize=9, fontweight='bold',
       )
       a.set_aspect('equal', adjustable='datalim')
     fig.tight_layout(rect=[0, 0, 1, 0.98])
@@ -6541,8 +6607,10 @@ class ManifoldBenchmark:
   # run() — compute + plot + save (convenience entry point)
   # -----------------------------------------------------------------------
 
-  def run(self, Z: float = 1.65, save_dir: Optional[str] = None,
-          dpi: int = 200, show: bool = True, verbose: bool = True):
+  def run(
+      self, Z: float = 1.65, save_dir: Optional[str] = None, dpi: int = 200,
+      show: bool = True, verbose: bool = True
+  ):
     """
     Full pipeline: compute all manifolds, then save three grid figures.
 
@@ -6592,34 +6660,34 @@ class ManifoldBenchmark:
 
 # Populate the REGISTRY class attribute after class body
 ManifoldBenchmark.REGISTRY = [
-  # row 1 — low-d parametric
-  ('M5',   ManifoldBenchmark.gen_M5,    2,   3,  'Helix 2D'),
-  ('M7',   ManifoldBenchmark.gen_M7,    2,   3,  'Swiss-Roll'),
-  ('M13',  ManifoldBenchmark.gen_M13,   1,   3,  'Helix 1D'),
-  # row 2
-  ('M11',  ManifoldBenchmark.gen_M11,   2,   3,  'Möbius ×10'),
-  ('M2',   ManifoldBenchmark.gen_M2,    3,   5,  'Affine 3→5'),
-  ('M3',   ManifoldBenchmark.gen_M3,    4,   6,  'Concentrated 4→6'),
-  # row 3
-  ('M4',   ManifoldBenchmark.gen_M4,    4,   8,  'Nonlinear 4→8'),
-  ('MP3',  ManifoldBenchmark.gen_MP3,   3,  12,  'Nonlinear 3→12'),
-  ('M6',   ManifoldBenchmark.gen_M6,    6,  36,  'Nonlinear 6→36'),
-  # row 4
-  ('MP6',  ManifoldBenchmark.gen_MP6,   6,  21,  'Nonlinear 6→21'),
-  ('MP9',  ManifoldBenchmark.gen_MP9,   9,  30,  'Nonlinear 9→30'),
-  ('Mβ',   ManifoldBenchmark.gen_Mbeta, 10,  40,  'Nonlinear 10→40'),
-  # row 5
-  ('M1',   ManifoldBenchmark.gen_M1,   10,  11,  'Hypersphere 10→11'),
-  ('M10a', ManifoldBenchmark.gen_M10a, 10,  11,  'Hypercube 10→11'),
-  ('M10b', ManifoldBenchmark.gen_M10b, 17,  18,  'Hypercube 17→18'),
-  # row 6
-  ('M10c', ManifoldBenchmark.gen_M10c, 24,  25,  'Hypercube 24→25'),
-  ('M10d', ManifoldBenchmark.gen_M10d, 70,  71,  'Hypercube 70→71'),
-  ('M9',   ManifoldBenchmark.gen_M9,   20,  20,  'Uniform 20D'),
-  # row 7
-  ('M12',  ManifoldBenchmark.gen_M12,  20,  20,  'Gaussian 20D'),
-  ('MN1',  ManifoldBenchmark.gen_MN1,  18,  72,  'Nonlinear 18→72'),
-  ('MN2',  ManifoldBenchmark.gen_MN2,  24,  96,  'Nonlinear 24→96'),
+    # row 1 — low-d parametric
+    ('M5',   ManifoldBenchmark.gen_M5,    2,   3,  'Helix 2D'),
+    ('M7',   ManifoldBenchmark.gen_M7,    2,   3,  'Swiss-Roll'),
+    ('M13',  ManifoldBenchmark.gen_M13,   1,   3,  'Helix 1D'),
+    # row 2
+    ('M11',  ManifoldBenchmark.gen_M11,   2,   3,  'Möbius ×10'),
+    ('M2',   ManifoldBenchmark.gen_M2,    3,   5,  'Affine 3→5'),
+    ('M3',   ManifoldBenchmark.gen_M3,    4,   6,  'Concentrated 4→6'),
+    # row 3
+    ('M4',   ManifoldBenchmark.gen_M4,    4,   8,  'Nonlinear 4→8'),
+    ('MP3',  ManifoldBenchmark.gen_MP3,   3,  12,  'Nonlinear 3→12'),
+    ('M6',   ManifoldBenchmark.gen_M6,    6,  36,  'Nonlinear 6→36'),
+    # row 4
+    ('MP6',  ManifoldBenchmark.gen_MP6,   6,  21,  'Nonlinear 6→21'),
+    ('MP9',  ManifoldBenchmark.gen_MP9,   9,  30,  'Nonlinear 9→30'),
+    ('Mβ',   ManifoldBenchmark.gen_Mbeta, 10,  40,  'Nonlinear 10→40'),
+    # row 5
+    ('M1',   ManifoldBenchmark.gen_M1,   10,  11,  'Hypersphere 10→11'),
+    ('M10a', ManifoldBenchmark.gen_M10a, 10,  11,  'Hypercube 10→11'),
+    ('M10b', ManifoldBenchmark.gen_M10b, 17,  18,  'Hypercube 17→18'),
+    # row 6
+    ('M10c', ManifoldBenchmark.gen_M10c, 24,  25,  'Hypercube 24→25'),
+    ('M10d', ManifoldBenchmark.gen_M10d, 70,  71,  'Hypercube 70→71'),
+    ('M9',   ManifoldBenchmark.gen_M9,   20,  20,  'Uniform 20D'),
+    # row 7
+    ('M12',  ManifoldBenchmark.gen_M12,  20,  20,  'Gaussian 20D'),
+    ('MN1',  ManifoldBenchmark.gen_MN1,  18,  72,  'Nonlinear 18→72'),
+    ('MN2',  ManifoldBenchmark.gen_MN2,  24,  96,  'Nonlinear 24→96'),
 ]
 
 
@@ -6639,41 +6707,41 @@ def main():
 
   # Generate sample data (4 clusters with some noise)
   X, y_true = make_blobs(
-    n_samples=300,
-    centers=4,
-    cluster_std=0.60,
-    random_state=42,
-    return_centers=False
+      n_samples=300,
+      centers=4,
+      cluster_std=0.60,
+      random_state=42,
+      return_centers=False
   )
 
   # Configuration for the clustering comparison
   metadata = {
-    # Algorithms to compare
-    "algorithms": [
-      "AdvancedDensityPeaksPP",
-      "HDBSCAN",
-      "KMeans",
-    ],
-    # Distance metric
-    "metric": "euclidean",
-    # Evaluation metrics for optimization
-    "eval_metrics": [
-      'SilhouetteScore',
-      'PAkDensitySeparationScore',
-      'DaviesBouldinScore',
-    ],
-    # Parallelization
-    "n_jobs": -1,
-    "random_state": 42,
-    # Parameter ranges for optimization (start, stop, step)
-    "bandwidth_range": (0.5, 2.0, 0.1),
-    "cluster_size_range": (10, 100, 10),
-    "damping_range": (0.5, 0.9, 0.1),
-    "eps_range": (0.3, 1.0, 0.1),
-    "min_samples_range": (5, 50, 5),
-    "num_clusters_range": (2, 10, 1),
-    "sample_size_range": (100, 300, 20),
-    "Z_range": (0.1, 2.0, 0.1),
+      # Algorithms to compare
+      "algorithms": [
+          "AdvancedDensityPeaksPP",
+          "HDBSCAN",
+          "KMeans",
+      ],
+      # Distance metric
+      "metric": "euclidean",
+      # Evaluation metrics for optimization
+      "eval_metrics": [
+          'SilhouetteScore',
+          'PAkDensitySeparationScore',
+          'DaviesBouldinScore',
+      ],
+      # Parallelization
+      "n_jobs": -1,
+      "random_state": 42,
+      # Parameter ranges for optimization (start, stop, step)
+      "bandwidth_range": (0.5, 2.0, 0.1),
+      "cluster_size_range": (10, 100, 10),
+      "damping_range": (0.5, 0.9, 0.1),
+      "eps_range": (0.3, 1.0, 0.1),
+      "min_samples_range": (5, 50, 5),
+      "num_clusters_range": (2, 10, 1),
+      "sample_size_range": (100, 300, 20),
+      "Z_range": (0.1, 2.0, 0.1),
   }
 
   # Create zoo and run comparison
@@ -6682,4 +6750,5 @@ def main():
   plt.show()
 
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+  main()

@@ -1,3 +1,39 @@
+"""
+=============================================================================
+OGS Parser Test Suite - Unit Tests for Catalog Parsing & Registration
+=============================================================================
+
+OVERVIEW:
+Unit test suite for ``ogsparser.py``. Validates CLI argument handling, catalog
+format auto-detection, and ``DataCatalog`` file registration across disparate
+bulletin formats (.dat, .hpl, .pun, .txt).
+
+TEST CASES & INVARIANTS:
+  1. test_parse_arguments_file_mode: Validates CLI execution when processing
+     individual catalog files.
+  2. test_datacatalog_file_registration: Verifies that ``DataCatalog`` correctly
+     identifies format types and registers input files into parser pipelines.
+
+USAGE:
+python -m unittest OGS/test/testogsparser.py
+
+DEPENDENCIES:
+- unittest / unittest.mock: test runner and mock frameworks
+  - ogsparser: catalog aggregator and parser dispatcher under test
+  - ogsconstants: shared formats and file patterns
+
+AUTHORS:
+  - 健
+  - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+    Centro di Ricerche Sismologiche (CRS)
+  - Università degli Studi di Trieste (UniTS)
+    Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+    Applied Data Science and Artificial Intelligence (ADSAI)
+  - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+    Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
+=============================================================================
+"""
+
 from ogsparser import DataCatalog, parse_arguments
 import ogsconstants as OGS_C
 import os
@@ -17,6 +53,7 @@ DATA_DIR = Path(os.path.abspath(THIS_DIR + "/../data"))
 
 
 class TestOGSParser(unittest.TestCase):
+  @unittest.mock.patch("os.path.isfile", return_value=True)
   @unittest.mock.patch("sys.argv", [
       "ogsparser.py",
       "-D", "20240320", "20240620",
@@ -24,7 +61,7 @@ class TestOGSParser(unittest.TestCase):
       "-v",
       "--merge"
   ])
-  def test_parse_arguments_file_mode(self):
+  def test_parse_arguments_file_mode(self, mock_isfile):
     args = parse_arguments()
     self.assertEqual(
         args.file, [Path(DATA_DIR / "manual" / "onlyEQ-2024.hpl")]

@@ -17,7 +17,7 @@
 #   The file is never modified, and repeated validation has no side effects.
 #
 # OPTIONS
-#   -h, --help    Show usage information and exit.
+#   -h, --help     Show usage information and exit.
 
 set -euo pipefail
 shopt -s extglob
@@ -32,6 +32,7 @@ readonly ALLOWED_KEYS_GEMINI=(
   commandExecutionPolicy
   compatibility
   description
+  disable-model-invocation
   execution-priority
   license
   mainAgent
@@ -78,8 +79,8 @@ usage() { # 12
 Usage: $SCRIPT [OPTIONS] <path-to-agent-or-skill-file>
 
 Options:
-  -h, --help    Show this help message and exit.
-  --            End option processing.
+  -h, --help     Show this help message and exit.
+  --             End option processing.
 
 Examples:
   bash $SCRIPT .agents/skills/agent-creator/SKILL.md
@@ -98,9 +99,11 @@ require_command() { # 5
 # extract_frontmatter
 # -------------------
 # Extract frontmatter and fail if its delimiters are incomplete.
+# Normalizes CRLF line endings to prevent cross-platform issues.
 extract_frontmatter() { # 11
   local -r target_file="$1"
   awk '
+    { sub(/\r$/, "") }
     NR == 1 && $0 == "---" { in_frontmatter = 1; next }
     in_frontmatter && $0 == "---" { closed = 1; exit }
     in_frontmatter { print }
@@ -129,9 +132,10 @@ has_key() { # 14
   local -r expected_key="$1"
   local -r frontmatter="$2"
   awk -v expected_key="$expected_key" '
-    /^[[:alnum:]_-]+:/ {
+    { sub(/\r$/, "") }
+    /^[[:alnum:]_-]+[[:space:]]*:/ {
       key = $0
-      sub(/:.*/, "", key)
+      sub(/[[:space:]]*:.*/, "", key)
       if (key == expected_key) {
         found = 1
       }
@@ -147,9 +151,10 @@ get_field_value() { # 13
   local -r key="$1"
   local -r frontmatter="$2"
   awk -v key="$key" '
-    $0 ~ "^" key ":" {
+    { sub(/\r$/, "") }
+    $0 ~ "^" key "[[:space:]]*:" {
       value = $0
-      sub("^" key ":[[:space:]]*", "", value)
+      sub("^" key "[[:space:]]*:[[:space:]]*", "", value)
       sub(/[[:space:]]*$/, "", value)
       print value
       exit
@@ -160,12 +165,14 @@ get_field_value() { # 13
 # has_non_empty_description
 # -------------------------
 # Check that the description field is present and non-empty.
+# Properly handles multiline scalar blocks (>- and |) with empty lines.
 has_non_empty_description() { # 33
   local -r frontmatter="$1"
   awk '
-    /^description:/ {
+    { sub(/\r$/, "") }
+    /^description[[:space:]]*:/ {
       val = $0
-      sub(/^description:[[:space:]]*/, "", val)
+      sub(/^description[[:space:]]*:[[:space:]]*/, "", val)
       sub(/[[:space:]]*$/, "", val)
       if (val ~ /^(\||>)/ || val == "") {
         found_key = 1
@@ -176,6 +183,9 @@ has_non_empty_description() { # 33
         exit
       }
     }
+    found_key && /^[[:space:]]*$/ {
+      next
+    }
     found_key && /^[[:space:]]+/ {
       trimmed = $0
       sub(/^[[:space:]]+/, "", trimmed)
@@ -185,7 +195,7 @@ has_non_empty_description() { # 33
         exit
       }
     }
-    found_key && !/^[[:space:]]+/ {
+    found_key && !/^[[:space:]]/ {
       exit
     }
     END {
@@ -201,8 +211,10 @@ validate_frontmatter() { # 93
   local -r frontmatter="$1"
   local declared_keys key name_val perm_val cmd_val bool_key bool_val tools_val errors=0
 
-  declared_keys=$(awk '/^[[:alnum:]_-]+:/ { key = $0; sub(/:.*/, "", key); print key }' \
-    <<< "$frontmatter")
+  declared_keys=$(awk '
+    { sub(/\r$/, "") }
+    /^[[:alnum:]_-]+[[:space:]]*:/ { key = $0; sub(/[[:space:]]*:.*/, "", key); print key }
+  ' <<< "$frontmatter")
   while IFS= read -r key; do
     [[ -n "$key" ]] || continue
     if [[ "$key" =~ ^($ALLOWED_KEYS_PATTERN_GEMINI)$ ]]; then
@@ -221,6 +233,12 @@ validate_frontmatter() { # 93
     name_val=$(strip_quotes "$name_val")
     if [[ -z "$name_val" ]]; then
       printf '[!] SCHEMA ERROR: name must not be empty.\n' >&2
+      ((errors += 1))
+    elif [[ ! "$name_val" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+      printf '[!] SCHEMA ERROR: name contains invalid characters: %s (must be alphanumeric, hyphens, underscores)\n' "$name_val" >&2
+      ((errors += 1))
+    elif (( ${#name_val} > 64 )); then
+      printf '[!] SCHEMA ERROR: name is too long (%d chars, max 64): %s\n' "${#name_val}" "$name_val" >&2
       ((errors += 1))
     fi
   fi
@@ -259,7 +277,7 @@ validate_frontmatter() { # 93
     esac
   fi
 
-  for bool_key in mainAgent subagent user-invocable; do
+  for bool_key in mainAgent subagent user-invocable disable-model-invocation; do
     if has_key "$bool_key" "$frontmatter"; then
       bool_val=$(get_field_value "$bool_key" "$frontmatter")
       bool_val=$(strip_quotes "$bool_val")
@@ -288,7 +306,21 @@ validate_frontmatter() { # 93
     esac
   fi
 
-  return "$errors"
+  if has_key allowed-tools "$frontmatter"; then
+    tools_val=$(get_field_value allowed-tools "$frontmatter")
+    tools_val=$(strip_quotes "$tools_val")
+    case "$tools_val" in
+      ""|"[]"|"[*]")
+        ;;
+      *)
+        if [[ "$tools_val" != \[* && "$tools_val" != -* ]]; then
+          printf '[!] SCHEMA WARNING: allowed-tools should be a list or [], got: %s\n' "$tools_val" >&2
+        fi
+        ;;
+    esac
+  fi
+
+  (( errors == 0 )) || return 1
 }
 
 # run

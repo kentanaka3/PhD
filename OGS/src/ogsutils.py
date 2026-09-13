@@ -68,7 +68,15 @@ DEPENDENCIES:
   - obspy.UTCDateTime  : robust datetime parsing for CLI inputs
   - ogsconstants       : shared column-name / unit constants
 
-AUTHOR: AI2Seism Project
+AUTHORS:
+  - 健
+  - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+    Centro di Ricerche Sismologiche (CRS)
+  - Università degli Studi di Trieste (UniTS)
+    Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+    Applied Data Science and Artificial Intelligence (ADSAI)
+  - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+    Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
 =============================================================================
 """
 
@@ -646,6 +654,8 @@ def labels_to_colormap(
 
   # Find all unique labels (may include -1 for noise)
   unique = np.unique(labels)
+  if len(unique) == 0:
+    raise ValueError("Cannot generate colormap for empty labels array.")
 
   # Create mapping from original labels to sequential indices
   label_to_idx = {lab: i for i, lab in enumerate(unique)}
@@ -654,7 +664,7 @@ def labels_to_colormap(
   encoded = np.vectorize(label_to_idx.get, otypes=[int])(labels)
 
   # Create discrete colormap with exactly len(unique) colors
-  cmap = cast(Any, cm.get_cmap("Paired")).resampled(len(unique))
+  cmap = cast(Any, cm.get_cmap('tab20')).resampled(len(unique))
 
   # Create boundary norm for discrete color assignment
   # Boundaries at -0.5, 0.5, 1.5, ... ensure each integer maps to one color
@@ -679,15 +689,23 @@ def inventory(
 
   Args:
     stations: Path to directory containing StationXML files.
+    output: Optional path to directory where inventory CSV will be saved.
 
   Returns:
     pd.DataFrame: DataFrame containing station metadata with columns:
     LONGITUDE_STR, LATITUDE_STR, DEPTH_STR, NETWORK_STR, STATION_STR,
     NETCOLOR_STR, STACOLOR_STR
 
+  Raises:
+    FileNotFoundError: If the station directory does not exist or contains
+      no valid StationXML files.
+
   Side Effects:
     - Logs warnings for unreadable station files
   """
+  if not stations.is_dir():
+    raise FileNotFoundError(f"Station directory not found: {stations}")
+
   logger = setup_logger(__name__)
   # Import ObsPy utilities (lazy import to avoid circular dependencies)
   from obspy import Inventory, read_inventory
@@ -716,6 +734,12 @@ def inventory(
           net.code,
           sta.code,
       ])
+
+  if not elements:
+    raise FileNotFoundError(
+        f"No valid StationXML (*.xml) files found in {stations}"
+    )
+
   INVENTORY = pd.DataFrame(
       elements,
       columns=[
@@ -798,7 +822,7 @@ def waveforms(
   # Scan all MiniSEED files recursively
   for wf in waveforms.glob("**/*.mseed"):
     if not wf.name.startswith("."):
-        # Parse filename: NET.STA.LOC.CHA__YYYYMMDDTHHMMSS__suffix.mseed
+      # Parse filename: NET.STA.LOC.CHA__YYYYMMDDTHHMMSS__suffix.mseed
       stid, dateinitid, _ = wf.stem.split(
           OGS_C.UNDERSCORE_STR + OGS_C.UNDERSCORE_STR
       )

@@ -10,9 +10,9 @@
 #
 # QUICK START / USAGE EXAMPLES:
 #   make help
-#   make init [DRY_RUN=1]   # Initialize the WORK directory structure
-#   make download YEAR=2025 STEP_DAYS=5 OFFSET=0 END_DAY=365
-#   make download YEAR=2025 STEP_DAYS=5 OFFSET=0 END_DAY=365 THREADS=4
+#   make init						    # Initialize the WORK directory structure
+#   make download START_DATE=20250127 STEP_DAYS=5
+#   make download OFFSET=5 END_DATE=20250213 STEP_DAYS=5 CORES=4
 #	  make compress           # Compress raw waveforms into yearly tar.gz files
 #	  make decompress         # Decompress yearly tar.gz files into raw waveforms
 #   make retrieve           # rsync waveforms to scratch for manual analysis
@@ -44,6 +44,20 @@
 #   - LAUNCHME.sh           : SLURM job-submission wrapper (activates SBC env)
 #   - $(SBC_RUN_BIN)        : ML catalog generation entrypoint (Hydra) [= ml_catalog_run]
 #   - $(OGS_PATH)/src/*.py  : OGS-specific Python scripts
+#
+# NOTE: START_DATE defaults to $(YEAR)-01-01 + $(OFFSET) days. If START_DATE is
+#       passed explicitly on the command line, OFFSET is ignored.
+#
+# AUTHORS:
+#   - 健
+#   - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+#     Centro di Ricerche Sismologiche (CRS)
+#   - Università degli Studi di Trieste (UniTS)
+#     Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+#     Applied Data Science and Artificial Intelligence (ADSAI)
+#   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+#     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
+#
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -53,14 +67,15 @@
 # General
 USER        ?= $(shell whoami)
 PROJECT     ?= Leonardo_Dev
-THREADS     ?= 4
+NODES 		  ?= 1
+TASKS			  ?= 1
+CORES			  ?= 1
 CONDA_ENV   ?= SBC_3.12
 
 # Date Variables
 YEAR        ?= 2026
 STEP_DAYS   ?= 5
 OFFSET      ?= 0
-END_DAY     ?= 366    # max 366 (leap years); loop clamps to year end
 
 # Paths
 WORK_PATH   		?= /leonardo_work/IscrC_AISeism/WORK
@@ -77,15 +92,11 @@ WAVE_PATH   		?= $(abspath $(WORK_PATH)/waveform)
 START_DATE  ?= $(shell date -d "$(YEAR)-01-01 + $(OFFSET) days" +%Y%m%d)
 END_DATE    ?= $(shell date -d "$(YEAR)-12-31" +%Y%m%d)
 
-_START_DATE_CHECK := $(shell date -d "$(START_DATE)" +%Y%m%d 2>/dev/null || echo invalid)
-_END_DATE_CHECK   := $(shell date -d "$(END_DATE)"   +%Y%m%d 2>/dev/null || echo invalid)
-$(if $(filter invalid,$(_START_DATE_CHECK)),$(error Invalid START_DATE: $(START_DATE)))
-$(if $(filter invalid,$(_END_DATE_CHECK)),$(error Invalid END_DATE: $(END_DATE)))
+$(if $(shell date -d "$(START_DATE)" +%Y%m%d 2>/dev/null),,$(error Invalid START_DATE: $(START_DATE)))
+$(if $(shell date -d "$(END_DATE)"   +%Y%m%d 2>/dev/null),,$(error Invalid END_DATE: $(END_DATE)))
+$(if $(shell [ "$(START_DATE)" -le "$(END_DATE)" ] 2>/dev/null && echo ok),,$(error Invalid date range: START_DATE=$(START_DATE) must be <= END_DATE=$(END_DATE)))
 
-ifeq ($(YEAR),$(shell date -d "$(START_DATE)" +%Y))
-else
-  YEAR := $(shell date -d "$(START_DATE)" +%Y)
-endif
+YEAR := $(shell date -d "$(START_DATE)" +%Y)
 
 # More paths
 TT_DB        	?= $(OGS_PATH)/data/VelocityModel/1D/tt_db.txt
@@ -127,6 +138,8 @@ NLLS				:= NLL1D NLL3D
   download compress decompress retrieve station index \
   $(MODELS) $(ASSOCS) $(NLLS)
 
+.SILENT: download
+
 # -----------------------------------------------------------------------------
 # DEFAULT / META
 # -----------------------------------------------------------------------------
@@ -136,11 +149,10 @@ all: base # 2
 help: #
 	@echo "AISeism Makefile — common targets:"
 	@echo "  make init"
-	@echo "  make download   YEAR=YYYY STEP_DAYS=N OFFSET=D END_DAY=D"
-	@echo "  make download   YEAR=YYYY STEP_DAYS=N OFFSET=D END_DAY=D THREADS=4"
-	@echo "  make compress | decompress | retrieve   YEAR=YYYY 	(deprecated; retained for compatibility)"
+	@echo "  make download   YEAR=YYYY STEP_DAYS=N [CORES=4]"
+	@echo "  make download   START_DATE=YYYYMMDD END_DATE=YYYYMMDD STEP_DAYS=N [CORES=4]"
 	@echo "  make station    YEAR=YYYY"
-	@echo "  make index THREADS=8 START_DATE=1977-01-01 END_DATE=2025-12-31"
+	@echo "  make index CORES=8 START_DATE=2005-01-01 END_DATE=2025-12-31"
 	@echo "  make PhaseNet | EQTransformer | ...	(picker models with default dataset/threshold)"
 	@echo "  make PhaseNet[INSTANCE,0.1] | EQTransformer[STEAD,0.2] | ...	(picker models with dataset/threshold overrides)"
 	@echo "  make PyOcto | GaMMA | REAL           (associator with default picker input)"
@@ -161,54 +173,45 @@ setup:
 # INITIALIZATION
 # =============================================================================
 init:
-	@WORK_PATH="$(WORK_PATH)" OGS_PATH="$(OGS_PATH)" \
-		NLL_PATH="$(NLL_PATH)" DATASET_PATH="$(DATASET_PATH)" \
-		CONDA_ROOT="$(CONDA_ROOT)" CONDA_INSTALLER="$(CONDA_INSTALLER)" \
-		CONDA_ENV="$(CONDA_ENV)" SBC_PATH="$(SBC_PATH)" \
-		bash "$(OGS_PATH)/utils/Leonardo/init.sh"
+	@WORK_PATH="$(WORK_PATH)" OGS_PATH="$(OGS_PATH)" NLL_PATH="$(NLL_PATH)" \
+		DATASET_PATH="$(DATASET_PATH)" CONDA_ROOT="$(CONDA_ROOT)" \
+		CONDA_INSTALLER="$(CONDA_INSTALLER)" CONDA_ENV="$(CONDA_ENV)" \
+		SBC_PATH="$(SBC_PATH)" bash "$(OGS_PATH)/utils/Leonardo/init.sh"
 
 # =============================================================================
 # DATA ACQUISITION
 # =============================================================================
 
-# Download waveforms in $(STEP_DAYS)-day chunks, clamped to $(YEAR).
+# Download waveforms in $(STEP_DAYS)-day chunks from $(START_DATE) to $(END_DATE).
 download: #
-	[[ "$(STEP_DAYS)" =~ ^[1-9][0-9]*$$ ]] || {
-		printf 'ERROR: STEP_DAYS must be a positive integer: %s\n' "$(STEP_DAYS)" >&2
-		exit 2
+	@[[ "$(STEP_DAYS)" =~ ^[1-9][0-9]*$$ ]] || { \
+		printf 'ERROR: STEP_DAYS must be a positive integer: %s\n' "$(STEP_DAYS)" >&2; \
+		exit 2; \
 	}
-	[[ "$(OFFSET)" =~ ^[0-9]+$$ ]] || {
-		printf 'ERROR: OFFSET must be a non-negative integer: %s\n' "$(OFFSET)" >&2
-		exit 2
-	}
-	[[ "$(END_DAY)" =~ ^[1-9][0-9]*$$ ]] || {
-		printf 'ERROR: END_DAY must be a positive integer: %s\n' "$(END_DAY)" >&2
-		exit 2
-	}
-	for i in $$(seq $(OFFSET) $(STEP_DAYS) $$(END_DAY)); do \
-	  start=$$(date -d "$(YEAR)-01-01 + $$i days" +%Y%m%d); \
-	  [ "$$(date -d "$$start" +%Y)" = "$(YEAR)" ] || continue; \
-	  end=$$(date -d "$$start + $$STEP_DAYS - 1 days" +%Y%m%d); \
-	  [ "$$end" -le "$$(END_DAY)" ] || end=$$(END_DAY); \
-	  [ "$$(date -d "$$end" +%Y)" = "$(YEAR)" ] || end=$(YEAR)1231; \
-	  echo "Downloading waveforms $$start → $$end (offset $$i days)"; \
-	  bash LAUNCHME.sh download 1 1 "DownLoad_$${start}_$${end}" \
-	    $(PYTHON_BIN) $(OGS_PATH)/src/ogsdownloader.py \
+	@set -e; \
+	start="$(START_DATE)"; \
+	while [ "$$start" -le "$(END_DATE)" ]; do \
+		end=$$(date -d "$$start + $(STEP_DAYS) days - 1 day" +%Y%m%d); \
+		[ "$$end" -le "$(END_DATE)" ] || end="$(END_DATE)"; \
+		echo "Downloading waveforms $$start → $$end"; \
+		OVERRIDE_CORES=$(CORES) CORE_COUNT=$(CORES) bash LAUNCHME.sh download 1 1 "DownLoad_$${start}_$${end}" \
+			$(PYTHON_BIN) $(OGS_PATH)/src/ogsdownloader.py \
 				-D $$start $$end \
 				-d $(WAVE_PATH) \
-				--threads $(THREADS) \
+				--threads $(CORES) \
 				-S "* -SP -OL -ED"; \
+		start=$$(date -d "$$end + 1 day" +%Y%m%d); \
 	done
 
 compress: #
 	@echo "WARNING: make compress is deprecated; use the current waveform archive workflow instead." >&2
-	bash LAUNCHME.sh compress 1 1 Compressor \
+	@bash LAUNCHME.sh compress 1 1 Compressor \
 	  $(PYTHON_BIN) $(WORK_PATH)/compressor.py \
 			-C $(WAVE_PATH) . -v
 
 decompress:
 	@echo "WARNING: make decompress is deprecated; use the current waveform archive workflow instead." >&2
-	bash LAUNCHME.sh compress 1 1 Decompressor \
+	@bash LAUNCHME.sh compress 1 1 Decompressor \
 	  $(PYTHON_BIN) $(WORK_PATH)/compressor.py \
 			-D $(WAVE_PATH)/$(YEAR) \
 	    $(WAVE_PATH) -v && \
@@ -217,13 +220,13 @@ decompress:
 retrieve:
 	@echo "WARNING: make retrieve is deprecated; use the current waveform archive workflow instead." >&2
 	@echo "Retrieving YEAR=$(YEAR) waveforms to /leonardo_scratch/large/userexternal/$(USER)/"
-	rsync -avh /leonardo_store/DRES_EchoArch/amagrin0/Ken/$(YEAR) \
+	@rsync -avh /leonardo_store/DRES_EchoArch/amagrin0/Ken/$(YEAR) \
 	  /leonardo_scratch/large/userexternal/$(USER)/
 
 # Station metadata for the configured date range.
 station:
 	@echo "Processing station metadata $(START_DATE) → $(END_DATE)..."
-	bash LAUNCHME.sh $(SLURM_TEMPLATE) 1 1 "Stations $(START_DATE)-$(END_DATE)" \
+	@bash LAUNCHME.sh $(SLURM_TEMPLATE) 1 1 "Stations_$(START_DATE)_$(END_DATE)" \
 	  $(PYTHON_BIN) $(OGS_PATH)/src/ogsstation.py \
 	    $(OGS_PATH)/src $(WAVE_PATH) $(STATION_PATH) \
 	    $(START_DATE) $(END_DATE) $(WORK_PATH)/catalogs/$(base)
@@ -231,7 +234,7 @@ station:
 # Build/update the sharded Squirrel indexes for the full waveform archive.
 index:
 	$(SBC_RUN_BIN) +index_only=true data=ogsDB data.check=true \
-	  data.index_workers=$(THREADS) \
+	  data.index_workers=$(CORES) \
 	  data.starttime=$(START_DATE) \
 	  data.endtime=$(END_DATE)
 
@@ -304,7 +307,7 @@ define _INDEXER_RULES
 $1:
 	bash LAUNCHME.sh $$(USER) 1 1 "Indexer $$(YEAR)" \
 	  $$(SBC_RUN_BIN) +index_only=true data=ogsDB data.check=true \
-	  data.index_workers=$$(THREADS) \
+	  data.index_workers=$$(CORES) \
 	  data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
 endef
 

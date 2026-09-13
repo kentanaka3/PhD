@@ -1,3 +1,45 @@
+"""
+=============================================================================
+OGS Catalog Test Suite - Unit Tests for Catalog Indexing & BGMA Review
+=============================================================================
+
+OVERVIEW:
+Unit test suite for the ``OGSCatalog`` class and BGMA (Base/Ground-truth vs.
+Model Assessment) bipartite graph matching engine.
+
+TEST CASES & INVARIANTS:
+  1. TestOGSCatalogEventPrefilter:
+     - Geographic candidate masking and projection onto boundary polygons.
+     - Prefilter event tracking for out-of-region rows outside BGMA review.
+     - Feasible event position pruning based on velocity and travel time.
+     - Mixed timezone UTC normalization for event origin timestamps.
+     - Integrity of partitioned review frames (both, base-only, target-only).
+  2. TestOGSBPGraphPicks:
+     - Station candidate window pruning and temporal tolerance bounds.
+  3. TestOGSDistanceMetrics:
+     - Pick phase match scoring, probability ratios, and zero-division guards.
+
+USAGE:
+python -m unittest OGS/test/testogscatalog.py
+
+DEPENDENCIES:
+- unittest / unittest.mock: test runner and catalog mocking
+  - numpy / pandas: array computations and tabular verification
+  - matplotlib.path: polygon membership testing
+  - ogscatalog / ogsconstants / ogsutils: core catalog implementation
+
+AUTHORS:
+  - 健
+  - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+    Centro di Ricerche Sismologiche (CRS)
+  - Università degli Studi di Trieste (UniTS)
+    Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+    Applied Data Science and Artificial Intelligence (ADSAI)
+  - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+    Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
+=============================================================================
+"""
+
 from ogsutils import OGSBPGraphPicks, dist_prob, dist_pick, dist_event
 from ogscatalog import OGSCatalog, _EVENTS_MH_COLUMNS, _EVENTS_PHASES
 import ogsconstants as OGS_C

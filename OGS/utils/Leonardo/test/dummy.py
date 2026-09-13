@@ -1,13 +1,42 @@
 #!/usr/bin/env python3
-"""Smoke tests executed by make init.
+"""
+=============================================================================
+Leonardo Workspace Smoke Test - Makefile Init Verification Suite
+=============================================================================
 
-The initialization target copies this repository into WORK_PATH, creates the
-shared config/data/src links, and launches this file through LAUNCHME.sh.
-These checks make the dummy SLURM job verify that the initialized workspace is
-usable rather than merely proving that Python started.
+OVERVIEW:
+Smoke test suite executed by the Makefile 'init' target on the Leonardo HPC
+cluster. Verifies that the initialized workspace in WORK_PATH contains the
+required execution launchers, configuration files, and symbolic links (config,
+data, src) back to the shared project tree.
 
-The test directory is copied into the workspace; config, data, and src are
-symbolic links back to the shared OGS tree. We check both facts explicitly.
+Ensures that the compute environment is verified before submitting resource-
+intensive multi-node SLURM jobs.
+
+USAGE:
+# Standalone test execution:
+  python dummy.py
+
+  # Invoked via Makefile:
+  make init -C OGS/utils/Leonardo
+
+  # Dispatched as a Slurm batch job:
+  sbatch LAUNCHME.sh OGS/utils/Leonardo/test/dummy.py
+
+DEPENDENCIES:
+- unittest: standard library test framework
+  - pathlib / os: workspace filesystem inspection
+
+AUTHORS:
+  - 健
+  - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+    Centro di Ricerche Sismologiche (CRS)
+  - Università degli Studi di Trieste (UniTS)
+    Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+    Applied Data Science and Artificial Intelligence (ADSAI)
+  - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+    Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
+=============================================================================
 """
 
 from __future__ import annotations

@@ -197,7 +197,7 @@ has_non_empty_description() { # 33
 # validate_frontmatter
 # --------------------
 # Validate supported keys, required fields, and field types.
-validate_frontmatter() { # 89
+validate_frontmatter() { # 117
   local -r frontmatter="$1"
   local declared_keys key perm_val effort_val turns_val shell_val bool_key bool_val errors=0
 
@@ -250,8 +250,8 @@ validate_frontmatter() { # 89
   if has_key maxTurns "$frontmatter"; then
     turns_val=$(get_field_value maxTurns "$frontmatter")
     turns_val=$(strip_quotes "$turns_val")
-    if [[ ! "$turns_val" =~ ^[0-9]+$ ]]; then
-      printf '[!] SCHEMA ERROR: maxTurns must be a positive integer, got: %s\n' "$turns_val" >&2
+    if [[ ! "$turns_val" =~ ^[1-9][0-9]*$ ]]; then
+      printf '[!] SCHEMA ERROR: maxTurns must be a positive integer (>= 1), got: %s\n' "$turns_val" >&2
       ((errors += 1))
     fi
   fi
@@ -264,6 +264,20 @@ validate_frontmatter() { # 89
         ;;
       *)
         printf '[!] SCHEMA ERROR: unsupported shell: %s (expected bash or powershell)\n' "$shell_val" >&2
+        ((errors += 1))
+        ;;
+    esac
+  fi
+
+  if has_key context "$frontmatter"; then
+    local context_val
+    context_val=$(get_field_value context "$frontmatter")
+    context_val=$(strip_quotes "$context_val")
+    case "$context_val" in
+      fork)
+        ;;
+      *)
+        printf '[!] SCHEMA ERROR: unsupported context: %s (expected fork)\n' "$context_val" >&2
         ((errors += 1))
         ;;
     esac
@@ -284,18 +298,33 @@ validate_frontmatter() { # 89
     fi
   done
 
+  if has_key name "$frontmatter"; then
+    local name_val name_raw
+    name_raw=$(get_field_value name "$frontmatter")
+    name_val=$(strip_quotes "$name_raw")
+    if [[ ${#name_val} -gt 64 ]]; then
+      printf '[!] SCHEMA ERROR: name exceeds 64 characters (%d chars): %s\n' "${#name_val}" "$name_val" >&2
+      ((errors += 1))
+    fi
+    # Enforce strict slug format only for unquoted names; quoted display names are allowed
+    if [[ "$name_raw" != \"*\" ]] && [[ "$name_raw" != \'*\' ]] && \
+       [[ -n "$name_val" ]] && [[ ! "$name_val" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+      printf '[!] SCHEMA ERROR: unquoted name must contain only lowercase letters, digits, and hyphens (quote it for display names): %s\n' "$name_val" >&2
+      ((errors += 1))
+    fi
+  fi
+
+  # Cap at 125 to prevent bash exit-code overflow (values > 125 collide with signals)
+  (( errors > 125 )) && errors=125
   return "$errors"
 }
 
 # run
 # ---
 # Validate one agent file without changing it.
-run() { # 14
+run() { # 8
   local -r target_file="$1"
   local frontmatter
-
-  [[ -f "$target_file" ]] || fail 1 "file does not exist: $target_file"
-  [[ -r "$target_file" ]] || fail 1 "file is not readable: $target_file"
   frontmatter=$(extract_frontmatter "$target_file") ||
     fail 1 "missing or incomplete YAML frontmatter: $target_file"
   [[ -n "$frontmatter" ]] ||

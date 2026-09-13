@@ -58,6 +58,7 @@ readonly ALLOWED_KEYS_GEMINI=(
   commandExecutionPolicy
   compatibility
   description
+  disable-model-invocation
   execution-priority
   license
   mainAgent
@@ -151,6 +152,7 @@ require_command() { # 5
 extract_frontmatter() { # 11
   local -r target_file="$1"
   awk '
+    { sub(/\r$/, "") }
     NR == 1 && $0 == "---" { in_frontmatter = 1; next }
     in_frontmatter && $0 == "---" { closed = 1; exit }
     in_frontmatter { print }
@@ -179,9 +181,10 @@ has_key() { # 14
   local -r expected_key="$1"
   local -r frontmatter="$2"
   awk -v expected_key="$expected_key" '
-    /^[[:alnum:]_-]+:/ {
+    { sub(/\r$/, "") }
+    /^[[:alnum:]_-]+[[:space:]]*:/ {
       key = $0
-      sub(/:.*/, "", key)
+      sub(/[[:space:]]*:.*/, "", key)
       if (key == expected_key) {
         found = 1
       }
@@ -197,9 +200,10 @@ get_field_value() { # 13
   local -r key="$1"
   local -r frontmatter="$2"
   awk -v key="$key" '
-    $0 ~ "^" key ":" {
+    { sub(/\r$/, "") }
+    $0 ~ "^" key "[[:space:]]*:" {
       value = $0
-      sub("^" key ":[[:space:]]*", "", value)
+      sub("^" key "[[:space:]]*:[[:space:]]*", "", value)
       sub(/[[:space:]]*$/, "", value)
       print value
       exit
@@ -213,9 +217,10 @@ get_field_value() { # 13
 has_non_empty_description() { # 33
   local -r frontmatter="$1"
   awk '
-    /^description:/ {
+    { sub(/\r$/, "") }
+    /^description[[:space:]]*:/ {
       val = $0
-      sub(/^description:[[:space:]]*/, "", val)
+      sub(/^description[[:space:]]*:[[:space:]]*/, "", val)
       sub(/[[:space:]]*$/, "", val)
       if (val ~ /^(\||>)/ || val == "") {
         found_key = 1
@@ -226,6 +231,9 @@ has_non_empty_description() { # 33
         exit
       }
     }
+    found_key && /^[[:space:]]*$/ {
+      next
+    }
     found_key && /^[[:space:]]+/ {
       trimmed = $0
       sub(/^[[:space:]]+/, "", trimmed)
@@ -235,7 +243,7 @@ has_non_empty_description() { # 33
         exit
       }
     }
-    found_key && !/^[[:space:]]+/ {
+    found_key && !/^[[:space:]]/ {
       exit
     }
     END {
@@ -251,7 +259,9 @@ validate_frontmatter_github() { # 68
   local -r frontmatter="$1"
   local declared_keys key target_val bool_key bool_val tools_val errors=0
 
-  declared_keys=$(awk '/^[[:alnum:]_-]+:/ { key = $0; sub(/:.*/, "", key); print key }' \
+  declared_keys=$(awk '
+    { sub(/\r$/, "") }
+    /^[[:alnum:]_-]+[[:space:]]*:/ { key = $0; sub(/[[:space:]]*:.*/, "", key); print key }' \
     <<< "$frontmatter")
   while IFS= read -r key; do
     [[ -n "$key" ]] || continue
@@ -323,7 +333,9 @@ validate_frontmatter_gemini() { # 93
   local -r frontmatter="$1"
   local declared_keys key name_val perm_val cmd_val bool_key bool_val tools_val errors=0
 
-  declared_keys=$(awk '/^[[:alnum:]_-]+:/ { key = $0; sub(/:.*/, "", key); print key }' \
+  declared_keys=$(awk '
+    { sub(/\r$/, "") }
+    /^[[:alnum:]_-]+[[:space:]]*:/ { key = $0; sub(/[[:space:]]*:.*/, "", key); print key }' \
     <<< "$frontmatter")
   while IFS= read -r key; do
     [[ -n "$key" ]] || continue
@@ -343,6 +355,12 @@ validate_frontmatter_gemini() { # 93
     name_val=$(strip_quotes "$name_val")
     if [[ -z "$name_val" ]]; then
       printf '[!] SCHEMA ERROR: name must not be empty.\n' >&2
+      ((errors += 1))
+    elif [[ ! "$name_val" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+      printf '[!] SCHEMA ERROR: name contains invalid characters: %s (must be alphanumeric, hyphens, underscores)\n' "$name_val" >&2
+      ((errors += 1))
+    elif (( ${#name_val} > 64 )); then
+      printf '[!] SCHEMA ERROR: name is too long (%d chars, max 64): %s\n' "${#name_val}" "$name_val" >&2
       ((errors += 1))
     fi
   fi
@@ -420,7 +438,9 @@ validate_frontmatter_claude() { # 89
   local -r frontmatter="$1"
   local declared_keys key perm_val effort_val turns_val shell_val bool_key bool_val errors=0
 
-  declared_keys=$(awk '/^[[:alnum:]_-]+:/ { key = $0; sub(/:.*/, "", key); print key }' \
+  declared_keys=$(awk '
+    { sub(/\r$/, "") }
+    /^[[:alnum:]_-]+[[:space:]]*:/ { key = $0; sub(/[[:space:]]*:.*/, "", key); print key }' \
     <<< "$frontmatter")
   while IFS= read -r key; do
     [[ -n "$key" ]] || continue

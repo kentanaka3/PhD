@@ -18,9 +18,6 @@
 #
 # Function          | description
 # ------------------|--------------------------------------------------------
-# log               | Print a timestamped informational message.
-# fail              | Report an error and terminate.
-# require_command   | Verify that a required executable is available.
 # usage             | Print command-line usage information.
 # validate_config   | Validate arguments and configuration before side effects.
 # run               | Perform the main operation.
@@ -41,35 +38,11 @@ umask 077
 readonly SCRIPT="$(basename -- "${BASH_SOURCE[0]}")"
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-# ---------------------------------------------------------------------------
-# Logging and errors
-# ---------------------------------------------------------------------------
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
-# Print a timestamped informational message.
-log() { # 6
-    printf '[%s][%s] %s\n' \
-        "$SCRIPT" \
-        "$(date '+%Y-%m-%d %H:%M:%S%z')" \
-        "$*"
-}
-
-# Report an error message and terminate the script with a non-zero exit code.
-fail() { # 7
-    local -r status="$1"
-    shift
-
-    log "ERROR: $*" >&2
-    exit "$status"
-}
-
-# Verify that a required executable is available.
-require_command() { # 6
-    local -r command_name="$1"
-
-    command -v "$command_name" >/dev/null 2>&1 ||
-        fail 127 "required command not found: $command_name"
-}
-
+# usage
+# -----
 # Print command-line usage information.
 usage() { # 14
     cat <<EOF
@@ -90,6 +63,8 @@ EOF
 # Configuration and operation
 # ---------------------------------------------------------------------------
 
+# validate_config
+# ---------------
 # Validate arguments and configuration before side effects.
 validate_config() { # 9
     # Check every prerequisite before changing files, submitting jobs, or
@@ -101,6 +76,8 @@ validate_config() { # 9
     # for absolute paths, allowed values, and positive integer parameters.
 }
 
+# run
+# ---
 # Perform the script's primary operation.
 run() { # 11
     # Put the script's primary operation here. Quote every expansion and use
@@ -118,6 +95,8 @@ run() { # 11
 # Main lifecycle
 # ---------------------------------------------------------------------------
 
+# main
+# ----
 # Parse arguments, validate configuration, and dispatch the requested operation.
 main() { # 24
     while [[ $# -gt 0 ]]; do

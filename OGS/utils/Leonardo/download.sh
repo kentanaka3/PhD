@@ -1,11 +1,12 @@
 #!/bin/bash
 
 #SBATCH --job-name="ktanakah #"
-#SBATCH --nodes=#
-#SBATCH --tasks-per-node=#
-#SBATCH  -c 1
+#SBATCH  -N 1
+#SBATCH  -n 1
+#SBATCH --cpus-per-task=#
 #SBATCH --account=IscrC_AI2Seism
 #SBATCH --time 03:59:00
+#SBATCH --mem=30800MB
 #SBATCH --partition=lrd_all_serial
 #SBATCH --error=download_%j.err
 #SBATCH --output=download_%j.out

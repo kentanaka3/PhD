@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 
-# LLM Markdown handler
-# =======================
+# LLM Context Manifest Handler
+# ============================
 #
 # Coordinate the LLM workspace lifecycle from one command-line interface.
-# The handler combines workspace initialization, Markdown navigation reporting,
-# and workspace validation without changing the behavior of the original
-# standalone scripts.
+# The handler combines workspace initialization, generates deterministic,
+# token-dense YAML Context Manifests for LLM subagents and workspace validation
+# without changing the behavior of the original standalone scripts.
+# Provides progressive disclosure: Tier 1 global repository routing and Tier 2
+# scoped module inspection.
 #
 # USAGE
 #   bash handler.sh init [--dry-run]
@@ -16,7 +18,7 @@
 #
 # COMMANDS
 #   init       Create missing LLM directories and starter documents.
-#   navigate   Print a Markdown navigation report to standard output.
+#   navigate   Generate a YAML context manifest (Tier 1 or Tier 2).
 #   validate   Validate documentation, links, paths, and script syntax.
 #
 # Function          | description
@@ -43,9 +45,9 @@ set -euo pipefail
 umask 077
 
 readonly SCRIPT="$(basename -- "${BASH_SOURCE[0]}")"
-readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-readonly WORKSPACE="$(cd -- "$SCRIPT_DIR/.." && pwd)"
-readonly ROOT="$(cd -- "$WORKSPACE/.." && pwd)"
+readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly WORKSPACE="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
+readonly ROOT="$(cd -- "$WORKSPACE/.." && pwd -P)"
 
 # log
 # ---
@@ -81,13 +83,13 @@ require_command() { # 6
 # usage
 # -----
 # Print command-line usage information.
-usage() { # 26
+usage() { # 25
     cat <<EOF
 Usage: $SCRIPT COMMAND [OPTIONS]
 
 Commands:
   init [--dry-run]       Create missing workspace directories and starters.
-  navigate [OPTIONS]    Generate a Markdown navigation report.
+  navigate [OPTIONS]     Generate a YAML context manifest.
   validate [--root DIR]  Validate documentation and project scripts.
 
 Options:
@@ -232,18 +234,15 @@ validate_markdown() { # 25
                     "${file#$scan_root/}" "$line_number" "$link" >&2
                 ((failures += 1))
             }
-        done < <(grep --line-number --extended-regexp '\]\([^)#]+(\#[^)]*)?\)' "$file" || true)
-    done < <(
-        find "$scan_root" -path "$scan_root/.git" -prune -o \
-            -type f -name '*.md' -print0 | sort -z
-    )
+        done < <(grep -nE '\]\([^)#]+(\#[^)]*)?\)' "$file" || true)
+    done < <(find "$scan_root" -path "$scan_root/.git" -prune -o -type f -name '*.md' -print0 | LC_ALL=C sort -z)
     return "$failures"
 }
 
-# validate_script_references
-# --------------------------
+# validate_scripts
+# ----------------
 # Detect stale references to project shell scripts.
-validate_script_references() { # 20
+validate_scripts() { # 20
     local -r scan_root="$1"
     local failures=0 file reference
 
@@ -254,18 +253,14 @@ validate_script_references() { # 20
                     "${file#$scan_root/}" "$reference" >&2
                 ((failures += 1))
             }
-        done < <(grep --only-matching --no-filename \
-            --extended-regexp '(LLM/scripts|OGS/utils/Leonardo|OGS/utils/\.local)/[A-Za-z0-9_.-]+\.sh' \
-            "$file" | sort -u || true)
-    done < <(
-        find "$scan_root" -path "$scan_root/.git" -prune -o \
-            -type f -name '*.md' -print0 | sort -z
-    )
+        done < <(grep -oHE '(LLM/scripts|OGS/utils/Leonardo|OGS/utils/\.local)/[A-Za-z0-9_.-]+\.sh' \
+            "$file" | cut -d: -f2- | LC_ALL=C sort -u || true)
+    done < <(find "$scan_root" -path "$scan_root/.git" -prune -o -type f -name '*.md' -print0 | LC_ALL=C sort -z)
     return "$failures"
 }
 
 # validate_bash
-# ------------
+# -------------
 # Validate the syntax of every project Bash script.
 validate_bash() { # 16
     local -r scan_root="$1"
@@ -277,10 +272,7 @@ validate_bash() { # 16
             printf 'ERR %s (Bash syntax check failed)\n' "${file#$scan_root/}" >&2
             ((failures += 1))
         fi
-    done < <(
-        find "$scan_root" -path "$scan_root/.git" -prune -o \
-            -type f -name '*.sh' -print0 | sort -z
-    )
+    done < <(find "$scan_root" -path "$scan_root/.git" -prune -o -type f -name '*.sh' -print0 | LC_ALL=C sort -z)
     return "$failures"
 }
 
@@ -336,7 +328,7 @@ navigate_scripts() { # 44
 # validate_functions
 # ------------------
 # Validate inline Bash function line counts in this handler.
-validate_functions() { # 32
+validate_functions() { # 30
     local -r target_file="$1"
     local -r scan_root="$(dirname -- "$target_file")"
     local failures=0 file line declaration count actual
@@ -350,33 +342,24 @@ validate_functions() { # 32
                 ((failures += 1))
                 continue
             fi
-            actual=$(awk -v start="$line" '
-                NR > start && /^}$/ {
-                    print NR - start + 1
-                    exit
-                }
-            ' "$file")
+            actual=$(awk -v start="$line" 'NR > start && /^}$/ { print NR - start + 1; exit }' "$file")
             if [[ "$actual" != "$count" ]]; then
                 printf 'ERR %s:%s (documented %s lines, counted %s)\n' \
                     "${file#$scan_root/}" "$line" "$count" "${actual:-unknown}" >&2
                 ((failures += 1))
             fi
-        done < <(grep --line-number --extended-regexp \
-            '^[[:alnum:]_]+\(\)[[:space:]]*\{' "$file" || true)
-    done < <(
-        printf '%s\0' "$target_file"
-    )
+        done < <(grep -nE '^[[:alnum:]_]+\(\)[[:space:]]*\{' "$file" || true)
+    done < <(printf '%s\0' "$target_file")
     return "$failures"
 }
 
-# validate_single_file
-# --------------------
+# validate_single
+# ---------------
 # Validate one supported Bash script or Markdown file.
-validate_single_file() { # 49
+validate_single() { # 48
     local -r scan_root="$ROOT"
     local -r file="$1"
-    local failures=0
-    local target link line_number content reference
+    local failures=0 target link line_number content reference
 
     [[ -f "$file" ]] || fail 1 "file does not exist: $file"
     case "$file" in
@@ -385,7 +368,7 @@ validate_single_file() { # 49
                 printf 'ERR %s (Bash syntax check failed)\n' "$file" >&2
                 ((failures += 1))
             fi
-            validate_functions "$file" || failures=$((failures + $?))
+            validate_functions "$file" || failures=$((failures +$?))
             ;;
         *.md)
             if (( $(awk '/^```|^~~~/ { fenced = !fenced } END { print fenced + 0 }' "$file") != 0 )); then
@@ -397,32 +380,30 @@ validate_single_file() { # 49
                 [[ -n "$link" && "$link" != http* && "$link" != mailto:* ]] || continue
                 target="$(dirname -- "$file")/$link"
                 [[ -e "$target" ]] || {
-                    printf 'ERR %s:%s (broken Markdown path: %s)\n' \
-                        "$file" "$line_number" "$link" >&2
+                    printf 'ERR %s:%s (broken Markdown path: %s)\n' "$file" "$line_number" "$link" >&2
                     ((failures += 1))
                 }
-            done < <(grep --line-number --extended-regexp '\]\([^)#]+(\#[^)]*)?\)' "$file" || true)
+            done < <(grep -nE '\]\([^)#]+(\#[^)]*)?\)' "$file" || true)
             while IFS= read -r reference; do
                 [[ -e "$scan_root/$reference" ]] || {
-                    printf 'ERR %s (stale or missing script reference: %s)\n' \
-                        "$file" "$reference" >&2
+                    printf 'ERR %s (stale or missing script reference: %s)\n' "$file" "$reference" >&2
                     ((failures += 1))
                 }
-            done < <(grep --only-matching --no-filename \
-                --extended-regexp '(LLM/scripts|OGS/utils/Leonardo|OGS/utils/\.local)/[A-Za-z0-9_.-]+\.sh' \
-                "$file" | sort -u || true)
+            done < <(grep -oHE '(LLM/scripts|OGS/utils/Leonardo|OGS/utils/\.local)/[A-Za-z0-9_.-]+\.sh' "$file" | cut -d: -f2- | LC_ALL=C sort -u || true)
             ;;
         *)
             fail 2 "single-file validation supports Bash scripts (*.sh) and Markdown (*.md): $file"
             ;;
     esac
 
-    (( failures == 0 )) ||
-        fail 1 "single-file validation failed with $failures issue(s)"
+    (( failures == 0 )) || fail 1 "single-file validation failed with $failures issue(s)"
     printf 'Validation passed: %s\n' "$file"
 }
 
-validate() { # 43
+# validate
+# --------
+# Validate the required workspace, Markdown, and Bash surfaces.
+validate() { # 44
     local -r scan_root="$1"
     local -a required=(
         "$scan_root/AGENTS.md"
@@ -450,29 +431,27 @@ validate() { # 43
         fi
     done
 
-    if [[ ! -x "$scan_root/LLM/scripts/handler.sh" ]]; then
+    [[ -x "$scan_root/LLM/scripts/handler.sh" ]] || {
         printf 'ERR LLM/scripts/handler.sh is not executable\n' >&2
         ((failures += 1))
-    fi
+    }
 
     validate_markdown "$scan_root" || failures=$((failures + $?))
-    validate_script_references "$scan_root" || failures=$((failures + $?))
+    validate_scripts "$scan_root" || failures=$((failures + $?))
     validate_bash "$scan_root" || failures=$((failures + $?))
-    validate_functions "$scan_root/LLM/scripts/handler.sh" ||
-        failures=$((failures + $?))
+    validate_functions "$scan_root/LLM/scripts/handler.sh" || failures=$((failures + $?))
 
-    (( failures == 0 )) ||
-        fail 1 "validation failed with $failures issue(s)"
+    (( failures == 0 )) || fail 1 "validation failed with $failures issue(s)"
     printf '\nValidation passed: %d required files checked.\n' "${#required[@]}"
 }
 
 # main
 # ----
 # Parse the command and dispatch the requested operation.
-main() { # 120
+main() { # 89
     local command="${1:-}"
     local scan_root="$ROOT"
-    local file_path=
+    local module=""
     local dry_run=false
     local format=table
 
@@ -499,9 +478,9 @@ main() { # 120
                         scan_root="$2"
                         shift 2
                         ;;
-                    --file)
-                        (( $# >= 2 )) || fail 2 "--file requires a file argument"
-                        file_path="$2"
+                    --module)
+                        (( $# >= 2 )) || fail 2 "--module requires a relative path"
+                        module="$2"
                         shift 2
                         ;;
                     --format)
@@ -565,15 +544,12 @@ main() { # 120
                 esac
             done
             if [[ -n "$file_path" ]]; then
-                local requested_file="$file_path"
-                file_path="$(cd -- "$(dirname -- "$requested_file")" 2>/dev/null && pwd)/$(basename -- "$requested_file")" ||
-                    fail 1 "could not resolve file: $requested_file"
-                validate_single_file "$file_path"
+                validate_single "$file_path"
             else
-                local requested_root="$scan_root"
-                scan_root="$(cd -- "$requested_root" 2>/dev/null && pwd)" ||
-                    fail 1 "could not resolve validation root: $requested_root"
-                validate "$scan_root"
+                local normalized_root
+                normalized_root="$(cd -- "$scan_root" 2>/dev/null && pwd -P)" ||
+                    fail 1 "could not resolve validation root: $scan_root"
+                validate "$normalized_root"
             fi
             ;;
         -h|--help)

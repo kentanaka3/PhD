@@ -2,7 +2,7 @@
 # AISeism Seismic Data Processing Pipeline for Local workflow - Makefile
 # =============================================================================
 # Pipeline stages:
-#   1. DATA ACQUISITION   : download, compress, decompress, retrieve, station
+#   1. DATA ACQUISITION   : download, station
 #   2. PHASE PICKING      : PhaseNet / EQTransformer with dataset+threshold args
 #   3. PHASE ASSOCIATION  : PyOcto / GaMMA / REAL with picker-input args
 #   4. EVENT LOCATION     : NLL1D / NLL3D with associator+picker-input args
@@ -145,16 +145,16 @@ help:
 	@echo "AISeism Makefile — common targets:"
 	@echo "  make download   YEAR=YYYY STEP_DAYS=N OFFSET=D END_DAY=D"
 	@echo "  make download   YEAR=YYYY STEP_DAYS=N OFFSET=D END_DAY=D THREADS=4"
-	@echo "  make compress | decompress   YEAR=YYYY"
+	@echo "  make compress | decompress   YEAR=YYYY (deprecated; retained for compatibility)"
 	@echo "  make station    YEAR=YYYY"
 	@echo "  make index THREADS=8 START_DATE=1977-01-01 END_DATE=2025-12-31"
 	@echo "  make PhaseNet | EQTransformer | ...	(picker models with default dataset/threshold)"
 	@echo "  make PhaseNet[INSTANCE,0.1] | EQTransformer[STEAD,0.2] | ...	(picker models with dataset/threshold overrides)"
-	@echo "  make PyOcto | GaMMA | REAL      			(associator with default picker input)"
+	@echo "  make PyOcto | GaMMA | REAL           (associator with default picker input)"
 	@echo "  make PyOcto[PhaseNet,INSTANCE,0.1] | GaMMA[EQTransformer,STEAD,0.2] | REAL[PhaseNet,SCEDC,0.3] ...	(associator with picker overrides)"
-	@echo "  make NLL1D | NLL3D               	  (locator with default picker+assoc input)"
+	@echo "  make NLL1D | NLL3D                   (locator with default picker+assoc input)"
 	@echo "  make NLL1D[PyOcto,PhaseNet,INSTANCE,0.1] | NLL3D[GaMMA,EQTransformer,STEAD,0.2] | ...	(locator with picker+assoc overrides)"
-	@echo "  make base                     			 	(just make the base catalog for quick iteration on later stages)"
+	@echo "  make base                            (just make the base catalog for quick iteration on later stages)"
 	@echo "  make parse | clean"
 
 setup:
@@ -285,6 +285,7 @@ $1: ; @$$(MAKE) --no-print-directory '$1[$$(DATASET),$$(THRESHOLD)]'
 
 $1[%]:
 	@stem='$$*'; dataset="$$$${stem%%,*}"; threshold="$$$${stem##*,}"; \
+	id="$1[$$$$dataset,$$$$threshold]"; \
 	picker_id="$$$$dataset/$$$$threshold/$$(YEAR)"; \
 	mkdir -p "$$(ROOT)/catalogs/$$(PROJECT)/$1/$$$$picker_id/SeisBenchPicker"; \
 	$$(ML_CATALOG_RUN) output_path="catalogs/$$(PROJECT)/$1/$$$$picker_id" \

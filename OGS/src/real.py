@@ -1,3 +1,47 @@
+"""
+=============================================================================
+REAL Associator Module - Rapid Earthquake Association and Location Wrapper
+=============================================================================
+
+OVERVIEW:
+Pipeline integration wrapper around the C-based REAL (Rapid Earthquake
+Association and Location) grid-search algorithm. Inherits from
+``ml_catalog.modules.associator.associator.AbstractAssociator`` to provide
+seamless Dask delayed task dispatch and catalog integration.
+
+KEY CAPABILITIES:
+  1. TRAVEL-TIME GRID GENERATION: Builds 1D velocity travel-time tables using
+     ``obspy.taup.build_taup_model`` and ``TauPyModel``.
+  2. PICK & STATION SERIALIZATION: Formats phase picks and station coordinates
+     into the strict tabular text formats required by the REAL binary.
+  3. EXECUTABLE ORCHESTRATION: Invokes the REAL executable across daily or
+     spatial sub-groups in isolated working directories.
+  4. CATALOG ASSIMILATION: Ingests REAL output files into standardized pandas
+     DataFrames containing associated event hypocenters and assigned picks.
+
+USAGE:
+# Instantiated within an ml_catalog pipeline or CatalogBuilder config:
+  associator = REALAssociator(real_prefix="/opt/real", ...)
+  associator.run(status)
+
+DEPENDENCIES:
+- dask: parallel task execution
+  - obspy (taup, geodetics): 1D travel-time tables and distance computations
+  - ml_catalog: associator base classes, caching helpers, and status registry
+  - numpy / pandas: tabular pick/event data manipulation
+
+AUTHORS:
+  - 健
+  - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+    Centro di Ricerche Sismologiche (CRS)
+  - Università degli Studi di Trieste (UniTS)
+    Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+    Applied Data Science and Artificial Intelligence (ADSAI)
+  - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+    Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
+=============================================================================
+"""
+
 import datetime
 import shutil
 import subprocess

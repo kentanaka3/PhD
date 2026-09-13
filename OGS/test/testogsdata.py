@@ -1,4 +1,43 @@
-from ml_catalog.data import _SQUIRREL_OGS_DAY_DIR_CACHE, _select_squirrel_add_paths
+"""
+=============================================================================
+OGS Data Test Suite - Unit Tests for Squirrel Waveform Cache & Indexing
+=============================================================================
+
+OVERVIEW:
+Unit test suite for ``ogsdata.py``. Validates the day-sharded Pyrocko Squirrel
+data access layer, path filtering, and database cache invalidation.
+
+TEST CASES & INVARIANTS:
+  1. Day Filtering: Verifies that ``_select_squirrel_add_paths`` prunes paths
+     outside configured target dates while preserving station XML metadata.
+  2. Non-OGS Path Preservation: Ensures external data directories and arbitrary
+     waveform sources are retained without date pruning.
+  3. Cache Invalidation: Validates cache-key generation and ensures stale cache
+     entries are invalidated when directory layouts change.
+  4. DataSource Registration: Confirms Squirrel data sources correctly ingest
+     selected day shards into the active runtime.
+
+USAGE:
+python -m unittest OGS/test/testogsdata.py
+
+DEPENDENCIES:
+- unittest / tempfile: isolated filesystem testing
+  - ml_catalog.data: base Squirrel data source primitives
+  - ogsdata: waveform cache and path selector under test
+
+AUTHORS:
+  - 健
+  - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+    Centro di Ricerche Sismologiche (CRS)
+  - Università degli Studi di Trieste (UniTS)
+    Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+    Applied Data Science and Artificial Intelligence (ADSAI)
+  - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+    Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
+=============================================================================
+"""
+
+from ogsdata import _SQUIRREL_OGS_DAY_DIR_CACHE, _select_squirrel_add_paths
 from ml_catalog import data
 import os
 import sys

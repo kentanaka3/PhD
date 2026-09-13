@@ -1,3 +1,41 @@
+"""
+=============================================================================
+OGS Constants Test Suite - Unit Tests for Inventory & Waveform Lookups
+=============================================================================
+
+OVERVIEW:
+Unit test suite for ``ogsconstants.py`` and associated data lookups. Verifies
+station inventory parsing, miniSEED waveform file discovery, and standard
+catalog column header definitions.
+
+TEST CASES & INVARIANTS:
+  1. test_inventory: Validates station inventory DataFrame schema, coordinates,
+     and network/station code extraction.
+  2. test_waveforms: Validates waveform path indexing, date parsing, and
+     channel discovery across archive directories.
+  3. test_headers: Ensures consistency of canonical column names across event
+     and pick tabular schemas.
+
+USAGE:
+python -m unittest OGS/test/testogsconstants.py
+
+DEPENDENCIES:
+- unittest: standard library testing framework
+  - pandas: DataFrame verification
+  - ogsconstants / ogsutils: constants and inventory utilities under test
+
+AUTHORS:
+  - 健
+  - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+    Centro di Ricerche Sismologiche (CRS)
+  - Università degli Studi di Trieste (UniTS)
+    Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+    Applied Data Science and Artificial Intelligence (ADSAI)
+  - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+    Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
+=============================================================================
+"""
+
 import ogsutils as OGS_U
 import ogsconstants as OGS_C
 import os

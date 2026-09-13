@@ -1,3 +1,46 @@
+"""
+=============================================================================
+OGS Catalog Builder MPI - Distributed Dask-MPI Catalog Construction Engine
+=============================================================================
+
+OVERVIEW:
+HPC-optimized catalog builder implementing distributed execution via Dask-MPI.
+Extends the base ``ml_catalog.CatalogBuilder`` framework with cluster-aware
+resource pinning, memory management, and task graph optimization.
+
+KEY FEATURES:
+  1. CUDA GPU PINNING: Detects local Slurm / OpenMPI rank and pins each worker
+     process to a distinct physical GPU before Dask intercepts worker loops.
+  2. DASK-MPI CLUSTER INITIALIZATION: Manages distributed scheduler-worker
+     topologies under Slurm allocations with customizable memory limits.
+  3. COMPUTE GRAPH EXECUTION: Orchestrates group modules, merge modules, and
+     joint post-processing modules with automatic task-graph optimization.
+  4. FORMAT SERIALIZATION: Streams processed seismic event catalogs and pick
+     assignments to CSV and Parquet files with distributed performance reporting.
+
+USAGE:
+# Dispatched within a Slurm allocation via LAUNCHME.sh or srun:
+  srun -n <ntasks> python -m mpi4py ogsbuilderMPI.py ...
+
+DEPENDENCIES:
+- dask / dask.distributed: distributed DAG task scheduling
+  - dask_mpi: MPI-based cluster bootstrapping
+  - torch: CUDA device detection and worker GPU pinning
+  - ml_catalog: base CatalogBuilder, status registry, and pipeline modules
+  - pandas: tabular data export
+
+AUTHORS:
+  - 健
+  - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+    Centro di Ricerche Sismologiche (CRS)
+  - Università degli Studi di Trieste (UniTS)
+    Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+    Applied Data Science and Artificial Intelligence (ADSAI)
+  - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+    Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
+=============================================================================
+"""
+
 import os
 import functools
 

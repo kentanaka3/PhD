@@ -1,3 +1,44 @@
+"""
+=============================================================================
+OGS Downloader Test Suite - Unit Tests for Waveform Retrieval & CLI
+=============================================================================
+
+OVERVIEW:
+Unit test suite for ``ogsdownloader.py``. Validates CLI argument parsing,
+multi-threaded download orchestration, negative station filtering, and
+multi-backend FDSN data retrieval (ObsPy and Pyrocko backends).
+
+TEST CASES & INVARIANTS:
+  1. Argument Parsing:
+     - Thread count argument validation (defaults, positive integers, rejection
+       of zero/negative values).
+  2. Threading & Backend Execution:
+     - Preservation of mass-downloader thread pools in serial mode.
+     - Multi-threaded per-client and per-day scheduling.
+     - Negative station exclusion filtering against remote FDSN inventories.
+     - Graceful logging and error isolation upon failed day downloads.
+     - Pyrocko backend waveform trace and station XML writing to disk.
+
+USAGE:
+python -m unittest OGS/test/testogsdownloader.py
+
+DEPENDENCIES:
+- unittest: unit test framework
+  - argparse: argument parsing inspection
+  - ogsdownloader: downloader classes and CLI functions under test
+
+AUTHORS:
+  - 健
+  - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+    Centro di Ricerche Sismologiche (CRS)
+  - Università degli Studi di Trieste (UniTS)
+    Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+    Applied Data Science and Artificial Intelligence (ADSAI)
+  - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+    Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
+=============================================================================
+"""
+
 import argparse
 import io
 import json
@@ -14,6 +55,11 @@ from pathlib import Path
 THIS_DIR = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(THIS_DIR + "/../src"))
 
+# Local imports
+import ogsconstants as OGS_C
+import ogsdownloader
+from ogsdownloader import data_downloader, parse_arguments
+
 
 def _install_obspy_import_stub():
   obspy_module = types.ModuleType("obspy")
@@ -26,10 +72,6 @@ try:
   import obspy
 except ModuleNotFoundError:
   _install_obspy_import_stub()
-
-import ogsconstants as OGS_C
-from ogsdownloader import data_downloader, parse_arguments
-import ogsdownloader
 
 
 class DownloadRecorder:
@@ -75,12 +117,12 @@ def _fake_obspy_modules(recorder):
   class FakeTrace:
     def __init__(self, network, station, location, channel, starttime, endtime):
       self.stats = types.SimpleNamespace(
-        network=network,
-        station=station,
-        location=location,
-        channel=channel,
-        starttime=starttime,
-        endtime=endtime,
+          network=network,
+          station=station,
+          location=location,
+          channel=channel,
+          starttime=starttime,
+          endtime=endtime,
       )
 
     def write(self, filename, format=None):
@@ -93,12 +135,12 @@ def _fake_obspy_modules(recorder):
     traces = []
     for network, station, location, channel, tmin, tmax in selection:
       traces.append(FakeTrace(
-        network,
-        station,
-        location,
-        channel,
-        datetime.fromtimestamp(tmin, tz=timezone.utc).replace(tzinfo=None),
-        datetime.fromtimestamp(tmax, tz=timezone.utc).replace(tzinfo=None),
+          network,
+          station,
+          location,
+          channel,
+          datetime.fromtimestamp(tmin, tz=timezone.utc).replace(tzinfo=None),
+          datetime.fromtimestamp(tmax, tz=timezone.utc).replace(tzinfo=None),
       ))
     recorder.append("parsed_streams", {"format": format, "count": len(traces)})
     return traces
@@ -129,14 +171,14 @@ def _fake_obspy_modules(recorder):
 
     def get_stations(self, **kwargs):
       recorder.append("station_queries", {
-        "client": self.name,
-        "kwargs": kwargs,
+          "client": self.name,
+          "kwargs": kwargs,
       })
       return [[
-        types.SimpleNamespace(code="AQU"),
-        types.SimpleNamespace(code="MTRA"),
-        types.SimpleNamespace(code="PZI"),
-        types.SimpleNamespace(code="TEST"),
+          types.SimpleNamespace(code="AQU"),
+          types.SimpleNamespace(code="MTRA"),
+          types.SimpleNamespace(code="PZI"),
+          types.SimpleNamespace(code="TEST"),
       ]]
 
   class MassDownloader:
@@ -146,12 +188,13 @@ def _fake_obspy_modules(recorder):
 
     def download(self, domain, restrictions, **kwargs):
       recorder.append("downloads", {
-        "domain": domain,
-        "restrictions": restrictions,
-        "kwargs": kwargs,
+          "domain": domain,
+          "restrictions": restrictions,
+          "kwargs": kwargs,
       })
       download_date = restrictions.kwargs["starttime"].strftime(
-        OGS_C.YYYYMMDD_FMT)
+          OGS_C.YYYYMMDD_FMT
+      )
       if download_date in recorder.failed_dates:
         raise RuntimeError("download failed")
 
@@ -167,11 +210,11 @@ def _fake_obspy_modules(recorder):
   obspy_module.read = read
 
   return {
-    "obspy": obspy_module,
-    "obspy.clients": clients_module,
-    "obspy.clients.fdsn": fdsn_module,
-    "obspy.clients.fdsn.mass_downloader": mass_downloader_module,
-    "obspy.clients.fdsn.mass_downloader.domain": domain_module,
+      "obspy": obspy_module,
+      "obspy.clients": clients_module,
+      "obspy.clients.fdsn": fdsn_module,
+      "obspy.clients.fdsn.mass_downloader": mass_downloader_module,
+      "obspy.clients.fdsn.mass_downloader.domain": domain_module,
   }
 
 
@@ -204,10 +247,13 @@ def _fake_pyrocko_modules(recorder):
 
     def get_pyrocko_stations(self, **kwargs):
       recorder.append("pyrocko_station_queries", {
-        "site": self.site,
-        "kwargs": kwargs,
+          "site": self.site,
+          "kwargs": kwargs,
       })
-      network = ("".join(char for char in self.site if char.isalnum())[:2] or "NW").upper()
+      network = (
+          "".join(char for char in self.site if char.isalnum())[:2] or
+          "NW"
+      ).upper()
       return [FakeStation(network, f"{network}01", "", ["HHZ", "HHN", "HHE"])]
 
     def dump_xml(self, filename=None, header=False):
@@ -233,24 +279,25 @@ def _fake_pyrocko_modules(recorder):
 
   def make_data_selection(stations, tmin, tmax, channel_prio=None):
     recorder.append("pyrocko_selection_calls", {
-      "tmin": tmin,
-      "tmax": tmax,
-      "channel_prio": channel_prio,
+        "tmin": tmin,
+        "tmax": tmax,
+        "channel_prio": channel_prio,
     })
     selection = []
     for station in stations:
       for channel in station.get_channels():
-        selection.append(
-          (station.network, station.station, station.location, channel.name, tmin, tmax)
-        )
+        selection.append((
+            station.network, station.station, station.location, channel.name,
+            tmin, tmax
+        ))
     return selection
 
   def dataselect(site="geofon", token=None, selection=None, **kwargs):
     recorder.append("pyrocko_dataselect_calls", {
-      "site": site,
-      "token": token,
-      "selection": selection,
-      "kwargs": kwargs,
+        "site": site,
+        "token": token,
+        "selection": selection,
+        "kwargs": kwargs,
     })
     if site in recorder.failed_data_sites:
       raise EmptyResult()
@@ -264,9 +311,9 @@ def _fake_pyrocko_modules(recorder):
   pyrocko_module.client = client_module
 
   return {
-    "pyrocko": pyrocko_module,
-    "pyrocko.client": client_module,
-    "pyrocko.client.fdsn": fdsn_module,
+      "pyrocko": pyrocko_module,
+      "pyrocko.client": client_module,
+      "pyrocko.client.fdsn": fdsn_module,
   }
 
 
@@ -276,40 +323,54 @@ class TestOGSDownloaderArguments(unittest.TestCase):
       self.assertEqual(parse_arguments().threads, 1)
 
     with unittest.mock.patch.object(
-        sys, "argv", ["ogsdownloader.py", "--threads", "3"]):
+        sys, "argv", ["ogsdownloader.py", "--threads", "3"]
+    ):
       self.assertEqual(parse_arguments().threads, 3)
 
   def test_threads_argument_rejects_non_positive_values(self):
-    with unittest.mock.patch.object(
-        sys, "argv", ["ogsdownloader.py", "--threads", "0"]), \
-        unittest.mock.patch("sys.stderr", new=io.StringIO()):
+    with (
+        unittest.mock.patch.object(
+            sys, "argv", ["ogsdownloader.py", "--threads", "0"]
+        ),
+        unittest.mock.patch("sys.stderr", new=io.StringIO())
+    ):
       with self.assertRaises(SystemExit) as error_context:
         parse_arguments()
 
     self.assertEqual(error_context.exception.code, 2)
+
+  def test_directory_argument_defaults_to_default_wave_path(self):
+    with unittest.mock.patch.object(sys, "argv", ["ogsdownloader.py"]):
+      args = parse_arguments()
+      self.assertEqual(args.directory, ogsdownloader.DEFAULT_WAVE_PATH)
+
+  def test_day_start_truncates_datetime_to_midnight(self):
+    dt_with_time = datetime(2024, 3, 20, 15, 30, 45, 123456)
+    result = ogsdownloader.day_start(dt_with_time)
+    self.assertEqual(result, datetime(2024, 3, 20, 0, 0, 0))
 
 
 class TestOGSDownloaderThreading(unittest.TestCase):
   def _args(self, directory, start="20240101", end="20240101", threads=1,
             pyrocko=False, client=None, key=None, network=None, station=None):
     return argparse.Namespace(
-      verbose=False,
-      silent=True,
-      review=None,
-      pyrocko=pyrocko,
-      rectdomain=[9.5, 15.0, 44.3, 47.5],
-      circdomain=None,
-      dates=[
-        datetime.strptime(start, OGS_C.YYYYMMDD_FMT),
-        datetime.strptime(end, OGS_C.YYYYMMDD_FMT),
-      ],
-      directory=directory,
-      client=client or ["TEST"],
-      key=key,
-      network=network or ["*"],
-      station=station or ["*"],
-      clip=None,
-      threads=threads,
+        verbose=False,
+        silent=True,
+        review=None,
+        pyrocko=pyrocko,
+        rectdomain=[9.5, 15.0, 44.3, 47.5],
+        circdomain=None,
+        dates=[
+            datetime.strptime(start, OGS_C.YYYYMMDD_FMT),
+            datetime.strptime(end, OGS_C.YYYYMMDD_FMT),
+        ],
+        directory=directory,
+        client=client or ["TEST"],
+        key=key,
+        network=network or ["*"],
+        station=station or ["*"],
+        clip=None,
+        threads=threads,
     )
 
   def _run_downloader(self, args, failed_dates=None):
@@ -317,9 +378,12 @@ class TestOGSDownloaderThreading(unittest.TestCase):
     logger = unittest.mock.MagicMock()
     modules = _fake_obspy_modules(recorder)
 
-    with unittest.mock.patch.dict(sys.modules, modules), \
+    with (
+        unittest.mock.patch.dict(sys.modules, modules),
         unittest.mock.patch.object(
-          ogsdownloader.OGS_U, "setup_logger", return_value=logger):
+            ogsdownloader.OGS_U, "setup_logger", return_value=logger
+        )
+    ):
       data_downloader(args)
 
     return recorder, logger
@@ -333,18 +397,21 @@ class TestOGSDownloaderThreading(unittest.TestCase):
     modules = _fake_obspy_modules(recorder)
     modules.update(_fake_pyrocko_modules(recorder))
 
-    with unittest.mock.patch.dict(sys.modules, modules), \
+    with (
+        unittest.mock.patch.dict(sys.modules, modules),
         unittest.mock.patch.object(
-          ogsdownloader.OGS_U, "setup_logger", return_value=logger):
+            ogsdownloader.OGS_U, "setup_logger", return_value=logger
+        )
+    ):
       data_downloader(args)
 
     return recorder, logger
 
   def _download_dates(self, recorder):
     return {
-      download["restrictions"].kwargs["starttime"].strftime(
-        OGS_C.YYYYMMDD_FMT)
-      for download in recorder.downloads
+        download["restrictions"].kwargs["starttime"].strftime(
+            OGS_C.YYYYMMDD_FMT
+        ) for download in recorder.downloads
     }
 
   def test_serial_download_preserves_mass_downloader_thread_default(self):
@@ -373,8 +440,9 @@ class TestOGSDownloaderThreading(unittest.TestCase):
   def test_obspy_negative_station_filter_resolves_inventory_station_string(self):
     with tempfile.TemporaryDirectory() as directory:
       args = self._args(
-        Path(directory), client=[OGS_C.INGV_CLIENT_STR], network=["IV"],
-        station=["*", "-AQU", "-MTRA", "-TEST"])
+          Path(directory), client=[OGS_C.INGV_CLIENT_STR], network=["IV"],
+          station=["*", "-AQU", "-MTRA", "-TEST"]
+      )
 
       recorder, logger = self._run_downloader(args)
 
@@ -392,18 +460,19 @@ class TestOGSDownloaderThreading(unittest.TestCase):
       args = self._args(Path(directory), end="20240102", threads=1)
 
       recorder, logger = self._run_downloader(
-        args, failed_dates={"20240102"})
+          args, failed_dates={"20240102"}
+      )
 
     self.assertEqual(len(recorder.downloads), 2)
     self.assertEqual(self._download_dates(recorder), {"20240101", "20240102"})
 
+    # Check that the failed date is logged as an error
     error_dates = [call.args[1] for call in logger.error.call_args_list]
     self.assertIn("20240102", error_dates)
 
     success_dates = [
-      call.args[1]
-      for call in logger.info.call_args_list
-      if call.args and call.args[0] == "Downloaded data for date: %s"
+        call.args[1] for call in logger.info.call_args_list
+        if call.args and call.args[0] == "Downloaded data for date: %s"
     ]
     self.assertIn("20240101", success_dates)
     self.assertNotIn("20240102", success_dates)
@@ -411,22 +480,27 @@ class TestOGSDownloaderThreading(unittest.TestCase):
   def test_pyrocko_download_writes_station_xml_and_trace_files(self):
     with tempfile.TemporaryDirectory() as directory:
       args = self._args(
-        Path(directory), end="20240102", threads=2, pyrocko=True,
-        client=[OGS_C.IRIS_CLIENT_STR])
+          Path(directory), end="20240102", threads=2, pyrocko=True,
+          client=[OGS_C.IRIS_CLIENT_STR]
+      )
 
       recorder, logger = self._run_pyrocko_downloader(args)
 
       waveform_files = sorted(Path(directory).glob("*/*/*/*.mseed"))
-      station_files = sorted((Path(directory) / OGS_C.STATION_STR).glob("*.xml"))
+      station_files = sorted(
+          (Path(directory) / OGS_C.STATION_STR).glob("*.xml")
+      )
 
     self.assertEqual(len(recorder.pyrocko_station_calls), 2)
     self.assertEqual(len(recorder.pyrocko_dataselect_calls), 2)
     self.assertEqual(len(waveform_files), 6)
     self.assertEqual(len(station_files), 2)
-    self.assertTrue(all("__iris-" in waveform.name for waveform in waveform_files))
+    self.assertTrue(
+        all("__iris-" in waveform.name for waveform in waveform_files)
+    )
     self.assertEqual(
-      recorder.pyrocko_selection_calls[0]["channel_prio"],
-      ogsdownloader.PYROCKO_CHANNEL_PRIORITIES,
+        recorder.pyrocko_selection_calls[0]["channel_prio"],
+        ogsdownloader.PYROCKO_CHANNEL_PRIORITIES,
     )
     logger.error.assert_not_called()
 
@@ -435,18 +509,22 @@ class TestOGSDownloaderThreading(unittest.TestCase):
       token_path = Path(directory) / "token.txt"
       token_path.write_text("TESTTOKEN\n")
       args = self._args(
-        Path(directory), pyrocko=True,
-        client=[OGS_C.INGV_CLIENT_STR, OGS_C.IRIS_CLIENT_STR],
-        key=token_path)
+          Path(directory),
+          pyrocko=True,
+          client=[OGS_C.INGV_CLIENT_STR, OGS_C.IRIS_CLIENT_STR],
+          key=token_path
+      )
 
       recorder, logger = self._run_pyrocko_downloader(args)
 
     tokens_by_site = {
-      call["site"]: call["token"] for call in recorder.pyrocko_dataselect_calls
+        call["site"]: call["token"]
+        for call in recorder.pyrocko_dataselect_calls
     }
     self.assertEqual(tokens_by_site["ingv"], b"TESTTOKEN")
     self.assertIsNone(tokens_by_site["iris"])
     logger.error.assert_not_called()
 
 
-if __name__ == "__main__": unittest.main()
+if __name__ == "__main__":
+  unittest.main()

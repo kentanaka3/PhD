@@ -1,3 +1,47 @@
+"""
+=============================================================================
+OGS Clustering Test Suite - Unit Tests for Seismic Event Clustering & ADP/PAk
+=============================================================================
+
+OVERVIEW:
+Unit test suite for ``ogsclustering.py``. Validates clustering utilities,
+algorithm wrappers, high-performance Advanced Density Peaks (ADP), and PAk
+density peak pointer-jumping algorithms.
+
+TEST CASES & INVARIANTS:
+  1. TestOGSClusteringUtils:
+     - Range iterator tuple and list parsing; validation of invalid bounds.
+     - Noise-aware categorical colormap generation for cluster visualizations.
+  2. TestOGSClusteringModels:
+     - Model instantiation and parameter validation across K-Means and DBSCAN.
+     - Model zoo factory registration, kwargs propagation, and metric tuning.
+     - Unfitted model center handling and exception handling.
+  3. TestOGSClusteringPlotting:
+     - Verification that 2D and 3D plotting calls enforce fitted model state.
+  4. Advanced Density Peaks & PAk:
+     - Density estimation, parent-link assignment, and pointer compression.
+
+USAGE:
+python -m unittest OGS/test/testogsclustering.py
+
+DEPENDENCIES:
+- unittest: unit test framework
+  - numpy / pandas: feature arrays and coordinates
+  - scikit-learn / dadapy: clustering algorithms and distance metrics
+  - ogsclustering: clustering implementations under test
+
+AUTHORS:
+  - 健
+  - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+    Centro di Ricerche Sismologiche (CRS)
+  - Università degli Studi di Trieste (UniTS)
+    Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+    Applied Data Science and Artificial Intelligence (ADSAI)
+  - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+    Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
+=============================================================================
+"""
+
 import os
 import sys
 import unittest

@@ -513,3 +513,9 @@ TSWLatexianTemp*
 *.nsys-rep
 data/*
 *.hdf5
+
+# Trash
+.Trash
+
+# Output
+*.csv

@@ -1,3 +1,43 @@
+"""
+=============================================================================
+OGS Model Trainer - PyTorch / SeisBench Phase Picking Training CLI
+=============================================================================
+
+OVERVIEW:
+Command-line training utility for deep-learning seismic phase pickers. Uses
+PyTorch and SeisBench to train and fine-tune models on OGS continuous waveform
+archives and validated reference pick catalogs.
+
+CLI ARGUMENTS:
+  -C, --catalog    Path to the OGS reference catalog directory (required).
+  -W, --waveforms  Path to the continuous waveform directory (required).
+  -D, --dates      Date range (YYYYMMDD YYYYMMDD) to select training windows.
+  -b, --batch_size Training batch size (default: 256).
+  -e, --epochs     Number of training epochs (default: 5).
+  -d, --download   Download waveforms if not locally cached.
+
+USAGE:
+python ogstrainer.py -C /path/to/catalog -W /path/to/waveforms -b 256 -e 10
+
+DEPENDENCIES:
+- torch / torch.utils.data: neural network training runtime
+  - seisbench: benchmark seismic models and waveform datasets
+  - obspy: seismological waveform IO
+  - pandas / numpy: catalog metadata handling
+  - ogsconstants / ogsutils: date validators and argument actions
+
+AUTHORS:
+  - 健
+  - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+    Centro di Ricerche Sismologiche (CRS)
+  - Università degli Studi di Trieste (UniTS)
+    Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+    Applied Data Science and Artificial Intelligence (ADSAI)
+  - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+    Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
+=============================================================================
+"""
+
 import os
 import glob
 import time

@@ -9,7 +9,7 @@ set -euo pipefail
 # OVERVIEW:
 # This script dynamically configures and submits SLURM batch jobs. It modifies
 # a template job script by inserting the appropriate resource allocation
-# parameters (nodes, tasks, threads) and then submits it to the SLURM 
+# parameters (nodes, tasks, cpus) and then submits it to the SLURM 
 # scheduler.
 #
 # The script uses a "template-and-replace" pattern where placeholder values
@@ -19,7 +19,7 @@ set -euo pipefail
 # KEY FEATURES:
 #   - Automatic MPI vs. serial mode selection based on task count
 #   - Dynamic SLURM directive configuration (nodes, tasks, CPUs, GPUs)
-#   - Thread count optimization (ensures tasks * threads = 32)
+#   - CPU count optimization (ensures tasks * cpus = $CORE_COUNT)
 #   - Output file naming with resource configuration encoded
 #   - Template restoration after submission for script reusability
 #
@@ -39,11 +39,11 @@ set -euo pipefail
 #   bash LAUNCHME.sh ktanakah "1 2" "1 2" MyJob python script.py --arg value
 #
 # RESOURCE ALLOCATION LOGIC:
-#   The script ensures that (tasks * threads) = 32 to fully utilize
+#   The script ensures that (tasks * cpus) = $CORE_COUNT to fully utilize
 #   node resources. For example:
-#     - 1 task  → 32 threads per task
-#     - 2 tasks → 16 threads per task
-#     - 4 tasks →  8 threads per task
+#     - 1 task  → 32 cpus per task
+#     - 2 tasks → 16 cpus per task
+#     - 4 tasks →  8 cpus per task
 #     - etc.
 #
 # =============================================================================
@@ -58,7 +58,7 @@ set -euo pipefail
 readonly MPI_CMD="mpirun -np "
 
 # Number of logical cores that the resource-selection loop tries to fill.
-readonly CORE_COUNT=32
+readonly CORE_COUNT=${CORE_COUNT:-32}
 
 # Resolve paths from this script so it works regardless of the callers current
 # directory. The submitted template is still executed by Slurm in its normal
@@ -71,7 +71,7 @@ TEMPLATE_CONFIGURED=0
 CURRENT_NODES=
 CURRENT_TASKS=
 CURRENT_CPUS=
-CURRENT_THREADS=
+OVERRIDE_CORES=
 
 # USER is normally exported on the cluster, but id provides a safe fallback.
 readonly CURRENT_USER=${USER:-$(id -un)}
@@ -79,11 +79,14 @@ readonly CURRENT_USER=${USER:-$(id -un)}
 # log
 # ---
 # Prints a timestamped log message to stdout.
-log() { printf "[%s][%s] %s\n" "$SCRIPT" "$(date '+%Y-%m-%d %H:%M:%S%z')" "$*"; }
+log() { # 3
+  printf "[%s][%s] %s\n" "$SCRIPT" "$(date '+%Y-%m-%d %H:%M:%S%z')" "$*"
+}
+
 # fail
 # ----
 # Prints a timestamped error message and exits with STATUS.
-fail() {
+fail() { # 6
   local status=$1
   shift
   log "ERROR: $*" >&2
@@ -93,7 +96,7 @@ fail() {
 # usage
 # -----
 # Displays a usage message and exits with status 2.
-usage() {
+usage() { # 7
   cat <<EOF
 Usage: $SCRIPT <jobFile> <nodes> <tasks> <jobName> <command> [args ...]
 
@@ -133,8 +136,8 @@ shift
 # Parse the job name for SLURM identification
 JOB_NAME=$1
 shift
-# Everything left in "$@" is the command and its arguments. It is forwarded
-# to sbatch and becomes the positional arguments received by the template.
+# Everything left in "$@" is the command and its arguments. It is forwarded to
+# sbatch and becomes the positional arguments received by the template.
 
 # NODES and TASKS may contain multiple space-separated values because the
 # nested loops below support submitting several resource configurations in one
@@ -174,7 +177,7 @@ esac
 #   Edits $TEMPLATE in place. The template must contain a commented serial
 #   Python command and a commented or active mpirun command in the expected
 #   format.
-set_execution_mode() {
+set_execution_mode() { # 17
   # If only 1 task is requested, use serial Python execution
   # Otherwise, use MPI parallel execution
   if [ "$1" -eq 1 ]; then
@@ -201,7 +204,7 @@ set_execution_mode() {
 # Side effects:
 #   Modifies $TEMPLATE. Call restore_template after sbatch, or rely on the
 #   EXIT trap if submission or a later command terminates unexpectedly.
-configure_template() {
+configure_template() { # 12
   sed -i -E -e "s/(#SBATCH --job-name=\"${CURRENT_USER} )#/\1${JOB_NAME}/g" \
             -e "s/(#SBATCH --nodes=)#/\1${CURRENT_NODES}/g" \
             -e "s/(#SBATCH --tasks-per-node=)#/\1${CURRENT_TASKS}/g" \
@@ -209,8 +212,8 @@ configure_template() {
             -e "s/(#SBATCH --cpus-per-task=)#/\1${CURRENT_CPUS}/g" \
             -e "s/(#SBATCH --error=${USER_INITIAL}_%j_)#.err/\1${JOB_NAME_SUFFIX}.err/g" \
             -e "s/(#SBATCH --output=${USER_INITIAL}_%j_)#.out/\1${JOB_NAME_SUFFIX}.out/g" \
-            -e "s/(export NUMBA_NUM_THREADS=)#/\1${CURRENT_THREADS}/g" \
-            -e "s/(export OMP_NUM_THREADS=)#/\1${CURRENT_THREADS}/g" \
+            -e "s/(export NUMBA_NUM_THREADS=)#/\1${CURRENT_CPUS}/g" \
+            -e "s/(export OMP_NUM_THREADS=)#/\1${CURRENT_CPUS}/g" \
             -e "s/${MPI_CMD}#/${MPI_CMD}${CURRENT_TASKS}/g" "$TEMPLATE"
 }
 
@@ -224,7 +227,7 @@ configure_template() {
 #   the active configuration. If no configuration is active, the function is
 #   a no-op. This makes it safe to call repeatedly from normal flow and from
 #   the EXIT trap.
-restore_template() {
+restore_template() { # 15
   [ "$TEMPLATE_CONFIGURED" -eq 1 ] || return 0
   sed -i -E \
     -e "s/(#SBATCH --job-name=\"${CURRENT_USER} )${JOB_NAME}/\1#/g" \
@@ -234,8 +237,8 @@ restore_template() {
     -e "s/(#SBATCH --cpus-per-task=)${CURRENT_CPUS}/\1#/g" \
     -e "s/(#SBATCH --error=${USER_INITIAL}_%j_)${JOB_NAME_SUFFIX}.err/\1#.err/g" \
     -e "s/(#SBATCH --output=${USER_INITIAL}_%j_)${JOB_NAME_SUFFIX}.out/\1#.out/g" \
-    -e "s/(export NUMBA_NUM_THREADS=)${CURRENT_THREADS}/\1#/g" \
-    -e "s/(export OMP_NUM_THREADS=)${CURRENT_THREADS}/\1#/g" \
+    -e "s/(export NUMBA_NUM_THREADS=)${CURRENT_CPUS}/\1#/g" \
+    -e "s/(export OMP_NUM_THREADS=)${CURRENT_CPUS}/\1#/g" \
     -e "s/${MPI_CMD}${CURRENT_TASKS}/${MPI_CMD}#/g" "$TEMPLATE"
   TEMPLATE_CONFIGURED=0
 }
@@ -244,7 +247,7 @@ restore_template() {
 # -------
 # EXIT-trap callback. Cleanup errors are deliberately suppressed so that a
 # failure during recovery does not hide the original submission error.
-cleanup() {
+cleanup() { # 3
   restore_template || true
 }
 
@@ -264,20 +267,18 @@ for CURRENT_NODES in ${NODES}; do
     set_execution_mode "$CURRENT_TASKS"
 
     # -------------------------------------------------------------------------
-    # SECTION 2: FIND A 32-CORE RESOURCE LAYOUT
+    # SECTION 2: FIND A $CORE_COUNT CORE RESOURCE LAYOUT
     # -------------------------------------------------------------------------
-    # Try different thread counts to find configuration where
-    # tasks * threads = 32. This ensures full utilization of the 32 cores
-    # typically available per node
-    for CURRENT_CPUS in 32 16 8 4 2 1; do
+    # Try different cpu counts to find configuration where
+    # tasks * cpus = $CORE_COUNT. This ensures full utilization of the
+    # $CORE_COUNT cores typically available per node, or honors an explicit CPU
+    # override.
+    for CURRENT_CPUS in ${OVERRIDE_CORES:-32 16 8 4 2 1}; do
 
-      # Calculate total threads across all tasks on this node
-      CURRENT_THREADS=$(($CURRENT_NODES * $CURRENT_CPUS))
+      # Only proceed if this configuration matches override $OVERRIDE_CORES or fills $CORE_COUNT cores (= tasks * cpus)
+      if [ -n "$OVERRIDE_CORES" ] || [ "$(($CURRENT_TASKS * $CURRENT_CPUS))" -eq "$CORE_COUNT" ]; then
 
-      # Only proceed if this configuration fills 32 cores (tasks * threads = 32)
-      if [ "$(($CURRENT_TASKS * $CURRENT_CPUS))" -eq "$CORE_COUNT" ]; then
-
-        log $(printf "Nodes: %02d, Tasks (MPI and/or GPU): %02d, Threads (OpenMP): %02d" $CURRENT_NODES $CURRENT_TASKS $CURRENT_CPUS)  # e.g., "Nodes: 01, Tasks: 04, Threads: 08"
+        log $(printf "Nodes: %02d, Tasks (MPI & GPU): %02d, CPUs (OpenMP): %02d" $CURRENT_NODES $CURRENT_TASKS $CURRENT_CPUS)  # e.g., "Nodes: 01, Tasks: 04, CPUs: 08"
         JOB_NAME_SUFFIX=$(printf "%02d_%02d_%02d" $CURRENT_NODES $CURRENT_TASKS $CURRENT_CPUS)  # e.g., "01_04_08"
 
         # ---------------------------------------------------------------------

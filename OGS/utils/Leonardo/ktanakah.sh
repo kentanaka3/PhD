@@ -13,8 +13,8 @@
 #SBATCH --mem=490000MB
 #SBATCH --partition=boost_usr_prod
 #SBATCH --qos=boost_qos_dbg
-#SBATCH --error=k_%j_#_#_#.err
-#SBATCH --output=k_%j_#_#_#.out
+#SBATCH --error=k_%j_#.err
+#SBATCH --output=k_%j_#.out
 
 # srun -A OGS23_PRACE_IT_0 --mem=490000MB -p boost_usr_prod --qos boost_qos_dbg --nodes=1 --tasks-per-node=1 --gres=gpu:1 --cpus-per-task=32 --pty /bin/bash
 # ml_catalog_run +libpath=. output_path=OGS22 data.starttime=2022-01-01 data.endtime=2022-01-02
