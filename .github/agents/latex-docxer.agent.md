@@ -184,8 +184,7 @@ Explicitly distinguish data rows and columns by epistemic classification:
 \end{table}
 ```
 
-#### Archetype C: Comparative methodological and axiomatic analysis
-
+#### Archetype C: Comparative Methodological and Axiomatic Analysis
 ```tex
 \begin{table}[htbp]
   \centering
@@ -233,8 +232,7 @@ Every architectural and pipeline diagram must visually encode component implemen
 | **Human / Analyst Decision** (manual review, input) | Hexagon or chamfered rectangle | Warm amber fill (`orange!10`) | Labeled "Manual" or "Review" |
 | **Planned / Future Milestone** (roadmap target) | Dashed stroke (`dash pattern=on 3.5pt off 2.5pt`) | Muted/patterned fill (`gray!4`) | Mandatory `[Planned]` badge on node |
 
-### 3. TikZ architecture and pipeline template
-
+### 3. TikZ Architecture and Pipeline Template
 ```tex
 \begin{figure}[htbp]
 \centering

@@ -1,9 +1,460 @@
-% Purpose: Supplementary material for the Datasets chapter.
-% Status: Draft; chapter-specific tables and validation notes pending review.
-% Source-of-truth: doc/UNITS/main/Chapter1_Datasets.tex and OGS catalog records.
+% Purpose: Supplementary material for the Datasets chapter presenting the
+% multi-decadal annual evolution of regional seismic station network geometries
+% and daily recording availability across the OGS observation
+% horizon (2005--2025).
+% Status: Draft; chapter-specific figures and validation notes pending review.
+% Source-of-truth: doc/UNITS/main/Chapter1_Datasets.tex, OGS/src/ogsutils.py,
+% and doc/imgs/OGS/.
 
-\section*{Chapter-Specific Supplementary Material}
+\section*{Annual Seismic Network Evolution and Station Availability
+(2005--2025)}
+\addcontentsline{toc}{section}{Annual Seismic Network Evolution and
+Station Availability (2005--2025)}
 \label{sec:supp_datasets}
+\label{sec:supp_annual_ogs_network}
 
-This section is reserved for dataset dictionaries, provenance tables, and
-additional validation material supporting Chapter~\ref{chap:Datasets}.
+This supplementary section presents the multi-decadal historical evolution of
+the regional seismological monitoring infrastructure operated and curated by
+\ac{OGS} \acf{CRS} in collaboration with partnering Italian and international
+seismological observatories. In alignment with the central dissertation
+objective of evaluating \textbf{+20 years} of continuous observational data
+(\textbf{January 1st, 2005 to December 31st, 2025}), the annual diagnostic
+pairs compiled below document regional network geometry and telemetry
+continuity across 21 consecutive calendar years (2005--2025).
+
+For each calendar year, two complementary diagnostic perspectives are provided:
+\begin{enumerate}[leftmargin=*,itemsep=2pt]
+  \item \textbf{Station Network Geometry (Left)}: Geographic distribution of
+    all permanent and temporary seismological and accelerometric recording
+    stations active during the calendar year. The red polygon denotes the
+    official \ac{OGS} operational bulletin area, while the blue rectangle
+    marks the regional bounding box queried across participating networks
+    \eg{\ac{OGS} Friuli network \texttt{OX}, \ac{INGV} National Seismic
+      Network \texttt{IV}, Slovenian Environment Agency \texttt{SL},
+      GeoSphere Austria \texttt{OE}, Swiss Seismological Service \texttt{CH},
+      Autonomous Provinces of Trento \texttt{ST} and Bolzano \texttt{SI},
+      MedNet \texttt{MN}, and Italian Strong Motion Network \texttt{IT}
+    }.
+  \item \textbf{Daily Telemetry Availability (Right)}: Stacked time series of
+    active daily station counts partitioned by contributing seismic network
+    across all 365 (or 366) days of the year. This diagnostic tracks continuous
+    recording continuity, winter telemetry drops, transient station outages,
+    and multi-client \ac{FDSN} data ingestion milestones.
+\end{enumerate}
+
+All station metadata and geographic coordinates are parsed directly from
+official FDSN StationXML inventories using \texttt{ogsutils.inventory}. Daily
+recording continuity and trace volumes are audited from continuous miniSEED
+archive files using \texttt{ogsutils.waveforms}.
+
+The 21-year monitoring history is presented in seven chronological triennial
+diagnostic panels (three calendar years per figure), organized into three
+operational epochs:
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item \textbf{Early Regional Monitoring Baseline (2005--2010)}: Documented in
+    Figures~\ref{fig:supp_ogs_2005_2007} and \ref{fig:supp_ogs_2008_2010}.
+  \item \textbf{Transboundary Integration and Network Densification
+    (2011--2019)}: Documented in Figures~\ref{fig:supp_ogs_2011_2013},
+    \ref{fig:supp_ogs_2014_2016}, and \ref{fig:supp_ogs_2017_2019}.
+  \item \textbf{Modern High-Density Multi-Agency Architecture (2020--2025)}:
+    Documented in Figures~\ref{fig:supp_ogs_2020_2022} and
+    \ref{fig:supp_ogs_2023_2025}.
+\end{itemize}
+
+\clearpage
+
+% =============================================================================
+% EPOCH 1: EARLY REGIONAL MONITORING BASELINE (2005--2010)
+% =============================================================================
+
+\subsection*{Early Regional Monitoring Baseline (2005--2010)}
+During this initial operational baseline, the monitoring network comprised
+approximately 15 to 35 active stations concentrated primarily along the Friuli
+Prealpine belt, supported by early bilateral data exchange with INGV and
+Slovenian networks.
+
+\begin{figure}[!htbp]
+  \centering
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2005/OGSStations.png}
+    \caption{Station network geometry (2005)}
+    \label{fig:supp_ogs_stations_2005}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2005/OGSAvailability.png}
+    \caption{Daily operational availability (2005)}
+    \label{fig:supp_ogs_avail_2005}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2006/OGSStations.png}
+    \caption{Station network geometry (2006)}
+    \label{fig:supp_ogs_stations_2006}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2006/OGSAvailability.png}
+    \caption{Daily operational availability (2006)}
+    \label{fig:supp_ogs_avail_2006}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2007/OGSStations.png}
+    \caption{Station network geometry (2007)}
+    \label{fig:supp_ogs_stations_2007}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2007/OGSAvailability.png}
+    \caption{Daily operational availability (2007)}
+    \label{fig:supp_ogs_avail_2007}
+  \end{subfigure}
+  \caption{\ac{OGS} regional seismic network topology and daily operational
+    station availability for calendar years 2005, 2006, and 2007. \emph{Left}:
+    Spatial distribution of active seismological and accelerometric recording
+    stations within the operational bulletin polygon (red boundary) and
+    regional station bounding box (blue boundary) across 2005 (a), 2006 (c),
+    and 2007 (e). \emph{Right}: Stacked daily station counts categorized by
+    contributing seismic network over the calendar years.
+  }
+  \label{fig:supp_ogs_2005_2007}
+\end{figure}
+
+\clearpage
+
+\begin{figure}[!htbp]
+  \centering
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2008/OGSStations.png}
+    \caption{Station network geometry (2008)}
+    \label{fig:supp_ogs_stations_2008}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2008/OGSAvailability.png}
+    \caption{Daily operational availability (2008)}
+    \label{fig:supp_ogs_avail_2008}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2009/OGSStations.png}
+    \caption{Station network geometry (2009)}
+    \label{fig:supp_ogs_stations_2009}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2009/OGSAvailability.png}
+    \caption{Daily operational availability (2009)}
+    \label{fig:supp_ogs_avail_2009}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2010/OGSStations.png}
+    \caption{Station network geometry (2010)}
+    \label{fig:supp_ogs_stations_2010}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2010/OGSAvailability.png}
+    \caption{Daily operational availability (2010)}
+    \label{fig:supp_ogs_avail_2010}
+  \end{subfigure}
+  \caption{\ac{OGS} regional seismic network topology and daily operational
+    station availability for calendar years 2008, 2009, and 2010. \emph{Left}:
+    Spatial distribution of active seismological and accelerometric recording
+    stations within the operational bulletin polygon (red boundary) and
+    regional station bounding box (blue boundary) across 2008 (a), 2009 (c),
+    and 2010 (e). \emph{Right}: Stacked daily station counts categorized by
+    contributing seismic network over the calendar years.
+  }
+  \label{fig:supp_ogs_2008_2010}
+\end{figure}
+
+\clearpage
+
+% =============================================================================
+% EPOCH 2: TRANSBOUNDARY INTEGRATION AND NETWORK DENSIFICATION (2011--2019)
+% =============================================================================
+
+\subsection*{Transboundary Integration and Network Densification (2011--2019)}
+This operational period marks the progressive expansion and densification of
+the regional network, characterized by the systematic integration of the
+\ac{OGS} Friuli network (\texttt{OX}), expanded cross-border telemetry with
+Austria (\texttt{OE}) and Slovenia (\texttt{SL}), and the deployment of new
+broadband sensors raising the active station count from approximately 40 to
+over 100 instruments.
+
+\begin{figure}[!htbp]
+  \centering
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2011/OGSStations.png}
+    \caption{Station network geometry (2011)}
+    \label{fig:supp_ogs_stations_2011}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2011/OGSAvailability.png}
+    \caption{Daily operational availability (2011)}
+    \label{fig:supp_ogs_avail_2011}
+  \end{subfigure}
+
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2012/OGSStations.png}
+    \caption{Station network geometry (2012)}
+    \label{fig:supp_ogs_stations_2012}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2012/OGSAvailability.png}
+    \caption{Daily operational availability (2012)}
+    \label{fig:supp_ogs_avail_2012}
+  \end{subfigure}
+
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2013/OGSStations.png}
+    \caption{Station network geometry (2013)}
+    \label{fig:supp_ogs_stations_2013}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2013/OGSAvailability.png}
+    \caption{Daily operational availability (2013)}
+    \label{fig:supp_ogs_avail_2013}
+  \end{subfigure}
+  \caption{\ac{OGS} regional seismic network topology and daily operational
+    station availability for calendar years 2011, 2012, and 2013. \emph{Left}:
+    Spatial distribution of active seismological and accelerometric recording
+    stations within the operational bulletin polygon (red boundary) and
+    regional station bounding box (blue boundary) across 2011 (a), 2012 (c),
+    and 2013 (e). \emph{Right}: Stacked daily station counts categorized by
+    contributing seismic network over the calendar years.
+  }
+  \label{fig:supp_ogs_2011_2013}
+\end{figure}
+
+\clearpage
+
+\begin{figure}[!htbp]
+  \centering
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2014/OGSStations.png}
+    \caption{Station network geometry (2014)}
+    \label{fig:supp_ogs_stations_2014}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2014/OGSAvailability.png}
+    \caption{Daily operational availability (2014)}
+    \label{fig:supp_ogs_avail_2014}
+  \end{subfigure}
+
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2015/OGSStations.png}
+    \caption{Station network geometry (2015)}
+    \label{fig:supp_ogs_stations_2015}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2015/OGSAvailability.png}
+    \caption{Daily operational availability (2015)}
+    \label{fig:supp_ogs_avail_2015}
+  \end{subfigure}
+
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2016/OGSStations.png}
+    \caption{Station network geometry (2016)}
+    \label{fig:supp_ogs_stations_2016}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2016/OGSAvailability.png}
+    \caption{Daily operational availability (2016)}
+    \label{fig:supp_ogs_avail_2016}
+  \end{subfigure}
+  \caption{\ac{OGS} regional seismic network topology and daily operational
+    station availability for calendar years 2014, 2015, and 2016. \emph{Left}:
+    Spatial distribution of active seismological and accelerometric recording
+    stations within the operational bulletin polygon (red boundary) and
+    regional station bounding box (blue boundary) across 2014 (a), 2015 (c),
+    and 2016 (e). \emph{Right}: Stacked daily station counts categorized by
+    contributing seismic network over the calendar years.
+  }
+  \label{fig:supp_ogs_2014_2016}
+\end{figure}
+
+\clearpage
+
+\begin{figure}[!htbp]
+  \centering
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2017/OGSStations.png}
+    \caption{Station network geometry (2017)}
+    \label{fig:supp_ogs_stations_2017}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2017/OGSAvailability.png}
+    \caption{Daily operational availability (2017)}
+    \label{fig:supp_ogs_avail_2017}
+  \end{subfigure}
+
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2018/OGSStations.png}
+    \caption{Station network geometry (2018)}
+    \label{fig:supp_ogs_stations_2018}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2018/OGSAvailability.png}
+    \caption{Daily operational availability (2018)}
+    \label{fig:supp_ogs_avail_2018}
+  \end{subfigure}
+
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2019/OGSStations.png}
+    \caption{Station network geometry (2019)}
+    \label{fig:supp_ogs_stations_2019}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2019/OGSAvailability.png}
+    \caption{Daily operational availability (2019)}
+    \label{fig:supp_ogs_avail_2019}
+  \end{subfigure}
+  \caption{\ac{OGS} regional seismic network topology and daily operational
+    station availability for calendar years 2017, 2018, and 2019. \emph{Left}:
+    Spatial distribution of active seismological and accelerometric recording
+    stations within the operational bulletin polygon (red boundary) and
+    regional station bounding box (blue boundary) across 2017 (a), 2018 (c),
+    and 2019 (e). \emph{Right}: Stacked daily station counts categorized by
+    contributing seismic network over the calendar year.
+  }
+  \label{fig:supp_ogs_2017_2019}
+\end{figure}
+
+\clearpage
+
+% =============================================================================
+% EPOCH 3: MODERN HIGH-DENSITY MULTI-AGENCY ARCHITECTURE (2020--2025)
+% =============================================================================
+
+\subsection*{Modern High-Density Multi-Agency Architecture (2020--2025)}
+The modern operational configuration represents a mature, high-density
+seismological and accelerometric array combining 18 regional and international
+monitoring institutions across Northeastern Italy, Austria, and Slovenia.
+Active daily telemetry continuously exceeds 140 stations from 2020 to 2023,
+stepping up to 266 stations during the 2024 Socchieve seismic sequence and
+sustaining peak density through 2025.
+
+\begin{figure}[!htbp]
+  \centering
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2020/OGSStations.png}
+    \caption{Station network geometry (2020)}
+    \label{fig:supp_ogs_stations_2020}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2020/OGSAvailability.png}
+    \caption{Daily operational availability (2020)}
+    \label{fig:supp_ogs_avail_2020}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2021/OGSStations.png}
+    \caption{Station network geometry (2021)}
+    \label{fig:supp_ogs_stations_2021}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2021/OGSAvailability.png}
+    \caption{Daily operational availability (2021)}
+    \label{fig:supp_ogs_avail_2021}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2022/OGSStations.png}
+    \caption{Station network geometry (2022)}
+    \label{fig:supp_ogs_stations_2022}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2022/OGSAvailability.png}
+    \caption{Daily operational availability (2022)}
+    \label{fig:supp_ogs_avail_2022}
+  \end{subfigure}
+  \caption{\ac{OGS} regional seismic network topology and daily operational
+    station availability for calendar years 2020, 2021, and 2022. \emph{Left}:
+    Spatial distribution of active seismological and accelerometric recording
+    stations within the operational bulletin polygon (red boundary) and
+    regional station bounding box (blue boundary) across 2020 (a), 2021 (c),
+    and 2022 (e). \emph{Right}: Stacked daily station counts categorized by
+  contributing seismic network over the calendar years.}
+  \label{fig:supp_ogs_2020_2022}
+\end{figure}
+
+\clearpage
+
+\begin{figure}[!htbp]
+  \centering
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2023/OGSStations.png}
+    \caption{Station network geometry (2023)}
+    \label{fig:supp_ogs_stations_2023}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2023/OGSAvailability.png}
+    \caption{Daily operational availability (2023)}
+    \label{fig:supp_ogs_avail_2023}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2024/OGSStations.png}
+    \caption{Station network geometry (2024)}
+    \label{fig:supp_ogs_stations_2024}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2024/OGSAvailability.png}
+    \caption{Daily operational availability (2024)}
+    \label{fig:supp_ogs_avail_2024}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2025/OGSStations.png}
+    \caption{Station network geometry (2025)}
+    \label{fig:supp_ogs_stations_2025}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.56\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{OGS/2025/OGSAvailability.png}
+    \caption{Daily operational availability (2025)}
+    \label{fig:supp_ogs_avail_2025}
+  \end{subfigure}
+  \caption{\ac{OGS} regional seismic network topology and daily operational
+    station availability for calendar years 2023, 2024, and 2025. \emph{Left}:
+    Spatial distribution of active seismological and accelerometric recording
+    stations within the operational bulletin polygon (red boundary) and
+    regional station bounding box (blue boundary) across 2023 (a), 2024 (c),
+    and 2025 (e). \emph{Right}: Stacked daily station counts categorized by
+    contributing seismic network over the calendar years.
+  }
+  \label{fig:supp_ogs_2023_2025}
+\end{figure}
+
+\clearpage

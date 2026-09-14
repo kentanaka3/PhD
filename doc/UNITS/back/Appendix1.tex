@@ -64,8 +64,8 @@ data:
   - HN?
   - HG?
   - BH?
-  starttime: '2024-03-20'
-  endtime: '2024-06-20'
+  starttime: '2005-01-01'
+  endtime: '2025-12-31'
   velocity_model:
     _target_: pandas.read_csv
     filepath_or_buffer: OGS/data/ogs1d.csv
@@ -266,10 +266,10 @@ operational parameters for deep-learning phase picking.
         \texttt{channel\_priorities} & List[Regex] & \texttt{[HH?,
         EH?, HN?, ...]} & [Analyst-Normalized] & Sensor hierarchy:
         High-Gain Broadband $\to$ Short-Period $\to$ Accelerometer \\
-        \texttt{starttime} & ISO Date & \texttt{'2024-03-20'} &
+        \texttt{starttime} & ISO Date & \texttt{'2005-01-01'} &
         [Observed] & Beginning timestamp of continuous observation
         horizon (00:00:00 UTC) \\
-        \texttt{endtime} & ISO Date & \texttt{'2024-06-20'} &
+        \texttt{endtime} & ISO Date & \texttt{'2025-12-31'} &
         [Observed] & Terminating timestamp of continuous observation
         horizon (23:59:59 UTC) \\
         \texttt{velocity\_model} & CSV Target &

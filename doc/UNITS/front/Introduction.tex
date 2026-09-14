@@ -385,7 +385,7 @@ datasets, and pre-trained weights for state-of-the-art
 architectures, dramatically enhancing the reproducibility of
 deep-learning seismic workflows. In this thesis, SeisBench serves as
 the core foundation for evaluating pre-trained phase pickers across
-diverse training corpora.
+diverse training datasets.
 
 \section{The March 27, 2024 Socchieve Earthquake Sequence}
 \label{sec:socchieve_sequence}
@@ -435,7 +435,7 @@ The key research questions addressed in this thesis are:
     Italy, STEAD globally, SCEDC in California) generalize to the
     complex geological and noise environment of Northeastern Italy?
     Does regional training data (INSTANCE) outperform massive but
-    geographically foreign corpora (SCEDC, STEAD)?
+    geographically foreign datasets (SCEDC, STEAD)?
   \item \textbf{Associator Scaling and Performance}: How do advanced
     phase association algorithms—specifically the Bayesian Gaussian
     Mixture Model Associator (\ac{GaMMA}) and the high-throughput
@@ -463,36 +463,33 @@ interconnected chapters, followed by a dedicated Data and Resources
 statement and technical appendices:
 \begin{itemize}
   \item \textbf{Chapter~\ref{chap:Datasets} (Datasets)}: Details the
-    operational case study data acquired across Northeastern Italy
-    (\placeholder{DATE RANGE}, \placeholder{STATIONS} stations,
-      \placeholder{NUM EVENTS} relocated \ac{OGS}
-    reference events with 7,129 picks) and reviews the four
-    benchmark training corpora (INSTANCE, STEAD, SCEDC, and Original sets).
-  \item \textbf{Chapter~\ref{chap:data_engineering} (Data
-    Engineering)}: Presents the software architecture of the
-    pipeline, detailing the central \texttt{ogsconstants}
-    configuration, weight-to-uncertainty mappings, automated FDSN
-    multi-client waveform downloading, multi-format legacy catalog
-    parsing (HPL, DAT, TXT, PUN), catalog aggregation, geodetic
-    math, and visualization frameworks.
-  \item \textbf{Chapter~\ref{chap:pipeline} (Computational
-    Pipeline)}: Formulates the
-    complete procedural workflow, detailing continuous waveform
-    preprocessing, deep-learning phase picking inference, Bayesian
-    (\ac{GaMMA}) and octree (\ac{PyOcto}) phase association, 1D
-    \ac{NonLinLoc} probabilistic relocation, and local magnitude
-    ($M_{\mathrm{L}}$) inversion.
+    operational case study data acquired across Northeastern Italy evaluating
+    \textbf{+20 years} of observational data (\textbf{January 1st, 2005 to
+    December 31st, 2025}) across \placeholder{NUM STATIONS} stations,
+    (\placeholder{NUM EVENTS} relocated \ac{OGS} reference events with
+    \placeholder{NUM PICKS} picks) and reviews the four benchmark training
+    datasets (INSTANCE, STEAD, SCEDC, and Original sets).
+  \item \textbf{Chapter~\ref{chap:data_engineering} (Data Engineering)}:
+    Presents the software architecture of the pipeline, detailing the central
+    \texttt{ogsconstants} configuration, weight-to-uncertainty mappings,
+    automated FDSN multi-client waveform downloading, multi-format legacy
+    catalog parsing (HPL, DAT, TXT, PUN), catalog aggregation, geodetic math,
+    and visualization frameworks.
+  \item \textbf{Chapter~\ref{chap:pipeline} (Computational Pipeline)}:
+    Formulates the complete procedural workflow, detailing continuous waveform
+    preprocessing, deep-learning phase picking inference, Bayesian (\ac{GaMMA})
+    and octree (\ac{PyOcto}) phase association, 1D \ac{NonLinLoc} probabilistic
+    relocation, and local magnitude ($M_{\mathrm{L}}$) inversion.
   \item \textbf{Chapter~\ref{chap:methodology} (Pipeline Evaluation
-    Framework)}: Develops
-    the formal evaluation methodology, defining bipartite graph
-    maximum-weight matching (\ac{BPGMA}) for both picks and events,
-    the construction of domain-specific confusion matrices, and the
-    mathematical derivation of recall, precision, and $F_1$ scores.
+    Framework)}: Develops the formal evaluation methodology, defining bipartite
+    graph maximum-weight matching (\ac{BPGMA}) for both picks and events, the
+    construction of domain-specific confusion matrices, and the mathematical
+    derivation of recall, precision, and $F_1$ scores.
   \item \textbf{Chapter~\ref{chap:hpc} (HPC Implementation)}: Analyzes the
-    high-performance computing implementation deployed on the CINECA
-    Leonardo supercomputer (EuroHPC Booster partition), detailing
-    SLURM job orchestration, MPI and GPU process allocation,
-    parallel I/O throughput, and execution scaling profiles.
+    \ac{HPC} implementation deployed on the CINECA Leonardo supercomputer
+    (EuroHPC Booster partition), detailing SLURM job orchestration, \ac{MPI}
+    and GPU process allocation, parallel I/O throughput, and execution scaling
+    profiles.
   \item \textbf{Chapter~\ref{chap:results} (Results)}: Delivers a comprehensive
     empirical evaluation of the benchmarking campaign on the
     Northeastern Italy dataset, presenting pick detection recall
