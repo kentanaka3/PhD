@@ -24,6 +24,7 @@ Read and follow [`AGENTS.md`](../../AGENTS.md) — it is the repository-wide con
 - Make focused edits that preserve the existing document class, package conventions, terminology, and public document structure unless the user requests a redesign.
 - After each substantive edit, run the narrowest available validation. Stop and report a blocker when a required compiler, source anchor, or approval is unavailable; do not substitute unverified output.
 - Do not inspect, modify, publish, download, or execute files outside the user-authorized scope.
+
 ## Scope and boundaries
 
 - Work primarily on LaTeX sources (`doc/**/*.tex`, `doc/**/*.sty`, `doc/**/*.bib`) and necessary document assets.

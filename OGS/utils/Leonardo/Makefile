@@ -24,6 +24,7 @@
 #   make NLL3D              # Run NonLinLoc 3D with the default assoc+picking inputs
 #   make base               # Just make the base catalog for quick iteration
 #   make station YEAR=2025
+#   make station START_DATE=20050101 END_DATE=20251231 base=OGS/ALL
 #   make parse
 #   make clean              # WARNING: deletes generated catalogs
 #   make MHPC               # Submit all registered models/assocs to SLURM for the given date range
@@ -104,13 +105,13 @@ TT_DB        	?= $(OGS_PATH)/data/VelocityModel/1D/tt_db.txt
 # Executable binaries
 CONDA_BIN			?= $(CONDA_ROOT)/bin/conda
 PYTHON_BIN		?= $(CONDA_ROOT)/envs/$(CONDA_ENV)/bin/python
-SBC_RUN_BIN		?= ml_catalog_run +libpath=.
+SBC_RUN_BIN		?= ml_catalog_run --config-dir conf +libpath=.
 
 # SLURM template (defaults to user template if present, else default)
 SLURM_TEMPLATE ?= $(if $(wildcard $(OGS_PATH)/utils/Leonardo/$(USER).sh),$(USER),default)
 
 # Default picker/associator roots that chained stages can reuse.
-base        := OGS/$(YEAR)
+base        ?= OGS/$(YEAR)
 BASE_PICKER := $(WORK_PATH)/catalogs/$(base)/SeisBenchPicker
 BASE_ASSOC  := $(WORK_PATH)/catalogs/$(base)/PyOcto
 
@@ -143,7 +144,7 @@ NLLS				:= NLL1D NLL3D
 # -----------------------------------------------------------------------------
 # DEFAULT / META
 # -----------------------------------------------------------------------------
-all: base # 2
+all:
 	@$(MAKE) --no-print-directory '$(NLL)[$(ASSOC),$(MODEL),$(DATASET),$(THRESHOLD)]'
 
 help: #
@@ -152,6 +153,7 @@ help: #
 	@echo "  make download   YEAR=YYYY STEP_DAYS=N [CORES=4]"
 	@echo "  make download   START_DATE=YYYYMMDD END_DATE=YYYYMMDD STEP_DAYS=N [CORES=4]"
 	@echo "  make station    YEAR=YYYY"
+	@echo "  make station    START_DATE=YYYYMMDD END_DATE=YYYYMMDD base=OGS/ALL"
 	@echo "  make index CORES=8 START_DATE=2005-01-01 END_DATE=2025-12-31"
 	@echo "  make PhaseNet | EQTransformer | ...	(picker models with default dataset/threshold)"
 	@echo "  make PhaseNet[INSTANCE,0.1] | EQTransformer[STEAD,0.2] | ...	(picker models with dataset/threshold overrides)"
@@ -159,15 +161,12 @@ help: #
 	@echo "  make PyOcto[PhaseNet,INSTANCE,0.1] | GaMMA[EQTransformer,STEAD,0.2] | REAL[PhaseNet,SCEDC,0.3] ...	(associator with picker overrides)"
 	@echo "  make NLL1D | NLL3D                   (locator with default picker+assoc input)"
 	@echo "  make NLL1D[PyOcto,PhaseNet,INSTANCE,0.1] | NLL3D[GaMMA,EQTransformer,STEAD,0.2] | ...	(locator with picker+assoc overrides)"
-	@echo "  make base                            (just make the base catalog for quick iteration on later stages)"
-	@echo "  make parse | clean"
+	@echo "  make parse														(merge manual OGS pick files into a unified catalog)"
 	@echo "  make MHPC                            (submit all registered models/assocs to SLURM for the given date range)"
 	@echo "  make PhD                             (submit all registered models/assocs to SLURM for the given date range)"
 	@echo "  make test                            (run a quick test of the SBC_RUN_BIN entrypoint)"
+	@echo "  make clean                           (WARNING: deletes generated catalogs)"
 	@echo "  make help                            (this message)"
-
-setup:
-	@echo "Setup placeholder — module loads / env activation go here."
 
 # =============================================================================
 # INITIALIZATION
@@ -176,7 +175,8 @@ init:
 	@WORK_PATH="$(WORK_PATH)" OGS_PATH="$(OGS_PATH)" NLL_PATH="$(NLL_PATH)" \
 		DATASET_PATH="$(DATASET_PATH)" CONDA_ROOT="$(CONDA_ROOT)" \
 		CONDA_INSTALLER="$(CONDA_INSTALLER)" CONDA_ENV="$(CONDA_ENV)" \
-		SBC_PATH="$(SBC_PATH)" bash "$(OGS_PATH)/utils/Leonardo/init.sh"
+		SBC_PATH="$(SBC_PATH)" SBC_RUN_BIN="$(SBC_RUN_BIN)" \
+		bash "$(OGS_PATH)/utils/Leonardo/init.sh"
 
 # =============================================================================
 # DATA ACQUISITION
@@ -303,9 +303,8 @@ ASSOC_DIR_REAL         ?= REAL
 
 # --- INDEXER -------------------------------------------------------------------
 define _INDEXER_RULES
-
 $1:
-	bash LAUNCHME.sh $$(USER) 1 1 "Indexer $$(YEAR)" \
+	bash LAUNCHME.sh $$(USER) 1 1 "Indexer$$(YEAR)" \
 	  $$(SBC_RUN_BIN) +index_only=true data=ogsDB data.check=true \
 	  data.index_workers=$$(CORES) \
 	  data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
@@ -341,13 +340,13 @@ $1[%]:
 	@stem='$$*'; \
 	model="$$$${stem%%,*}"; rest="$$$${stem#*,}"; \
 	dataset="$$$${rest%%,*}"; threshold="$$$${rest##*,}"; \
-	id="$1[$$$$model,$$$$dataset,$$$$threshold]"; \
+	assoc_id="$1[$$$$model,$$$$dataset,$$$$threshold]"; \
 	picker_id="$$$$model/$$$$dataset/$$$$threshold/$$(YEAR)"; \
 	mkdir -p "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$picker_id"; \
 	mkdir -p "$$(WORK_PATH)/catalogs/$$(PROJECT)/$$$$picker_id"; \
 	ln -sfn "$$(WORK_PATH)/catalogs/$$(PROJECT)/$$$$picker_id/SeisBenchPicker" \
 	  "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$picker_id/SeisBenchPicker"; \
-	bash LAUNCHME.sh $$(SLURM_TEMPLATE) 1 1 "$$$$id" \
+	bash LAUNCHME.sh $$(SLURM_TEMPLATE) 1 1 "$$$$assoc_id" \
 	  $$(SBC_RUN_BIN) output_path="catalogs/$$(PROJECT)/$1/$$$$picker_id" \
 	  group_modules/associator=$(ASSOC_YAML_$1) \
 	  data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
@@ -435,7 +434,7 @@ clean: #
 	}
 	@echo "Removing generated files under $(WORK_PATH)"
 	@cd "$(WORK_PATH)" && \
-	rm -rf -- config data src test && \
+	rm -rf -- conf data src test && \
 	rm -rf -- ACTIVATEME.sh download.sh dummy.sh init.sh ktanakah.sh \
 		LAUNCHME.sh LEONARDO.yml Makefile
 	#@echo "Removing generated catalogs below $(WORK_PATH)/catalogs"
