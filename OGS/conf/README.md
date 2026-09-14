@@ -1,8 +1,8 @@
-# OGS Hydra Configuration (`OGS/config/`)
+# OGS Hydra Configuration (`OGS/conf/`)
 
 ## Overview
 
-The `OGS/config/` directory contains the Hydra/YAML configuration hierarchy
+The `OGS/conf/` directory contains the Hydra/YAML configuration hierarchy
 for the `ml_catalog` seismic data processing pipeline. Hydra composes these
 YAML fragments at runtime based on the top-level configuration in
 [`config.yaml`](config.yaml) and command-line overrides supplied by the
@@ -30,7 +30,7 @@ external data services, and values supplied by the launcher.
 ## Configuration Structure
 
 ```text
-OGS/config/
+OGS/conf/
 ├── config.yaml                     # Root defaults configuration
 ├── builder/
 │   └── default.yaml                # Catalog builder parameters (Dask / MPI graph execution)

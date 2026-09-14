@@ -96,7 +96,7 @@ profile is documentation and bridge guidance until date handling is ported:
   the `.local` location (`.local/Makefile:19-24`).
 - `PYTHON_BIN` resolves `python3` from `PATH` (`.local/Makefile:25`); override
   it with a verified workstation environment.
-- `init.sh` links the actual `OGS/config`, `OGS/data`, and `OGS/src`
+- `init.sh` links the actual `OGS/conf`, `OGS/data`, and `OGS/src`
   directories without replacing conflicting paths
   (`.local/init.sh:130-161`).
 - Direct Python entrypoints are `OGS/src/ogsdownloader.py`,

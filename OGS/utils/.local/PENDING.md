@@ -28,7 +28,7 @@ transfers, package installation, or destructive cleanup.
 - [ ] Verify that all local Makefile command recipes continue to use
       `LAUNCHME.sh` or an explicitly reviewed, argv-safe local command path;
       no SLURM launcher is appropriate here (`Makefile:96-148`).
-- [ ] Verify the initializer links the repository's actual `OGS/config`,
+- [ ] Verify the initializer links the repository's actual `OGS/conf`,
       `OGS/data`, and `OGS/src` paths and refuses conflicting existing paths
       (`init.sh:130-161`).
 - [ ] Verify the selected workstation Python through `PYTHON_BIN`

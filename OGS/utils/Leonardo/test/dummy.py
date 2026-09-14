@@ -7,8 +7,8 @@ Leonardo Workspace Smoke Test - Makefile Init Verification Suite
 OVERVIEW:
 Smoke test suite executed by the Makefile 'init' target on the Leonardo HPC
 cluster. Verifies that the initialized workspace in WORK_PATH contains the
-required execution launchers, configuration files, and symbolic links (config,
-data, src) back to the shared project tree.
+required execution launchers, configuration files, directories (conf, test) and
+symbolic links (data, src) back to the shared project tree.
 
 Ensures that the compute environment is verified before submitting resource-
 intensive multi-node SLURM jobs.
@@ -69,6 +69,7 @@ class InitializedWorkspaceTests(unittest.TestCase):
     The test directory is checked separately because it is a directory,
     not a regular file.
     """
+    # TODO: Extract this list from OGS utils/Leonardo
     required_files = (
         "ACTIVATEME.sh",
         "LAUNCHME.sh",
@@ -90,8 +91,8 @@ class InitializedWorkspaceTests(unittest.TestCase):
     self.assertTrue((self.workspace / "test/dummy.py").is_file())
 
   def test_shared_directories_are_symbolic_links(self) -> None:
-    """Verify config, data, and src are links to the shared OGS tree."""
-    expected_target_names = {"config": "conf", "data": "data", "src": "src"}
+    """Verify data, and src are links to the shared OGS tree."""
+    expected_target_names = {"data": "data", "src": "src"}
     for link_name, target_name in expected_target_names.items():
       with self.subTest(link_name=link_name):
         link = self.workspace / link_name
@@ -105,6 +106,15 @@ class InitializedWorkspaceTests(unittest.TestCase):
             f"{link_name} does not resolve to a {target_name} directory",
         )
         self.assertTrue(link.resolve().is_dir())
+
+  def test_shared_directories_are_directories(self) -> None:
+    """Verify config are directories in the shared OGS tree."""
+    expected_directory_names = {"conf": "conf", "test": "test"}
+    for directory_name, target_name in expected_directory_names.items():
+      with self.subTest(directory_name=directory_name):
+        directory = self.workspace / directory_name
+        self.assertTrue(directory.is_dir(),
+                        f"{directory_name} is not a directory")
 
   def test_external_repositories_are_git_checkouts(self) -> None:
     """Verify that init prepared both repositories beside WORK_PATH.

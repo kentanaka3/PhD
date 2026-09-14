@@ -103,7 +103,7 @@ scan_conflicts() { # 22
 # emit_tier1
 # ----------
 # Emit the Tier 1 global routing manifest.
-emit_tier1() { # 21
+emit_tier1() { # 22
 	local -r scan_root="$1"
 	local ogs_val doc_val llm_val conflicts
 
@@ -123,6 +123,7 @@ modules:
   - {path: LLM, role: governance, entry: [LLM/README.md], validate: $llm_val, ops: reviewed}
 conflicts: $conflicts
 EOF
+	emit_navigation "$scan_root"
 }
 
 # extract_symbols

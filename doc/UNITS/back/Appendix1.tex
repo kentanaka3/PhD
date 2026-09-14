@@ -1,7 +1,7 @@
 % Purpose: Historical Hydra YAML example and parameter dictionaries,
 % with explicit separation from the current checked-in configuration.
 % Status: Draft | Under Review; configuration provenance pending.
-% Source-of-truth: OGS/config/, doc/MHPC/chapters/appendix.tex,
+% Source-of-truth: OGS/conf/, doc/MHPC/chapters/appendix.tex,
 % ml_catalog configuration schemas.
 
 \label{chap:appendix}
@@ -422,7 +422,7 @@ outlines the quality-control gates enforced by \texttt{OGSPickStatQC}.
         least 3 P and 2 S picks ensures that candidate events possess
         sufficient degrees of freedom for initial hypocentral stability.
       \item Evidence Anchor: The current source is
-        \path{OGS/config/group_modules/associator/ogsgamma.yaml};
+        \path{OGS/conf/group_modules/associator/ogsgamma.yaml};
         values in this table describe the historical example and
         require run-level confirmation.
       \end{tablenotes}
@@ -523,7 +523,7 @@ and Dask parallel cluster parameters.
         decouples origin time from spatial coordinates, rendering
         hypocentral convergence robust against outlier picks.
       \item Evidence Anchor: The current source is
-        \path{OGS/config/group_modules/nonlinloc/ogsnonlinloc1d.yaml};
+        \path{OGS/conf/group_modules/nonlinloc/ogsnonlinloc1d.yaml};
         values in this table describe the historical example and
         require run-level confirmation.
       \end{tablenotes}
@@ -574,7 +574,7 @@ and Dask parallel cluster parameters.
         execution eliminates multi-gigabyte memory copying of raw
         waveform streams during parallel station processing.
       \item Evidence Anchor: Implemented in
-        \path{OGS/src/ogsmagnitude.py} and \path{OGS/config/config.yaml}.
+        \path{OGS/src/ogsmagnitude.py} and \path{OGS/conf/config.yaml}.
       \end{tablenotes}
     \end{threeparttable}
   \end{table}

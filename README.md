@@ -741,12 +741,12 @@ from ogsclustering import OGSClusteringZoo
 metadata = {
     "algorithms": ["KMeans", "HDBSCAN", "DBSCAN", "Agglomerative"],
     "eval_metrics": ["SilhouetteScore", "DaviesBouldinScore"],
-    "num_clusters_range": (2, 10, 1),        # for KMeans, Agglomerative
-    "cluster_size_range": (10, 100, 10),      # for HDBSCAN
-    "eps_range": (0.3, 1.0, 0.1),             # for DBSCAN
+    "num_clusters_range": (2, 12, 1),
+    "cluster_size_range": (10, 80, 10),
+    "eps_range": (0.2, 0.8, 0.1),
     "metric": "euclidean",
     "n_jobs": -1,
-    "random_state": 42,
+    "random_state": 42
 }
 
 zoo = OGSClusteringZoo(metadata=metadata, verbose=True)

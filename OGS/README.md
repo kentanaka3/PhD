@@ -36,7 +36,7 @@ legacy catalog or waveform service
 
 ```text
 OGS/
-├── config/     # Hydra configuration tree (builder, cluster, data, group/joint modules)
+├── conf/       # Hydra configuration tree (builder, cluster, data, group/joint modules)
 ├── data/       # Static datasets: OGSCatalog benchmarks and 1D/3D VelocityModel files
 ├── src/        # 24 Python source modules for downloading, parsing, ML picking, association, location, clustering
 ├── test/       # Test suite (10 test modules + Makefile)
@@ -46,7 +46,7 @@ OGS/
 ## Subpackage Navigation
 
 - **Source Code**: [`src/README.md`](src/README.md) describes all 24 Python modules in `OGS/src/`, including core components, ML integrations, and analysis drivers.
-- **Configuration**: [`config/README.md`](config/README.md) documents the
+- **Configuration**: [`conf/README.md`](conf/README.md) documents the
   hierarchical Hydra/YAML configuration system used by `ml_catalog_run`.
 - **Testing**: [`test/README.md`](test/README.md) details the test suite and Makefile test targets.
 - **Cluster Execution**: [`utils/README.md`](utils/README.md) explains the Leonardo cluster environment, `init.sh`, `LAUNCHME.sh`, and `Makefile`.
