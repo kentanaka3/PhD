@@ -709,6 +709,13 @@ self.EVENTS[OGS_C.NUMBER_P_AND_S_PICKS_STR] = self.EVENTS[
       directory hierarchies under
       \path{$WORK/waveforms/YYYY/MM/DD/}. Preserves primary
       observation integrity without modification.
+    \item \textbf{Tier 1b: Day-Sharded Waveform Index (SQLite)}:
+      Autonomous calendar-day Pyrocko Squirrel database shards stored
+      under \path{ogsDB/YYYY/MM/DD/.squirrel}, providing rapid waveform
+      sample interval, sample rate, and channel indexation. Sharding
+      by day eliminates SQLite database write-lock contention across
+      parallel workers during ingestion and enables lock-free local
+      RAM/tmpfs staging during inference.
     \item \textbf{Tier 2: Station Metadata (StationXML)}: XML
       metadata stored under \texttt{station/\{NET\}.\{STA\}.xml},
       providing calibration responses, gains, and coordinates.

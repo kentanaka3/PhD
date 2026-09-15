@@ -1,7 +1,6 @@
-% Purpose: High-Performance Computing deployment, workload
-% scheduling, workflow orchestration, and parallel scaling on the
-% CINECA Leonardo supercomputer.
-% Status: Draft; author and venue review pending.
+% Purpose: High-Performance Computing deployment, workload scheduling, workflow
+% orchestration, and parallel scaling on the CINECA Leonardo supercomputer.
+% Status: Under Review
 % Source-of-truth: OGS/utils/Leonardo/Makefile,
 % OGS/utils/Leonardo/LAUNCHME.sh, OGS/utils/Leonardo/ACTIVATEME.sh,
 % OGS/utils/Leonardo/ktanakah.sh
@@ -142,19 +141,87 @@ queuing, hardware partition isolation, Quality of Service (\ac{QoS})
 enforcement, and hardware affinity binding.
 
 \subsection{Partition Structure and Quality of Service (QoS)}
-Jobs are submitted to the production Booster partition
-\texttt{boost\_usr\_prod} under defined QoS classes tailored to the
-developmental lifecycle:
+Computational workloads across the AISeism lifecycle are mapped onto Leonardo's
+heterogeneous partition topology according to compute, memory, and accelerator
+requirements:
+\begin{enumerate}
+  \item \textbf{Booster Module (\texttt{boost\_usr\_prod})}:
+    Houses $3{,}259$ GPU-accelerated blades with $13{,}036$ NVIDIA A100-64GB
+    GPUs and $104{,}288$ CPU cores. Each node features $1 \times$ 32-core Intel
+    Xeon 8358 processor and $512\,\mathrm{GB}$ of RAM. This partition is
+    dedicated to tensor-intensive deep neural network phase detection
+    (\ac{PhaseNet}, \ac{EQTransformer}) and transfer-learning fine-tuning.
+    Access requires the GPU project account allocation (e.g.,
+    \texttt{OGS23\_PRACE\_IT\_0} or \texttt{IscrC\_AISeism}).
+    Default walltime is $30\,\mathrm{min}$, with a partition maximum of $24\,\mathrm{h}$
+    and up to $64$ nodes per job.
+  \item \textbf{Data-Centric General-Purpose Module (\texttt{dcgp\_usr\_prod})}:
+    Comprises $1{,}473$ dual-socket CPU-only compute nodes ($164{,}976$ total
+    cores). Each blade integrates $2 \times$ 56-core Intel Xeon Platinum 8358
+    processors ($112$ physical CPU cores per node), $512\,\mathrm{GB}$ of RAM,
+    and $3\,\mathrm{TB}$ of high-speed node-local NVMe scratch
+    (\texttt{gres/tmpfs=3T}), with zero GPUs. This partition is specifically
+    designated for CPU- and I/O-intensive operations: waveform SQLite
+    database indexing, StationXML metadata collation, legacy bulletin
+    parsing, and probabilistic hypocenter inversions (\ac{NonLinLoc}). Access
+    requires the CPU-specific project account suffix (e.g.,
+    \texttt{OGS23\_PRACE\_IT\_1} or \texttt{IscrC\_AISeism\_0}). Default
+    walltime is $30\,\mathrm{min}$, with a partition maximum of $24\,\mathrm{h}$
+    and up to $16$ nodes per job.
+  \item \textbf{Serial / Interactive Utility Partition (\texttt{lrd\_all\_serial})}:
+    Hosted on dedicated cluster login and utility nodes (\texttt{login[08,13]}).
+    Subject to strict per-user quotas (maximum 8 CPU cores, 2 running jobs,
+    and a $4\,\mathrm{h}$ wall-clock limit). Dedicated to non-destructive
+    pre-flight data sanity checks, Makefile dry-runs, and lightweight
+    diagnostic logging without consuming compute node allocations.
+\end{enumerate}
+
+Within these partitions, job scheduling is prioritized via defined QoS tiers:
 \begin{itemize}
-  \item \textbf{Debug QoS (\texttt{boost\_qos\_dbg})}: Dedicated to
-    rapid pipeline validation, integration smoke tests, and
-    hyperparameter checks. Limited to a maximum allocation of 2
-    nodes, 8 GPUs, and 30 minutes of wall-clock time.
-  \item \textbf{Production QoS (\texttt{boost\_qos\_bprod})}:
-    Allocated for large-scale multi-year retrospective
-    re-evaluations. Supports long-running array jobs spanning dozens
-    of nodes with wall-clock limits up to 24 hours.
+  \item \textbf{Debug QoS (\texttt{boost\_qos\_dbg} / \texttt{dcgp\_qos\_dbg})}:
+    Dedicated to rapid pipeline validation, unit testing, and smoke runs.
+    Enforces a strict $30\,\mathrm{minute}$ wall-clock limit and caps
+    allocations at 2 nodes / 224 CPUs (DCGP) or 8 nodes / 256 CPUs (Booster)
+    with a maximum of 1--2 concurrent jobs per user, but grants elevated
+    scheduling priority (Priority 80 vs.~60 for standard production).
+  \item \textbf{Production QoS (\texttt{boost\_qos\_bprod} / \texttt{dcgp\_qos\_bprod})}:
+    Allocated for large-scale retrospective evaluations and long-running
+    multi-station processing jobs. Permits up to 24 hours of execution time
+    across standard partition node limits.
+  \item \textbf{Extended-Runtime QoS (\texttt{boost\_qos\_lprod} / \texttt{dcgp\_qos\_lprod})}:
+    Reserved for long-horizon iterative training runs or multi-year continuous
+    inversion chains, extending permissible walltime up to $4\,\mathrm{days}$
+    ($96\,\mathrm{h}$) for bounded node groups (max 3 nodes on DCGP, max 8 on Booster).
 \end{itemize}
+
+Table~\ref{tab:leonardo_partitions} summarizes the operational parameters
+and architectural constraints across these primary partitions.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Operational characteristics and resource limits across CINECA Leonardo partitions and QoS classes.}
+  \label{tab:leonardo_partitions}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{l l c c c c X}
+      \toprule
+      \textbf{Partition} & \textbf{QoS Class} & \textbf{Max Wall} & \textbf{Max Nodes} & \textbf{CPUs/Node} & \textbf{GPUs/Node} & \textbf{Account / Role} \\
+      \midrule
+      \texttt{boost\_usr\_prod} & \texttt{boost\_qos\_dbg}   & $30\,\mathrm{min}$ & 8  & 32  & $4 \times $ A100 & \texttt{*\_0} / Debug GPU \\
+      \texttt{boost\_usr\_prod} & \texttt{boost\_qos\_bprod} & $24\,\mathrm{h}$   & 64 & 32  & $4 \times $ A100 & \texttt{*\_0} / Production ML \\
+      \texttt{boost\_usr\_prod} & \texttt{boost\_qos\_lprod} & $96\,\mathrm{h}$   & 8  & 32  & $4 \times $ A100 & \texttt{*\_0} / Long ML Training \\
+      \texttt{dcgp\_usr\_prod}  & \texttt{dcgp\_qos\_dbg}    & $30\,\mathrm{min}$ & 2  & 112 & None             & \texttt{*\_1} / Debug CPU \\
+      \texttt{dcgp\_usr\_prod}  & \texttt{dcgp\_qos\_bprod}  & $24\,\mathrm{h}$   & 16 & 112 & None             & \texttt{*\_1} / Production Indexing \\
+      \texttt{dcgp\_usr\_prod}  & \texttt{dcgp\_qos\_lprod}  & $96\,\mathrm{h}$   & 3  & 112 & None             & \texttt{*\_1} / Extended CPU \\
+      \texttt{lrd\_all\_serial} & \texttt{lrd\_all\_serial}  & $4\,\mathrm{h}$    & 1  & $\le 8$ & None         & Default / Interactive utility \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item Note the strict separation between GPU-enabled accounts (\texttt{OGS23\_PRACE\_IT\_0}) on the Booster module and CPU-dedicated accounts (\texttt{OGS23\_PRACE\_IT\_1}) on the DCGP module.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
 
 \subsection{Processor Affinity and NUMA Socket Binding}
 Because the Intel Xeon 8358 CPU comprises 32 physical cores
@@ -454,6 +521,24 @@ lfs setstripe -c 4 -S 4M /leonardo_work/IscrC_AISeism/WORK/waveform
     format with Snappy compression, reducing disk storage footprint
     by $75\%$ compared to text-based CSVs and accelerating
     downstream bipartite matching ingestion by an order of magnitude.
+  \item \textbf{Day-Sharded SQLite Waveform Indexing}: Maintaining a
+    single monolithic SQLite database (\texttt{ogsDB/.squirrel}) across
+    multi-year continuous waveform archives incurs severe POSIX file
+    locking latency on distributed parallel filesystems (Lustre/GPFS).
+    To eliminate database write contention, the data layer partitions
+    indexes into autonomous calendar-day shards (\path{ogsDB/YYYY/MM/DD/.squirrel}).
+    Each calendar day constitutes an independent SQLite environment,
+    allowing worker processes to index hundreds of days fully in parallel
+    without cross-worker synchronization locks.
+  \item \textbf{Node-Level Multithreading and Ephemeral Staging}: During
+    full-archive indexing (\texttt{ogsdata.py}), a thread pool
+    (\texttt{ThreadPoolExecutor}) distributes daily shards across all
+    available physical CPU cores ($N_{\mathrm{threads}} = 32$ on Booster or
+    $112$ on DCGP). Furthermore, when downstream phase pickers query
+    waveforms, each day shard (typically $< 5\,\mathrm{MB}$) is optionally
+    staged into node-local temporary storage (\path{/tmp} or \texttt{tmpfs})
+    via \texttt{copy\_to\_tmp=True}, achieving $100\%$ lock-free, low-latency
+    waveform lookups during high-concurrency neural inference.
 \end{enumerate}
 
 % =============================================================================
