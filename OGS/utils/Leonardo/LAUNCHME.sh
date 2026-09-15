@@ -24,19 +24,19 @@ set -euo pipefail
 #   - Template restoration after submission for script reusability
 #
 # USAGE:
-#   bash LAUNCHME.sh <jobFile> <nodes> <tasks> <jobName> <script> [options]
+#   bash LAUNCHME.sh [OPTIONS] <jobFile> <nodes> <tasks> <jobName> <command> [args ...]
+#   bash LAUNCHME.sh --help
+#
+# OPTIONS:
+#   -v, --verbose  Enable verbose output
+#   -h, --help     Show this help message and exit
 #
 # ARGUMENTS:
 #   <jobFile>  - Base name of the SLURM job script (without .sh extension)
 #   <nodes>    - Number of compute nodes to request
 #   <tasks>    - Number of MPI tasks (or GPUs) per node
 #   <jobName>  - Name to assign to the SLURM job
-#   <script>   - The actual command/script to run
-#   [options]  - Additional arguments passed to the script
-#
-# EXAMPLE:
-#   bash LAUNCHME.sh ktanakah 1 1 MyJob python script.py --arg value
-#   bash LAUNCHME.sh ktanakah "1 2" "1 2" MyJob python script.py --arg value
+#   <command>  - The actual command/script to run
 #
 # RESOURCE ALLOCATION LOGIC:
 #   The script ensures that (tasks * cpus) = $CORE_COUNT to fully utilize
@@ -45,6 +45,30 @@ set -euo pipefail
 #     - 2 tasks → 16 cpus per task
 #     - 4 tasks →  8 cpus per task
 #     - etc.
+#
+# EXAMPLES:
+#   bash LAUNCHME.sh ktanakah 1 1 MyJob python script.py --arg value
+#   bash LAUNCHME.sh ktanakah "1 2" "1 2" MyJob python script.py --arg value
+#   bash LAUNCHME.sh -v ktanakah 1 1 MyJob python script.py --arg value
+#
+# Function            | description
+# --------------------|--------------------------------------------------------
+# usage               | Displays a usage message.
+# set_execution_mode  | Selects the command form that the template will execute.
+# configure_template  | Replaces placeholder markers in the SLURM template.
+# restore_template    | Reverses substitutions and restores template placeholders.
+# cleanup             | EXIT-trap callback to restore the template on termination.
+# main                | Parses options/arguments and orchestrates job submissions.
+#
+# AUTHORS:
+#   - 健
+#   - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+#     Centro di Ricerche Sismologiche (CRS)
+#   - Università degli Studi di Trieste (UniTS)
+#     Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+#     Applied Data Science and Artificial Intelligence (ADSAI)
+#   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+#     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
 #
 # =============================================================================
 
@@ -66,103 +90,52 @@ readonly CORE_COUNT=${CORE_COUNT:-32}
 readonly SCRIPT=$(basename -- "${BASH_SOURCE[0]}")
 readonly SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
+# Verbosity flag (0: quiet, 1: verbose). Can be set via environment or -v/--verbose.
+VERBOSE=${VERBOSE:-0}
+case "${VERBOSE:-0}" in
+  1|true|yes) VERBOSE=1 ;;
+  *) VERBOSE=0 ;;
+esac
+
 # Keep cleanup state in named globals for recovery by the EXIT trap.
 TEMPLATE_CONFIGURED=0
 CURRENT_NODES=
 CURRENT_TASKS=
 CURRENT_CPUS=
-OVERRIDE_CORES=
+OVERRIDE_CORES=${OVERRIDE_CORES:-}
+TEMPLATE=
+JOB_NAME=
+JOB_NAME_SUFFIX=
+NODES=
+TASKS=
 
 # USER is normally exported on the cluster, but id provides a safe fallback.
 readonly CURRENT_USER=${USER:-$(id -un)}
-
-# log
-# ---
-# Prints a timestamped log message to stdout.
-log() { # 3
-  printf "[%s][%s] %s\n" "$SCRIPT" "$(date '+%Y-%m-%d %H:%M:%S%z')" "$*"
-}
-
-# fail
-# ----
-# Prints a timestamped error message and exits with STATUS.
-fail() { # 6
-  local status=$1
-  shift
-  log "ERROR: $*" >&2
-  exit "$status"
-}
-
-# usage
-# -----
-# Displays a usage message and exits with status 2.
-usage() { # 7
-  cat <<EOF
-Usage: $SCRIPT <jobFile> <nodes> <tasks> <jobName> <command> [args ...]
-
-Configure and submit ./<jobFile>.sh through SLURM.
-EOF
-}
 
 # Extract first letter of username for output file naming convention
 # e.g., "ktanakah" → "k"
 readonly USER_INITIAL="${CURRENT_USER:0:1}"
 
-# -----------------------------------------------------------------------------
-# ARGUMENT PARSING AND VALIDATION
-# -----------------------------------------------------------------------------
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
-if [ "$#" -lt 5 ]; then
-  usage >&2
-  fail 2 "expected at least 5 arguments"
-fi
+# usage
+# -----
+# Displays a usage message.
+usage() { # 14
+  cat <<EOF
+Usage: $SCRIPT [OPTIONS] <jobFile> <nodes> <tasks> <jobName> <command> [args ...]
 
-# Parse the job file name (the SLURM template script to modify).
-TEMPLATE="${SCRIPT_DIR}/$1.sh"
-shift
+Options:
+  -v, --verbose  Enable verbose output.
+  -h, --help     Show this help message and exit.
 
-if [ ! -f "$TEMPLATE" ]; then
-  fail 1 "template not found: $TEMPLATE"
-fi
+Environment:
+  VERBOSE        Preset verbosity (0: quiet, 1: verbose).
 
-# Parse number of compute nodes to request
-NODES=$1
-shift
-
-# Parse number of tasks (MPI processes or GPUs) per node
-TASKS=$1
-shift
-
-# Parse the job name for SLURM identification
-JOB_NAME=$1
-shift
-# Everything left in "$@" is the command and its arguments. It is forwarded to
-# sbatch and becomes the positional arguments received by the template.
-
-# NODES and TASKS may contain multiple space-separated values because the
-# nested loops below support submitting several resource configurations in one
-# invocation. Validate every value before modifying the template.
-# NODES and TASKS intentionally accept space-separated value lists.
-for resource_value in $NODES $TASKS; do
-  case "$resource_value" in
-    ""|*[!0-9]*)
-      fail 2 "node/task counts must be positive integers: $resource_value"
-      ;;
-    0)
-      fail 2 "node/task counts must be greater than zero"
-      ;;
-  esac
-done
-
-if [ -z "$JOB_NAME" ]; then
-  fail 2 "job name must not be empty"
-fi
-
-case "$JOB_NAME" in
-  *[!A-Za-z0-9_.-]*)
-    fail 2 "job name may contain only letters, numbers, _, ., and -"
-    ;;
-esac
+Configure and submit ./<jobFile>.sh through SLURM.
+EOF
+}
 
 
 # set_execution_mode TASKS
@@ -177,16 +150,18 @@ esac
 #   Edits $TEMPLATE in place. The template must contain a commented serial
 #   Python command and a commented or active mpirun command in the expected
 #   format.
-set_execution_mode() { # 17
+set_execution_mode() { # 19
   # If only 1 task is requested, use serial Python execution
   # Otherwise, use MPI parallel execution
   if [ "$1" -eq 1 ]; then
+    [[ $VERBOSE -ne 0 ]] && log "Setting execution mode to SERIAL (1 task)"
     # SERIAL MODE: Enable 'python' command, disable 'mpirun' command
     # - Uncomment lines starting with "# python"
     # - Comment out lines starting with "mpirun -np"
     sed -i -E -e "s/^# (python )/\1/g" \
               -e "s/^${MPI_CMD}/# ${MPI_CMD}/g" "$TEMPLATE"
   else
+    [[ $VERBOSE -ne 0 ]] && log "Setting execution mode to PARALLEL ($1 tasks)"
     # PARALLEL MODE: Enable 'mpirun' command, disable 'python' command
     # - Comment out lines starting with "python"
     # - Uncomment lines starting with "# mpirun -np"
@@ -204,7 +179,8 @@ set_execution_mode() { # 17
 # Side effects:
 #   Modifies $TEMPLATE. Call restore_template after sbatch, or rely on the
 #   EXIT trap if submission or a later command terminates unexpectedly.
-configure_template() { # 12
+configure_template() { # 13
+  [[ $VERBOSE -ne 0 ]] && log "Configuring template for submission"
   sed -i -E -e "s/(#SBATCH --job-name=\"${CURRENT_USER} )#/\1${JOB_NAME}/g" \
             -e "s/(#SBATCH --nodes=)#/\1${CURRENT_NODES}/g" \
             -e "s/(#SBATCH --tasks-per-node=)#/\1${CURRENT_TASKS}/g" \
@@ -227,8 +203,9 @@ configure_template() { # 12
 #   the active configuration. If no configuration is active, the function is
 #   a no-op. This makes it safe to call repeatedly from normal flow and from
 #   the EXIT trap.
-restore_template() { # 15
+restore_template() { # 16
   [ "$TEMPLATE_CONFIGURED" -eq 1 ] || return 0
+  [[ $VERBOSE -ne 0 ]] && log "Restoring template"
   sed -i -E \
     -e "s/(#SBATCH --job-name=\"${CURRENT_USER} )${JOB_NAME}/\1#/g" \
     -e "s/(#SBATCH --nodes=)${CURRENT_NODES}/\1#/g" \
@@ -251,56 +228,98 @@ cleanup() { # 3
   restore_template || true
 }
 
-# -----------------------------------------------------------------------------
-# MAIN PROCESSING LOOP
-# -----------------------------------------------------------------------------
+# main
+# ----
+# Parses options and arguments, validates configuration, and submits jobs.
+main() { # 90
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -h|--help)
+        usage
+        return 0
+        ;;
+      -v|--verbose)
+        VERBOSE=1
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        usage >&2
+        fail 2 "unknown option: $1"
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
 
-# Iterate over requested node counts (supports space-separated list)
-for CURRENT_NODES in ${NODES}; do
+  if [ "$#" -lt 5 ]; then
+    usage >&2
+    fail 2 "expected at least 5 arguments"
+  fi
 
-  # Iterate over requested task counts (supports space-separated list)
-  for CURRENT_TASKS in ${TASKS}; do
+  TEMPLATE="${SCRIPT_DIR}/$1.sh"
+  shift
 
-    # -------------------------------------------------------------------------
-    # SECTION 1: SELECT SERIAL OR MPI EXECUTION
-    # -------------------------------------------------------------------------
-    set_execution_mode "$CURRENT_TASKS"
+  if [ ! -f "$TEMPLATE" ]; then
+    fail 1 "template not found: $TEMPLATE"
+  fi
 
-    # -------------------------------------------------------------------------
-    # SECTION 2: FIND A $CORE_COUNT CORE RESOURCE LAYOUT
-    # -------------------------------------------------------------------------
-    # Try different cpu counts to find configuration where
-    # tasks * cpus = $CORE_COUNT. This ensures full utilization of the
-    # $CORE_COUNT cores typically available per node, or honors an explicit CPU
-    # override.
-    for CURRENT_CPUS in ${OVERRIDE_CORES:-32 16 8 4 2 1}; do
+  NODES=$1
+  shift
 
-      # Only proceed if this configuration matches override $OVERRIDE_CORES or fills $CORE_COUNT cores (= tasks * cpus)
-      if [ -n "$OVERRIDE_CORES" ] || [ "$(($CURRENT_TASKS * $CURRENT_CPUS))" -eq "$CORE_COUNT" ]; then
+  TASKS=$1
+  shift
 
-        log $(printf "Nodes: %02d, Tasks (MPI & GPU): %02d, CPUs (OpenMP): %02d" $CURRENT_NODES $CURRENT_TASKS $CURRENT_CPUS)  # e.g., "Nodes: 01, Tasks: 04, CPUs: 08"
-        JOB_NAME_SUFFIX=$(printf "%02d_%02d_%02d" $CURRENT_NODES $CURRENT_TASKS $CURRENT_CPUS)  # e.g., "01_04_08"
+  JOB_NAME=$1
+  shift
 
-        # ---------------------------------------------------------------------
-        # SECTION 3: CONFIGURE, SUBMIT, AND RESTORE THE TEMPLATE
-        # ---------------------------------------------------------------------
-        TEMPLATE_CONFIGURED=1
-        trap cleanup EXIT
-        configure_template
+  for resource_value in $NODES $TASKS; do
+    validate_positive_integer "$resource_value" "resource value"
+  done
 
-        # Preserve the submission exit status while always restoring the template.
-        if sbatch "$TEMPLATE" "$@"; then
-          submission_status=0
-          log "Submitted job for ${JOB_NAME}"
-        else
-          submission_status=$?
+  if [ -z "$JOB_NAME" ]; then
+    fail 2 "job name must not be empty"
+  fi
+
+  case "$JOB_NAME" in
+    *[!A-Za-z0-9_.-]*)
+      fail 2 "job name may contain only letters, numbers, _, ., and -"
+      ;;
+  esac
+
+  trap cleanup EXIT
+
+  local submission_status=0
+  for CURRENT_NODES in ${NODES}; do
+    for CURRENT_TASKS in ${TASKS}; do
+      set_execution_mode "$CURRENT_TASKS"
+      for CURRENT_CPUS in ${OVERRIDE_CORES:-64 32 16 8 4 2 1}; do
+        if [ -n "$OVERRIDE_CORES" ] || [ "$(($CURRENT_TASKS * $CURRENT_CPUS))" -eq "$CORE_COUNT" ]; then
+          log $(printf "Nodes: %02d, Tasks (MPI & GPU): %02d, CPUs (OpenMP): %03d" $CURRENT_NODES $CURRENT_TASKS $CURRENT_CPUS)
+          JOB_NAME_SUFFIX=$(printf "%02d_%02d_%03d" $CURRENT_NODES $CURRENT_TASKS $CURRENT_CPUS)
+
+          TEMPLATE_CONFIGURED=1
+          configure_template
+
+          if sbatch "$TEMPLATE" "$@"; then
+            submission_status=0
+            log "Submitted job for ${JOB_NAME}"
+          else
+            submission_status=$?
+          fi
+
+          restore_template
+          if [ "$submission_status" -ne 0 ]; then
+            fail "$submission_status" "sbatch submission failed"
+          fi
         fi
-
-        restore_template
-        if [ "$submission_status" -ne 0 ]; then
-          fail "$submission_status" "sbatch submission failed"
-        fi
-      fi
+      done
     done
   done
-done
+}
+
+main "$@"

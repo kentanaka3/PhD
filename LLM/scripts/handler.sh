@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
+# =============================================================================
 # LLM Context Manifest Handler
-# ============================
+# =============================================================================
 #
 # Coordinate the LLM workspace lifecycle from one command-line interface.
 # The handler combines workspace initialization, generates deterministic,

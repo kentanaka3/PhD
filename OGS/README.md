@@ -55,6 +55,7 @@ OGS/
 
 - **Waveform Download**: `python OGS/src/ogsdownloader.py`
 - **Catalog Parsing & Merging**: `python OGS/src/ogsparser.py`
+- **Model Training & Fine-Tuning**: `python OGS/src/ogstrainer.py` (or `make Trainer` in `OGS/utils/Leonardo/Makefile`)
 - **Sequence Clustering**: `python OGS/src/ogssequence.py`
 - **Machine Learning Pipeline**: `ml_catalog_run` (via `SBC_RUN_BIN`) driven by `OGS/utils/Leonardo/Makefile`
 - **Catalog Comparison**: `OGSCatalog.bgmaEvents()` / `OGSCatalog.bgmaPicks()` in `OGS/src/ogscatalog.py`
@@ -64,26 +65,24 @@ OGS/
 ```bash
 python OGS/src/ogsdownloader.py --help
 python OGS/src/ogsparser.py --help
+python OGS/src/ogstrainer.py --help
 python OGS/src/ogssequence.py --help
 make -C OGS/test constants
 make -C OGS/utils/Leonardo -n help
+make -C OGS/utils/Leonardo -n Trainer
 ```
 
-The first three commands only display CLI help. The test and dry-run examples
-avoid downloading data or submitting a job; inspect generated commands before
-running a target with external side effects.
+The first four commands only display CLI help. The test and dry-run examples avoid downloading data or submitting a job; inspect generated commands before running a target with external side effects.
 
 ## Workflow selection
 
-Use the standalone Python entrypoints for local parsing, downloading, station
-inventory extraction, or sequence clustering. Use
-`OGS/utils/Leonardo/Makefile` for the configured `SBC_RUN_BIN` (= `ml_catalog_run`)
-stages and SLURM submission path. The Makefile's bracketed targets must be
+Use the standalone Python entrypoints for local parsing, downloading, station inventory extraction, model training, or sequence clustering. Use `OGS/utils/Leonardo/Makefile` for the configured `SBC_RUN_BIN` (= `ml_catalog_run`) stages, model fine-tuning (`make Trainer`), and SLURM submission path. The Makefile's bracketed targets must be
 quoted, for example:
 
 ```bash
 make -C OGS/utils/Leonardo -n "PhaseNet[INSTANCE,0.1]"
 make -C OGS/utils/Leonardo -n "NLL1D[PyOcto,PhaseNet,INSTANCE,0.1]"
+make -C OGS/utils/Leonardo -n Trainer
 ```
 
 `-n` previews the expanded command; it does not prove that the external

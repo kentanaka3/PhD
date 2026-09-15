@@ -12,19 +12,27 @@ CLI ARGUMENTS:
   -C, --catalog    Path to the OGS reference catalog directory (required).
   -W, --waveforms  Path to the continuous waveform directory (required).
   -D, --dates      Date range (YYYYMMDD YYYYMMDD) to select training windows.
+  -m, --model      SeisBench model class (default: PhaseNet).
+  -s, --dataset    Pretrained weights name (default: instance).
   -b, --batch_size Training batch size (default: 256).
   -e, --epochs     Number of training epochs (default: 5).
+  -lr, --learning_rate  Learning rate for Adam optimizer (default: 1e-2).
+  -w, --workers    Number of DataLoader workers (default: 4).
+  -o, --output     Path for model checkpoints (default: ./checkpoints).
   -d, --download   Download waveforms if not locally cached.
 
 USAGE:
 python ogstrainer.py -C /path/to/catalog -W /path/to/waveforms -b 256 -e 10
+python ogstrainer.py -C /path/to/catalog -W /path/to/waveforms -m EQTransformer
+python ogstrainer.py -C /path/to/catalog -W /path/to/waveforms -m PhaseNet \\
+  -s instance -e 20 -b 128 -lr 1e-3
 
 DEPENDENCIES:
 - torch / torch.utils.data: neural network training runtime
   - seisbench: benchmark seismic models and waveform datasets
   - obspy: seismological waveform IO
   - pandas / numpy: catalog metadata handling
-  - ogsconstants / ogsutils: date validators and argument actions
+  - ogsconstants / ogscatalog: OGS catalog management and constants
 
 AUTHORS:
   - 健
@@ -38,26 +46,53 @@ AUTHORS:
 =============================================================================
 """
 
-import os
 import glob
-import time
+import logging
 import argparse
+import subprocess
+import time
 import numpy as np
 import obspy as op
 import pandas as pd
+import torch
 import seisbench.data as sbd
+import seisbench.generate as sbg
+import seisbench.models as sbm
 
 from pathlib import Path
 from datetime import datetime
 from torch.utils.data import DataLoader
+from seisbench.util import worker_seeding
 
 import ogsconstants as OGS_C
 import ogsutils as OGS_U
+from ogscatalog import OGSCatalog
+
+logger = logging.getLogger(__name__)
 
 LEARNING_RATE = 1e-2
 EPOCHS = 5
 BATCH_SIZE = 256
 NUM_WORKERS = 4
+
+# Mapping from SeisBench model class names to seisbench.models classes
+MODEL_REGISTRY = {
+    OGS_C.PHASENET_STR: sbm.PhaseNet,
+    OGS_C.EQTRANSFORMER_STR: sbm.EQTransformer,
+}
+
+# OGS phase dictionary: maps SeisBench label columns to phase types.
+# OGS catalogs use simple "P" and "S" phase annotations.
+PHASE_DICT = {
+    "trace_p_arrival_sample": "P",
+    "trace_P_arrival_sample": "P",
+    "trace_Pg_arrival_sample": "P",
+    "trace_Pn_arrival_sample": "P",
+    "trace_s_arrival_sample": "S",
+    "trace_S_arrival_sample": "S",
+    "trace_Sg_arrival_sample": "S",
+    "trace_Sn_arrival_sample": "S",
+}
 
 
 def parse_arguments():
@@ -84,6 +119,19 @@ def parse_arguments():
       help="Path to the waveforms directory"
   )
   parser.add_argument(
+      "-m", "--model", type=str, default=OGS_C.PHASENET_STR,
+      choices=list(MODEL_REGISTRY.keys()),
+      help="SeisBench model class name (default: PhaseNet)"
+  )
+  parser.add_argument(
+      "-s", "--dataset", type=str, default=OGS_C.INSTANCE_STR,
+      choices=[
+          OGS_C.INSTANCE_STR, OGS_C.STEAD_STR, OGS_C.SCEDC_STR,
+          OGS_C.ORIGINAL_STR, OGS_C.ADRIAARRAY_STR
+      ],
+      help="Pretrained weights name to fine-tune from (default: instance)"
+  )
+  parser.add_argument(
       "-b", "--batch_size", type=int, default=BATCH_SIZE,
       help="Batch size for training"
   )
@@ -98,22 +146,38 @@ def parse_arguments():
       "-lr", "--learning_rate", type=float, default=LEARNING_RATE,
       help="Learning rate for training"
   )
-  parser.add_argument("-w", "--workers", type=int, default=NUM_WORKERS,
-                      help="Number of workers for data loading")
+  parser.add_argument(
+      "-w", "--workers", type=int, default=NUM_WORKERS,
+      help="Number of workers for data loading"
+  )
+  parser.add_argument(
+      "-o", "--output", type=Path, default=Path("./checkpoints"),
+      help="Output directory for model checkpoints"
+  )
   return parser.parse_args()
+
+
+def loss_fn(y_pred, y_true, eps=1e-5):
+  """Vector cross entropy loss for probabilistic phase labels.
+
+  Following the SeisBench convention: mean over sample dimension,
+  sum over pick dimension, mean over batch.
+  """
+  h = y_true * torch.log(y_pred + eps)
+  h = h.mean(-1).sum(-1)  # Mean along sample dim, sum along pick dim
+  h = h.mean()            # Mean over batch axis
+  return -h
 
 
 class OGSTrainer:
   def __init__(self, args):
     self.args = args
-    self.catalog: OGS_U.OGSCatalog = OGS_U.OGSCatalog(
+    self.catalog = OGSCatalog(
         args.catalog,
         start=args.dates[0],
         end=args.dates[1],
         name="Training Catalog"
     )
-    self.metadata_path = Path(".") / "metadata.csv"
-    self.waveforms_path = Path(".") / "waveforms.hdf5"
     self.start, self.end = args.dates
     self.waveforms_dir = Path(args.waveforms)
     self.waveforms = OGS_U.waveforms(self.waveforms_dir, self.start, self.end)
@@ -206,9 +270,9 @@ class OGSTrainer:
     }
     DATASET = pd.DataFrame(columns=[
         "filepath", "source_id", "network", "station", "location", "channel",
-        "latitude", "longitude", "depth_km", "source_origin_time",
-        "source_magnitude", OGS_C.PHASE_STR, OGS_C.TIME_STR,
-        OGS_C.AMPLITUDE_STR, OGS_C.WEIGHT_STR, OGS_C.PROBABILITY_STR
+        "source_latitude_deg", "source_longitude_deg", "source_depth_km",
+        "source_origin_time", "source_magnitude", OGS_C.PHASE_STR,
+        OGS_C.TIME_STR, OGS_C.AMPLITUDE_STR, OGS_C.WEIGHT_STR
     ])
     DAYS = np.arange(
         self.start, self.end + OGS_C.ONE_DAY, OGS_C.ONE_DAY,
@@ -218,11 +282,11 @@ class OGSTrainer:
     for day_ in DAYS:
       if day_ not in self.catalog.picks_:
         continue
-      df_picks = self.catalog.get_(day_, "picks")
-      df_events = self.catalog.get_(day_, "events")
+      df_picks = self.catalog._load_day("picks", day_)
+      df_events = self.catalog._load_day("events", day_)
       if df_picks.empty:
         continue
-      for (event, station), station_picks in df_picks.groupby(
+      for (event_id, station), station_picks in df_picks.groupby(
               [OGS_C.IDX_PICKS_STR, OGS_C.STATION_STR]
       ):
         station_picks = station_picks[station_picks[OGS_C.PHASE_STR].notna()]
@@ -231,11 +295,9 @@ class OGSTrainer:
         ]
         if len(station_picks) <= 1:
           continue
-        print(station_picks)
         for _, pick in station_picks.iterrows():
           net, sta, loc = self.get_station_info(pick[OGS_C.STATION_STR])
           picktime = op.UTCDateTime(pick[OGS_C.TIME_STR])
-          # e.g. /Users/admin/Desktop/OGS_Catalog/waveforms/2001/08/08/FV.BAD..HNE__20010808T111251Z__20010808T111451Z.mseed
           filepath = Path(
               self.args.waveforms /
               DIR_FMT['year'].format(picktime.year) /
@@ -243,7 +305,7 @@ class OGSTrainer:
               DIR_FMT['day'].format(picktime.day) /
               f"{net if net else '*'}.{sta}.*.*__"
               f"{(picktime - OGS_C.PICK_TRAIN_OFFSET
-                  ).strftime("%Y%m%dT%H%M%SZ")}__"  # type: ignore
+                  ).strftime('%Y%m%dT%H%M%SZ')}__"
               f"{(picktime + OGS_C.PICK_TRAIN_OFFSET
                   ).strftime("%Y%m%dT%H%M%SZ")}.mseed"
           )  # type: ignore
@@ -276,7 +338,7 @@ class OGSTrainer:
             if event.empty:
               print(f"Missing event for pick ID: {pick[OGS_C.IDX_PICKS_STR]}")
               continue
-            event = event.iloc[0]
+            event_row = event.iloc[0]
             dataset.append({
                 "filepath": wf_file,
                 "source_id": pick[OGS_C.IDX_PICKS_STR],
@@ -284,15 +346,15 @@ class OGSTrainer:
                 "station": stats.station,
                 "location": stats.location,
                 "channel": stats.channel,
-                "source_latitude_deg": event[OGS_C.LATITUDE_STR],
-                "source_longitude_deg": event[OGS_C.LONGITUDE_STR],
-                "source_depth_km": event[OGS_C.DEPTH_STR],
-                "source_origin_time": event[OGS_C.TIME_STR],
-                "source_magnitude": event[OGS_C.MAGNITUDE_L_STR],
+                "source_latitude_deg": event_row[OGS_C.LATITUDE_STR],
+                "source_longitude_deg": event_row[OGS_C.LONGITUDE_STR],
+                "source_depth_km": event_row[OGS_C.DEPTH_STR],
+                "source_origin_time": event_row[OGS_C.TIME_STR],
+                "source_magnitude": event_row[OGS_C.MAGNITUDE_L_STR],
                 OGS_C.TIME_STR: pick[OGS_C.TIME_STR],
                 OGS_C.PHASE_STR: pick[OGS_C.PHASE_STR],
                 OGS_C.WEIGHT_STR: pick[OGS_C.WEIGHT_STR],
-                OGS_C.AMPLITUDE_STR: pick[OGS_C.AMPLITUDE_STR],
+                OGS_C.AMPLITUDE_STR: pick.get(OGS_C.AMPLITUDE_STR, np.nan),
             })
           DATASET = pd.concat([DATASET, pd.DataFrame(dataset)],
                               ignore_index=True)
@@ -301,7 +363,39 @@ class OGSTrainer:
 
 def main(args):
   trainer = OGSTrainer(args)
-  trainer.train()
+
+  # Step 1: Build the training dataset from OGS catalog + waveforms
+  logger.info("Building training dataset...")
+  dataset_df = trainer.build_dataset()
+
+  if dataset_df.empty:
+    logger.error("No training data found. Check catalog and waveform paths.")
+    return
+
+  # Step 2: Load or create SeisBench dataset
+  # If a SeisBench-format dataset already exists, load it directly;
+  # otherwise the build_dataset() CSV serves as the data index.
+  if trainer.waveforms_path.exists() and trainer.metadata_path.exists():
+    logger.info("Loading existing SeisBench dataset from %s",
+                trainer.output_dir)
+    data = sbd.WaveformDataset(trainer.output_dir)
+  else:
+    logger.warning(
+        "SeisBench HDF5 dataset not found at %s. "
+        "The training dataset CSV has been created at %s. "
+        "Convert it to SeisBench format using sbd.WaveformDataWriter "
+        "before training can proceed.",
+        trainer.waveforms_path,
+        trainer.output_dir / "training_dataset.csv"
+    )
+    return
+
+  # Step 3: Train
+  logger.info("Starting training: model=%s, dataset=%s, epochs=%d, "
+              "batch_size=%d, lr=%s",
+              args.model, args.dataset, args.epochs,
+              args.batch_size, args.learning_rate)
+  trainer.train(data)
 
 
 if __name__ == "__main__":

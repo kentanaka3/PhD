@@ -1,4 +1,4 @@
-_target_: OGS.src.ogsdata.SquirrelDataSource
+_target_: src.ogsdata.OGSSquirrelDataSource
 
 env: ogsDB
 persistent: v1
@@ -21,4 +21,4 @@ endtime: "2022-12-31"
 
 velocity_model:
   _target_: pandas.read_csv
-  filepath_or_buffer: OGS/data/VelocityModel/1D/VelocityModel.csv
+  filepath_or_buffer: data/VelocityModel/1D/VelocityModel.csv

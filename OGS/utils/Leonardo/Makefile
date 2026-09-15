@@ -11,21 +11,21 @@
 # QUICK START / USAGE EXAMPLES:
 #   make help
 #   make init						    # Initialize the WORK directory structure
+#   make download           # Download waveforms for the default YEAR in $(STEP_DAYS)-day chunks
 #   make download START_DATE=20250127 STEP_DAYS=5
 #   make download OFFSET=5 END_DATE=20250213 STEP_DAYS=5 CORES=4
 #	  make compress           # Compress raw waveforms into yearly tar.gz files
 #	  make decompress         # Decompress yearly tar.gz files into raw waveforms
 #   make retrieve           # rsync waveforms to scratch for manual analysis
-#   make index              # Build/update Squirrel indexes for the waveform archive
+#   make Index CORES=112    # Build/update Squirrel indexes for the waveform archive
 #   make PyOcto             # Run PyOcto with the default picker input
 #   make GaMMA              # Run GaMMA with the default picker input
 #   make REAL               # Run REAL with the default picker input
 #   make NLL1D              # Run NonLinLoc 1D with the default assoc+picking inputs
 #   make NLL3D              # Run NonLinLoc 3D with the default assoc+picking inputs
-#   make base               # Just make the base catalog for quick iteration
-#   make station YEAR=2025
+#   make station YEAR=2025  # Generate station metadata for the given year
 #   make station START_DATE=20050101 END_DATE=20251231 base=OGS/ALL
-#   make parse
+#   make parse              # Merge manual OGS pick files into a unified catalog
 #   make clean              # WARNING: deletes generated catalogs
 #   make MHPC               # Submit all registered models/assocs to SLURM for the given date range
 #   make PhD                # Submit all registered models/assocs to SLURM for the given date range
@@ -99,6 +99,9 @@ $(if $(shell [ "$(START_DATE)" -le "$(END_DATE)" ] 2>/dev/null && echo ok),,$(er
 
 YEAR := $(shell date -d "$(START_DATE)" +%Y)
 
+START_DATE_ISO := $(shell date -d "$(START_DATE)" +%Y-%m-%d)
+END_DATE_ISO   := $(shell date -d "$(END_DATE)" +%Y-%m-%d)
+
 # More paths
 TT_DB        	?= $(OGS_PATH)/data/VelocityModel/1D/tt_db.txt
 
@@ -130,14 +133,19 @@ ASSOCS			:= PyOcto GaMMA
 NLL				  ?= NLL1D
 NLLS				:= NLL1D NLL3D
 
+# Training
+EPOCHS        ?= 5
+BATCH_SIZE    ?= 256
+LEARNING_RATE ?= 1e-2
+WORKERS       ?= 4
+
 # -----------------------------------------------------------------------------
 # PHONY DECLARATIONS
 # -----------------------------------------------------------------------------
 .DEFAULT_GOAL := help
 
-.PHONY: help setup all init base MHPC parse test clean \
-  download compress decompress retrieve station index \
-  $(MODELS) $(ASSOCS) $(NLLS)
+.PHONY: help all init MHPC PhD parse test clean download station index \
+  Trainer $(MODELS) $(ASSOCS) $(NLLS)
 
 .SILENT: download
 
@@ -150,17 +158,20 @@ all:
 help: #
 	@echo "AISeism Makefile — common targets:"
 	@echo "  make init"
-	@echo "  make download   YEAR=YYYY STEP_DAYS=N [CORES=4]"
-	@echo "  make download   START_DATE=YYYYMMDD END_DATE=YYYYMMDD STEP_DAYS=N [CORES=4]"
-	@echo "  make station    YEAR=YYYY"
+	@echo "  make download                        (download waveforms in $(STEP_DAYS)-day chunks from $(START_DATE) to $(END_DATE))"
+	@echo "  make download   YEAR=YYYY STEP_DAYS=N [CORES=N]"
+	@echo "  make download   START_DATE=YYYYMMDD END_DATE=YYYYMMDD STEP_DAYS=N [CORES=N]"
+	@echo "  make station    YEAR=YYYY"           (generate station metadata for the given year)
 	@echo "  make station    START_DATE=YYYYMMDD END_DATE=YYYYMMDD base=OGS/ALL"
-	@echo "  make index CORES=8 START_DATE=2005-01-01 END_DATE=2025-12-31"
+	@echo "  make Indexer                         (index the downloaded waveforms)"
+	@echo "  make Indexer    START_DATE=YYYYMMDD END_DATE=YYYYMMDD [CORES=N]"
 	@echo "  make PhaseNet | EQTransformer | ...	(picker models with default dataset/threshold)"
 	@echo "  make PhaseNet[INSTANCE,0.1] | EQTransformer[STEAD,0.2] | ...	(picker models with dataset/threshold overrides)"
 	@echo "  make PyOcto | GaMMA | REAL           (associator with default picker input)"
 	@echo "  make PyOcto[PhaseNet,INSTANCE,0.1] | GaMMA[EQTransformer,STEAD,0.2] | REAL[PhaseNet,SCEDC,0.3] ...	(associator with picker overrides)"
 	@echo "  make NLL1D | NLL3D                   (locator with default picker+assoc input)"
 	@echo "  make NLL1D[PyOcto,PhaseNet,INSTANCE,0.1] | NLL3D[GaMMA,EQTransformer,STEAD,0.2] | ...	(locator with picker+assoc overrides)"
+	@echo "  make Trainer    [MODEL=PhaseNet DATASET=INSTANCE EPOCHS=5 BATCH_SIZE=256]  (fine-tune a SeisBench picker)"
 	@echo "  make parse														(merge manual OGS pick files into a unified catalog)"
 	@echo "  make MHPC                            (submit all registered models/assocs to SLURM for the given date range)"
 	@echo "  make PhD                             (submit all registered models/assocs to SLURM for the given date range)"
@@ -194,7 +205,8 @@ download: #
 		end=$$(date -d "$$start + $(STEP_DAYS) days - 1 day" +%Y%m%d); \
 		[ "$$end" -le "$(END_DATE)" ] || end="$(END_DATE)"; \
 		echo "Downloading waveforms $$start → $$end"; \
-		OVERRIDE_CORES=$(CORES) CORE_COUNT=$(CORES) bash LAUNCHME.sh download 1 1 "DownLoad_$${start}_$${end}" \
+		OVERRIDE_CORES=$(CORES) CORE_COUNT=$(CORES) \
+		bash LAUNCHME.sh download 1 1 "DownLoad_$${start}_$${end}" \
 			$(PYTHON_BIN) $(OGS_PATH)/src/ogsdownloader.py \
 				-D $$start $$end \
 				-d $(WAVE_PATH) \
@@ -231,12 +243,6 @@ station:
 	    $(OGS_PATH)/src $(WAVE_PATH) $(STATION_PATH) \
 	    $(START_DATE) $(END_DATE) $(WORK_PATH)/catalogs/$(base)
 
-# Build/update the sharded Squirrel indexes for the full waveform archive.
-index:
-	$(SBC_RUN_BIN) +index_only=true data=ogsDB data.check=true \
-	  data.index_workers=$(CORES) \
-	  data.starttime=$(START_DATE) \
-	  data.endtime=$(END_DATE)
 
 # =============================================================================
 # INDEXER / PICKER / ASSOCIATOR / NLL — RUNTIME PARAMETRIC RULES
@@ -304,10 +310,12 @@ ASSOC_DIR_REAL         ?= REAL
 # --- INDEXER -------------------------------------------------------------------
 define _INDEXER_RULES
 $1:
-	bash LAUNCHME.sh $$(USER) 1 1 "Indexer$$(YEAR)" \
+	@echo "Indexing waveforms from $$(START_DATE) to $$(END_DATE) with $$(CORES) cores"
+	@OVERRIDE_CORES=$(CORES) CORE_COUNT=$(CORES) \
+	bash LAUNCHME.sh index 1 1 "Index_$$(START_DATE)_$$(END_DATE)" \
 	  $$(SBC_RUN_BIN) +index_only=true data=ogsDB data.check=true \
 	  data.index_workers=$$(CORES) \
-	  data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
+	  data.starttime="$$(START_DATE_ISO)" data.endtime="$$(END_DATE_ISO)"
 endef
 
 # --- PICKER ------------------------------------------------------------------
@@ -327,7 +335,7 @@ $1[%]:
 	  group_modules.picker.model.name=$$$${dataset,,} \
 	  group_modules.picker.classify_args.P_threshold=$$$$threshold \
 	  group_modules.picker.classify_args.S_threshold=$$$$threshold \
-	  data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
+	  data.starttime="$(START_DATE_ISO)" data.endtime="$(END_DATE_ISO)"
 endef
 
 # --- ASSOCIATOR --------------------------------------------------------------
@@ -349,7 +357,7 @@ $1[%]:
 	bash LAUNCHME.sh $$(SLURM_TEMPLATE) 1 1 "$$$$assoc_id" \
 	  $$(SBC_RUN_BIN) output_path="catalogs/$$(PROJECT)/$1/$$$$picker_id" \
 	  group_modules/associator=$(ASSOC_YAML_$1) \
-	  data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
+	  data.starttime="$(START_DATE_ISO)" data.endtime="$(END_DATE_ISO)"
 endef
 
 # --- NONLINLOC ---------------------------------------------------------------
@@ -375,7 +383,7 @@ $1[%]:
 	bash LAUNCHME.sh $$(SLURM_TEMPLATE) 1 1 "$$$$nll_id" \
 	  $$(SBC_RUN_BIN) output_path="catalogs/$$(PROJECT)/$1/$$$$assoc_id" \
 	  group_modules/nonlinloc=$(LOCATOR_YAML_$1) \
-	  data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
+	  data.starttime="$(START_DATE_ISO)" data.endtime="$(END_DATE_ISO)"
 endef
 
 # Instantiate rules — one pair per registered stage name.
@@ -387,8 +395,30 @@ $(foreach n,$(NLLS),  $(eval $(call _NLL_RULES,$n)))
 # -----------------------------------------------------------------------------
 # BASE catalog — single quick-iteration run reused as input by chained stages.
 # -----------------------------------------------------------------------------
-base:
-	mkdir -p "$(WORK_PATH)/catalogs/$(base)/$(YEAR)"
+
+# =============================================================================
+# TRAINING
+# =============================================================================
+
+# Fine-tune a SeisBench model on the OGS waveform archive and reference catalog.
+#
+# USAGE:
+#   make Trainer                                       # defaults
+#   make Trainer EPOCHS=20 BATCH_SIZE=128 LEARNING_RATE=1e-3
+#   make -n Trainer                                    # dry-run preview
+Trainer:
+	@bash LAUNCHME.sh $(SLURM_TEMPLATE) 1 1 "Trainer_$(MODEL)_$(DATASET)" \
+	  $(PYTHON_BIN) $(OGS_PATH)/src/ogstrainer.py \
+	    -C $(CATALOG_PATH) \
+	    -W $(WAVE_PATH) \
+	    -D $(START_DATE) $(END_DATE) \
+	    -m $(MODEL) \
+	    -s $(DATASET) \
+	    -b $(BATCH_SIZE) \
+	    -e $(EPOCHS) \
+	    -lr $(LEARNING_RATE) \
+	    -w $(WORKERS) \
+	    -o $(WORK_PATH)/models/$(MODEL)/$(DATASET)
 
 MHPC:
 	@$(foreach m,$(MODELS),$(foreach d,$(DATASETS),$(foreach t,$(THRESHOLDS), \
@@ -435,7 +465,7 @@ clean: #
 	@echo "Removing generated files under $(WORK_PATH)"
 	@cd "$(WORK_PATH)" && \
 	rm -rf -- conf data src test && \
-	rm -rf -- ACTIVATEME.sh download.sh dummy.sh init.sh ktanakah.sh \
-		LAUNCHME.sh LEONARDO.yml Makefile
+	rm -rf -- ACTIVATEME.sh common.sh download.sh dummy.sh index.sh init.sh \
+		ktanakah.sh LAUNCHME.sh LEONARDO.yml Makefile
 	#@echo "Removing generated catalogs below $(WORK_PATH)/catalogs"
 	#@test -n "$(WORK_PATH)" && rm -rf -- "$(WORK_PATH)/catalogs"/*

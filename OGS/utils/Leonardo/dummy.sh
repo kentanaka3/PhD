@@ -1,11 +1,11 @@
 #!/bin/bash
 
 #SBATCH --job-name="ktanakah #"
-#SBATCH --nodes=#
-#SBATCH --tasks-per-node=#
+#SBATCH  -N 1
+#SBATCH  -n 1
 #SBATCH  -c 1
-#SBATCH --gres=gpu:#
 #SBATCH --account=IscrC_AISeism
+# #SBATCH --account=OGS23_PRACE_IT_0
 #SBATCH --time 00:00:30
 #SBATCH --mem=1024MB
 #SBATCH --partition=boost_usr_prod

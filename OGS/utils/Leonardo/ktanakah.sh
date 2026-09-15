@@ -8,11 +8,11 @@
 # #SBATCH --account=IscrC_AISeism
 # #SBATCH --account=ICT24_MHPC
 #SBATCH --account=OGS23_PRACE_IT_0
-# #SBATCH --time 23:59:00
-#SBATCH --time 00:30:00
+#SBATCH --time 1-00:00:00
+# #SBATCH --time 00:30:00
 #SBATCH --mem=490000MB
 #SBATCH --partition=boost_usr_prod
-#SBATCH --qos=boost_qos_dbg
+# #SBATCH --qos=boost_qos_dbg
 #SBATCH --error=k_%j_#.err
 #SBATCH --output=k_%j_#.out
 

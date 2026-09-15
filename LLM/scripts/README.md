@@ -13,10 +13,7 @@ Each directly executable script uses `set -euo pipefail` and `umask 077`. They d
 [`navigate.sh`](navigate.sh), [`validate.sh`](validate.sh), [`md_nav.sh`](md_nav.sh), [`yaml_nav.sh`](yaml_nav.sh), [`md_val.sh`](md_val.sh), and [`yaml_val.sh`](yaml_val.sh) read files only; their generated content goes to standard output and their diagnostics go to standard error through shared helpers.
 [`default.sh`](default.sh) is a commented starting template, not an operational workflow.
 
-No script in this directory contains code to download data, install packages,
-call an LLM provider, run inference, or submit a job. This is an observation
-of these script sources, not a claim about commands invoked elsewhere in the
-repository.
+No script in this directory contains code to download data, install packages, call an LLM provider, run inference, or submit a job. This is an observation of these script sources, not a claim about commands invoked elsewhere in the repository.
 
 ## Files And Relationships
 
@@ -131,6 +128,14 @@ Without `--module`, it emits a Tier 1 manifest for the `OGS`, `doc`, and
 `LLM` modules. The optional `--include-assets` is accepted in this mode but
 does not alter Tier 1 output. `--scripts` is forbidden in Tier 1 and fails
 with status 2.
+
+The Tier 1 manifest invokes `md_nav.sh` for `OGS/README.md`,
+`doc/README.md`, and `LLM/README.md`, plus `yaml_nav.sh` for
+`OGS/conf/config.yaml`. It records each compact outline under `navigation`
+alongside the exact direct command for further exploration. Thus a caller of
+`bash LLM/scripts/handler.sh navigate --root "$PWD"` receives both module
+entry points and the next read-only commands needed to inspect their Markdown
+or YAML structure.
 
 With `--module REL_PATH`, the script emits a Tier 2 manifest. The module must
 be relative, exist beneath the resolved root after canonicalization, and may
@@ -289,10 +294,8 @@ OGS/utils/Leonardo/*.sh
 OGS/utils/.local/*.sh
 ```
 
-For Bash function counts, the validator finds declarations matching the local
-`name() {` form, reads the inline `{ # N` count, and counts through the next
-line consisting solely of `}`. Use the file-mode check whenever changing a
-script with the function-count convention:
+YAML validation uses Ruby's built-in Psych parser to parse the source stream only; it does not load model objects or execute project configuration.
+For Bash function counts, the validator finds declarations matching the local `name() {` form, reads the inline `{ # N` count, and counts through the next line consisting solely of `}`. Use the file-mode check whenever changing a script with the function-count convention:
 
 ```bash
 bash LLM/scripts/handler.sh validate --file LLM/scripts/handler.sh
@@ -342,13 +345,16 @@ bash LLM/scripts/handler.sh navigate --module LLM/scripts --scripts
 bash LLM/scripts/md_nav.sh outline LLM/README.md --depth 2
 
 # Inspect conservative YAML structure without parsing or rewriting the file.
-bash LLM/scripts/yaml_nav.sh outline OGS/config/config.yaml --depth 2
+bash LLM/scripts/yaml_nav.sh outline OGS/conf/config.yaml --depth 2
 
 # Report only what workspace initialization would create.
 bash LLM/scripts/handler.sh init --dry-run
 
 # Validate this documentation file.
 bash LLM/scripts/handler.sh validate --file LLM/scripts/README.md
+
+# Parse-check the primary YAML configuration.
+bash LLM/scripts/handler.sh validate --file OGS/conf/config.yaml
 ```
 
 Do not use `init` without `--dry-run` unless creating missing workspace paths

@@ -5,7 +5,8 @@ OGS Data Test Suite - Unit Tests for Squirrel Waveform Cache & Indexing
 
 OVERVIEW:
 Unit test suite for ``ogsdata.py``. Validates the day-sharded Pyrocko Squirrel
-data access layer, path filtering, and database cache invalidation.
+data access layer, path filtering, database cache invalidation, and multi-core
+parallel shard indexing.
 
 TEST CASES & INVARIANTS:
   1. Day Filtering: Verifies that ``_select_squirrel_add_paths`` prunes paths

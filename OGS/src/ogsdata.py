@@ -58,7 +58,7 @@ ARCHITECTURE:
       ├── day_envs: {date: env_path} for sharded databases
       ├── get_sq(day): lazy per-day Squirrel instance
       ├── groups(): day/group discovery
-      ├── get_group() / get_segments(): waveform retrieval
+      └── get_group() / get_segments(): waveform retrieval
 
 SEISMIC APPLICATIONS:
   - Efficient indexing of large OGS waveform archives split by calendar day
@@ -207,6 +207,27 @@ def _deduplicate_paths(paths: Iterable[pathlike]) -> list[pathlike]:
   return deduplicated
 
 
+def _normalize_time_input(time):
+  """
+  Normalize date/time input before Pyrocko/UTCDateTime normalization.
+
+  Handles 8-digit numeric integers or strings (e.g. ``20050101``) that Hydra
+  passes from unquoted command-line arguments, converting them to canonical
+  ``YYYY-MM-DD`` strings so they are not misinterpreted as epoch timestamps.
+  """
+  # TODO: Add this normalization to the public API so users can pass unquoted
+  # 8-digit dates
+  if time is None:
+    return None
+  if isinstance(time, int):
+    s = str(time)
+    if len(s) == 8 and s.isdigit():
+      return f"{s[:4]}-{s[4:6]}-{s[6:]}"
+  elif isinstance(time, str) and len(time) == 8 and time.isdigit():
+    return f"{time[:4]}-{time[4:6]}-{time[6:]}"
+  return time
+
+
 def _squirrel_add_time_to_date(time) -> Optional[datetime.date]:
   """
   Convert a broad Squirrel/ml_catalog time value to ``datetime.date``.
@@ -313,7 +334,7 @@ def _day_relative_path(day: datetime.date) -> str:
 
 def _squirrel_day_env_candidates(
     env_path: Path, day: datetime.date
-) -> tuple[Path, Path]:
+) -> tuple[Path, ...]:
   """
   Return supported filesystem layouts for a daily Squirrel environment.
 
@@ -347,13 +368,12 @@ def _target_day_env(env_path: Path, day: datetime.date) -> Path:
   Choose the destination directory for creating/updating a daily shard.
 
   Existing initialized shards are reused in place. New shards default to the
-  sibling layout ``env_parent/env_name/YYYY/MM/DD`` so they remain separate
-  from a possible monolithic base environment.
+  canonical layout ``env_path/YYYY/MM/DD``.
   """
   existing = _existing_day_env(env_path, day)
   if existing is not None:
     return existing
-  return env_path.parent / env_path.name / _day_relative_path(day)
+  return env_path / _day_relative_path(day)
 
 
 def _is_under_resolved_roots(file_path: Path, resolved_roots: set[str]) -> bool:
@@ -895,8 +915,8 @@ class OGSSquirrelDataSource(BaseSquirrelDataSource):
     self.codes = ["*.*.*"] if codes is None else list(codes)
     self.codes_exclude = None if codes_exclude is None else list(codes_exclude)
     self.accessor_buffer = accessor_buffer
-    self.starttime = normalize_pyrocko_time(starttime)
-    self.endtime = normalize_pyrocko_time(endtime)
+    self.starttime = normalize_pyrocko_time(_normalize_time_input(starttime))
+    self.endtime = normalize_pyrocko_time(_normalize_time_input(endtime))
     self.paths = paths or []
     self.check = check
     self.index_workers = index_workers

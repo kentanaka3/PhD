@@ -20,10 +20,12 @@ Read and follow [`AGENTS.md`](../../AGENTS.md) — it is the repository-wide con
 - After each substantive edit, run the narrowest available validation. Stop and report a blocker when a required compiler, source anchor, or approval is unavailable; do not substitute unverified output.
 - Do not inspect, modify, publish, download, or execute files outside the user-authorized scope.
 
+---
+
 ## Scope and boundaries
 
 - Work primarily on LaTeX sources (`doc/**/*.tex`, `doc/**/*.bib`) and necessary document assets.
-- Before making technical, mathematical, or empirical claims, inspect the relevant project source files `OGS/src/`, configuration schemas `OGS/config/`, datasets `OGS/data/`, and tests `OGS/test/`; reconcile existing prose with current implementation.
+- Before making technical, mathematical, or empirical claims, inspect the relevant project source files `OGS/src/`, configuration schemas `OGS/conf/`, datasets `OGS/data/`, and tests `OGS/test/`; reconcile existing prose with current implementation.
 - Preserve the strict epistemic distinctions mandated by `AGENTS.md`:
   1. **Observations**: Direct measurements or primary inputs.
   2. **Analyst Labels**: Controlled categorization, cleaning rules, or mappings.
@@ -45,9 +47,9 @@ Read and follow [`AGENTS.md`](../../AGENTS.md) — it is the repository-wide con
 For every new or substantially revised TeX document, begin with concise purpose and review status comments in the header:
 
 ```tex
-% Purpose: [Concise statement of document topic, audience, and scientific objective]
+% Scientific Objective: [Concise statement of document topic, audience, and scientific objective]
 % Status: Draft | Under Review | Camera-Ready; author and venue review pending.
-% Source-of-truth: [Repository-relative paths to supporting source code, schemas, or data]
+% Evidence Anchors: [Repository-relative paths to supporting source code, schemas, tests, or data]
 ```
 
 ### Standard Scientific Document Hierarchy
@@ -64,6 +66,8 @@ Structure scientific LaTeX documents logically according to venue guidelines and
 8. **Conclusion**: Summary of verified contributions and data/code availability statement.
 
 For compact conference abstracts and extended summaries, use `article` with compact section-style headings to avoid unnecessary page breaks while preserving clear structural hierarchy.
+
+---
 
 ## Mathematical exposition and formal scientific rigor
 
@@ -102,7 +106,7 @@ When discussing planned extensions or literature baselines, state their exact ma
 \end{equation}
 ```
 
-## Publication-grade tabular representation and data modeling
+## Publication-Grade Tabular Representation and Data Modeling
 
 Every table must function as a self-contained, publication-grade scientific artifact.
 
@@ -156,7 +160,7 @@ Explicitly distinguish data rows and columns by epistemic classification:
 \end{table}
 ```
 
-#### Archetype B: Capability and evidence provenance matrix
+#### Archetype C: System Architecture & Evidence Provenance Matrix
 
 ```tex
 \begin{table}[htbp]
@@ -210,7 +214,9 @@ Explicitly distinguish data rows and columns by epistemic classification:
 \end{table}
 ```
 
-## TikZ and PGFPlots scientific diagramming standards
+---
+
+## Publication-Grade TikZ and PGFPlots Standards
 
 When modeling system architectures, data provenance pipelines, mathematical DAGs, or quantitative time-series in `doc/**/*.tex`, adhere to reproducible vector standards.
 
@@ -232,19 +238,20 @@ Every architectural and pipeline diagram must visually encode component implemen
 | **Human / Analyst Decision** (manual review, input) | Hexagon or chamfered rectangle | Warm amber fill (`orange!10`) | Labeled "Manual" or "Review" |
 | **Planned / Future Milestone** (roadmap target) | Dashed stroke (`dash pattern=on 3.5pt off 2.5pt`) | Muted/patterned fill (`gray!4`) | Mandatory `[Planned]` badge on node |
 
-### 3. TikZ Architecture and Pipeline Template
+### 2. TikZ Architectural Diagram Template
+
 ```tex
 \begin{figure}[htbp]
 \centering
 \begin{tikzpicture}[
   >=Stealth,
-  node distance=6mm and 8mm,
+  node distance=8mm and 10mm,
   every node/.style={font=\small},
-  base/.style={rectangle, rounded corners=3pt, draw=black!80, line width=0.7pt, align=center, inner sep=5pt, minimum height=8mm},
+  base/.style={rectangle, rounded corners=3pt, draw=black!80, line width=0.7pt, align=center, inner sep=5pt, minimum height=9mm},
   manual/.style={base, fill=orange!10, draw=orange!80!black},
-  impl/.style={base, fill=blue!8, draw=blue!80!black, text width=32mm},
-  audit/.style={base, fill=gray!10, draw=black!80, double, double distance=1pt, text width=32mm},
-  planned/.style={base, fill=gray!4, draw=black!50, dash pattern=on 3.5pt off 2.5pt, text width=32mm, font=\small\itshape},
+  impl/.style={base, fill=blue!8, draw=blue!80!black, text width=30mm},
+  audit/.style={base, fill=gray!10, draw=black!80, double, double distance=1pt, text width=30mm},
+  planned/.style={base, fill=gray!4, draw=black!50, dash pattern=on 3.5pt off 2.5pt, text width=30mm, font=\small\itshape},
   arrow/.style={->, thick, draw=black!75},
   dashedarrow/.style={->, thick, dashed, draw=black!50}
 ]
@@ -307,14 +314,14 @@ When plotting empirical trajectories, experimental comparisons, or benchmark res
     legend cell align={left},
     font=\small,
     grid=both,
-    grid style={dotted, gray!40}
+    grid style={dotted, gray!50}
   ]
     \addplot[thick, color=blue!80!black, mark=*] coordinates {
       (1, 100.0)
       (2, 116.88)
       (3, 125.00)
     };
-    \addlegendentry{Fixed-Basket Metric ($I_t$)}
+    \addlegendentry{Proposed Estimator}
 
     \addplot[thick, color=red!70!black, dashed, mark=square*] coordinates {
       (1, 100.0)
@@ -350,6 +357,8 @@ Before declaring any scientific LaTeX revision complete, verify:
 - [ ] All acronyms, mathematical symbols, currencies, and units are defined within float bounds or table notes.
 - [ ] Multi-pass compilation runs cleanly without fatal errors, unresolved citations (`?`), or broken cross-references.
 - [ ] Layout is inspected for overfull `\hbox` warnings and awkward float displacements.
+
+---
 
 ## Project evidence anchors and code reconciliation
 

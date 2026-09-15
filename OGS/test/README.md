@@ -6,13 +6,9 @@ The `OGS/test/` directory contains unit and integration tests for catalog parser
 
 ## Purpose and prerequisites
 
-Use these tests to check parser behavior and selected catalog, clustering,
-data-access, and downloader interfaces after a documented change. They are
-not a substitute for scientific validation of a complete ML pipeline.
+Use these tests to check parser behavior and selected catalog, clustering, data-access, and downloader interfaces after a documented change. They are not a substitute for scientific validation of a complete ML pipeline.
 
-The parser tests require the expected sample inputs under
-`OGS/data/manual/`; the checked-in Parquet files under `OGS/test/OGSCatalog/`
-are comparison outputs/fixtures, not a replacement for every manual input.
+The parser tests require the expected sample inputs under `OGS/data/manual/`; the checked-in Parquet files under `OGS/test/OGSCatalog/` are comparison outputs/fixtures, not a replacement for every manual input.
 Install the dependencies required by the selected test before running it.
 
 ## Test Inventory
@@ -28,7 +24,8 @@ Install the dependencies required by the selected test before running it.
 | [`testogscatalog.py`](testogscatalog.py) | `ogscatalog.py` | *(manual / pytest)* | Catalog DataFrame operations, filtering, BGMA matching integration. |
 | [`testogsclustering.py`](testogsclustering.py) | `ogsclustering.py` | *(manual / pytest)* | 14 clustering algorithm wrappers and evaluation metrics. |
 | [`testogsdata.py`](testogsdata.py) | `ogsdata.py` | *(manual / pytest)* | Pyrocko Squirrel data source access and sharding. |
-| [`testogsdownloader.py`](testogsdownloader.py) | `ogsdownloader.py` | *(manual / pytest)* | FDSN client parameter validation and domain bounds. |
+| [`testogsdownloader.py`](testogsdownloader.py) | `ogsdownloader.py` | `make downloader` | FDSN client parameter validation and domain bounds. |
+| [`testogstrainer.py`](testogstrainer.py) | `ogstrainer.py` | `make trainer` | CLI argument parsing, vector cross-entropy loss, station/event parsing, trace conditioning, SeisBench augmentations, checkpointing, and training/validation loops. |
 
 ## Running Tests
 
@@ -37,6 +34,7 @@ These tests use synthetic in-memory data, mocks, and constant definitions:
 ```bash
 cd OGS/test
 python testogsconstants.py    # Validates constant definitions and tolerances
+python testogstrainer.py     # Validates model training, CLI, loss, trace cleaning, augmentations, and loops
 python testogscatalog.py     # Tests event prefiltering and candidate masking with synthetic DataFrames
 python testogsclustering.py  # 1,968 lines of algorithmic and property tests on synthetic manifolds
 ```
@@ -70,4 +68,4 @@ catalog documentation. This preserves reproducibility without treating a
 fixture as an independently validated scientific ground truth.
 
 ## Note on Test Makefile Coverage
-The `OGS/test/Makefile` target `all` currently runs targets `.dat .hpl .pun .txt parser constants`. The richer, self-contained test suites ([`testogscatalog.py`](testogscatalog.py) and [`testogsclustering.py`](testogsclustering.py)) are not yet wired into the test Makefile and should be executed directly via Python or pytest.
+The `OGS/test/Makefile` target `all` runs targets `.dat .hpl .pun .txt parser constants clustering downloader catalog data trainer`. Self-contained test suites can also be executed directly via Python or unittest/pytest.

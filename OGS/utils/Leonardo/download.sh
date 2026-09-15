@@ -5,7 +5,7 @@
 #SBATCH  -n 1
 #SBATCH --cpus-per-task=#
 #SBATCH --account=IscrC_AI2Seism
-#SBATCH --time 03:59:00
+#SBATCH --time 04:00:00
 #SBATCH --mem=30800MB
 #SBATCH --partition=lrd_all_serial
 #SBATCH --error=download_%j.err

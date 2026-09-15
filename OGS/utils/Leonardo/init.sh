@@ -2,9 +2,11 @@
 
 set -euo pipefail
 
+# =============================================================================
 # AISeism Leonardo workspace initializer
-# ======================================
+# =============================================================================
 #
+# OVERVIEW:
 # Initialize the configured work directory and its external dependencies.
 # Existing repositories, Conda installations, and Conda environments are
 # verified and reused, making this script safe to run more than once.
@@ -27,6 +29,18 @@ set -euo pipefail
 # Required configuration is supplied through environment variables by the
 # Makefile. Override those variables at invocation time rather than editing
 # this script.
+#
+# AUTHORS:
+#   - 健
+#   - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+#     Centro di Ricerche Sismologiche (CRS)
+#   - Università degli Studi di Trieste (UniTS)
+#     Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+#     Applied Data Science and Artificial Intelligence (ADSAI)
+#   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+#     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
+#
+# =============================================================================
 
 umask 077
 
@@ -257,8 +271,10 @@ run_smoke_test() { # 9
     log "Running the dummy pipeline smoke test"
     (
         cd "$WORK_PATH"
+        OVERRIDE_CORES=1 CORE_COUNT=1 VERBOSE=1 \
         bash LAUNCHME.sh dummy 1 1 launchme_dummy \
             "$CONDA_ROOT/envs/$CONDA_ENV/bin/python" "$WORK_PATH/test/dummy.py"
+        OVERRIDE_CORES=1 CORE_COUNT=1 VERBOSE=1 \
         bash LAUNCHME.sh dummy 1 1 sbc_help $SBC_RUN_BIN --help
     )
 }

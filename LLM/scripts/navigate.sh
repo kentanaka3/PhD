@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
+# =============================================================================
 # LLM Context Manifest Navigator
-# ==============================
+# =============================================================================
 #
 # Generate deterministic Tier 1 repository routing or Tier 2 scoped manifests.
 # Navigation is read-only and writes YAML only to standard output.
@@ -24,6 +25,18 @@
 # extract_symbols    | Extract Make, Bash, and Python symbols in a module.
 # emit_tier2         | Emit a scoped module manifest.
 # main               | Parse navigation options and emit the requested manifest.
+#
+# AUTHORS:
+#   - 健
+#   - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+#     Centro di Ricerche Sismologiche (CRS)
+#   - Università degli Studi di Trieste (UniTS)
+#     Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+#     Applied Data Science and Artificial Intelligence (ADSAI)
+#   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+#     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
+#
+# =============================================================================
 
 set -euo pipefail
 umask 077

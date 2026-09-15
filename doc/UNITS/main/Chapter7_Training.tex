@@ -1,0 +1,1126 @@
+% Purpose: Mathematical formulation, algorithmic implementation, and HPC
+% orchestration of deep-learning seismic phase pickers (PhaseNet and
+% EQTransformer) fine-tuning and regional domain adaptation on OGS
+% continuous waveform archives.
+% Status: Under Review
+% Source-of-truth: OGS/src/ogstrainer.py, OGS/src/ogsconstants.py,
+% OGS/utils/Leonardo/Makefile, OGS/utils/Leonardo/LAUNCHME.sh,
+% OGS/utils/Leonardo/ktanakah.sh
+
+\providecommand{\bm}[1]{\mathbf{#1}}
+
+\label{chap:training}
+
+Automated seismic monitoring pipelines deployed across dense regional
+networks rely fundamentally upon high-sensitivity, robust deep-learning
+phase pickers to identify primary ($P$) and secondary ($S$) wave arrival
+onsets within continuous multi-channel waveform streams. While deep neural
+architectures such as PhaseNet (\cite{PhaseNet}) and Earthquake Transformer
+(\ac{EQTransformer}, \cite{EQTransformer}) achieve remarkable pick
+precision and recall when evaluated on standard benchmark datasets, their
+direct zero-shot deployment in localized seismotectonic domains often
+incurs significant performance degradation. This discrepancy stems from
+pronounced domain shift between the generalized training distributions and
+the specific wave propagation characteristics, crustal velocity structures,
+ambient noise environments, and sensor instrumentation of the target
+observational domain.
+
+To bridge this operational performance gap, this chapter formulates and
+implements an end-to-end, reproducible training and fine-tuning framework
+engineered for regional domain adaptation on continuous waveform archives
+recorded by the \ac{OGS} \ac{SMINO} network (\cite{SMINO}) across
+Northeastern Italy and the Alpine-Dinaric transition zone. The training
+system is implemented in the production module \path{OGS/src/ogstrainer.py}
+under the unified SeisBench framework (\cite{SeisBench}), bridging
+analyst-curated catalog bulletin archives with High-Performance Computing
+(\ac{HPC}) infrastructure.
+
+This chapter is structured into seven complementary sections:
+\begin{itemize}
+  \item Section~\ref{sec:domain_adaptation_theory} establishes the
+    theoretical rationale for seismic transfer learning and domain
+    adaptation, dissecting the geophysical drivers of covariate shift
+    across the complex crustal velocity structures of Northeastern Italy.
+  \item Section~\ref{sec:data_extraction_pipeline} details the data
+    extraction pipeline, analyst-pick quality filtering based on Hypo71
+    weights, automated waveform retrieval, signal conditioning, and
+    SeisBench HDF5 container serialization.
+  \item Section~\ref{sec:neural_architectures} presents the architectural
+    specifications of the PhaseNet 1D U-Net and \ac{EQTransformer}
+    hierarchical attention networks alongside their pretrained baseline
+    weight repositories.
+  \item Section~\ref{sec:data_augmentation} formulates the stochastic data
+    augmentation graph, random window selection, and Gaussian probabilistic
+    target labeling for arrival time representation.
+  \item Section~\ref{sec:loss_and_optimization} derives the multi-channel
+    vector cross-entropy loss function, batch-level standard normalization,
+    and Adam optimization dynamics.
+  \item Section~\ref{sec:checkpointing_and_validation} outlines the
+    dataset partitioning strategy, validation protocol, and state-preserving
+    checkpoint retention architecture.
+  \item Section~\ref{sec:hpc_orchestration} demonstrates the HPC workload
+    orchestration on the CINECA Leonardo supercomputer, detailing
+    parameterized Makefile rules and SLURM execution wrappers.
+\end{itemize}
+
+\paragraph{Evidence status and publication boundary.}
+The software modules governing catalog ingestion, waveform conditioning,
+stochastic data augmentation, vector cross-entropy loss calculation,
+model checkpointing, and SLURM workload generation are demonstrated and
+fully verified within \path{OGS/src/ogstrainer.py}, \path{OGS/src/ogsconstants.py},
+and \path{OGS/utils/Leonardo/Makefile}. Conversely, the complete multi-epoch
+training trajectories, converged regional model weights, and prospective
+generalization benchmarks across the multi-year OGS archive represent
+active computational campaigns scheduled on Leonardo Booster GPU allocations.
+Accordingly, numerical loss trajectories and performance metrics reported
+herein denote intended evaluation schemas and architectural baseline
+parameters rather than final certified catalog revisions.
+
+% =============================================================================
+% SECTION 1: THEORETICAL RATIONALE AND REGIONAL DOMAIN ADAPTATION
+% =============================================================================
+\section{Theoretical Rationale and Regional Domain Adaptation}
+\label{sec:domain_adaptation_theory}
+
+Deep neural network phase pickers have transformed observational
+seismology by replacing heuristic, univariate triggering algorithms
+\eg{\ac{STA/LTA}, \cite{STALTA}; autoregressive pickers, \cite{LEONARD1999247}}
+with multi-channel representation learning. Standard benchmark models are
+typically trained on large-scale public repositories such as \ac{SCEDC}
+(\cite{SCEDC}) in Southern California, \ac{STEAD} (\cite{STEAD}) globally,
+or \ac{INSTANCE} (\cite{INSTANCE}) across the Italian peninsula. As
+demonstrated by systematic benchmarking studies (\cite{WhichPicker}), models
+trained on one regional dataset often suffer pronounced accuracy degradation,
+elevated picking variance, and heightened false-positive rates when evaluated
+out-of-domain on unseen seismic networks.
+
+\subsection{Mathematical Formulation of Seismic Domain Shift}
+\label{subsec:domain_shift_math}
+
+In statistical machine learning, a seismic phase picking domain
+$\mathcal{D} = \{\mathcal{X}, P(\mathbf{X})\}$ is defined by a feature space
+$\mathcal{X} \subset \mathbb{R}^{C \times L}$ of multi-component seismic
+waveform time series and a marginal probability distribution $P(\mathbf{X})$,
+where $C = 3$ denotes the three orthogonal recording components (vertical $Z$,
+north-south $N$, east-west $E$) and $L$ denotes the window sequence length.
+A phase picking task $\mathcal{T} = \{\mathcal{Y}, P(\mathbf{Y} \mid \mathbf{X})\}$
+consists of a label space $\mathcal{Y} \subset [0, 1]^{K \times L}$ representing
+continuous temporal probability trajectories for $K = 3$ target classes
+$\{P, S, \mathrm{Noise}\}$ and an objective conditional probability distribution
+$P(\mathbf{Y} \mid \mathbf{X})$ modeled by a neural network
+$f_{\bm{\Theta}}: \mathcal{X} \to \mathcal{Y}$ parameterized by weights $\bm{\Theta}$.
+
+During supervised pretraining, the neural network optimizes its parameters on a
+source domain $\mathcal{D}_s = \{\mathcal{X}_s, P_s(\mathbf{X})\}$ under source
+task $\mathcal{T}_s$ by minimizing an empirical risk objective:
+\begin{equation}
+  \bm{\Theta}^* = \argmin_{\bm{\Theta}} \mathbb{E}_{(\mathbf{X}, \mathbf{Y}) \sim \mathcal{D}_s}
+  \left[ \mathcal{L}\bigl( f_{\bm{\Theta}}(\mathbf{X}), \mathbf{Y} \bigr) \right].
+  \label{eq:source_risk_minimization}
+\end{equation}
+
+When the trained model $f_{\bm{\Theta}^*}$ is deployed on a regional target
+domain $\mathcal{D}_t = \{\mathcal{X}_t, P_t(\mathbf{X})\}$, such as the OGS
+network in Northeastern Italy, domain shift manifests across two primary
+statistical regimes:
+\begin{enumerate}
+  \item \textbf{Covariate Shift} ($P_s(\mathbf{X}) \neq P_t(\mathbf{X})$ while
+    $P_s(\mathbf{Y} \mid \mathbf{X}) \approx P_t(\mathbf{Y} \mid \mathbf{X})$):
+    The marginal distribution of seismic wavefields differs between domains due
+    to differing ambient seismic noise spectra, site amplification, and sensor
+    transfer functions, while the physical relationship between wave arrival
+    onsets and particle motion remains invariant.
+  \item \textbf{Concept Drift / Conditional Shift} ($P_s(\mathbf{Y} \mid \mathbf{X}) \neq P_t(\mathbf{Y} \mid \mathbf{X})$):
+    The conditional distribution of phase arrival probabilities diverges because
+    differing regional crustal velocity gradients, structural discontinuities,
+    and scattering regimes distort waveform signatures, generating emergent phase
+    arrivals, complex coda conversions, and multi-path reflections not captured in
+    the source training distribution.
+\end{enumerate}
+
+The discrepancy between source and target feature representations can be
+formalized via the Kullback--Leibler (\ac{KL}) divergence between the induced
+marginal feature distributions:
+\begin{equation}
+  D_{\mathrm{KL}}\bigl( P_s(\mathbf{X}) \,\|\, P_t(\mathbf{X}) \bigr) =
+  \int_{\mathcal{X}} P_s(\mathbf{X}) \log\left( \frac{P_s(\mathbf{X})}{P_t(\mathbf{X})} \right) \mathrm{d}\mathbf{X}.
+  \label{eq:kl_divergence}
+\end{equation}
+Whenever $D_{\mathrm{KL}}(P_s \,\|\, P_t) > 0$, the theoretical generalization
+bound on target empirical error $\mathcal{E}_t(f_{\bm{\Theta}})$ increases
+proportionally to the distribution divergence, leading to missed weak onsets
+and spurious picks on complex coda.
+
+\subsection{Geophysical Drivers of Domain Shift in Northeastern Italy}
+\label{subsec:geophysical_drivers}
+
+The target operational environment of the \ac{OGS} \ac{SMINO} network encloses
+an active tectonic collision zone spanning the Eastern Southern Alps and the
+External Dinarides. Several regional geophysical factors induce pronounced
+domain discrepancy relative to standard training corpora:
+
+\begin{itemize}
+  \item \textbf{Complex Crustal Velocity Discontinuities}: The crust in
+    Northeastern Italy exhibits extreme lateral and vertical heterogeneity.
+    The Moho depth deepens rapidly from approximately $30\,\mathrm{km}$ beneath
+    the Venetian-Friulian alluvial plain to over $45\,\mathrm{km}$ beneath the
+    Alpine metamorphic root (\cite{Bressan1998}). Thrust-and-fold belts in the
+    Carnic and Julian Prealps create sharp acoustic impedance contrasts,
+    inducing complex refracted head waves ($P_n$, $S_n$) and post-critical
+    Moho reflections ($P_mP$, $S_mS$) with emergent onsets that confound models
+    trained on simpler tabular crustal structures.
+  \item \textbf{High-Frequency Attenuation and Scattering}: The fractured
+    carbonate platforms and karst lithologies characterizing the Friuli region
+    exhibit high intrinsic and scattering attenuation. The seismic quality factor
+    follows a frequency-dependent power law $Q(f) = Q_0 f^\alpha$, with regional
+    estimates indicating significant high-frequency damping ($f > 15\,\mathrm{Hz}$)
+    and severe near-surface high-frequency spectral decay governed by the
+    Anderson-Hough attenuation parameter $\kappa_0$. High-frequency $P$-wave
+    energy is rapidly dispersed into coda waves, softening impulse onsets into
+    gradual ramps.
+  \item \textbf{Topographic and Valley Site Amplification}: Many \ac{OGS} stations
+    are sited in narrow Alpine valleys filled with soft Quaternary alluvium or on
+    steep topography. Trapped sedimentary valley waves and topographic ridge
+    scattering create monochromatic resonance bands and energetic S-wave coda
+    reverberations that mimic genuine microseismic arrivals.
+  \item \textbf{Heterogeneous Multi-Network Instrumentation}: The OGS monitoring
+    archive ingests telemetry from 18 distinct regional and international networks,
+    operating high-sensitivity broadband velocimeters (Streckeisen STS-2, Nanometrics
+    Trillium 120/240) alongside strong-motion accelerometers (Kinemetrics Episensor)
+    with disparate sensor poles, zeroes, dynamic ranges, and digitizer sampling
+    frequencies ($50$, $100$, and $200\,\mathrm{Hz}$).
+\end{itemize}
+
+\subsection{Inductive Transfer Learning vs Fine-Tuning Strategies}
+\label{subsec:transfer_strategies}
+
+Addressing domain discrepancy requires selecting an appropriate transfer learning
+strategy. In seismology, two principal paradigms exist:
+\begin{enumerate}
+  \item \textbf{Full Retraining from Random Initialization}: Training deep
+    neural networks from scratch requires massive ground-truth training corpora
+    ($N \ge 10^5\text{--}10^6$ labeled traces). Regional seismic bulletins,
+    including the \ac{OGS} catalog (\cite{MagrinEtAl2026RevisedOGSCatalog}),
+    possess high-quality analyst labels but with smaller total sample volumes
+    ($N \approx 10^3\text{--}10^4$ events). Training complex architectures from
+    scratch on regional corpora inevitably leads to catastrophic overfitting,
+    where the network memorizes station-specific noise signatures rather than
+    learning generalized wavefield kinematics.
+  \item \textbf{Inductive Transfer Learning via Parameter Fine-Tuning}:
+    Under this approach, the network weights $\bm{\Theta}$ are warm-started
+    from a model pretrained on large benchmark corpora ($\bm{\Theta}^{(0)} \leftarrow \bm{\Theta}_{\mathrm{pretrained}}$).
+    The early convolutional layers, which extract universal low-level waveform
+    features such as onset slopes, frequency content, and amplitude envelopes,
+    remain largely preserved. Fine-tuning with a reduced learning rate
+    $\eta \in [10^{-3}, 10^{-2}]$ adapts the intermediate representations and
+    deeper decision layers to regional attenuation, site resonance, and complex
+    travel-time trajectories.
+\end{enumerate}
+
+The framework implemented in \path{OGS/src/ogstrainer.py} adopts inductive
+transfer learning, enabling systematic fine-tuning from multiple pretrained
+baselines to identify the optimal regional domain adaptation trajectory.
+
+% =============================================================================
+% SECTION 2: DATA EXTRACTION AND STREAM CONDITIONING PIPELINE
+% =============================================================================
+\section{Data Extraction and Stream Conditioning Pipeline}
+\label{sec:data_extraction_pipeline}
+
+The training dataset generation engine bridges the authoritative, analyst-curated
+OGS seismic catalog with the continuous multi-channel waveform repository. The
+workflow is coordinated by the \texttt{OGSTrainer.build\_dataset()} method in
+\path{OGS/src/ogstrainer.py}.
+
+\subsection{Analyst Label Ingestion and Pick Quality Filtering}
+\label{subsec:pick_filtering}
+
+Ground-truth phase labels are retrieved from the object-oriented \texttt{OGSCatalog}
+interface across a user-specified Gregorian date window $[t_{\mathrm{start}}, t_{\mathrm{end}}]$.
+For each calendar day within the target observation window, pick records and event
+hypocenters are loaded into memory and grouped by unique pick index (\texttt{index})
+and station identifier (\texttt{station}).
+
+To ensure that supervised gradient updates are driven solely by high-precision,
+unambiguous seismic onsets, an analyst pick quality filter is enforced. The
+\ac{OGS} bulletin encodes arrival-time uncertainties using the standard Hypo71
+(\cite{Hypo71}) integer weighting scheme $w \in \{0, 1, 2, 3, 4, 5\}$, defined
+in \path{OGS/src/ogsconstants.py}:
+\begin{equation}
+  \sigma_t(w) =
+  \begin{cases}
+    0.01\,\unit{\second}, & w = 0 \quad (\text{Impulsive, very sharp onset}), \\
+    0.04\,\unit{\second}, & w = 1 \quad (\text{Clear, distinct onset}), \\
+    0.20\,\unit{\second}, & w = 2 \quad (\text{Fairly clear onset}), \\
+    1.00\,\unit{\second}, & w = 3 \quad (\text{Emergent onset}), \\
+    5.00\,\unit{\second}, & w = 4 \quad (\text{Poor quality, highly uncertain}), \\
+    25.0\,\unit{\second}, & w = 5 \quad (\text{Unusable / discarded phase}).
+  \end{cases}
+  \label{eq:hypo71_weights}
+\end{equation}
+
+In \texttt{ogstrainer.py}, picks are strictly filtered to retain only high-confidence
+arrivals with weights $w \le 2$:
+\begin{lstlisting}[language=python,basicstyle=\scriptsize\ttfamily]
+station_picks = station_picks[station_picks[OGS_C.PHASE_STR].notna()]
+station_picks = station_picks[
+    station_picks[OGS_C.WEIGHT_STR].astype(float) <= 2
+]
+if len(station_picks) <= 1:
+    continue
+\end{lstlisting}
+This filtering step eliminates emergent and questionable picks ($w \ge 3$),
+guaranteeing that the temporal target distributions represent physical arrivals
+with timing precision $\sigma_t \le 0.20\,\unit{\second}$. Furthermore, stations
+recording only an isolated pick without a complementary phase arrival are
+pruned from training pair generation to enforce balanced multi-phase representation.
+
+\subsection{Waveform Stream Windowing and Automated Retrieval}
+\label{subsec:waveform_windowing}
+
+For each validated pick, the corresponding continuous waveform files are located
+within the hierarchical miniSEED archive structured by year, month, and day:
+\begin{equation}
+  \path{<WAVE_PATH>/<YYYY>/<MM>/<DD>/<NET>.<STA>.*.*__<START_TIME>__<END_TIME>.mseed}
+  \label{eq:mseed_path_pattern}
+\end{equation}
+
+The waveform segment is extracted with an operational temporal padding of
+$\pm 60\,\unit{\second}$ centered around the pick timestamp $t_{\mathrm{pick}}$,
+defined by the time delta constant \texttt{PICK\_TRAIN\_OFFSET = td(seconds=60)}
+in \path{OGS/src/ogsconstants.py}:
+\begin{equation}
+  \mathcal{W}_{\mathrm{extract}} = \left[ t_{\mathrm{pick}} - 60\,\unit{\second}, \;
+  t_{\mathrm{pick}} + 60\,\unit{\second} \right].
+  \label{eq:extraction_window}
+\end{equation}
+This $120\,\unit{\second}$ temporal window guarantees that both primary and secondary
+arrivals, the pre-P noise baseline, and the complete decaying coda are contained
+within the raw trace prior to subsequent stochastic cropping.
+
+When continuous waveforms are absent from local scratch mounts, \texttt{OGSTrainer}
+provides automated fallback retrieval via \texttt{\_download\_waveform()}, which
+executes \path{OGS/src/ogsdownloader.py} as an asynchronous subprocess querying
+distributed \ac{FDSN} data nodes (\cite{SMINO}) across INGV, SED, ARSO, and OGS
+repositories.
+
+\subsection{Signal Conditioning Pipeline}
+\label{subsec:signal_conditioning}
+
+Raw waveforms recorded by heterogeneous digitizers exhibit DC offsets, linear
+instrumental drift, and high-frequency anthropogenic contamination. Prior to
+dataset compilation, every extracted trace is conditioned via the deterministic
+preprocessing method \texttt{get\_clean_trace()}:
+\begin{equation}
+  x(t) \xrightarrow{\text{Detrend}} x_1(t) \xrightarrow{\text{Demean}} x_2(t)
+  \xrightarrow{\text{Taper}} x_3(t) \xrightarrow{\text{Bandpass}} x_4(t)
+  \xrightarrow{\text{Resample}} x_5(t).
+  \label{eq:preprocessing_chain}
+\end{equation}
+
+The mathematical operations comprising this pipeline include:
+\begin{enumerate}
+  \item \textbf{Linear Detrending}: Fitting and subtracting an optimal first-order
+    polynomial $p(t) = m t + c$ via least-squares regression:
+    \begin{equation}
+      x_1(t) = x(t) - (m t + c), \quad \text{where} \quad (m, c) = \argmin_{m', c'}
+      \sum_{k=1}^N \bigl( x(t_k) - (m' t_k + c') \bigr)^2.
+    \end{equation}
+  \item \textbf{Mean Subtraction (Demeaning)}: Centering the trace to zero mean:
+    \begin{equation}
+      x_2(t) = x_1(t) - \frac{1}{N} \sum_{k=1}^N x_1(t_k).
+    \end{equation}
+  \item \textbf{Cosine Tapering}: Applying a symmetric cosine bell taper
+    (Tukey window with $5\%$ edge taper, $\alpha = 0.05$) to smoothly attenuate
+    trace boundaries to zero, preventing Gibbs oscillations and spectral leakage
+    during subsequent Fourier domain filtering:
+    \begin{equation}
+      w(t) =
+      \begin{cases}
+        \frac{1}{2}\left[ 1 - \cos\left( \frac{\pi t}{\alpha T} \right) \right], & 0 \le t < \alpha T, \\
+        1, & \alpha T \le t \le (1 - \alpha) T, \\
+        \frac{1}{2}\left[ 1 - \cos\left( \frac{\pi (T - t)}{\alpha T} \right) \right], & (1 - \alpha) T < t \le T.
+      \end{cases}
+    \end{equation}
+  \item \textbf{4th-Order Zero-Phase Butterworth Bandpass Filtering}: Filtering
+    between $f_{\mathrm{min}} = 0.1\,\unit{\hertz}$ and $f_{\mathrm{max}} = 20.0\,\unit{\hertz}$.
+    The 4th-order zero-phase implementation applies forward-backward filtering
+    to achieve zero group-delay distortion, preserving exact phase onset timing:
+    \begin{equation}
+      |H(f)|^2 = \frac{1}{1 + \left( \frac{f^2 - f_0^2}{f \cdot \Delta f} \right)^{2 n}}, \quad n = 4,
+    \end{equation}
+    where $\Delta f = f_{\mathrm{max}} - f_{\mathrm{min}} = 19.9\,\unit{\hertz}$
+    and $f_0 = \sqrt{f_{\mathrm{min}} f_{\mathrm{max}}}$.
+  \item \textbf{Anti-Aliasing Resampling}: Resampling the conditioned stream to a
+    normalized sampling frequency $f_s = 100.0\,\unit{\hertz}$ ($\Delta t = 0.01\,\unit{\second}$)
+    using polyphase rational interpolation with an integrated anti-aliasing low-pass
+    filter at the Nyquist cutoff ($f_{\mathrm{Nyq}} = 50.0\,\unit{\hertz}$).
+\end{enumerate}
+
+\subsection{SeisBench Waveform Dataset Serialization}
+\label{subsec:seisbench_serialization}
+
+Conditioned traces and matched catalog records are compiled into a flat tabular
+index, \path{training_dataset.csv}, storing comprehensive trace metadata:
+source identifiers, network, station, channel, event hypocentral coordinates
+(latitude, longitude, depth), origin time, local magnitude ($M_{\mathrm{L}}$),
+phase type ($P$ or $S$), arrival timestamp, peak trace amplitude, and Hypo71
+weight.
+
+To support high-throughput, random-access mini-batch loading across parallel
+GPU workers, this flat dataset is converted into SeisBench standardized format
+using \texttt{seisbench.data.WaveformDataWriter}. The writer generates:
+\begin{enumerate}
+  \item \path{waveforms.hdf5}: An optimized hierarchical HDF5 container storing
+    multi-component waveform arrays under chunked, contiguous binary datasets
+    with blosc compression, enabling zero-copy slicing of arbitrary window offsets.
+  \item \path{metadata.csv}: A standardized columnar schema indexing trace
+    indices, sample arrival positions (\eg{\texttt{trace\_p\_arrival\_sample}} and
+    \texttt{trace\_s\_arrival\_sample}), epicentral distances, and source magnitudes.
+\end{enumerate}
+Once serialized, the dataset is ingested into \texttt{seisbench.data.WaveformDataset},
+providing a high-performance abstraction that decouples raw waveform storage from
+neural pipeline execution.
+
+% =============================================================================
+% SECTION 3: NEURAL MODEL ARCHITECTURES AND PRETRAINED BASELINES
+% =============================================================================
+\section{Neural Model Architectures and Pretrained Baselines}
+\label{sec:neural_architectures}
+
+The training engine interfaces with two distinct neural network topologies
+registered in the \texttt{MODEL\_REGISTRY} of \path{OGS/src/ogstrainer.py}:
+PhaseNet (\cite{PhaseNet}) and Earthquake Transformer (\ac{EQTransformer},
+\cite{EQTransformer}).
+
+\subsection{PhaseNet: 1D U-Net with Lateral Skip Connections}
+\label{subsec:phasenet_arch}
+
+PhaseNet adapts the U-Net architecture from biomedical image segmentation to
+one-dimensional multi-channel time series. The network consists of a contracting
+path (encoder) and an expanding path (decoder) joined by lateral skip connections,
+as formulated in Chapter~\ref{chap:pipeline}.
+
+\begin{itemize}
+  \item \textbf{Input Dimensionality}: Three-component seismic waveform
+    $\mathbf{X} \in \mathbb{R}^{3 \times L}$, where $L = 3{,}001$ samples
+    ($30.01\,\unit{\second}$ at $100\,\unit{\hertz}$).
+  \item \textbf{Contracting Encoder}: Four sequential downsampling stages.
+    Each stage comprises a 1D convolution with a large kernel size $k = 7$,
+    stride $s = 1$, batch normalization, and a rectified linear unit (ReLU)
+    activation function, followed by a strided 1D convolution with kernel $k=7$
+    and stride $s = 2$ that halves the temporal resolution while doubling the
+    feature channel depth:
+    \begin{equation}
+      C_l = 8 \times 2^l, \quad L_l = \left\lfloor \frac{L_{l-1} + 1}{2} \right\rfloor, \quad l \in \{1, 2, 3, 4\}.
+    \end{equation}
+  \item \textbf{Bottleneck}: A deep contextual representation layer with 128
+    feature channels operating on the downsampled feature map ($L_4 \approx 188$
+    samples), capturing long-period waveform envelopes and broad temporal context.
+  \item \textbf{Expanding Decoder}: Four symmetric upsampling stages. Each
+    stage employs transposed 1D convolutions with stride $s = 2$ to double the
+    temporal dimension, concatenates the resulting feature map laterally with the
+    corresponding high-resolution representation from the contracting encoder
+    via skip connections, and processes the merged representation through 1D
+    convolutions and ReLU activations.
+  \item \textbf{Output Layer}: A $1 \times 1$ pointwise convolution mapping
+    the 8-channel reconstructed feature map to three logits, followed by a
+    temporal softmax projection producing posterior probabilities:
+    \begin{equation}
+      \hat{y}_{c}(t) = \frac{\exp\bigl( z_c(t) \bigr)}{\sum_{k \in \{P, S, N\}} \exp\bigl( z_k(t) \bigr)}, \quad c \in \{P, S, N\},
+      \label{eq:phasenet_softmax}
+    \end{equation}
+    where $\hat{y}_P(t)$ is the P-wave probability, $\hat{y}_S(t)$ is the S-wave
+    probability, and $\hat{y}_N(t)$ is the background noise probability.
+\end{itemize}
+
+The combination of deep downsampling and lateral skip connections enables
+PhaseNet to resolve large temporal receptive fields ($\approx 10\text{--}15\,\unit{\second}$)
+while preserving high-frequency onset timing down to the individual sample level.
+
+\subsection{EQTransformer: Attentive Deep Hierarchical Architecture}
+\label{subsec:eqt_arch}
+
+Earthquake Transformer (\ac{EQTransformer}, \cite{EQTransformer}) combines
+1D convolutional residual networks, bidirectional Long Short-Term Memory
+(\ac{LSTM}) recurrent networks, and multi-head self-attention mechanisms to
+jointly perform earthquake detection and phase picking.
+
+\begin{itemize}
+  \item \textbf{Input Dimensionality}: Three-component waveform $\mathbf{X} \in \mathbb{R}^{3 \times L}$
+    with sequence length $L = 6{,}000$ samples ($60.00\,\unit{\second}$ at $100\,\unit{\hertz}$).
+  \item \textbf{1D ResNet Feature Extractor}: A hierarchy of 1D residual blocks
+    operating with strided convolutions that downsamples the input sequence by a
+    cumulative factor of 8 to $L_{\mathrm{down}} = 750$ time steps, extracting
+    local temporal features while mitigating vanishing gradient degradation.
+  \item \textbf{Bidirectional LSTM Sequence Modeling}: A bidirectional LSTM layer
+    processes the compressed temporal features in forward and backward directions,
+    capturing long-range contextual dependencies across the waveform sequence:
+    \begin{equation}
+      \mathbf{h}_t = \left[ \overrightarrow{\mathrm{LSTM}}(\mathbf{x}_t, \overrightarrow{\mathbf{h}}_{t-1}) \,\|\,
+      \overleftarrow{\mathrm{LSTM}}(\mathbf{x}_t, \overleftarrow{\mathbf{h}}_{t+1}) \right].
+    \end{equation}
+  \item \textbf{Multi-Head Self-Attention}: Scaled dot-product attention
+    mechanisms allow the network to dynamically assign attention weights across
+    distant temporal segments:
+    \begin{equation}
+      \mathrm{Attention}(\mathbf{Q}, \mathbf{K}, \mathbf{V}) =
+      \mathrm{softmax}\left( \frac{\mathbf{Q}\mathbf{K}^T}{\sqrt{d_k}} \right)\mathbf{V},
+    \end{equation}
+    where query $\mathbf{Q}$, key $\mathbf{K}$, and value $\mathbf{V}$ projections
+    enable the model to correlate initial P-wave particle motion onsets with subsequent
+    S-wave shear arrivals and coda energy distributions.
+  \item \textbf{Multi-Task Decoders}: Three independent feed-forward decoder heads
+    with separate attention modules output continuous probability trajectories for:
+    (i) earthquake detection ($\hat{y}_{\mathrm{det}}$), (ii) P-phase arrival
+    ($\hat{y}_P$), and (iii) S-phase arrival ($\hat{y}_S$).
+\end{itemize}
+
+\subsection{Pretrained Baseline Model Repositories}
+\label{subsec:pretrained_repositories}
+
+The \texttt{ogstrainer.py} CLI exposes five benchmark pretrained weight variants
+via the \texttt{-s / --dataset} flag, corresponding to major public seismic
+corpora distributed within the SeisBench repository:
+\begin{enumerate}
+  \item \texttt{instance} (\cite{INSTANCE}): Pretrained on the Italian Seismic
+    Dataset for Machine Learning, comprising $1.15 \times 10^6$ three-component
+    traces recorded across Italy. Because it encompasses the tectonic regime of
+    peninsular Italy, it serves as the primary regional baseline for transfer learning.
+  \item \texttt{stead} (\cite{STEAD}): Pretrained on the Stanford Earthquake
+    Dataset, containing $1.2 \times 10^6$ global earthquake and noise traces with
+    broad geometric diversity.
+  \item \texttt{scedc} (\cite{SCEDC}): Pretrained on Southern California Earthquake
+    Data Center records, dominated by strike-slip faulting mechanisms and shallow
+    crustal structures.
+  \item \texttt{original} (\cite{PhaseNet,EQTransformer}): Initial author weights
+    trained on Northern California (NCEDC) data for PhaseNet and mixed global/California
+    data for EQTransformer.
+  \item \texttt{adriaarray}: Pretrained on regional seismic waveforms collected
+    during the recent AdriaArray scientific initiative across the Adriatic-Pannonian
+    collision zone.
+\end{enumerate}
+
+Table~\ref{tab:pretrained_corpora_comparison} synthesizes the key seismotectonic
+and instrumental properties of these five baseline training corpora.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Comparative synthesis of benchmark training corpora and pretrained
+    baseline weight repositories available for regional transfer learning.}
+  \label{tab:pretrained_corpora_comparison}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{l l l c >{\raggedright\arraybackslash}X}
+      \toprule
+      \textbf{Corpus Key} & \textbf{Geographic Scope} & \textbf{Tectonic Regime} & \textbf{Traces [$10^3$]} & \textbf{Transfer Learning Compatibility to NE Italy} \\
+      \midrule
+      \texttt{instance}   & Italy (INGV)              & Apennines / Alps         & $1{,}150$                 & High; shares Italian network instrumentation and regional wave propagation terms. \\
+      \texttt{adriaarray} & Central/SE Europe         & Alpine-Dinaric-Pannonian & $\sim 450$                & High; overlaps target regional tectonic boundaries and seismic stations. \\
+      \texttt{stead}      & Global                    & Diverse / Global Mix     & $1{,}200$                 & Moderate; excellent SNR diversity but lacks regional crustal wavefield specifics. \\
+      \texttt{scedc}      & Southern California       & Strike-slip (San Andreas)& $750$                     & Moderate; distinct sediment basin propagation and shallow seismogenic depths. \\
+      \texttt{original}   & Northern California       & Strike-slip / Subduction & $\sim 700$                & Moderate to Low; baseline author reference with California-specific noise textures. \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item Target \& Scope: Public seismological training corpora available within
+        SeisBench (\cite{SeisBench}) and integrated into \path{OGS/src/ogstrainer.py}.
+      \item Notice that \texttt{instance} and \texttt{adriaarray} provide the closest
+        crustal velocity and instrumental alignment with the target Alpine-Dinaric domain.
+      \item Evidence Anchor: Configured via \path{OGS/src/ogsconstants.py} constants
+        \texttt{INSTANCE\_STR}, \texttt{ADRIAARRAY\_STR}, \texttt{STEAD\_STR},
+        \texttt{SCEDC\_STR}, and \texttt{ORIGINAL\_STR}.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+
+% =============================================================================
+% SECTION 4: DATA AUGMENTATION AND PROBABILISTIC PHASE LABELING
+% =============================================================================
+\section{Data Augmentation and Probabilistic Phase Labeling}
+\label{sec:data_augmentation}
+
+To prevent the deep neural networks from memorizing absolute phase positions or
+overfitting to localized station noise textures, \path{OGS/src/ogstrainer.py}
+implements an advanced stochastic data augmentation and target generation graph
+via \texttt{seisbench.generate}.
+
+\subsection{Stochastic Augmentation Graph via SeisBench Generate}
+\label{subsec:augmentation_graph}
+
+The augmentation pipeline is constructed dynamically in \texttt{\_build\_augmentations()}
+and integrated into \texttt{seisbench.generate.GenericGenerator}. The operational
+sequence comprises five sequential stochastic transformations:
+
+\begin{enumerate}
+  \item \textbf{WindowAroundSample}: Selects a wide candidate window guaranteed to
+    enclose a verified catalog arrival. Rather than centering the pick deterministically,
+    the pick is randomly positioned within a window of length $2 \times L_{\mathrm{in}}$
+    with $L_{\mathrm{in}}$ samples preceding the pick, using a variable strategy:
+    \begin{lstlisting}[language=python,basicstyle=\scriptsize\ttfamily]
+sbg.WindowAroundSample(
+    list(PHASE_DICT.keys()),
+    samples_before=windowlen,
+    windowlen=windowlen * 2,
+    selection="random",
+    strategy="variable",
+)
+    \end{lstlisting}
+    This prevents the neural network from learning a trivial spatial prior
+    centered at the middle of the window.
+  \item \textbf{RandomWindow}: Performs a secondary stochastic crop to extract
+    the exact model input sequence length ($L=3{,}001$ for PhaseNet, $L=6{,}000$
+    for EQTransformer) with edge zero-padding (\texttt{strategy="pad"}):
+    \begin{lstlisting}[language=python,basicstyle=\scriptsize\ttfamily]
+sbg.RandomWindow(windowlen=windowlen, strategy="pad")
+    \end{lstlisting}
+    This exposes the model to arbitrary arrival offsets, including picks situated
+    near the start or end of the inference window.
+  \item \textbf{ChangeDtype (Input $\mathbf{X}$)}: Explicitly casts waveform sample
+    tensors to 32-bit floating point precision (\texttt{np.float32}), matching
+    PyTorch accelerator requirements and preventing double-precision memory overhead.
+  \item \textbf{ProbabilisticLabeller}: Generates smooth Gaussian probability
+    trajectories centered at the exact fractional sample positions of the P and S
+    arrivals, as detailed in Section~\ref{subsec:probabilistic_labeling}.
+  \item \textbf{ChangeDtype (Target $\mathbf{Y}$)}: Casts the output label probability
+    tensor $\mathbf{Y}$ to \texttt{np.float32} precision.
+\end{enumerate}
+
+\subsection{Probabilistic Phase Label Formulation}
+\label{subsec:probabilistic_labeling}
+
+A fundamental challenge in training neural phase pickers lies in target arrival
+representation. Formulating phase picking as discrete Dirac impulse classification
+($y_c(t) = 1$ if $t = t_{\mathrm{arr}}$, $y_c(t) = 0$ otherwise) incurs two severe
+mathematical deficiencies:
+\begin{enumerate}
+  \item \textbf{Extreme Class Imbalance}: Within an input window of $L = 3{,}001$
+    samples, a single discrete impulse corresponds to a positive class prior
+    $P(y=1) \approx 3.3 \times 10^{-4}$. Gradients generated by cross-entropy loss
+    are overwhelmingly dominated by background noise samples, causing optimization
+    instability.
+  \item \textbf{Absence of Gradient Distance Feedback}: A Dirac target treats a
+    prediction error of 1 sample ($\qty{10}{\milli\second}$) identically to an
+    error of 1,000 samples ($\qty{10}{\second}$), assigning zero probability
+    density and zero smooth gradient outside the single arrival sample.
+\end{enumerate}
+
+To establish a smooth convex optimization manifold that mirrors physical picking
+uncertainty, \texttt{ProbabilisticLabeller} parameterizes phase targets as continuous
+univariate Gaussian bell curves centered at arrival sample $t_{\mathrm{arr}}$:
+\begin{equation}
+  y_c(t) = \exp\left( -\frac{(t - t_{\mathrm{arr}})^2}{2\sigma^2} \right), \quad c \in \{P, S\},
+  \label{eq:gaussian_target_bell}
+\end{equation}
+where the standard deviation $\sigma$ is set to $\sigma = 30$ samples ($0.30\,\unit{\second}$
+at $f_s = 100\,\unit{\hertz}$). The Full Width at Half Maximum (\ac{FWHM}) of the
+resulting target distribution is:
+\begin{equation}
+  \mathrm{FWHM} = 2\sqrt{2\ln 2}\,\sigma \approx 2.3548 \times 30\,\text{samples} \approx 70.64\,\text{samples} \approx 0.706\,\unit{\second}.
+  \label{eq:fwhm_calculation}
+\end{equation}
+This $0.71\,\unit{\second}$ effective probability envelope comfortably spans the
+$0.20\,\unit{\second}$ empirical timing uncertainty threshold associated with
+Hypo71 quality weight $w \le 2$ (Section~\ref{subsec:pick_filtering}), providing
+the network with smooth, non-vanishing gradient guidance proportional to temporal
+offset. Target values are truncated to zero when $y_c(t) < 10^{-4}$.
+
+\subsection{Noise Channel Normalization and Multi-Label Consistency}
+\label{subsec:noise_channel_norm}
+
+For three-class networks (PhaseNet), the background noise channel probability
+$y_N(t)$ is defined as the complementary upper envelope of the seismic phase
+probabilities:
+\begin{equation}
+  y_N(t) = 1 - \max\bigl( y_P(t), y_S(t) \bigr).
+  \label{eq:noise_channel_complement}
+\end{equation}
+
+By construction, this formulation enforces two vital mathematical properties:
+\begin{equation}
+  \max_{c \in \{P, S, N\}} y_c(t) = 1, \quad \text{and} \quad \sum_{c \in \{P, S, N\}} y_c(t) \ge 1, \quad \forall t \in [1, L].
+  \label{eq:label_convexity}
+\end{equation}
+Far from arrival times, $y_P(t) = 0$ and $y_S(t) = 0$, driving $y_N(t) = 1.0$.
+In the immediate vicinity of an arrival, $y_c(t_{\mathrm{arr}}) = 1.0$, which drives
+the noise target $y_N(t_{\mathrm{arr}}) = 0.0$. In transition regimes between
+adjacent arrivals ($S - P$ intervals), the formulation ensures smooth probability
+partitioning without artificial discontinuity.
+
+% =============================================================================
+% SECTION 5: MATHEMATICAL LOSS FORMULATION AND OPTIMIZATION DYNAMICS
+% =============================================================================
+\section{Mathematical Loss Formulation and Optimization Dynamics}
+\label{sec:loss_and_optimization}
+
+Neural network optimization is governed by the vector cross-entropy loss function
+implemented in \texttt{loss\_fn()} of \path{OGS/src/ogstrainer.py}, integrated
+with dynamic GPU waveform normalization and deterministic gradient descent.
+
+\subsection{Multi-Channel Vector Cross-Entropy Loss Derivation}
+\label{subsec:loss_derivation}
+
+Let $\mathbf{Y} \in [0, 1]^{B \times K \times L}$ denote the ground-truth probabilistic
+target tensor and $\hat{\mathbf{Y}} \in [0, 1]^{B \times K \times L}$ denote the
+model-predicted posterior probability tensor for a mini-batch of $B$ training
+examples, $K = 3$ output classes ($c \in \{P, S, N\}$), and sequence length $L$.
+The predicted posterior probabilities are generated by the final temporal softmax
+or sigmoid projection layer.
+
+The vector cross-entropy loss per time sample $t \in \{1, \dots, L\}$ and class
+$c \in \{1, \dots, K\}$ for batch element $b \in \{1, \dots, B\}$ is formulated as:
+\begin{equation}
+  h_{b,c,t} = y_{b,c,t} \log\bigl( \hat{y}_{b,c,t} + \epsilon \bigr),
+  \label{eq:sample_entropy}
+\end{equation}
+where $\epsilon = 10^{-5}$ is a strictly positive numerical regularization constant
+preventing mathematical divergence ($\log 0 \to -\infty$) when model predictions
+approach zero.
+
+The dimensional aggregation follows the SeisBench convention:
+\begin{enumerate}
+  \item \textbf{Mean over Sequence Length ($L$)}: The cross-entropy is averaged
+    across the temporal sample dimension (axis $-1$) to make the loss invariant to
+    arbitrary input window lengths ($L=3{,}001$ versus $L=6{,}000$):
+    \begin{equation}
+      \bar{h}_{b,c} = \frac{1}{L} \sum_{t=1}^{L} y_{b,c,t} \log\bigl( \hat{y}_{b,c,t} + \epsilon \bigr).
+    \end{equation}
+  \item \textbf{Sum over Class Channels ($K$)}: The loss is summed across the $K$
+    mutually dependent target classes (axis $-1$ after sample reduction):
+    \begin{equation}
+      H_b = \sum_{c \in \{P, S, N\}} \bar{h}_{b,c} = \sum_{c \in \{P, S, N\}}
+      \frac{1}{L} \sum_{t=1}^{L} y_{b,c,t} \log\bigl( \hat{y}_{b,c,t} + \epsilon \bigr).
+    \end{equation}
+  \item \textbf{Mean over Mini-Batch ($B$)}: The aggregated entropy is averaged
+    across all $B$ independent samples within the mini-batch:
+    \begin{equation}
+      \mathcal{L}(\mathbf{Y}, \hat{\mathbf{Y}}) = - \frac{1}{B} \sum_{b=1}^{B} H_b =
+      - \frac{1}{B} \sum_{b=1}^{B} \sum_{c \in \{P, S, N\}} \frac{1}{L} \sum_{t=1}^{L}
+      y_{b,c,t} \log\bigl( \hat{y}_{b,c,t} + \epsilon \bigr).
+      \label{eq:final_vector_loss}
+    \end{equation}
+\end{enumerate}
+
+This formulation maps directly to the vectorized implementation in \path{OGS/src/ogstrainer.py}:
+\begin{lstlisting}[language=python,basicstyle=\scriptsize\ttfamily]
+def loss_fn(y_pred, y_true, eps=1e-5):
+    h = y_true * torch.log(y_pred + eps)
+    h = h.mean(-1).sum(-1)  # Mean along sample dim, sum along pick dim
+    h = h.mean()            # Mean over batch axis
+    return -h
+\end{lstlisting}
+
+The analytical partial derivative with respect to predicted logit $\hat{y}_{b,c,t}$
+evaluates to:
+\begin{equation}
+  \frac{\partial \mathcal{L}}{\partial \hat{y}_{b,c,t}} =
+  - \frac{1}{B L} \cdot \frac{y_{b,c,t}}{\hat{y}_{b,c,t} + \epsilon}.
+  \label{eq:loss_gradient}
+\end{equation}
+Because the denominator is bounded from below by $\epsilon = 10^{-5}$, gradient
+magnitudes remain strictly bounded throughout all optimization stages, preventing
+exploding gradients during the initial fine-tuning epochs.
+
+\subsection{Batch-Level Standard Waveform Normalization}
+\label{subsec:batch_normalization}
+
+Seismic waveform amplitudes vary across several orders of magnitude due to
+earthquake magnitude scaling ($\Delta M_{\mathrm{L}} = 1$ corresponds to a factor
+of 10 in ground amplitude) and geometric spreading attenuation. To prevent large-magnitude
+events from dominating gradient updates, dynamic trace standard normalization is
+executed on the GPU device via \texttt{model.annotate\_batch\_pre()}:
+
+\begin{equation}
+  \tilde{x}_{b,j}(t) = \frac{x_{b,j}(t) - \mu_{b,j}}{\sigma_{b,j} + \epsilon_{\mathrm{norm}}}, \quad j \in \{Z, N, E\},
+  \label{eq:batch_trace_std_norm}
+\end{equation}
+where component mean $\mu_{b,j}$ and standard deviation $\sigma_{b,j}$ are computed
+independently across the temporal dimension $t \in [1, L]$:
+\begin{equation}
+  \mu_{b,j} = \frac{1}{L} \sum_{t=1}^{L} x_{b,j}(t), \quad
+  \sigma_{b,j} = \sqrt{\frac{1}{L} \sum_{t=1}^{L} \bigl( x_{b,j}(t) - \mu_{b,j} \bigr)^2},
+\end{equation}
+with $\epsilon_{\mathrm{norm}} = 10^{-6}$ preventing division by zero on dead or
+disconnected channels. Performing standard normalization dynamically within the
+GPU batch tensor graph guarantees exact numerical consistency with operational
+real-time inference in \path{OGS/src/ogspicker.py}.
+
+\subsection{Optimization Dynamics and Deterministic Seeding}
+\label{subsec:optimization_dynamics}
+
+Model parameters $\bm{\Theta}$ are updated using the Adam adaptive moment estimation
+optimizer (\cite{KingmaBa2014}):
+\begin{align}
+  \mathbf{m}_t &= \beta_1 \mathbf{m}_{t-1} + (1 - \beta_1) \mathbf{g}_t, \\
+  \mathbf{v}_t &= \beta_2 \mathbf{v}_{t-1} + (1 - \beta_2) \mathbf{g}_t^2, \\
+  \hat{\mathbf{m}}_t &= \frac{\mathbf{m}_t}{1 - \beta_1^t}, \quad
+  \hat{\mathbf{v}}_t = \frac{\mathbf{v}_t}{1 - \beta_2^t}, \\
+  \bm{\Theta}_t &= \bm{\Theta}_{t-1} - \frac{\eta}{\sqrt{\hat{\mathbf{v}}_t} + \epsilon_{\mathrm{adam}}} \hat{\mathbf{m}}_t,
+\end{align}
+where $\mathbf{g}_t = \nabla_{\bm{\Theta}} \mathcal{L}$ denotes the stochastic gradient,
+$\beta_1 = 0.9$ is the first moment decay, $\beta_2 = 0.999$ is the second moment
+decay, $\epsilon_{\mathrm{adam}} = 10^{-8}$ is the smoothing term, and $\eta$ is
+the learning rate.
+
+The default configuration employs an initial learning rate $\eta = 10^{-2}$ for
+broad parameter adaptation, adjustable via the CLI parameter \texttt{-lr / --learning\_rate}
+down to $\eta = 10^{-3}$ for conservative fine-tuning of deep attention layers.
+Mini-batches are assembled with $B = 256$ samples, providing a balanced trade-off
+between gradient variance reduction and GPU memory occupancy.
+
+To guarantee computational reproducibility across parallel DataLoader worker
+subprocesses, worker initialization is tied to \texttt{seisbench.util.worker\_seeding}:
+\begin{lstlisting}[language=python,basicstyle=\scriptsize\ttfamily]
+train_loader = DataLoader(
+    train_generator,
+    batch_size=self.args.batch_size,
+    shuffle=True,
+    num_workers=self.args.workers,
+    worker_init_fn=worker_seeding,
+)
+\end{lstlisting}
+The \texttt{worker\_seeding} function derives a deterministic random seed for
+each worker process by combining the master PyTorch random state with the worker
+rank identifier, ensuring invariant augmentation sequences across experimental runs.
+
+% =============================================================================
+% SECTION 6: CHECKPOINTING, MODEL EVALUATION, AND VALIDATION STRATEGY
+% =============================================================================
+\section{Checkpointing, Model Evaluation, and Validation Strategy}
+\label{sec:checkpointing_and_validation}
+
+Robust training requires systematic evaluation against unseen validation data
+to diagnose overfitting, guide early stopping, and preserve optimal model states.
+
+\subsection{Dataset Partitioning: Train, Development, and Test Splits}
+\label{subsec:dataset_partitioning}
+
+The SeisBench \texttt{WaveformDataset.train\_dev\_test()} protocol partitions
+the loaded dataset into three mutually disjoint subsets:
+\begin{equation}
+  \mathcal{D} = \mathcal{D}_{\mathrm{train}} \cup \mathcal{D}_{\mathrm{dev}} \cup \mathcal{D}_{\mathrm{test}},
+  \quad \text{with} \quad \mathcal{D}_i \cap \mathcal{D}_j = \emptyset \; \forall i \neq j.
+  \label{eq:dataset_partition}
+\end{equation}
+
+Partitioning is performed at the discrete earthquake event level rather than across
+isolated traces. This spatial-temporal grouping prevents data leakage: all multi-station
+recordings associated with a single seismic event are assigned entirely to one
+split, preventing the neural network from memorizing source focal mechanisms or
+event-specific wavefield signatures during training.
+
+\subsection{Validation Protocol and Memory Optimization}
+\label{subsec:validation_protocol}
+
+At the conclusion of each training epoch, the validation method \texttt{\_validate()}
+evaluates the model across the development generator $\mathcal{D}_{\mathrm{dev}}$:
+\begin{lstlisting}[language=python,basicstyle=\scriptsize\ttfamily]
+self.model.eval()
+total_loss = 0.0
+with torch.no_grad():
+    for batch in dataloader:
+        x = batch["X"].to(self.model.device)
+        x_preproc = self.model.annotate_batch_pre(x, {})
+        pred = self.model(x_preproc)
+        total_loss += loss_fn(pred, batch["y"].to(self.model.device)).item()
+return total_loss / max(num_batches, 1)
+\end{lstlisting}
+
+Two critical execution primitives govern this stage:
+\begin{enumerate}
+  \item \texttt{model.eval()}: Disables dropout layers and freezes batch
+    normalization running statistics, ensuring deterministic evaluation.
+  \item \texttt{torch.no_grad()}: Disables autograd gradient tape tracking,
+    eliminating intermediate activation retention in GPU VRAM and speeding up
+    validation inference by over $300\%$.
+\end{enumerate}
+
+\subsection{State-Preserving Checkpointing Architecture}
+\label{subsec:checkpointing_arch}
+
+The training engine implements a dual checkpoint retention strategy coordinated
+by \texttt{\_save\_checkpoint()}:
+\begin{enumerate}
+  \item \textbf{Epoch-Wise State Dumps} (\path{checkpoint_epoch_<EEE>.pt}):
+    At each epoch $e \in \{1, \dots, E\}$, an exhaustive checkpoint archive is
+    persisted to the output directory:
+    \begin{lstlisting}[language=python,basicstyle=\scriptsize\ttfamily]
+checkpoint = {
+    "epoch": epoch,
+    "model_state_dict": self.model.state_dict(),
+    "optimizer_state_dict": optimizer.state_dict(),
+    "train_loss": train_loss,
+    "val_loss": val_loss,
+    "model_name": self.args.model,
+    "dataset": self.args.dataset,
+}
+    \end{lstlisting}
+    Retaining the complete optimizer state dictionary (\texttt{optimizer\_state\_dict})
+    allows interrupted jobs on HPC clusters to resume without resetting Adam
+    momentum and variance tracking buffers.
+  \item \textbf{Optimal Model Tracking} (\path{best_model.pt}):
+    The trainer continuously monitors the development set average loss
+    $\bar{\mathcal{L}}_{\mathrm{val}}$. Whenever the current epoch yields a strictly
+    lower loss than all preceding epochs ($\bar{\mathcal{L}}_{\mathrm{val}} < \mathcal{L}_{\mathrm{best}}$),
+    the pure model state weights are updated:
+    \begin{equation}
+      \bm{\Theta}_{\mathrm{best}} \leftarrow \bm{\Theta}_e, \quad \mathcal{L}_{\mathrm{best}} \leftarrow \bar{\mathcal{L}}_{\mathrm{val}}.
+      \label{eq:best_model_update}
+    \end{equation}
+    The resulting \path{best_model.pt} artifact represents the production-ready
+    fine-tuned weights, directly loadable by \path{OGS/src/ogspicker.py} for
+    inference across the operational pipeline.
+\end{enumerate}
+
+% =============================================================================
+% SECTION 7: HPC WORKFLOW ORCHESTRATION ON CINECA LEONARDO
+% =============================================================================
+\section{HPC Workflow Orchestration on CINECA Leonardo}
+\label{sec:hpc_orchestration}
+
+Training and fine-tuning deep neural networks across continuous multi-year seismic
+archives requires petascale computational throughput. The training workflow is
+engineered for scalable execution on the \textbf{Leonardo} supercomputer hosted
+at \ac{CINECA} under EuroHPC.
+
+\subsection{Leonardo Booster Architecture and Hardware Acceleration}
+\label{subsec:leonardo_booster}
+
+The training pipeline is deployed on the Leonardo Booster partition, whose
+architectural attributes were introduced in Chapter~\ref{chap:hpc}. Each Atos
+BullSequana X2135 compute node integrates:
+\begin{itemize}
+  \item \textbf{Compute Accelerators}: Four NVIDIA Ampere A100-SXM4 GPUs with
+    $64\,\unit{\giga\byte}$ of high-bandwidth HBM2e memory per GPU, delivering
+    $1.55\,\unit{\tera\byte\per\second}$ of memory bandwidth and $19.5\,\unit{\tera\text{FLOPS}}$
+    of single-precision (FP32) performance ($156\,\unit{\tera\text{FLOPS}}$ TF32).
+  \item \textbf{Host Processor}: A 32-core Intel Xeon Platinum 8358 CPU
+    ($2.60\,\unit{\giga\hertz}$, 64 threads) with $512\,\unit{\giga\byte}$ of
+    DDR4-3200 host memory.
+  \item \textbf{High-Speed Interconnect}: NVIDIA NVLink 3.0 inter-GPU fabric
+    providing $600\,\unit{\giga\byte\per\second}$ bidirectional communication,
+    complemented by dual 200G HDR InfiniBand adapters in Dragonfly+ topology.
+  \item \textbf{Parallel Filesystem}: Shared high-speed Lustre scratch filesystem
+    (\path{/leonardo_work/IscrC_AISeism/}) capable of delivering $> 100\,\unit{\giga\byte\per\second}$
+    aggregate I/O throughput for HDF5 dataset ingestion.
+\end{itemize}
+
+\subsection{Parameterized Workflow Execution via GNU Make}
+\label{subsec:makefile_trainer}
+
+To streamline training campaigns and enforce operational reproducibility, the
+training workflow is parameterized within the central orchestration Makefile
+at \path{OGS/utils/Leonardo/Makefile}.
+
+The \texttt{Trainer} target encapsulates model selection, baseline dataset,
+hyperparameters, and directory paths:
+\begin{lstlisting}[language=make,basicstyle=\scriptsize\ttfamily]
+# Training defaults
+EPOCHS        ?= 5
+BATCH_SIZE    ?= 256
+LEARNING_RATE ?= 1e-2
+WORKERS       ?= 4
+
+Trainer:
+	@bash LAUNCHME.sh $(SLURM_TEMPLATE) 1 1 "Trainer_$(MODEL)_$(DATASET)" \
+	  $(PYTHON_BIN) $(OGS_PATH)/src/ogstrainer.py \
+	    -C $(CATALOG_PATH) \
+	    -W $(WAVE_PATH) \
+	    -D $(START_DATE) $(END_DATE) \
+	    -m $(MODEL) \
+	    -s $(DATASET) \
+	    -b $(BATCH_SIZE) \
+	    -e $(EPOCHS) \
+	    -lr $(LEARNING_RATE) \
+	    -w $(WORKERS) \
+	    -o $(WORK_PATH)/models/$(MODEL)/$(DATASET)
+\end{lstlisting}
+
+Researchers can override any hyperparameter directly via CLI variables:
+\begin{lstlisting}[language=bash,basicstyle=\scriptsize\ttfamily]
+# Fine-tune PhaseNet on INSTANCE weights for 20 epochs with learning rate 1e-3
+make Trainer MODEL=PhaseNet DATASET=INSTANCE EPOCHS=20 BATCH_SIZE=128 LEARNING_RATE=1e-3
+
+# Fine-tune EQTransformer from STEAD global weights
+make Trainer MODEL=EQTransformer DATASET=STEAD EPOCHS=15 BATCH_SIZE=64 LEARNING_RATE=5e-4
+\end{lstlisting}
+
+\subsection{SLURM Job Wrapping via LAUNCHME.sh}
+\label{subsec:slurm_launchme}
+
+Execution on Leonardo is managed through the dynamic SLURM job submission wrapper
+\path{OGS/utils/Leonardo/LAUNCHME.sh}, interfacing with the job template
+\path{OGS/utils/Leonardo/ktanakah.sh}.
+
+When invoked with \texttt{bash LAUNCHME.sh <template> 1 1 <jobName> <command>},
+the wrapper dynamically populates the SLURM allocation headers:
+\begin{lstlisting}[language=bash,basicstyle=\scriptsize\ttfamily]
+#SBATCH --job-name="Trainer_PhaseNet_INSTANCE"
+#SBATCH --nodes=1
+#SBATCH --tasks-per-node=1
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=32
+#SBATCH --account=IscrC_AISeism
+#SBATCH --mem=490000MB
+#SBATCH --partition=boost_usr_prod
+#SBATCH --qos=boost_qos_dbg
+#SBATCH --time=00:30:00
+\end{lstlisting}
+This allocates a dedicated NVIDIA A100 GPU (\texttt{--gres=gpu:1}) paired with
+all 32 host CPU cores (\texttt{--cpus-per-task=32}) and $490\,\unit{\giga\byte}$
+system RAM on the production Booster partition (\texttt{boost\_usr\_prod}).
+Before launching Python, the wrapper invokes \path{ACTIVATEME.sh}, activating
+the optimized Conda environment \texttt{SBC\_3.12} containing PyTorch compiled
+with CUDA 12, cuDNN, and SeisBench libraries.
+
+\subsection{End-to-End Pipeline DAG and Evidence Synthesis}
+\label{subsec:pipeline_dag_evidence}
+
+The complete training and domain adaptation workflow is synthesized in the
+directed acyclic graph depicted in Figure~\ref{fig:training_dag}.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[
+      >=Stealth,
+      node distance=5mm and 6mm,
+      every node/.style={font=\scriptsize},
+      base/.style={rectangle, rounded corners=3pt, draw=black!80,
+      line width=0.7pt, align=center, inner sep=4pt, minimum height=7mm},
+      data/.style={base, fill=gray!10, draw=black!80, double, double
+      distance=1pt, text width=26mm},
+      proc/.style={base, fill=blue!8, draw=blue!80!black, text width=28mm},
+      qc/.style={base, fill=teal!10, draw=teal!80!black, text width=26mm},
+      planned/.style={base, fill=gray!4, draw=black!50, dash pattern=on 3.5pt off 2.5pt, text width=26mm, font=\scriptsize\itshape},
+      arrow/.style={->, thick, draw=black!75},
+      dashedarrow/.style={->, thick, dashed, draw=black!50}
+    ]
+
+    % Row 1: Data Extraction
+    \node[data] (cat) {OGS Catalog\\(Weights $w \le 2$)};
+    \node[data, right=of cat] (mseed) {Raw Continuous MSEED\\(\path{WAVE_PATH})};
+    \node[proc, right=of mseed] (extract) {Stream Extraction\\($\pm 60\,\unit{\second}$ windowing)};
+
+    % Row 2: Preprocessing & Serialization
+    \node[proc, below=of extract] (clean) {Conditioning Pipeline\\(\texttt{get_clean_trace})};
+    \node[data, below=of mseed] (hdf5) {SeisBench HDF5\\(\path{waveforms.hdf5})};
+    \node[data, below=of cat] (meta) {Columnar Index\\(\path{metadata.csv})};
+
+    % Row 3: Augmentation & Batching
+    \node[proc, below=of hdf5] (gen) {SeisBench Generator\\(\texttt{WindowAroundSample})};
+    \node[proc, right=of gen] (label) {Probabilistic Labeller\\($\sigma = 30$ samples)};
+    \node[proc, right=of label] (batch) {DataLoader Workers\\($B=256$, seed init)};
+
+    % Row 4: GPU Acceleration & Training
+    \node[proc, below=of batch] (norm) {GPU Normalization\\(\texttt{annotate_batch_pre})};
+    \node[proc, below=of label] (model) {Neural Forward Pass\\(PhaseNet / EQT)};
+    \node[proc, below=of gen] (loss) {Vector Cross-Entropy\\(\texttt{loss_fn}, $\epsilon=10^{-5}$)};
+
+    % Row 5: Checkpointing & Validation
+    \node[proc, below=of loss] (opt) {Adam Optimization\\($\eta \in [10^{-3}, 10^{-2}]$)};
+    \node[data, below=of model] (ckpt) {Checkpoint Archives\\(\path{best_model.pt})};
+    \node[planned, below=of norm] (bench) {[Proposed] Regional\\Evaluation Suite};
+
+    % Connections
+    \draw[arrow] (cat) -- (extract);
+    \draw[arrow] (mseed) -- (extract);
+    \draw[arrow] (extract) -- (clean);
+    \draw[arrow] (clean) -- (hdf5);
+    \draw[arrow] (clean) -- (meta);
+    \draw[arrow] (hdf5) -- (gen);
+    \draw[arrow] (meta) -- (gen);
+    \draw[arrow] (gen) -- (label);
+    \draw[arrow] (label) -- (batch);
+    \draw[arrow] (batch) -- (norm);
+    \draw[arrow] (norm) -- (model);
+    \draw[arrow] (model) -- (loss);
+    \draw[arrow] (loss) -- (opt);
+    \draw[arrow] (opt) -- (ckpt);
+    \draw[dashedarrow] (ckpt) -- (bench);
+
+    % Subsystem Boxes
+    \begin{pgfonlayer}{background}
+      \node[draw=blue!40, fill=blue!2, dashed, rounded corners=5pt,
+      fit=(clean) (extract), inner sep=4pt] (ingestbox) {};
+      \node[anchor=north west, font=\tiny\bfseries\color{blue!70!black}] at
+      (ingestbox.north west) {Stream Conditioning};
+
+      \node[draw=teal!40, fill=teal!2, dashed, rounded corners=5pt,
+      fit=(norm) (model) (loss) (opt), inner sep=4pt] (trainbox) {};
+      \node[anchor=south west, font=\tiny\bfseries\color{teal!70!black}] at
+      (trainbox.south west) {Leonardo Booster GPU Execution};
+    \end{pgfonlayer}
+
+  \end{tikzpicture}
+  \caption{Directed Acyclic Graph (DAG) of the regional deep-learning training
+    and domain adaptation pipeline. Double-bordered gray boxes denote immutable
+    persistent filesystem storage (catalog records, miniSEED streams, HDF5 containers,
+    and checkpoint binaries); solid blue boxes indicate demonstrated software modules
+    implemented in \path{OGS/src/ogstrainer.py}; dashed gray boxes indicate planned
+    validation benchmarks. Notice that stream conditioning and HDF5 serialization
+    occur prior to stochastic augmentation, ensuring zero-copy GPU batch loading.}
+  \label{fig:training_dag}
+\end{figure}
+
+Table~\ref{tab:training_hyperparameters} provides an exhaustive specification
+of all operational hyperparameters, network dimensions, and optimization parameters
+governing PhaseNet and EQTransformer training within the Leonardo Booster environment.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Operational hyperparameters, architectural dimensions, and optimization
+    configurations for regional domain adaptation on Leonardo Booster.}
+  \label{tab:training_hyperparameters}
+  \begin{threeparttable}
+    \begin{tabularx}{\linewidth}{l c c X}
+      \toprule
+      \textbf{Configuration Parameter} & \textbf{PhaseNet Setup} & \textbf{EQTransformer Setup} & \textbf{Operational Rationale \& Algorithmic Constraint} \\
+      \midrule
+      Input Sequence Length ($L$) & $3{,}001$ samples & $6{,}000$ samples & $30.01\,\unit{\second}$ vs $60.00\,\unit{\second}$ at $100\,\unit{\hertz}$; captures full $S$-coda. \\
+      Input Waveform Channels ($C$)& $3$ ($Z, N, E$)   & $3$ ($Z, N, E$)   & Normalized 3-component particle motion velocities. \\
+      Pretrained Weight Baselines & \texttt{instance} & \texttt{stead}     & Warm-start representations from Italian or global corpora. \\
+      Mini-Batch Size ($B$)       & $256$             & $128$ / $256$      & Balances GPU VRAM saturation with gradient variance reduction. \\
+      Optimizer Class             & Adam              & Adam               & First moment $\beta_1=0.9$, second moment $\beta_2=0.999$. \\
+      Base Learning Rate ($\eta$) & $1.0 \times 10^{-2}$& $1.0 \times 10^{-2}$& Standard CLI default; fine-tunable down to $10^{-3}$. \\
+      Loss Regularization ($\epsilon$) & $1.0 \times 10^{-5}$ & $1.0 \times 10^{-5}$ & Numerical stability constant in vector cross-entropy. \\
+      Label Target Standard Dev ($\sigma$) & $30$ samples & $30$ samples & $0.30\,\unit{\second}$ Gaussian envelope matching pick quality $w \le 2$. \\
+      Preprocessing Bandpass Filter & $0.1\text{--}20.0\,\unit{\hertz}$ & $0.1\text{--}20.0\,\unit{\hertz}$ & 4th-order zero-phase Butterworth; isolates seismic signal. \\
+      Pick Quality Weight Threshold & $w \le 2$         & $w \le 2$          & Discards emergent picks with timing uncertainty $> 0.2\,\unit{\second}$. \\
+      DataLoader Workers ($N_w$)  & $4$               & $4$                & Asynchronous multi-process loading with \texttt{worker_seeding}. \\
+      Hardware Allocation (SLURM) & $1 \times$ A100 GPU & $1 \times$ A100 GPU & $64\,\unit{\giga\byte}$ HBM2e, 32 CPU cores, $490\,\unit{\giga\byte}$ RAM on Booster. \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item Target \& Scope: Algorithmic parameters for neural network fine-tuning
+        configured in \path{OGS/src/ogstrainer.py} and submitted via \path{OGS/utils/Leonardo/Makefile}.
+      \item Notice the difference in input sequence length ($3{,}001$ vs $6{,}000$ samples),
+        reflecting EQTransformer's recurrent attention mechanism over extended coda sequences.
+      \item Evidence Anchor: Formulated in \texttt{ogstrainer.py} functions \texttt{\_build\_augmentations()},
+        \texttt{loss\_fn()}, and Makefile target \texttt{Trainer}.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+
+\section{Summary and Outlook}
+\label{sec:training_summary}
+
+This chapter has established the mathematical principles, software architecture,
+and HPC execution protocol for deep-learning seismic phase picker fine-tuning and
+regional domain adaptation. By integrating analyst-curated arrival picks from the
+\ac{OGS} bulletin with continuous multi-channel waveform streams, the system
+enforces strict pick uncertainty constraints ($w \le 2$, $\sigma_t \le 0.2\,\unit{\second}$),
+deterministic signal conditioning, stochastic multi-window augmentation, and
+continuous Gaussian label smoothing.
+
+The derived vector cross-entropy loss function guarantees numerically stable
+gradient updates on GPU accelerators, while the dual checkpoint retention protocol
+safeguards optimal model states for operational catalog generation. Deploying this
+framework through parameterized Makefile rules and SLURM wrappers on the CINECA
+Leonardo Booster supercomputer provides the computational foundation for
+evaluating regional domain adaptation across the complex tectonic boundaries of
+Northeastern Italy, paving the way for high-resolution automated seismicity
+monitoring.
+

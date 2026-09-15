@@ -60,7 +60,7 @@ The 24 Python source modules (+ 1 package initializer) are organized functionall
 | [`ogsqc.py`](ogsqc.py) | `OGSPickStatQC`, `EventStatQC` | `ml_catalog.modules.PickStatQC` | Quality control filters using minimum pick counts (P/S/total) and geographic polygon bounding. | dask, matplotlib, ml_catalog |
 | [`real.py`](real.py) | `REALAssociator` | `AbstractAssociator` | Wrapper around the REAL (Rapid Earthquake Association and Location) grid-search phase associator with TauP travel times. | obspy.taup, ml_catalog |
 | [`ogsbuilderMPI.py`](ogsbuilderMPI.py) | `OGSCatalogBuilderMPI` | `ml_catalog.CatalogBuilder` | MPI-parallel catalog generation driver using `dask_mpi`. | dask_mpi, ml_catalog |
-| [`ogstrainer.py`](ogstrainer.py) | Training loop / CLI | PyTorch + SeisBench | Fine-tunes SeisBench neural network pickers on OGS waveform data. | torch, seisbench, obspy |
+| [`ogstrainer.py`](ogstrainer.py) | `OGSTrainer`, CLI main | PyTorch + SeisBench | Complete fine-tuning engine for SeisBench pickers (PhaseNet, EQTransformer) on OGS waveform archives: catalog pick filtering (Hypo71 weights $\le 2$), DSP trace conditioning, arrival-centered augmentation, probabilistic Gaussian target labeling ($\sigma=30$), vector cross-entropy loss, Adam optimization, validation, and epoch/best checkpointing. | torch, seisbench, obspy, pandas, numpy |
 
 ### 6. Clustering and Visualization
 

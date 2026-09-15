@@ -1,10 +1,24 @@
 #!/usr/bin/env bash
 
+# =============================================================================
 # LLM Script Common Functions
-# ===========================
+# =============================================================================
 #
+# OVERVIEW:
 # Provide shared diagnostic and dependency helpers for the LLM command scripts.
 # This file is source-only and has no command-line interface or side effects.
+#
+# AUTHORS:
+#   - 健
+#   - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+#     Centro di Ricerche Sismologiche (CRS)
+#   - Università degli Studi di Trieste (UniTS)
+#     Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+#     Applied Data Science and Artificial Intelligence (ADSAI)
+#   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+#     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
+#
+# =============================================================================
 
 # ---------------------------------------------------------------------------
 # Logging and errors
