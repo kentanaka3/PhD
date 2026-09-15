@@ -435,12 +435,11 @@ PhD:
 	@$(foreach m,$(MODELS),$(foreach d,$(DATASETS),$(foreach t,$(THRESHOLDS), \
 	  echo "Submitting $m[$d,$t] to SLURM..."; \
 	  $(MAKE) --no-print-directory '$m[$d,$t]' PROJECT=PhD \
-	    START_DATE=19700101 END_DATE=20251231 ; )))
+	    START_DATE=20050101 END_DATE=20251231 ; )))
 	@$(foreach a,$(ASSOCS),$(foreach t,$(THRESHOLDS), \
 	  echo "Submitting NLL1D[$a,PhaseNet,INSTANCE,$t] to SLURM..."; \
-	  $(MAKE) --no-print-directory 'NLL1D[$a,PhaseNet,INSTANCE,$t]' \
-	    PROJECT=PhD \
-	    START_DATE=20240320 END_DATE=20240620 ; ))
+	  $(MAKE) --no-print-directory 'NLL1D[$a,PhaseNet,INSTANCE,$t]' PROJECT=PhD \
+	    START_DATE=20050101 END_DATE=20251231 ; ))
 
 # =============================================================================
 # CATALOG MANAGEMENT

@@ -1,10 +1,10 @@
-_target_: OGS.src.ogsmagnitude.OGSLocalMagnitude
+_target_: src.ogsmagnitude.OGSLocalMagnitude
 station_corrections:
   _target_: pandas.read_csv
-  filepath_or_buffer: "OGS/data/Magnitude/LocalMagnitude/MagnitudeCorrection.csv"
+  filepath_or_buffer: "data/Magnitude/LocalMagnitude/MagnitudeCorrection.csv"
 ignore_stations:
   _target_: pandas.read_csv
-  filepath_or_buffer: "OGS/data/Magnitude/LocalMagnitude/IGNORE_STATIONS.csv"
+  filepath_or_buffer: "data/Magnitude/LocalMagnitude/IGNORE_STATIONS.csv"
 attenuation_params:
   c0: -18.0471
   c1: 1.105

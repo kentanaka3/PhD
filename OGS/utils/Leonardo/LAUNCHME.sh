@@ -286,8 +286,8 @@ main() { # 90
   fi
 
   case "$JOB_NAME" in
-    *[!A-Za-z0-9_.-]*)
-      fail 2 "job name may contain only letters, numbers, _, ., and -"
+    *[!A-Za-z0-9_.,\[\]-]*)
+      fail 2 "job name may contain only letters, numbers, _, ., -, ,, [, and ]"
       ;;
   esac
 
