@@ -9,20 +9,20 @@
 \usepackage[table]{xcolor}
 \usepackage{hyperref}
 \hypersetup{
-  colorlinks=true,
-  linkcolor=blue!70!black,
-  citecolor=blue!70!black,
-  urlcolor=blue!70!black
+  colorlinks = true,
+  linkcolor  = blue!70!black,
+  citecolor  = blue!70!black,
+  urlcolor   = blue!70!black
 }
 \usepackage{geometry}
 \geometry{
   a4paper,
-  left=2cm,
-  right=2cm,
-  top=3.5cm,
-  bottom=2.5cm,
-  bindingoffset=5mm,
-  headheight=15pt
+  left          = 2cm,
+  right         = 2cm,
+  top           = 3.5cm,
+  bottom        = 2.5cm,
+  bindingoffset = 5mm,
+  headheight    = 15pt
 }
 \usepackage{helvet}
 \renewcommand{\familydefault}{\sfdefault}
@@ -32,28 +32,28 @@
 \usepackage{titling}
 \usepackage{eso-pic}
 \usepackage{transparent}
-\usepackage{amsmath, amsfonts, amssymb}
+\usepackage{amsmath, amsfonts, amssymb, amsthm}
 \usepackage{epstopdf}
 \usepackage[
-  style=authoryear,
-  backend=bibtex,
-  maxbibnames=99,
-  maxcitenames=1,
-  minnames=1,
-  sorting=nyt,
-  natbib=true,
-  url=true,
-  doi=true,
-  eprint=false,
-  isbn=false,
+  style        = authoryear,
+  backend      = bibtex,
+  maxbibnames  = 99,
+  maxcitenames = 1,
+  minnames     = 1,
+  sorting      = nyt,
+  natbib       = true,
+  url          = true,
+  doi          = true,
+  eprint       = false,
+  isbn         = false,
 ]{biblatex}
 \addbibresource{lib.bib}
 \usepackage{booktabs, caption, subcaption}
 \captionsetup{
-  labelfont=bf,
-  singlelinecheck=false,
-  labelsep=space,
-  skip=4pt
+  labelfont       = bf,
+  singlelinecheck = false,
+  labelsep        = space,
+  skip            = 4pt
 }
 \usepackage{threeparttable}
 \usepackage{tabularx}
@@ -61,6 +61,12 @@
 \usepackage{multicol, multirow}
 \usepackage{comment}
 \usepackage{acro}
+\acsetup{
+  cite/group     = true,
+  cite/group/cmd = \cite,
+  cite/cmd       = \parencite
+}
+\AddToHook{cmd/chapter/before}{\acresetall}
 \usepackage{pdflscape}
 \usepackage{microtype}
 \microtypesetup{nopatch=footnote}
@@ -80,6 +86,17 @@
 % Semantic mathematical operators
 \DeclareMathOperator{\argmin}{arg\,min}
 \DeclareMathOperator{\argmax}{arg\,max}
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\Cov}{Cov}
+
+% Theorem and mathematical environments
+\newtheorem{theorem}{Theorem}[chapter]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}{Definition}[chapter]
+\newtheorem{assumption}{Assumption}[chapter]
+\newtheorem{remark}{Remark}[chapter]
 
 % Redefine equation references to include "Eq." prefix for clarity in text.
 \let\originaleqref\eqref
@@ -160,15 +177,29 @@
   long = Applied Data Science and Artificial Intelligence
 }
 \DeclareAcronym{AI}{short = AI, long = Artificial Intelligence}
-\DeclareAcronym{AIC}{short = AIC, long = Akaike Information Criterion}
+\DeclareAcronym{AIC}{
+  short = AIC,
+  long = Akaike Information Criterion,
+  cite = akaike1974
+}
 \DeclareAcronym{API}{short = API, long = Application Programming Interface}
 \DeclareAcronym{ARSO}{
   short = ARSO,
   long = Agencija Republike Slovenije za okolje
 }
+\DeclareAcronym{BIC}{
+  short = $\mathrm{BIC}$,
+  long = Bayesian Information Criterion,
+  cite = schwarz1978
+}
 \DeclareAcronym{BPGMA}{
   short = BPGMA,
   long = Bipartite Graph Matching Algorithm
+}
+\DeclareAcronym{CH}{
+  short = $\mathrm{CH}$,
+  long = Calinski--Harabasz Index,
+  cite = calinski1974
 }
 \DeclareAcronym{CINECA}{
   short = CINECA,
@@ -179,19 +210,33 @@
 \DeclareAcronym{CPU}{short = CPU, long = Central Processing Unit}
 \DeclareAcronym{CRS}{short = CRS, long = Centro di Ricerche Sismologiche}
 \DeclareAcronym{CUDA}{short = CUDA, long = Compute Unified Device Architecture}
+
+\DeclareAcronym{DB}{
+  short = $\mathrm{DB}$,
+  long = Davies--Bouldin Index,
+  cite = davies1979
+}
+\DeclareAcronym{DAG}{short = DAG, long = Directed Acyclic Graph}
 \DeclareAcronym{DBSCAN}{
   short = DBSCAN,
-  long = Density-Based Spatial Clustering of Applications with Noise
+  long = Density-Based Spatial Clustering of Applications with Noise,
+  cite = ester1996
 }
+\DeclareAcronym{DCGP}{short = DCGP, long = Data-Centric General-Purpose}
 \DeclareAcronym{DL}{short = DL, long = Deep Learning}
 \DeclareAcronym{DOI}{short = DOI, long = Digital Object Identifier}
 \DeclareAcronym{EDT}{short = EDT, long = Equal Differential Time}
 \DeclareAcronym{EIDA}{short = EIDA, long = European Integrated Data Archive}
 \DeclareAcronym{EM}{short = EM, long = Expectation-Maximization}
-\DeclareAcronym{EQTransformer}{
-  short = EQTransformer,
+\DeclareAcronym{EQT}{
+  short = EQT,
   long = Earthquake Transformer,
-  cite=EQTransformer
+  cite = EQTransformer
+}
+\DeclareAcronym{ETAS}{
+  short = ETAS,
+  long = Epidemic-Type Aftershock Sequence,
+  cite = ogata1988
 }
 \DeclareAcronym{F1}{short = F1, long = F1 Score}
 \DeclareAcronym{FDR}{short = FDR, long = False Discovery Rate}
@@ -206,28 +251,44 @@
 \DeclareAcronym{GaMMA}{
   short = GaMMA,
   long = Gaussian Mixture Model Associator,
-  cite=GaMMA
+  cite = GaMMA
 }
 \DeclareAcronym{GPU}{short = GPU, long = Graphics Processing Unit}
 \DeclareAcronym{GRU}{short = GRU, long = Gated Recurrent Unit}
 \DeclareAcronym{HDD}{short = HDD, long = Hard Disk Drive}
 \DeclareAcronym{HPC}{short = HPC, long = High Performance Computing}
-\DeclareAcronym{HypoDD}{short = HypoDD, long = Hypocenter Double-Difference}
+\DeclareAcronym{HypoDD}{
+  short = HypoDD,
+  long = Hypocenter Double-Difference,
+  cite = waldhauser2000
+}
 \DeclareAcronym{INGV}{
   short = INGV,
   long = Istituto Nazionale di Geofisica e Vulcanologia
 }
+\DeclareAcronym{IPP}{short = IPP, long = Inhomogeneous Poisson Process}
 \DeclareAcronym{INSTANCE}{
   short = INSTANCE,
   long = Italian Seismic Dataset for Machine Learning,
-  cite=INSTANCE
+  cite = INSTANCE
 }
 \DeclareAcronym{KNN}{
   short = KNN,
   long = K-Nearest Neighbors
 }
+\DeclareAcronym{KL}{
+  short = $D_\mathrm{KL}$,
+  long = Kullback--Leibler Divergence,
+  cite = kullback1951
+}
 \DeclareAcronym{KPI}{short = KPI, long = Key Performance Indicator}
 \DeclareAcronym{LSTM}{short = LSTM, long = Long Short-Term Memory}
+\DeclareAcronym{MAE}{short = $\mathrm{MAE}$, long = Mean Absolute Error}
+\DeclareAcronym{MDL}{
+  short = MDL,
+  long = Minimum Description Length,
+  cite = rissanen1978
+}
 \DeclareAcronym{MH}{short = MH, long = Matched}
 \DeclareAcronym{MHPC}{
   short = MHPC,
@@ -239,12 +300,17 @@
 }
 \DeclareAcronym{ML}{short = ML, long = Machine Learning}
 \DeclareAcronym{MLP}{short = MLP, long = Multilayer Perceptron}
+\DeclareAcronym{MLE}{
+  short = $\mathrm{MLE}$,
+  long = Maximum Likelihood Estimation
+}
 \DeclareAcronym{MPI}{short = MPI, long = Message Passing Interface}
 \DeclareAcronym{MS}{short = MS, long = Missed}
+\DeclareAcronym{NCSN}{short = NCSN, long = Northern California Seismic Network}
 \DeclareAcronym{NonLinLoc}{
   short = NonLinLoc,
   long = Non-Linear Earthquake Location Algorithm,
-  cite=NonLinLoc
+  cite = NonLinLoc
 }
 \DeclareAcronym{NUMA}{short = NUMA, long = Non-Uniform Memory Access}
 \DeclareAcronym{OGS}{
@@ -256,16 +322,29 @@
   long = Observatories and Research Facilities for European Seismology
 }
 \DeclareAcronym{PCA}{short = PCA, long = Principal Component Analysis}
-\DeclareAcronym{PhaseNet}{short = PhaseNet, long = PhaseNet, cite = PhaseNet}
+\DeclareAcronym{PELT}{
+  short = PELT,
+  long = Pruned Exact Linear Time,
+  cite = killick2012
+}
+\DeclareAcronym{PhaseNet}{
+  short = PhaseNet,
+  long = PhaseNet Deep-Learning Phase Picker,
+  cite = PhaseNet
+}
 \DeclareAcronym{PNRR}{
   short = PNRR,
   long = Piano Nazionale di Ripresa e Resilienza
 }
 \DeclareAcronym{PS}{short = PS, long = Proposed}
+\DeclareAcronym{PSHA}{
+  short = PSHA,
+  long = Probabilistic Seismic Hazard Analysis
+}
 \DeclareAcronym{PyOcto}{
   short = PyOcto,
   long = High-Throughput Octree-Based Seismic Phase Associator,
-  cite=PyOcto
+  cite = PyOcto
 }
 \DeclareAcronym{QC}{short = QC, long = Quality Control}
 \DeclareAcronym{QoS}{short = QoS, long = Quality of Service}
@@ -273,15 +352,26 @@
 \DeclareAcronym{RAN}{short = RAN, long = Rete Accelerometrica Nazionale}
 \DeclareAcronym{RF}{short = RF, long = Random Forest}
 \DeclareAcronym{RNN}{short = RNN, long = Recurrent Neural Network}
+\DeclareAcronym{RMSE}{short = RMSE, long = Root Mean Square Error}
+\DeclareAcronym{SC}{
+  short = $\mathrm{SC}$,
+  long = Silhouette Coefficient,
+  cite = rousseeuw1987
+}
 \DeclareAcronym{SCEDC}{
   short = SCEDC,
   long = Southern California Earthquake Data Center,
-  cite=SCEDC
+  cite = SCEDC
+}
+\DeclareAcronym{SCSN}{
+  short = SCSN,
+  long = Southern California Seismic Network
 }
 \DeclareAcronym{SED}{short = SED, long = Swiss Seismological Service}
 \DeclareAcronym{SMINO}{
   short = SMINO,
-  long = Sistema di Monitoraggio terrestre dell'Italia Nord Orientale
+  long = Sistema di Monitoraggio terrestre dell'Italia Nord Orientale,
+  cite = SMINO
 }
 \DeclareAcronym{SNR}{short = SNR, long = Signal-to-Noise Ratio}
 \DeclareAcronym{SM}{short = SM, long = Skimmed}
@@ -289,12 +379,13 @@
 \DeclareAcronym{SSD}{short = SSD, long = Solid State Drive}
 \DeclareAcronym{STA/LTA}{
   short = STA/LTA,
-  long = Short-Time Average/Long-Time Average
+  long = Short-Time Average/Long-Time Average,
+  cite = STALTA
 }
 \DeclareAcronym{STEAD}{
   short = STEAD,
   long = STanford EArthquake Dataset,
-  cite=STEAD
+  cite = STEAD
 }
 \DeclareAcronym{STFT}{short = STFT, long = Short-Time Fourier transform}
 \DeclareAcronym{SVD}{short = SVD, long = Singular Value Decomposition}
@@ -306,6 +397,11 @@
 \DeclareAcronym{TN}{short = TN, long = True Negative}
 \DeclareAcronym{TP}{short = TP, long = True Positive}
 \DeclareAcronym{UniTS}{short = UniTS, long = Università degli Studi di Trieste}
+\DeclareAcronym{UMVUE}{
+  short = $\mathrm{UMVUE}$,
+  long = Uniformly Minimum-Variance Unbiased Estimator,
+  cite = lehmann1950
+}
 
 \usepackage[onehalfspacing]{setspace}
 
@@ -379,6 +475,13 @@
 \chapter{HPC Implementation}
 \input{main/Chapter5_HPC_Implementation}
 \supplementarymaterial{HPC Implementation}{HPCImplementation}
+
+\chapter{Training}
+\input{main/Chapter7_Training}
+
+\chapter{Seismic Swarm and Density-Based Clustering}
+\input{main/Chapter8_Clustering}
+\supplementarymaterial{Seismic Swarm and Density-Based Clustering}{Clustering}
 
 \chapter{Results}
 \input{main/Chapter6_Results}

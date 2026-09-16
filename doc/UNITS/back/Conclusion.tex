@@ -7,13 +7,13 @@
 
 \label{chap:conclusion}
 
-This dissertation documents the design and source-level
-implementation of a modular machine-learning computational pipeline
-for phase picking, spatiotemporal association, non-linear hypocenter
-location, and local-magnitude estimation. The \ac{OGS} source tree and
-tests demonstrate components of this workflow, while the run-level
-provenance needed to establish the numerical
-Chapter~\ref{chap:results} findings is not present in this checkout.
+This dissertation documents the design and source-level implementation of a
+modular machine-learning computational pipeline for phase picking,
+spatiotemporal association, non-linear hypocenter location, and
+local-magnitude estimation. The \ac{OGS} source tree and tests demonstrate
+components of this workflow, while the run-level provenance needed to establish
+the numerical Chapter~\ref{chap:results} findings is not present in this
+checkout.
 Those numerical findings therefore remain under human review rather
 than validated empirical conclusions.
 
@@ -22,7 +22,8 @@ initiated on March 27, 2024, by the $M_{\mathrm{L}}~4.6$
 ($M_{\mathrm{w}}~4.5$) Socchieve earthquake---the most energetic
 seismic shock to strike Friuli since the 1976--1980 disaster---along
 with its vigorous aftershock sequence. Recording continuous
-wavefields across 266 stations belonging to 18 regional, national,
+wavefields across \placeholder{NUM STATIONS} stations belonging to
+18 regional, national,
 and international networks, the case study provided an ideal
 empirical crucible for testing the transferability, scalability, and
 physical fidelity of artificial intelligence in observational seismology.
@@ -51,7 +52,7 @@ characterization, model transferability, and pipeline optimization:
 \subsection{Deep-Learning Phase Picking and the Domain Proximity Law}
 A systematic benchmarking campaign contrasting \textbf{PhaseNet}
 (\cite{PhaseNet}) and \textbf{Earthquake Transformer}
-(\ac{EQTransformer}, \cite{EQTransformer}) across four distinct
+(\ac{EQT}, \cite{EQTransformer}) across four distinct
 training corpora demonstrated that \textbf{domain proximity is the
 single most decisive determinant of phase picker performance}, far
 outweighing neural network capacity, architectural depth, or raw sample volume:
@@ -61,23 +62,23 @@ outweighing neural network capacity, architectural depth, or raw sample volume:
     highest detection recall and arrival timing precision. PhaseNet
     (INSTANCE) recovered $95.3\%$ of P-wave picks and $91.8\%$ of
     S-wave picks (combined recall $0.938$) with outstanding arrival
-    time precision: $\mathrm{MAE} = 0.066\,\unit{\second}$
-    ($\mathrm{RMSE} = 0.107\,\unit{\second}$, bias
-    $-0.021\,\unit{\second}$) for P-arrivals, and $\mathrm{MAE} =
-    0.116\,\unit{\second}$ ($\mathrm{RMSE} = 0.160\,\unit{\second}$,
-    bias $+0.054\,\unit{\second}$) for S-arrivals. EQTransformer
-    (INSTANCE) achieved marginally higher total recall ($0.944$),
+    time precision: $\mathrm{MAE} = \qty{0.066}{\second}$
+    ($\mathrm{RMSE} = \qty{0.107}{\second}$, bias
+    $\qty{-0.021}{\second}$) for P-arrivals, and $\mathrm{MAE} =
+    \qty{0.116}{\second}$ ($\mathrm{RMSE} = \qty{0.160}{\second}$,
+    bias $\qty{+0.054}{\second}$) for S-arrivals. \ac{EQT}
+    (\ac{INSTANCE}) achieved marginally higher total recall ($0.944$),
     but at the cost of a $14\text{--}16\%$ increase in timing error
-    and a persistent positive S-wave latency bias ($+0.091\,\unit{\second}$).
+    and a persistent positive S-wave latency bias ($\qty{+0.091}{\second}$).
   \item \textbf{The Out-of-Domain Over-Detection Pathology}: In
     stark contrast, models trained on the Southern California
     \ac{SCEDC} dataset (\cite{SCEDC}) demonstrated severe
     out-of-domain failure. Despite training on over $8.1$ million
-    traces, SCEDC models generated \textbf{23.1 million proposed
-    picks} (PhaseNet) and nearly \textbf{30.0 million proposed
-    picks} (EQTransformer) across the 93-day test archive---a
+    traces, \ac{SCEDC} models generated \textbf{23.1 million proposed
+    picks} (\ac{PhaseNet}) and nearly \textbf{30.0 million proposed
+    picks} (\ac{EQT}) across the 21-year test archive---a
     $12 \times $ to $22 \times $ escalation in candidate volume relative
-    to INSTANCE. Arid strike-slip environments fail to prepare deep
+    to \ac{INSTANCE}. Arid strike-slip environments fail to prepare deep
     networks for the complex cultural vibrations, river-bed bedload
     noise, and microseismic coda dispersion characteristic of
     European Alpine valleys.
@@ -86,7 +87,7 @@ outweighing neural network capacity, architectural depth, or raw sample volume:
     $\tau_{\mathrm{threshold}}$ from $0.1$ to $0.3$ reduced
     background candidate pick rates by $80\%$ (from $1.97$ million
     to $398{,}815$), while P-phase timing MAE remained invariant at
-    $0.065\,\unit{\second}$. S-wave recall degraded more steeply
+    $\qty{0.065}{\second}$. S-wave recall degraded more steeply
     than P-wave recall ($6.5$ vs.\ $2.4$ percentage points),
     confirming that S-waves, submerged within P-coda reverberations,
     generate lower peak posterior probabilities.
@@ -106,16 +107,16 @@ fundamentally contrasting pick-filtering philosophies:
     approximately \textbf{25\% of genuine arrivals} during
     clustering in order to enforce tight Gaussian travel-time fits
     under a simplified half-space model.
-  \item \textbf{PyOcto's High Retention}: PyOcto retained
+  \item \textbf{\ac{PyOcto}'s High Retention}: \ac{PyOcto} retained
     \textbf{90.7\% of all true picks} ($94.0\%$ of P-arrivals and
     $86.2\%$ of S-arrivals), leveraging precomputed 1D travel-time
     tables to preserve dense, multi-station arrivals for each event hypothesis.
   \item \textbf{Opposing Origin Time Signatures}: At the association
-    stage, GaMMA exhibited a systematic positive origin time bias of
-    $+0.484\,\unit{\second}$ ($\mathrm{MAE} =
-    0.536\,\unit{\second}$), whereas PyOcto exhibited an opposing
-    negative bias of $-0.421\,\unit{\second}$ ($\mathrm{MAE} =
-    0.472\,\unit{\second}$).
+    stage, \ac{GaMMA} exhibited a systematic positive origin time bias of
+    $\qty{+0.484}{\second}$ ($\mathrm{\ac{MAE}} =
+    \qty{0.536}{\second}$), whereas \ac{PyOcto} exhibited an opposing
+    negative bias of $\qty{-0.421}{\second}$ ($\mathrm{\ac{MAE}} =
+    \qty{0.472}{\second}$).
 \end{itemize}
 
 \subsection{Hypocenter Relocation and the Geometric Station Bottleneck}
@@ -126,9 +127,9 @@ pick-retention disparity triggered a dramatic operational divergence:
   \item \textbf{GaMMA's Relocation Collapse}: GaMMA+NonLinLoc
     suffered a catastrophic recall loss, dropping from $96.1\%$ at
     association to \textbf{73.7\%} after location (losing 85
-    verified catalog events). Because GaMMA pruned $25\%$ of
+    verified catalog events). Because \ac{GaMMA} pruned $25\%$ of
     arrivals, many event hypotheses survived with only 4 or 5 picks.
-    When inverted under NonLinLoc's non-linear Equal Differential
+    When inverted under \ac{NonLinLoc}'s non-linear Equal Differential
     Time (\ac{EDT}) formulation, these sparse geometries resulted in
     unconstrained posterior PDFs and large azimuthal gaps, causing
     convergence failures.
@@ -193,7 +194,7 @@ seismology and seismological data science:
 \subsection{Bipartite Graph Matching Optimization (BPGMA)}
 Traditional seismic catalog comparisons rely on greedy
 nearest-neighbor pairing, which produces cascading assignment errors
-during dense aftershock clusters. In Chapter~\ref{chap:methodology},
+during dense aftershock clusters. In Chapter~\ref{chap:pipeline_evaluation},
 we formulated catalog comparison as a \textbf{Maximum-Weight
 Bipartite Graph Matching} problem:
 \begin{equation}
@@ -243,7 +244,7 @@ geometric limitations of Gaussian mixture clustering.
 \section{Operational Implications for Real-Time Monitoring and Reprocessing}
 \label{sec:conclusion_operations}
 
-Deploying the pipeline on the CINECA Leonardo supercomputer
+Deploying the pipeline on the \ac{CINECA} Leonardo supercomputer
 demonstrates that modern high-performance computing bridges the
 historical divide between real-time monitoring and retrospective research:
 
@@ -266,7 +267,7 @@ exhaustiveness. We formulated a dual-regime operational architecture:
 \end{itemize}
 
 \subsection{Petascale Retrospective Archive Reprocessing}
-On Leonardo Booster compute nodes ($4 \times$ NVIDIA A100 GPUs, 32
+On Leonardo Booster compute nodes ($4 \times$ NVIDIA A100 \ac{GPU}s, 32
 Intel Xeon cores), PhaseNet inference executes in $\approx 42\,\unit{\second}$
 per station-year ($> 2{,}000 \times$ real-time),
 and PyOcto association executes in $\approx 15\,\unit{\second}$ per
@@ -277,10 +278,10 @@ capability to re-evaluate legacy continuous archives, uncovering
 previously undetected seismicity swarms, induced events, and
 precursory fault creep.
 
-\subsection{Reproducible HPC Infrastructure and Software Provenance}
+\subsection{Reproducible \ac{HPC} Infrastructure and Software Provenance}
 By decoupling configuration state from procedural execution via
-**Hydra** and orchestrating multi-node job dependencies via **GNU
-Make** and **Slurm**, the workflow ensures absolute computational
+\textbf{Hydra} and orchestrating multi-node job dependencies via \textbf{GNU
+Make} and \textbf{Slurm}, the workflow ensures absolute computational
 reproducibility. Every published catalog is paired with an
 immutable, frozen configuration snapshot
 (\texttt{.hydra/config.yaml}), eliminating idiosyncratic operator
@@ -400,11 +401,13 @@ emerging opportunities chart the roadmap for future development:
 
 \begin{enumerate}
   \item \textbf{Scaling to the Pan-European AdriaArray Mega-Experiment}:
-    This study evaluated a 93-day window across 266 stations. The
-    ongoing **AdriaArray** initiative integrates over $1{,}500$
+    This study evaluated \textbf{+20 years} of observational data
+    (\textbf{January 1st, 2005 to December 31st, 2025}) across
+    \placeholder{NUM STATIONS} stations.
+    The ongoing \textbf{AdriaArray} initiative integrates over $1{,}500$
     broadband and temporary stations spanning 15 European nations
-    across the Adriatic-Alpine-Pannonian realm. Extending our CINECA
-    Leonardo HPC workflow to the full multi-year AdriaArray dataset
+    across the Adriatic-Alpine-Pannonian realm. Extending our \ac{CINECA}
+    Leonardo \ac{HPC} workflow to the full multi-year AdriaArray dataset
     will enable the construction of the most complete, unified
     transboundary microseismic catalog in European history.
   \item \textbf{Integration of High-Resolution 3D Velocity Models
@@ -420,9 +423,9 @@ emerging opportunities chart the roadmap for future development:
     wavefield solvers will sharpen hypocentral alignments and depth
     constraints along active blind thrust faults.
   \item \textbf{Real-Time Edge Streaming and IoT Integration}:
-    Transitioning from batch HPC processing to sub-second streaming
+    Transitioning from batch \ac{HPC} processing to sub-second streaming
     inference requires compiling deep neural networks (PhaseNet and
-    EQTransformer) to lightweight edge-computing runtimes (such as
+    \ac{EQT}) to lightweight edge-computing runtimes (such as
       NVIDIA TensorRT, ONNX, or low-power microcontrollers collocated
     directly with station digitizers). Edge picking will enable
     localized decentralized trigger verification and reduce

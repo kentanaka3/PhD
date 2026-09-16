@@ -177,8 +177,7 @@ Signal-to-Noise Ratio (\ac{SNR}).
 To overcome these limitations, the computational pipeline integrates
 state-of-the-art deep learning architectures accessible via the
 SeisBench framework (\cite{SeisBench}): \textbf{PhaseNet}
-(\cite{PhaseNet}) and \textbf{Earthquake Transformer}
-(\ac{EQTransformer}, \cite{EQTransformer}). These models formulate
+(\cite{PhaseNet}) and \acf{EQT}. These models formulate
 phase picking as a continuous dense-prediction task, mapping raw
 waveform arrays directly into continuous posterior probability
 distributions for P-wave, S-wave, and background noise arrivals.
@@ -337,8 +336,7 @@ channel-wise Softmax activation:
 \end{equation}
 
 \subsection{EQTransformer: Hierarchical Self-Attention and Multi-Task Decoding}
-Earthquake Transformer (\ac{EQTransformer}, \cite{EQTransformer})
-represents a significant paradigm shift by combining deep 1D
+\acf{EQT} represents a significant paradigm shift by combining deep 1D
 residual convolutions, bidirectional recurrent memory, and
 hierarchical multi-head self-attention. It solves three interrelated
 seismic monitoring objectives simultaneously:

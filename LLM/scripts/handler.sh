@@ -449,8 +449,8 @@ validate() { # 44
 # main
 # ----
 # Parse the command and dispatch the requested operation.
-main() { # 89
-    local command="${1:-}"
+main() { # 117
+    local command="${1:-}" file_path=""
     local scan_root="$ROOT"
     local module=""
     local dry_run=false

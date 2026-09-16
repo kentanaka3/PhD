@@ -5,7 +5,7 @@
 % Source-of-truth: OGS/src/, SMINO documentation, literature
 % citations in lib.bib.
 
-\label{chap:Introduction}
+\label{chap:introduction}
 
 \section{Seismological Foundations and Wave Propagation Physics}
 \label{sec:wave_physics}
@@ -142,11 +142,12 @@ Modern digital seismological observatories record these vector
 ground motions along three mutually orthogonal spatial components:
 Vertical (Z), North-South (N), and East-West (E). Observational
 stations deploy high-gain broadband seismometers \eg{measuring velocity
-$\dot{\mathbf{u}}(t)$ over flat bandwidths from $0.01$ to $50\,\mathrm{Hz}$}
+  $\dot{\mathbf{u}}(t)$ over flat bandwidths from \qty{0.01}{\hertz}
+to \qty{50}{\hertz}}
 and strong-motion accelerometers \eg{measuring ground acceleration
   $\ddot{\mathbf{u}}(t)$ without clipping during high-amplitude near-source
 shaking}. Data are continuously digitized at high sampling rates
-($100\,\mathrm{Hz}$) and packaged into standard miniSEED (MSEED) containers,
+(\qty{100}{\hertz}) and packaged into standard miniSEED (MSEED) containers,
 with instrumental transfer functions, calibration poles, zeros, and geodetic
 station coordinates formally cataloged in StationXML schemas.
 
@@ -183,7 +184,7 @@ junction where two major collisional orogenic belts converge:
 
 This tectonic configuration results in concentrated intraplate
 seismicity characterized by shallow hypocenters (typically
-$5\text{--}15\,\mathrm{km}$ depth), predominantly compressive
+$\qtyrange{5}{15}{\kilo\meter}$ depth), predominantly compressive
 thrust-faulting mechanisms with subordinate strike-slip kinematics,
 and recurrent destructive earthquake sequences.
 
@@ -218,7 +219,7 @@ the regional Civil Protection agencies of Friuli Venezia Giulia and Veneto.
 
 Over four decades of technological development, the initial sparse
 analog network deployed after the 1976 earthquake evolved into the
-modern \acf{SMINO} (\cite{SMINO}). The SMINO monitoring
+modern \acf{SMINO}. The \ac{SMINO} monitoring
 infrastructure represents a state-of-the-art, multi-parametric,
 real-time observation system covering Friuli Venezia Giulia, Veneto,
 and surrounding border areas.
@@ -242,8 +243,8 @@ The regional monitoring infrastructure integrates:
 In operational practice, seismic monitoring in Northeastern Italy is
 not conducted in isolation; wavefield propagation respects no
 administrative boundaries. As described in
-Chapter~\ref{chap:Datasets}, the complete regional monitoring
-aperture analyzed in this study encompasses \textbf{266 stations}
+Chapter~\ref{chap:datasets}, the complete regional monitoring
+aperture analyzed in this study encompasses \placeholder{NUM STATIONS} stations
 originating from 18 distinct regional, national, and international
 networks (including \ac{OGS}, \ac{INGV}, GeoSphere Austria, the
 \ac{ARSO}, the \ac{SED}, and the \ac{RAN}). The continuous
@@ -299,7 +300,7 @@ on classical heuristic algorithms:
 Despite their enduring historical utility, classical algorithms
 suffer from fundamental physical and algorithmic limitations:
 \begin{itemize}
-  \item \textbf{Vulnerability to Noise and False Triggers}: STA/LTA
+  \item \textbf{Vulnerability to Noise and False Triggers}: \ac{STA/LTA}
     is highly sensitive to non-stationary transient noise, cultural
     vibrations, electrical glitches, and meteorological
     disturbances, causing excessive false trigger rates in densely
@@ -307,10 +308,10 @@ suffer from fundamental physical and algorithmic limitations:
   \item \textbf{Emergent and Low-SNR Degradation}: Onsets of
     small-magnitude earthquakes ($M_{\mathrm{L}} < 2.0$) or emergent
     arrivals traveling through attenuative, heterogeneous crustal
-    paths exhibit low signal-to-noise ratios (\ac{SNR}). STA/LTA
-    triggers systematically late, while AIC minimization frequently
+    paths exhibit low \acp{SNR}. \ac{STA/LTA}
+    triggers systematically late, while \ac{AIC} minimization frequently
     settles into local minima created by noise fluctuations.
-  \item \textbf{Phase Misidentification}: Neither STA/LTA nor AIC
+  \item \textbf{Phase Misidentification}: Neither \ac{STA/LTA} nor \ac{AIC}
     natively distinguishes between compressional (P) and shear (S)
     phases without ad-hoc, brittle horizontal-to-vertical amplitude
     ratios or polarization filters. S-wave arrivals arriving within
@@ -355,7 +356,7 @@ feature engineering. Applied to seismic waveforms, deep
 convolutional and attention-based architectures learn the
 multi-scale spatio-temporal signatures of wave propagation,
 dispersion, impedance contrasts, and noise textures
-\cite{MousaviBeroza2022}.
+\parencite{MousaviBeroza2022}.
 
 Key architectural breakthroughs include:
 \begin{itemize}
@@ -366,11 +367,10 @@ Key architectural breakthroughs include:
     successive downsampling and upsampling convolutional stages to
     produce continuous probability distributions for P-wave
     arrivals, S-wave arrivals, and noise.
-  \item \textbf{Earthquake Transformer (\ac{EQTransformer})}
-    (\cite{EQTransformer}): A sophisticated multi-task deep network
+  \item \textbf{\acf{EQT}}: A sophisticated multi-task deep network
     that integrates 1D convolutional layers, bidirectional \ac{LSTM}
     recurrent units, and multiple multi-head self-attention
-    mechanisms. EQTransformer models both local waveform geometries
+    mechanisms. \ac{EQT} models both local waveform geometries
     and long-range temporal dependencies across 60-second windows,
     simultaneously outputting detection probabilities for earthquake
     presence, P-wave arrival, and S-wave arrival.
@@ -398,10 +398,10 @@ that struck Friuli in early 2024.
 On \textbf{March 27, 2024, at 21:19:37 UTC} (22:19:37 local time), a
 magnitude $M_{\mathrm{L}}~4.6 \pm 0.3$ ($M_{\mathrm{w}}~4.5$)
 earthquake occurred in the Carnic Prealps, approximately
-$5\,\mathrm{km}$ south-southwest of Socchieve, Udine province
+\qty{5}{\kilo\meter} south-southwest of Socchieve, Udine province
 (hypocentral coordinates: Latitude $46.3583^\circ\,\mathrm{N}$,
   Longitude $12.8080^\circ\,\mathrm{E}$, focal depth
-$10.22\,\mathrm{km}$). The earthquake was strongly felt across the
+\qty{10.22}{\kilo\meter}). The earthquake was strongly felt across the
 entire Friuli Venezia Giulia and Veneto regions, as well as in
 neighboring Austria and Slovenia, causing localized structural
 damage, masonry cracking, and rockfalls in the epicentral area.
@@ -431,11 +431,11 @@ The key research questions addressed in this thesis are:
 \begin{enumerate}
   \item \textbf{Domain Adaptation and Generalization}: How
     effectively do deep-learning phase pickers (PhaseNet and
-    EQTransformer) trained on large external datasets (INSTANCE in
-    Italy, STEAD globally, SCEDC in California) generalize to the
+    \ac{EQT}) trained on large external datasets (\ac{INSTANCE} in
+    Italy, \ac{STEAD} globally, \ac{SCEDC} in California) generalize to the
     complex geological and noise environment of Northeastern Italy?
-    Does regional training data (INSTANCE) outperform massive but
-    geographically foreign datasets (SCEDC, STEAD)?
+    Does regional training data (\ac{INSTANCE}) outperform massive but
+    geographically foreign datasets (\ac{SCEDC}, \ac{STEAD})?
   \item \textbf{Associator Scaling and Performance}: How do advanced
     phase association algorithms—specifically the Bayesian Gaussian
     Mixture Model Associator (\ac{GaMMA}) and the high-throughput
@@ -447,10 +447,10 @@ The key research questions addressed in this thesis are:
     analyst reference catalogs without introducing spatiotemporal
     bias or duplicate assignment artifacts?
   \item \textbf{HPC Scalability and Operational Viability}: Can the
-    entire processing workflow—from continuous multi-client FDSN
+    entire processing workflow—from continuous multi-client \ac{FDSN}
     waveform ingestion to deep inference, association, and
-    relocation—be parallelized across modern GPU-accelerated
-    supercomputing architectures (such as the CINECA Leonardo Tier-0
+    relocation—be parallelized across modern \ac{GPU}-accelerated
+    supercomputing architectures (such as the \ac{CINECA} Leonardo Tier-0
     system) to support near-real-time operational monitoring and
     rapid historical archive reprocessing?
 \end{enumerate}
@@ -462,20 +462,21 @@ The remainder of this dissertation is organized into eight
 interconnected chapters, followed by a dedicated Data and Resources
 statement and technical appendices:
 \begin{itemize}
-  \item \textbf{Chapter~\ref{chap:Datasets} (Datasets)}: Details the
+  \item \textbf{Chapter~\ref{chap:datasets} (Datasets)}: Details the
     operational case study data acquired across Northeastern Italy evaluating
     \textbf{+20 years} of observational data (\textbf{January 1st, 2005 to
     December 31st, 2025}) across \placeholder{NUM STATIONS} stations,
     (\placeholder{NUM EVENTS} relocated \ac{OGS} reference events with
     \placeholder{NUM PICKS} picks) and reviews the four benchmark training
-    datasets (INSTANCE, STEAD, SCEDC, and Original sets).
+    datasets (\ac{INSTANCE}, \ac{STEAD}, \ac{SCEDC}, and Original sets).
   \item \textbf{Chapter~\ref{chap:data_engineering} (Data Engineering)}:
     Presents the software architecture of the pipeline, detailing the central
     \texttt{ogsconstants} configuration, weight-to-uncertainty mappings,
-    automated FDSN multi-client waveform downloading, multi-format legacy
+    automated \ac{FDSN} multi-client waveform downloading, multi-format legacy
     catalog parsing (HPL, DAT, TXT, PUN), catalog aggregation, geodetic math,
     and visualization frameworks.
-  \item \textbf{Chapter~\ref{chap:pipeline} (Computational Pipeline)}:
+  \item \textbf{Chapter~\ref{chap:computational_pipeline}
+    (Computational Pipeline)}:
     Formulates the complete procedural workflow, detailing continuous waveform
     preprocessing, deep-learning phase picking inference, Bayesian (\ac{GaMMA})
     and octree (\ac{PyOcto}) phase association, 1D \ac{NonLinLoc} probabilistic
@@ -486,9 +487,10 @@ statement and technical appendices:
     construction of domain-specific confusion matrices, and the mathematical
     derivation of recall, precision, and $F_1$ scores.
   \item \textbf{Chapter~\ref{chap:hpc} (HPC Implementation)}: Analyzes the
-    \ac{HPC} implementation deployed on the CINECA Leonardo supercomputer
+    \ac{HPC} implementation deployed on the \ac{CINECA} Leonardo supercomputer
     (EuroHPC Booster partition), detailing SLURM job orchestration, \ac{MPI}
-    and GPU process allocation, parallel I/O throughput, and execution scaling
+    and \ac{GPU} process allocation, parallel I/O throughput, and
+    execution scaling
     profiles.
   \item \textbf{Chapter~\ref{chap:results} (Results)}: Delivers a comprehensive
     empirical evaluation of the benchmarking campaign on the

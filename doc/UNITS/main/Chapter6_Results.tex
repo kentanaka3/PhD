@@ -8,7 +8,7 @@
 \label{chap:results}
 
 This chapter delivers a structured, evidence-bounded empirical
-evaluation of the automated machine-learning seismic monitoring
+evaluation of the automated \ac{ML} seismic monitoring
 pipeline. The analysis is structured hierarchically, tracking
 wavefield data through each modular pipeline stage: beginning with
 the deep-learning phase pickers, advancing through spatiotemporal
@@ -18,7 +18,7 @@ and catalog recovery assessments.
 
 \paragraph{Evidence status and publication boundary.} The matching
 implementation and its eligibility accounting are demonstrated by
-the source and tests cited in Chapter~\ref{chap:methodology}. The
+the source and tests cited in Chapter~\ref{chap:pipeline_evaluation}. The
 run-level catalogs, resolved configurations, commands,
 model/checkpoint identifiers, and benchmark logs needed to reproduce
 the numerical tables in this chapter are not present in this
@@ -45,8 +45,8 @@ the training dataset composition, the neural detection probability
 threshold ($\tau_{\mathrm{threshold}} \in \{0.1, 0.2, 0.3\}$), the
 association clustering topology (\ac{GaMMA} versus \ac{PyOcto}), and
 the station network aperture. Performance is evaluated using the
-bipartite graph maximum-weight matching (\ac{BPGMA}) methodology
-formulated in Chapter~\ref{chap:methodology}, enforcing strict
+\acf{BPGMA} methodology
+formulated in Chapter~\ref{chap:pipeline_evaluation}, enforcing strict
 one-to-one correspondences and isolating genuine physical detections
 from spurious background proposals.
 
@@ -66,11 +66,10 @@ magnitude routines depend.
 We conduct a systematic benchmarking campaign evaluating two
 state-of-the-art deep neural network architectures:
 \textbf{PhaseNet} (\cite{PhaseNet}), a 1D fully convolutional U-Net
-network, and \textbf{Earthquake Transformer} (\ac{EQTransformer},
-\cite{EQTransformer}), a deep residual network integrating
+network, and \acf{EQT}, a deep residual network integrating
 hierarchical multi-head self-attention. Both architectures are
 evaluated across four distinct training datasets accessed via the
-SeisBench framework (\cite{SeisBench}): \ac{INSTANCE} (Italy),
+SeisBench framework \parencite{SeisBench}: \ac{INSTANCE} (Italy),
 \ac{STEAD} (global), \ac{SCEDC} (Southern California), and the
 original training sets curated by the respective model authors.
 
@@ -92,7 +91,7 @@ This investigation is guided by two core seismological questions:
 
 Table~\ref{tab:picker_dataset_synthesis} presents a comprehensive
 synthesis of pick detection recall, proposed pick volumes, and
-arrival timing accuracy for PhaseNet and EQTransformer across all
+arrival timing accuracy for \ac{PhaseNet} and \ac{EQT} across all
 four training datasets at the baseline detection threshold
 $\tau_{\mathrm{threshold}} = 0.1$. To dissect the internal detection
 mechanics of each model, Tables~\ref{tab:phasenet_confmtx_datasets}
@@ -120,12 +119,12 @@ misclassifications ($\epsilon_{\mathrm{PS}},
         \textbf{P} & \textbf{S} & \textbf{Total} &
         \textbf{Picks ($\mathrm{PS}$)} & \textbf{P} & \textbf{S} \\
         \midrule
-        \multirow{4}{*}{\rotatebox[origin=c]{90}{PhaseNet}}
-        & INSTANCE (Italy) & \placeholder{P RECALL} &
+        \multirow{4}{*}{\rotatebox[origin=c]{90}{\ac{PhaseNet}}}
+        & \ac{INSTANCE} (Italy) & \placeholder{P RECALL} &
         \placeholder{S RECALL} & \placeholder{TOTAL RECALL} &
         \placeholder{$PS$} & \placeholder{$MAE_P$} &
         \placeholder{$MAE_S$} \\
-        & SCEDC (S. California) & \placeholder{P RECALL} &
+        & \ac{SCEDC} (S. California) & \placeholder{P RECALL} &
         \placeholder{S RECALL} & \placeholder{TOTAL RECALL} &
         \placeholder{$PS$} & \placeholder{$MAE_P$} &
         \placeholder{$MAE_S$} \\
@@ -133,17 +132,17 @@ misclassifications ($\epsilon_{\mathrm{PS}},
         \placeholder{S RECALL} & \placeholder{TOTAL RECALL} &
         \placeholder{$PS$} & \placeholder{$MAE_P$} &
         \placeholder{$MAE_S$} \\
-        & STEAD (Global) & \placeholder{P RECALL} &
+        & \ac{STEAD} (Global) & \placeholder{P RECALL} &
         \placeholder{S RECALL} & \placeholder{TOTAL RECALL} &
         \placeholder{$PS$} & \placeholder{$MAE_P$} &
         \placeholder{$MAE_S$} \\
         \midrule
-        \multirow{4}{*}{\rotatebox[origin=c]{90}{EQTransformer}}
-        & INSTANCE (Italy) & \placeholder{P RECALL} &
+        \multirow{4}{*}{\rotatebox[origin=c]{90}{\ac{EQT}}}
+        & \ac{INSTANCE} (Italy) & \placeholder{P RECALL} &
         \placeholder{S RECALL} & \placeholder{TOTAL RECALL} &
         \placeholder{$PS$} & \placeholder{$MAE_P$} &
         \placeholder{$MAE_S$} \\
-        & SCEDC (S. California) & \placeholder{P RECALL} &
+        & \ac{SCEDC} (S. California) & \placeholder{P RECALL} &
         \placeholder{S RECALL} & \placeholder{TOTAL RECALL} &
         \placeholder{$PS$} & \placeholder{$MAE_P$} &
         \placeholder{$MAE_S$} \\
@@ -151,7 +150,7 @@ misclassifications ($\epsilon_{\mathrm{PS}},
         \placeholder{S RECALL} & \placeholder{TOTAL RECALL} &
         \placeholder{$PS$} & \placeholder{$MAE_P$} &
         \placeholder{$MAE_S$} \\
-        & STEAD (Global) & \placeholder{P RECALL} &
+        & \ac{STEAD} (Global) & \placeholder{P RECALL} &
         \placeholder{S RECALL} & \placeholder{TOTAL RECALL} &
         \placeholder{$PS$} & \placeholder{$MAE_P$} &
         \placeholder{$MAE_S$} \\
@@ -163,8 +162,8 @@ misclassifications ($\epsilon_{\mathrm{PS}},
         \placeholder{NUM PICKS}
         manually verified picks (\placeholder{NUM P PICKS} P and
         \placeholder{NUM S PICKS} S) from the \ac{OGS}
-        bulletin via BPGMA ($\omega_t = 0.5\,\unit{\second}$).
-      \item[b] Mean Absolute Error ($\mathrm{MAE}$) evaluated on matched pick
+        bulletin via \ac{BPGMA} ($\omega_t = \qty{0.5}{\second}$).
+      \item[b] \ac{MAE} evaluated on matched pick
         arrival time residuals $\Delta t =
         t_{\mathrm{detected}} - t_{\mathrm{catalog}}$.
       \item Target \& Scope: Deep-learning picker generalization
@@ -184,7 +183,7 @@ misclassifications ($\epsilon_{\mathrm{PS}},
   \begin{table}[htbp]
     \centering
     \small
-    \caption{Domain-specific confusion matrices for PhaseNet across
+    \caption{Domain-specific confusion matrices for \ac{PhaseNet} across
     training datasets ($\tau_{\mathrm{threshold}} = 0.1$).}
     \label{tab:phasenet_confmtx_datasets}
     \begin{threeparttable}
@@ -196,7 +195,7 @@ misclassifications ($\epsilon_{\mathrm{PS}},
         $\mathrm{Recall}$\tnote{d} & $\mathrm{PS}$\tnote{e} &
         \textbf{Bias [$\unit{\second}$]} & \textbf{RMSE [$\unit{\second}$]} \\
         \midrule
-        \multirow{2}{*}{\textbf{INSTANCE}}
+        \multirow{2}{*}{\textbf{\ac{INSTANCE}}}
         & \textbf{P} & \placeholder{$MH_P$} & \placeholder{$MS_P$} &
         \placeholder{$CROSS_P$} & \placeholder{$RECALL_P$} &
         \placeholder{$PS_P$} & \placeholder{$BIAS_P$} &
@@ -206,7 +205,7 @@ misclassifications ($\epsilon_{\mathrm{PS}},
         \placeholder{$PS_S$} & \placeholder{$BIAS_S$} &
         \placeholder{$RMSE_S$} \\
         \midrule
-        \multirow{2}{*}{SCEDC}
+        \multirow{2}{*}{\ac{SCEDC}}
         & P & \placeholder{$MH_P$} & \placeholder{$MS_P$} &
         \placeholder{$CROSS_P$} & \placeholder{$RECALL_P$} &
         \placeholder{$PS_P$} & \placeholder{$BIAS_P$} &
@@ -226,7 +225,7 @@ misclassifications ($\epsilon_{\mathrm{PS}},
         \placeholder{$RECALL_S$} & \placeholder{$PS_S$} &
         \placeholder{$BIAS_S$} & \placeholder{$RMSE_S$} \\
         \midrule
-        \multirow{2}{*}{STEAD}
+        \multirow{2}{*}{\ac{STEAD}}
         & P & \placeholder{$MH_P$} & \placeholder{$MS_P$} &
         \placeholder{$CROSS_P$} & \placeholder{$RECALL_P$} &
         \placeholder{$PS_P$} & \placeholder{$BIAS_P$} &
@@ -240,7 +239,7 @@ misclassifications ($\epsilon_{\mathrm{PS}},
       \begin{tablenotes}[flushleft]
         \footnotesize
       \item[a] Matched picks ($\mathrm{MH}$): True-positive detections
-        mapped to catalog arrivals within $\omega_t = 0.5\,\unit{\second}$.
+        mapped to catalog arrivals within $\omega_t = \qty{0.5}{\second}$.
       \item[b] Missed picks ($\mathrm{MS}$): Reference catalog
         arrivals unrecovered by the model.
       \item[c] Phase cross-misclassifications:
@@ -251,10 +250,10 @@ misclassifications ($\epsilon_{\mathrm{PS}},
         the versioned reference-catalog extract.
       \item[e] Proposed picks ($\mathrm{PS}$): Model candidate
         arrivals without reference catalog counterpart.
-      \item Target \& Scope: Classification breakdown of PhaseNet
+      \item Target \& Scope: Classification breakdown of \ac{PhaseNet}
         across four training datasets.
       \item What the reader should notice: Counts, recall, bias, and
-        RMSE remain
+        \ac{RMSE} remain
         unverified until the corresponding matching outputs are archived.
       \item Evidence Anchor: Verified parquet tables in
         \texttt{OGS/test/OGSCatalog/}.
@@ -267,7 +266,7 @@ misclassifications ($\epsilon_{\mathrm{PS}},
   \begin{table}[htbp]
     \centering
     \small
-    \caption{Domain-specific confusion matrices for EQTransformer
+    \caption{Domain-specific confusion matrices for \ac{EQT}
     across training datasets ($\tau_{\mathrm{threshold}} = 0.1$).}
     \label{tab:eqt_confmtx_datasets}
     \begin{threeparttable}
@@ -276,9 +275,9 @@ misclassifications ($\epsilon_{\mathrm{PS}},
         \textbf{Dataset} & \textbf{Phase} & $\mathrm{MH}$ &
         $\mathrm{MS}$ & $\epsilon_{\mathrm{cross}}$ &
         $\mathrm{Recall}$ & $\mathrm{PS}$ & \textbf{Bias
-        [$\unit{\second}$]} & \textbf{RMSE [$\unit{\second}$]} \\
+        [\unit{\second}]} & \textbf{\ac{RMSE} [\unit{\second}]} \\
         \midrule
-        \multirow{2}{*}{\textbf{INSTANCE}}
+        \multirow{2}{*}{\textbf{\ac{INSTANCE}}}
         & \textbf{P} & \placeholder{$MH_P$} & \placeholder{$MS_P$} &
         \placeholder{CROSS} & \placeholder{RECALL} & \placeholder{$PS_P$} &
         \placeholder{BIAS} & \placeholder{RMSE} \\
@@ -286,7 +285,7 @@ misclassifications ($\epsilon_{\mathrm{PS}},
         \placeholder{CROSS} & \placeholder{RECALL} & \placeholder{$PS_S$} &
         \placeholder{BIAS} & \placeholder{RMSE} \\
         \midrule
-        \multirow{2}{*}{SCEDC}
+        \multirow{2}{*}{\ac{SCEDC}}
         & P & \placeholder{$MH_P$} & \placeholder{$MS_P$} &
         \placeholder{CROSS} & \placeholder{RECALL} & \placeholder{$PS_P$} &
         \placeholder{BIAS} & \placeholder{RMSE} \\
@@ -302,7 +301,7 @@ misclassifications ($\epsilon_{\mathrm{PS}},
         \placeholder{CROSS} & \placeholder{RECALL} & \placeholder{$PS_S$} &
         \placeholder{BIAS} & \placeholder{RMSE} \\
         \midrule
-        \multirow{2}{*}{STEAD}
+        \multirow{2}{*}{\ac{STEAD}}
         & P & \placeholder{$MH_P$} & \placeholder{$MS_P$} &
         \placeholder{CROSS} & \placeholder{RECALL} & \placeholder{$PS_P$} &
         \placeholder{BIAS} & \placeholder{RMSE} \\
@@ -313,9 +312,10 @@ misclassifications ($\epsilon_{\mathrm{PS}},
       \end{tabularx}
       \begin{tablenotes}[flushleft]
         \footnotesize
-      \item Target \& Scope: Classification breakdown of EQTransformer
+      \item Target \& Scope: Classification breakdown of \ac{EQT}
         across four training datasets.
-      \item What the reader should notice: Comparative recall, timing RMSE, and
+      \item What the reader should notice: Comparative recall,
+        timing \ac{RMSE}, and
         phase-bias conclusions require archived run-level outputs.
       \item Evidence Anchor: Parquet evaluation fixtures generated via
         \texttt{OGSCatalog.bgmaPicks()}.
@@ -431,15 +431,15 @@ magnitude benchmarks.
 
 Operational monitoring centers must dynamically balance sensitivity
 against false trigger rates. We systematically sweep the picker
-confidence threshold $\tau_{\mathrm{threshold}} \in \{0.1, 0.2,
-0.3\}$ for both PhaseNet (INSTANCE) and EQTransformer (INSTANCE).
+confidence threshold $\tau_{\mathrm{threshold}} \in \{0.1, 0.2, 0.3\}$ for both
+\ac{PhaseNet} (\ac{INSTANCE}) and \ac{EQT} (\ac{INSTANCE}).
 Tables~\ref{tab:phasenet_threshold_sweep} and
 \ref{tab:eqt_threshold_sweep} summarize the resulting performance curves.
 
 \begin{table}[htbp]
   \centering
   \small
-  \caption{PhaseNet (INSTANCE) pick performance across detection
+  \caption{\ac{PhaseNet} (\ac{INSTANCE}) pick performance across detection
   probability thresholds.}
   \label{tab:phasenet_threshold_sweep}
   \begin{threeparttable}
@@ -451,7 +451,8 @@ Tables~\ref{tab:phasenet_threshold_sweep} and
       \cmidrule(lr){3-5} \cmidrule(lr){7-9}
       $\tau_{\mathrm{thresh}}$ & \textbf{Phase} & $\mathrm{MH}$ &
       $\mathrm{MS}$ & $\mathbf{Recall}$ & \textbf{Picks
-      ($\mathrm{PS}$)} & \textbf{Mean (Bias)} & \textbf{MAE} & \textbf{RMSE} \\
+      ($\mathrm{PS}$)} & \textbf{Mean (Bias)} & \textbf{\ac{MAE}} &
+      \textbf{\ac{RMSE}} \\
       \midrule
       \multirow{3}{*}{$0.1$}
       & P & \placeholder{$MH_P$} & \placeholder{$MS_P$} & \placeholder{RECALL}
@@ -503,7 +504,7 @@ Tables~\ref{tab:phasenet_threshold_sweep} and
 \begin{table}[htbp]
   \centering
   \small
-  \caption{EQTransformer (INSTANCE) pick performance across
+  \caption{\ac{EQT} (\ac{INSTANCE}) pick performance across
   detection probability thresholds.}
   \label{tab:eqt_threshold_sweep}
   \begin{threeparttable}
@@ -515,7 +516,8 @@ Tables~\ref{tab:phasenet_threshold_sweep} and
       \cmidrule(lr){3-5} \cmidrule(lr){7-9}
       $\tau_{\mathrm{thresh}}$ & \textbf{Phase} & $\mathrm{MH}$ &
       $\mathrm{MS}$ & $\mathbf{Recall}$ & \textbf{Picks
-      ($\mathrm{PS}$)} & \textbf{Mean (Bias)} & \textbf{MAE} & \textbf{RMSE} \\
+      ($\mathrm{PS}$)} & \textbf{Mean (Bias)} & \textbf{\ac{MAE}} &
+      \textbf{\ac{RMSE}} \\
       \midrule
       \multirow{3}{*}{$0.1$}
       & P & \placeholder{$MH_P$} & \placeholder{$MS_P$} & \placeholder{RECALL}
@@ -740,69 +742,67 @@ Table~\ref{tab:associator_residuals} details the origin time and
 preliminary spatial discrepancies between associator-formed events
 and the \ac{OGS} reference catalog.
 
-\begin{table}[htbp]
-  \centering
-  \small
-  \caption{Origin time and preliminary spatial residuals of
-  associators across thresholds.}
-  \label{tab:associator_residuals}
-  \begin{threeparttable}
-    \begin{tabularx}{\linewidth}{l c c c c c c c c}
-      \toprule
-      & & \multicolumn{3}{c}{\textbf{Origin Time Residuals
-      [$\unit{\second}$]}\tnote{a}} &
-      \multicolumn{2}{c}{\textbf{Epicentral
-      Dist.\ [$\unit{\kilo\meter}$]}} &
-      \multicolumn{2}{c}{\textbf{Depth Diff.\ [$\unit{\kilo\meter}$]}} \\
-      \cmidrule(lr){3-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9}
-      \textbf{Associator} & $\tau_{\mathrm{thresh}}$ & \textbf{Mean
-      (Bias)} & \textbf{MAE} & \textbf{RMSE} & \textbf{Median} &
-      \textbf{90th \%} & \textbf{Mean} & \textbf{Std} \\
-      \midrule
-      \multirow{3}{*}{GaMMA} & $0.1$ & \placeholder{BIAS} &
-      \placeholder{MAE} & \placeholder{RMSE} & \placeholder{MEDIAN DIST} &
-      \placeholder{P90 DIST} & \placeholder{DEPTH MEAN} &
-      \placeholder{DEPTH STD} \\
-      & $0.2$ & \placeholder{BIAS} & \placeholder{MAE} &
-      \placeholder{RMSE} & \placeholder{MEDIAN DIST} &
-      \placeholder{P90 DIST} & \placeholder{DEPTH MEAN} &
-      \placeholder{DEPTH STD} \\
-      & $0.3$ & \placeholder{BIAS} & \placeholder{MAE} &
-      \placeholder{RMSE} & \placeholder{MEDIAN DIST} &
-      \placeholder{P90 DIST} & \placeholder{DEPTH MEAN} &
-      \placeholder{DEPTH STD} \\
-      \midrule
-      \multirow{3}{*}{PyOcto} & $0.1$ & \placeholder{BIAS} &
-      \placeholder{MAE} & \placeholder{RMSE} & \placeholder{MEDIAN DIST} &
-      \placeholder{P90 DIST} & \placeholder{DEPTH MEAN} &
-      \placeholder{DEPTH STD} \\
-      & $0.2$ & \placeholder{BIAS} & \placeholder{MAE} &
-      \placeholder{RMSE} & \placeholder{MEDIAN DIST} &
-      \placeholder{P90 DIST} & \placeholder{DEPTH MEAN} &
-      \placeholder{DEPTH STD} \\
-      & $0.3$ & \placeholder{BIAS} & \placeholder{MAE} &
-      \placeholder{RMSE} & \placeholder{MEDIAN DIST} &
-      \placeholder{P90 DIST} & \placeholder{DEPTH MEAN} &
-      \placeholder{DEPTH STD} \\
-      \bottomrule
-    \end{tabularx}
-    \begin{tablenotes}[flushleft]
-      \footnotesize
-    \item[a] Origin time residual: $\Delta T_0 = T_{0,
-      \mathrm{detected}} - T_{0, \mathrm{catalog}}$.
-    \item Target \& Scope: Preliminary hypocentral and origin-time
-      accuracy of associator clusters prior to NonLinLoc relocation.
-    \item What the reader should notice: GaMMA displays a systematic
-      positive origin time bias ($+0.484\,\unit{\second}$), whereas
-      PyOcto displays an equal and opposite negative bias
-      ($-0.421\,\unit{\second}$). GaMMA achieves tighter depth
-      scatter ($\mathrm{std} = 3.38\,\unit{\kilo\meter}$) while
-      PyOcto delivers zero mean depth bias.
-    \item Evidence Anchor: PickStatQC output logs generated via
-      \texttt{OGSPickStatQC}.
-    \end{tablenotes}
-  \end{threeparttable}
-\end{table}
+\begin{landscape}
+  \begin{table}[htbp]
+    \centering
+    \small
+    \caption{Origin time and preliminary spatial residuals of
+    associators across thresholds.}
+    \label{tab:associator_residuals}
+    \begin{threeparttable}
+      \begin{tabularx}{\linewidth}{l c c c c c c c c}
+        \toprule
+        & & \multicolumn{3}{c}{\textbf{Origin Time Residuals
+        [$\unit{\second}$]}\tnote{a}} &
+        \multicolumn{2}{c}{\textbf{Epicentral
+        Dist.\ [$\unit{\kilo\meter}$]}} &
+        \multicolumn{2}{c}{\textbf{Depth Diff.\ [$\unit{\kilo\meter}$]}} \\
+        \cmidrule(lr){3-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9}
+        \textbf{Associator} & $\tau_{\mathrm{thresh}}$ & \textbf{Mean
+        (Bias)} & \textbf{MAE} & \textbf{RMSE} & \textbf{Median} &
+        \textbf{90th \%} & \textbf{Mean} & \textbf{Std} \\
+        \midrule
+        \multirow{3}{*}{GaMMA} & $0.1$ & \placeholder{BIAS} &
+        \placeholder{MAE} & \placeholder{RMSE} & \placeholder{MEDIAN DIST} &
+        \placeholder{P90 DIST} & \placeholder{DEPTH MEAN} &
+        \placeholder{DEPTH STD} \\
+        & $0.2$ & \placeholder{BIAS} & \placeholder{MAE} &
+        \placeholder{RMSE} & \placeholder{MEDIAN DIST} &
+        \placeholder{P90 DIST} & \placeholder{DEPTH MEAN} &
+        \placeholder{DEPTH STD} \\
+        & $0.3$ & \placeholder{BIAS} & \placeholder{MAE} &
+        \placeholder{RMSE} & \placeholder{MEDIAN DIST} &
+        \placeholder{P90 DIST} & \placeholder{DEPTH MEAN} &
+        \placeholder{DEPTH STD} \\
+        \midrule
+        \multirow{3}{*}{PyOcto} & $0.1$ & \placeholder{BIAS} &
+        \placeholder{MAE} & \placeholder{RMSE} & \placeholder{MEDIAN DIST} &
+        \placeholder{P90 DIST} & \placeholder{DEPTH MEAN} &
+        \placeholder{DEPTH STD} \\
+        & $0.2$ & \placeholder{BIAS} & \placeholder{MAE} &
+        \placeholder{RMSE} & \placeholder{MEDIAN DIST} &
+        \placeholder{P90 DIST} & \placeholder{DEPTH MEAN} &
+        \placeholder{DEPTH STD} \\
+        & $0.3$ & \placeholder{BIAS} & \placeholder{MAE} &
+        \placeholder{RMSE} & \placeholder{MEDIAN DIST} &
+        \placeholder{P90 DIST} & \placeholder{DEPTH MEAN} &
+        \placeholder{DEPTH STD} \\
+        \bottomrule
+      \end{tabularx}
+      \begin{tablenotes}[flushleft]
+        \footnotesize
+      \item[a] Origin time residual: $\Delta T_0 = T_{0,
+        \mathrm{detected}} - T_{0, \mathrm{catalog}}$.
+      \item Target \& Scope: Preliminary hypocentral and origin-time
+        accuracy of associator clusters prior to NonLinLoc relocation.
+      \item What the reader should notice: Relative origin-time, epicentral,
+        and depth-error distributions require archived associator outputs.
+      \item Evidence Anchor: PickStatQC output logs generated via
+        \texttt{OGSPickStatQC}.
+      \end{tablenotes}
+    \end{threeparttable}
+  \end{table}
+\end{landscape}
 
 The associator-stage residuals reveal characteristic systematic signatures:
 \begin{itemize}

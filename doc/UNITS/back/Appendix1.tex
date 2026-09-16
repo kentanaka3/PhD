@@ -4,8 +4,6 @@
 % Source-of-truth: OGS/conf/, doc/MHPC/chapters/appendix.tex,
 % ml_catalog configuration schemas.
 
-\label{chap:appendix}
-
 \chapter{Pipeline Configuration and Parameter Reference}
 \label{units:app:config}
 
@@ -42,7 +40,7 @@ example retained to explain the intended parameter structure. It is
 not the exact configuration of a reproducible run and must not be
 executed as-is. In particular, it differs from the current
 checked-in configuration in data-source binding, waveform paths,
-velocity-model path, and GaMMA parameters. A publication-ready
+velocity-model path, and \ac{GaMMA} parameters. A publication-ready
 appendix must replace it with an archived resolved Hydra
 configuration, its hash, code revision, command, run identifier, and
 reviewer approval.
@@ -313,14 +311,14 @@ operational parameters for deep-learning phase picking.
         pre-trained PyTorch models \\
         \texttt{model.\_target\_} & Class Method &
         \texttt{PhaseNet.from\_pretrained} & [Model Architecture] &
-        Instantiates PhaseNet 1D U-Net neural architecture \\
+        Instantiates \ac{PhaseNet} 1D U-Net neural architecture \\
         \texttt{model.name} & String & \texttt{phd\_ken\_tanaka} &
         [Model Architecture] & Model checkpoint fine-tuned on the
-        Italian INSTANCE corpus \\
-        \texttt{P\_threshold} & Float & $0.1$ (Baseline) & [Model
+        Italian \ac{INSTANCE} dataset \\
+        \texttt{P\_threshold} & Float & \num{0.1} (Baseline) & [Model
         Hypothesis] & Minimum posterior probability threshold for
         P-wave peak acceptance \\
-        \texttt{S\_threshold} & Float & $0.1$ (Baseline) & [Model
+        \texttt{S\_threshold} & Float & \num{0.1} (Baseline) & [Model
         Hypothesis] & Minimum posterior probability threshold for
         S-wave peak acceptance \\
         \texttt{batch\_size} & Integer & \num{16384} & [System
@@ -336,7 +334,7 @@ operational parameters for deep-learning phase picking.
       \item Target \& Scope: Neural network inference parameters for
         continuous phase onset detection.
       \item What the reader should notice: Large batch sizing
-        (\num{16384}) maximizes GPU tensor core occupancy, achieving
+        (\num{16384}) maximizes \ac{GPU} tensor core occupancy, achieving
         $>2{,}000 \times$ real-time inference throughput.
       \item Evidence Anchor: Implemented in \path{OGS/src/ogspicker.py}.
       \end{tablenotes}
@@ -380,37 +378,37 @@ outlines the quality-control gates enforced by \texttt{OGSPickStatQC}.
         enclosing regional network aperture \\
         \texttt{z(km)} & Pair[Float] & $[0, 40]$ &
         [Analyst-Normalized] & Seismogenic crustal depth search range
-        ($0\text{--}40\,\unit{\kilo\meter}$) \\
-        \texttt{vel.p, vel.s} & Float [$\unit{\kilo\meter/\second}$] &
-        $5.85, 3.28$ & [Analyst-Normalized] & Apparent body-wave
+        (\qtyrange{0}{40}{\kilo\meter}) \\
+        \texttt{vel.p, vel.s} & Float [\unit{\kilo\meter\per\second}] &
+        \num{5.85}, \num{3.28} & [Analyst-Normalized] & Apparent body-wave
         velocities for initial half-space travel times \\
         \texttt{method} & String & \texttt{BGMM} & [Model
         Architecture] & Bayesian Gaussian Mixture Model with Dirichlet
         process priors \\
         \texttt{use\_dbscan} & Boolean & \texttt{true} & [System
-        Architecture] & Enables spatiotemporal DBSCAN pre-clustering
+        Architecture] & Enables spatiotemporal \ac{DBSCAN} pre-clustering
         to discard noise \\
-        \texttt{dbscan\_eps} & Float [$\unit{\second}$] & $13.4$ &
+        \texttt{dbscan\_eps} & Float [\unit{\second}] & \num{13.4} &
         [Model Hypothesis] & Maximum spatiotemporal distance threshold
-        for DBSCAN connectivity \\
-        \texttt{dbscan\_min\_samples} & Integer & $3$ & [Model
+        for \ac{DBSCAN} connectivity \\
+        \texttt{dbscan\_min\_samples} & Integer & \num{3} & [Model
         Hypothesis] & Minimum neighboring picks required to seed a
-        DBSCAN cluster \\
-        \texttt{oversample\_factor} & Integer & $5$ & [System
+        \ac{DBSCAN} cluster \\
+        \texttt{oversample\_factor} & Integer & \num{5} & [System
         Architecture] & Time oversampling multiplier during EM initialization\\
-        \texttt{min\_picks\_per\_eq} & Integer & $5$ &
+        \texttt{min\_picks\_per\_eq} & Integer & \num{5} &
         [Analyst-Normalized] & Minimum total picks required to
         instantiate an earthquake event \\
-        \texttt{min\_p\_picks\_per\_eq} & Integer & $3$ &
+        \texttt{min\_p\_picks\_per\_eq} & Integer & \num{3} &
         [Analyst-Normalized] & Minimum P-wave arrivals required per
         associated event \\
-        \texttt{min\_s\_picks\_per\_eq} & Integer & $2$ &
+        \texttt{min\_s\_picks\_per\_eq} & Integer & \num{2} &
         [Analyst-Normalized] & Minimum S-wave arrivals required to
         constrain focal depth \\
         \texttt{covariance\_prior\_pre} & Pair[Float] & $[5.0, 5.0]$ &
         [Model Hypothesis] & Prior variance scale for horizontal and
         vertical travel-time misfits \\
-        \texttt{max\_sigma11} & Float & $1.0$ & [Model Hypothesis] &
+        \texttt{max\_sigma11} & Float & \num{1.0} & [Model Hypothesis] &
         Maximum allowable primary eigenvalue for cluster spatial covariance \\
         \bottomrule
       \end{tabularx}
@@ -437,24 +435,25 @@ outlines the quality-control gates enforced by \texttt{OGSPickStatQC}.
     control (\texttt{OGSPickStatQC}).}
     \label{tab:app_qc_dictionary}
     \begin{threeparttable}
-      \begin{tabularx}{\linewidth}{l l l c X}
+      \begin{tabularx}{\linewidth}{l l l X}
         \toprule
         \textbf{Parameter} & \textbf{Data Type} & \textbf{Configured
         Value} & \textbf{Operational Semantics / Description} \\
         \midrule
         \texttt{\_target\_} & Class Path & \texttt{OGSPickStatQC} &
         Post-association quality control module \\
-        \texttt{total\_picks} & Integer & $6$ & Minimum associated
+        \texttt{total\_picks} & Integer & \num{6} & Minimum associated
         picks required
         for event survival into location \\
-        \texttt{p\_and\_s\_picks} & Integer & $3$ & Minimum stations recording
+        \texttt{p\_and\_s\_picks} & Integer & \num{3} & Minimum
+        stations recording
         both P and S arrivals \\
         \bottomrule
       \end{tabularx}
       \begin{tablenotes}[flushleft]
         \footnotesize
       \item Target \& Scope: Quality-control filter gating associated
-        event hypotheses prior to NonLinLoc inversion.
+        event hypotheses prior to \ac{NonLinLoc} inversion.
       \item What the reader should notice: Enforcing 3 co-located P
         and S stations eliminates unconstrained hypocenters with
         infinite trade-offs between depth and origin time.
@@ -470,7 +469,8 @@ outlines the quality-control gates enforced by \texttt{OGSPickStatQC}.
 \section{Hypocenter Location and Magnitude Parameter Dictionaries}
 \label{sec:app_loc_mag_params}
 
-Table~\ref{tab:app_nll_dictionary} specifies the NonLinLoc inversion cards.
+Table~\ref{tab:app_nll_dictionary} specifies the \ac{NonLinLoc} inversion
+cards.
 Table~\ref{tab:app_mag_cluster_dictionary} details local magnitude estimation
 and Dask parallel cluster parameters.
 \begin{landscape}
@@ -507,8 +507,8 @@ and Dask parallel cluster parameters.
         \texttt{LOCMETH} & Inversion & \texttt{EDT\_OT\_WT 9999.0 4
         ...} & [Model Architecture] & Equal Differential Time
         formulation; minimum 4 station pairs \\
-        \texttt{LOCGAU} & Error Spec & $0.15\,\unit{\second},
-        1.0\,\unit{\second}$ & [Analyst-Normalized] & Correlation
+        \texttt{LOCGAU} & Error Spec & \qty{0.15}{\second},
+        \qty{1.0}{\second} & [Analyst-Normalized] & Correlation
         length and theoretical crustal travel-time error \\
         \texttt{LOCQUAL2ERR} & List[Float] & \texttt{[0.1, 0.5, 1.0,
         2.0, ...]} & [Analyst-Normalized] & Maps pick weight classes
@@ -517,9 +517,9 @@ and Dask parallel cluster parameters.
       \end{tabularx}
       \begin{tablenotes}[flushleft]
         \footnotesize
-      \item Target \& Scope: NonLinLoc probabilistic relocation cards
+      \item Target \& Scope: \ac{NonLinLoc} probabilistic relocation cards
         under the 1D crustal model.
-      \item What the reader should notice: The EDT formulation
+      \item What the reader should notice: The \ac{EDT} formulation
         decouples origin time from spatial coordinates, rendering
         hypocentral convergence robust against outlier picks.
       \item Evidence Anchor: The current source is
@@ -556,8 +556,8 @@ and Dask parallel cluster parameters.
         \texttt{cluster.\_target\_} & Class Path &
         \texttt{LocalCluster} & [System Architecture] & Distributed
         memory Dask task scheduler \\
-        \texttt{n\_workers} & Integer & $1$ & [System Architecture] &
-        Worker process count per MPI task allocation \\
+        \texttt{n\_workers} & Integer & \num{1} & [System Architecture] &
+        Worker process count per \ac{MPI} task allocation \\
         \texttt{processes} & Boolean & \texttt{false} & [System
         Architecture] & Uses thread-based worker model to share
         in-memory waveform arrays \\

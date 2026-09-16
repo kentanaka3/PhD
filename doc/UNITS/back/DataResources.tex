@@ -9,7 +9,7 @@
 This chapter records the intended data-provenance and
 software-availability statement for this dissertation. The network
 identifiers and links below require human confirmation against the
-FDSN registry and the access date used for the submitted thesis.
+\ac{FDSN} registry and the access date used for the submitted thesis.
 They are not validated by the source checkout, and restricted
 waveforms or institutional catalogs are not redistributed with it.
 
@@ -54,7 +54,7 @@ repository citations.
         University of Genoa & 1967--pres. &
         \url{https://doi.org/10.7914/SN/GU} \\
         \textbf{HA} & Interreg Italia-Austria Network & \ac{OGS} / ZAMG &
-        2005--pres. & FDSN temporary / project archive \\
+        2005--pres. & \ac{FDSN} temporary / project archive \\
         \textbf{IT} & Italian Strong Motion Network (RAN) & Civil
         Protection Department & 1972--pres. &
         \url{https://doi.org/10.7914/SN/IT} \\
@@ -92,7 +92,7 @@ repository citations.
       \item What the reader should notice: The dataset integrates 18
         distinct network operators across Italy, Austria, Slovenia,
         and Switzerland into a unified transboundary observation aperture.
-      \item Evidence Anchor: Formally registered FDSN network codes and
+      \item Evidence Anchor: Formally registered \ac{FDSN} network codes and
         International DOI Foundation records.
       \end{tablenotes}
     \end{threeparttable}
@@ -159,7 +159,7 @@ repository citations.
     Istituto Nazionale di Geofisica e Vulcanologia (INGV).
     \url{https://doi.org/10.13127/sd/fbbbtdtd6q}
 
-  \item \textbf{[NI] \acf{OGS} and University of Trieste (2002)}.
+  \item \textbf{[NI] \ac{OGS} and University of Trieste (2002)}.
     \textit{North-East Italy Broadband Network} [Data set].
     International Federation of Digital Seismograph Networks.
     \url{https://doi.org/10.7914/SN/NI}
@@ -217,26 +217,26 @@ The deep-learning phase pickers evaluated in this thesis were
 accessed through the standardized SeisBench repository
 (\cite{SeisBench}, \url{https://github.com/seisbench/seisbench}):
 \begin{itemize}
-  \item \textbf{INSTANCE (Italy)}: Michelini, A., Cianetti, S.,
+  \item \textbf{\ac{INSTANCE} (Italy)}: Michelini, A., Cianetti, S.,
     Gaviano, S., Giunchi, C., Jozinovi\'c, D., \& Lauciani, V.
     (2021). \textit{INSTANCE -- the Italian seismic dataset for
     machine learning}. \textit{Earth System Science Data}, 13(12),
     5509--5544. \url{https://doi.org/10.5194/essd-13-5509-2021}
-  \item \textbf{STEAD (Global)}: Mousavi, S.~M., Sheng, Y., Zhu, W.,
+  \item \textbf{\ac{STEAD} (Global)}: Mousavi, S.~M., Sheng, Y., Zhu, W.,
     \& Beroza, G.~C. (2019). \textit{STanford EArthquake Dataset
     (STEAD): A Global Data Set of Seismic Signals for AI}.
     \textit{IEEE Access}, 7, 179464--179476.
     \url{https://doi.org/10.1109/ACCESS.2019.2947848}
-  \item \textbf{SCEDC (Southern California)}: Southern California
+  \item \textbf{\ac{SCEDC} (Southern California)}: Southern California
     Earthquake Center (2013). \textit{Southern California Seismic
     Network (SCSN) Waveform Data}. Caltech/USGS.
     \url{https://doi.org/10.7909/C3WD3xH1}
-  \item \textbf{PhaseNet Original Weights}: Zhu, W., \& Beroza,
+  \item \textbf{\ac{PhaseNet} Original Weights}: Zhu, W., \& Beroza,
     G.~C. (2018). \textit{PhaseNet: a deep-neural-network-based
     seismic arrival-time picking method}. \textit{Geophysical
     Journal International}, 216(1), 261--273.
     \url{https://doi.org/10.1093/gji/ggy423}
-  \item \textbf{Earthquake Transformer Original Weights}: Mousavi,
+  \item \textbf{\ac{EQT} Original Weights}: Mousavi,
     S.~M., Ellsworth, W.~L., Zhu, W., Chuang, L.~Y., \& Beroza,
     G.~C. (2020). \textit{Earthquake transformer---an attentive
       deep-learning model for simultaneous earthquake detection and
@@ -250,26 +250,26 @@ The complete computational software developed in this dissertation
 is open-source and structured across modular packages:
 \begin{itemize}
   \item \textbf{\ac{OGS} Pipeline Framework}: The Python source code
-    (\texttt{OGS/src/}) implementing multi-format catalog parsing,
-    FDSN downloading, bipartite graph matching (\ac{BPGMA}), local
-    magnitude calculation, and plotting is maintained in the
-    institutional repository:
+    (\path{OGS/src/}) implementing multi-format catalog parsing,
+    \ac{FDSN} downloading, \acf{BPGMA}, local magnitude calculation, and
+    plotting is maintained in the institutional repository:
     \url{https://github.com/kentanaka3/PhD}.
-  \item \textbf{CINECA Leonardo HPC Orchestration}: All Slurm
+  \item \textbf{\ac{CINECA} Leonardo \ac{HPC} Orchestration}: All Slurm
     submission scripts, Hydra configuration templates, Makefile
     dependency graphs, and environment activation wrappers
-    (\texttt{OGS/utils/Leonardo/}) are preserved within the
+    (\path{OGS/utils/Leonardo/}) are preserved within the
     repository under release tag \texttt{v1.0-UNITS-PhD}.
   \item \textbf{SeisBench Platform}: Pre-trained models and dataset
-    interfaces were executed using SeisBench version 0.3.4 (\cite{SeisBench}).
+    interfaces were executed using SeisBench version 0.3.4
+    \parencite{SeisBench}.
   \item \textbf{Associator Codes}:
     \begin{itemize}
-      \item \textbf{GaMMA}: Available at
-        \url{https://github.com/AI4EPS/GaMMA} (\cite{GaMMA}).
-      \item \textbf{PyOcto}: Available at
-        \url{https://github.com/austin-bell/pyocto} (\cite{PyOcto}).
+      \item \textbf{\ac{GaMMA}}: Available at
+        \url{https://github.com/AI4EPS/GaMMA} \parencite{GaMMA}.
+      \item \textbf{\ac{PyOcto}}: Available at
+        \url{https://github.com/austin-bell/pyocto} \parencite{PyOcto}.
     \end{itemize}
-  \item \textbf{Relocation Engine}: The NonLinLoc software suite
+  \item \textbf{Relocation Engine}: The \ac{NonLinLoc} software suite
     (version 7.00) developed by Anthony Lomax is accessible at
-    \url{https://alomax.free.fr/nlloc/} (\cite{NonLinLoc}).
+    \url{https://alomax.free.fr/nlloc/} \parencite{NonLinLoc}.
 \end{itemize}

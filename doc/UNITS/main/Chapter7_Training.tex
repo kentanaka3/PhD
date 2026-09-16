@@ -15,9 +15,9 @@ Automated seismic monitoring pipelines deployed across dense regional
 networks rely fundamentally upon high-sensitivity, robust deep-learning
 phase pickers to identify primary ($P$) and secondary ($S$) wave arrival
 onsets within continuous multi-channel waveform streams. While deep neural
-architectures such as PhaseNet (\cite{PhaseNet}) and Earthquake Transformer
-(\ac{EQTransformer}, \cite{EQTransformer}) achieve remarkable pick
-precision and recall when evaluated on standard benchmark datasets, their
+architectures such as PhaseNet (\cite{PhaseNet}) and \acf{EQT} achieve
+remarkable pick precision and recall when evaluated on standard
+benchmark datasets, their
 direct zero-shot deployment in localized seismotectonic domains often
 incurs significant performance degradation. This discrepancy stems from
 pronounced domain shift between the generalized training distributions and
@@ -46,7 +46,7 @@ This chapter is structured into seven complementary sections:
     weights, automated waveform retrieval, signal conditioning, and
     SeisBench HDF5 container serialization.
   \item Section~\ref{sec:neural_architectures} presents the architectural
-    specifications of the PhaseNet 1D U-Net and \ac{EQTransformer}
+    specifications of the \ac{PhaseNet} 1D U-Net and \ac{EQT}
     hierarchical attention networks alongside their pretrained baseline
     weight repositories.
   \item Section~\ref{sec:data_augmentation} formulates the stochastic data
@@ -58,8 +58,8 @@ This chapter is structured into seven complementary sections:
   \item Section~\ref{sec:checkpointing_and_validation} outlines the
     dataset partitioning strategy, validation protocol, and state-preserving
     checkpoint retention architecture.
-  \item Section~\ref{sec:hpc_orchestration} demonstrates the HPC workload
-    orchestration on the CINECA Leonardo supercomputer, detailing
+  \item Section~\ref{sec:hpc_orchestration} demonstrates the \ac{HPC} workload
+    orchestration on the \ac{CINECA} Leonardo supercomputer, detailing
     parameterized Makefile rules and SLURM execution wrappers.
 \end{itemize}
 
@@ -67,11 +67,12 @@ This chapter is structured into seven complementary sections:
 The software modules governing catalog ingestion, waveform conditioning,
 stochastic data augmentation, vector cross-entropy loss calculation,
 model checkpointing, and SLURM workload generation are demonstrated and
-fully verified within \path{OGS/src/ogstrainer.py}, \path{OGS/src/ogsconstants.py},
-and \path{OGS/utils/Leonardo/Makefile}. Conversely, the complete multi-epoch
-training trajectories, converged regional model weights, and prospective
-generalization benchmarks across the multi-year OGS archive represent
-active computational campaigns scheduled on Leonardo Booster GPU allocations.
+fully verified within \path{OGS/src/ogstrainer.py},
+\path{OGS/src/ogsconstants.py}, and \path{OGS/utils/Leonardo/Makefile}.
+Conversely, the complete multi-epoch training trajectories, converged regional
+model weights, and prospective generalization benchmarks across the multi-year
+\ac{OGS} archive represent active computational campaigns scheduled on Leonardo
+Booster \ac{GPU} allocations.
 Accordingly, numerical loss trajectories and performance metrics reported
 herein denote intended evaluation schemas and architectural baseline
 parameters rather than final certified catalog revisions.
@@ -130,12 +131,13 @@ statistical regimes:
     to differing ambient seismic noise spectra, site amplification, and sensor
     transfer functions, while the physical relationship between wave arrival
     onsets and particle motion remains invariant.
-  \item \textbf{Concept Drift / Conditional Shift} ($P_s(\mathbf{Y} \mid \mathbf{X}) \neq P_t(\mathbf{Y} \mid \mathbf{X})$):
-    The conditional distribution of phase arrival probabilities diverges because
-    differing regional crustal velocity gradients, structural discontinuities,
-    and scattering regimes distort waveform signatures, generating emergent phase
-    arrivals, complex coda conversions, and multi-path reflections not captured in
-    the source training distribution.
+  \item \textbf{Concept Drift / Conditional Shift} ($P_s(\mathbf{Y}
+    \mid \mathbf{X}) \neq P_t(\mathbf{Y} \mid \mathbf{X})$): The conditional
+    distribution of phase arrival probabilities diverges because differing
+    regional crustal velocity gradients, structural discontinuities, and
+    scattering regimes distort waveform signatures, generating emergent phase
+    arrivals, complex coda conversions, and multi-path reflections not captured
+    in the source training distribution.
 \end{enumerate}
 
 The discrepancy between source and target feature representations can be
@@ -143,7 +145,8 @@ formalized via the Kullback--Leibler (\ac{KL}) divergence between the induced
 marginal feature distributions:
 \begin{equation}
   D_{\mathrm{KL}}\bigl( P_s(\mathbf{X}) \,\|\, P_t(\mathbf{X}) \bigr) =
-  \int_{\mathcal{X}} P_s(\mathbf{X}) \log\left( \frac{P_s(\mathbf{X})}{P_t(\mathbf{X})} \right) \mathrm{d}\mathbf{X}.
+  \int_{\mathcal{X}} P_s(\mathbf{X}) \log\left(
+  \frac{P_s(\mathbf{X})}{P_t(\mathbf{X})} \right) \mathrm{d}\mathbf{X}.
   \label{eq:kl_divergence}
 \end{equation}
 Whenever $D_{\mathrm{KL}}(P_s \,\|\, P_t) > 0$, the theoretical generalization
@@ -162,24 +165,31 @@ domain discrepancy relative to standard training corpora:
 \begin{itemize}
   \item \textbf{Complex Crustal Velocity Discontinuities}: The crust in
     Northeastern Italy exhibits extreme lateral and vertical heterogeneity.
-    The Moho depth deepens rapidly from approximately $30\,\mathrm{km}$ beneath
-    the Venetian-Friulian alluvial plain to over $45\,\mathrm{km}$ beneath the
-    Alpine metamorphic root (\cite{Bressan1998}). Thrust-and-fold belts in the
+    The Moho depth deepens rapidly from approximately
+    $\qty{30}{\kilo\meter}$ beneath
+    the Venetian-Friulian alluvial plain to over
+    $\qty{45}{\kilo\meter}$ beneath the
+    Alpine metamorphic root \parencite{Bressan1998}. Thrust-and-fold
+    belts in the
     Carnic and Julian Prealps create sharp acoustic impedance contrasts,
     inducing complex refracted head waves ($P_n$, $S_n$) and post-critical
     Moho reflections ($P_mP$, $S_mS$) with emergent onsets that confound models
     trained on simpler tabular crustal structures.
   \item \textbf{High-Frequency Attenuation and Scattering}: The fractured
     carbonate platforms and karst lithologies characterizing the Friuli region
-    exhibit high intrinsic and scattering attenuation. The seismic quality factor
-    follows a frequency-dependent power law $Q(f) = Q_0 f^\alpha$, with regional
-    estimates indicating significant high-frequency damping ($f > 15\,\mathrm{Hz}$)
+    exhibit high intrinsic and scattering attenuation. The seismic
+    quality factor
+    follows a frequency-dependent power law $Q(f) = Q_0 f^\alpha$,
+    with regional
+    estimates indicating significant high-frequency damping ($f >
+    \qty{15}{\hertz}$)
     and severe near-surface high-frequency spectral decay governed by the
     Anderson-Hough attenuation parameter $\kappa_0$. High-frequency $P$-wave
     energy is rapidly dispersed into coda waves, softening impulse onsets into
     gradual ramps.
-  \item \textbf{Topographic and Valley Site Amplification}: Many \ac{OGS} stations
-    are sited in narrow Alpine valleys filled with soft Quaternary alluvium or on
+  \item \textbf{Topographic and Valley Site Amplification}: Many \ac{OGS}
+    stations are sited in narrow Alpine valleys filled with soft Quaternary
+    alluvium or on
     steep topography. Trapped sedimentary valley waves and topographic ridge
     scattering create monochromatic resonance bands and energetic S-wave coda
     reverberations that mimic genuine microseismic arrivals.
@@ -188,7 +198,7 @@ domain discrepancy relative to standard training corpora:
     operating high-sensitivity broadband velocimeters (Streckeisen STS-2, Nanometrics
     Trillium 120/240) alongside strong-motion accelerometers (Kinemetrics Episensor)
     with disparate sensor poles, zeroes, dynamic ranges, and digitizer sampling
-    frequencies ($50$, $100$, and $200\,\mathrm{Hz}$).
+    frequencies ($\qtylist{50; 100; 200}{\hertz}$).
 \end{itemize}
 
 \subsection{Inductive Transfer Learning vs Fine-Tuning Strategies}
@@ -200,7 +210,7 @@ strategy. In seismology, two principal paradigms exist:
   \item \textbf{Full Retraining from Random Initialization}: Training deep
     neural networks from scratch requires massive ground-truth training corpora
     ($N \ge 10^5\text{--}10^6$ labeled traces). Regional seismic bulletins,
-    including the \ac{OGS} catalog (\cite{MagrinEtAl2026RevisedOGSCatalog}),
+    including the \ac{OGS} catalog \parencite{MagrinEtAl2026RevisedOGSCatalog},
     possess high-quality analyst labels but with smaller total sample volumes
     ($N \approx 10^3\text{--}10^4$ events). Training complex architectures from
     scratch on regional corpora inevitably leads to catastrophic overfitting,
@@ -227,8 +237,9 @@ baselines to identify the optimal regional domain adaptation trajectory.
 \section{Data Extraction and Stream Conditioning Pipeline}
 \label{sec:data_extraction_pipeline}
 
-The training dataset generation engine bridges the authoritative, analyst-curated
-OGS seismic catalog with the continuous multi-channel waveform repository. The
+The training dataset generation engine bridges the authoritative,
+analyst-curated \ac{OGS} seismic catalog with the continuous multi-channel
+waveform repository. The
 workflow is coordinated by the \texttt{OGSTrainer.build\_dataset()} method in
 \path{OGS/src/ogstrainer.py}.
 
@@ -249,12 +260,14 @@ in \path{OGS/src/ogsconstants.py}:
 \begin{equation}
   \sigma_t(w) =
   \begin{cases}
-    0.01\,\unit{\second}, & w = 0 \quad (\text{Impulsive, very sharp onset}), \\
-    0.04\,\unit{\second}, & w = 1 \quad (\text{Clear, distinct onset}), \\
-    0.20\,\unit{\second}, & w = 2 \quad (\text{Fairly clear onset}), \\
-    1.00\,\unit{\second}, & w = 3 \quad (\text{Emergent onset}), \\
-    5.00\,\unit{\second}, & w = 4 \quad (\text{Poor quality, highly uncertain}), \\
-    25.0\,\unit{\second}, & w = 5 \quad (\text{Unusable / discarded phase}).
+    \qty{0.01}{\second}, & w = 0 \quad (\text{Impulsive, very sharp
+    onset}), \\
+    \qty{0.04}{\second}, & w = 1 \quad (\text{Clear, distinct onset}), \\
+    \qty{0.20}{\second}, & w = 2 \quad (\text{Fairly clear onset}), \\
+    \qty{1.00}{\second}, & w = 3 \quad (\text{Emergent onset}), \\
+    \qty{5.00}{\second}, & w = 4 \quad (\text{Poor quality, highly
+    uncertain}), \\
+    \qty{25.0}{\second}, & w = 5 \quad (\text{Unusable / discarded phase}).
   \end{cases}
   \label{eq:hypo71_weights}
 \end{equation}
@@ -271,31 +284,37 @@ if len(station_picks) <= 1:
 \end{lstlisting}
 This filtering step eliminates emergent and questionable picks ($w \ge 3$),
 guaranteeing that the temporal target distributions represent physical arrivals
-with timing precision $\sigma_t \le 0.20\,\unit{\second}$. Furthermore, stations
+with timing precision $\sigma_t \le \qty{0.20}{\second}$.
+Furthermore, stations
 recording only an isolated pick without a complementary phase arrival are
-pruned from training pair generation to enforce balanced multi-phase representation.
+pruned from training pair generation to enforce balanced multi-phase
+representation.
 
 \subsection{Waveform Stream Windowing and Automated Retrieval}
 \label{subsec:waveform_windowing}
 
 For each validated pick, the corresponding continuous waveform files are located
 within the hierarchical miniSEED archive structured by year, month, and day:
-\begin{equation}
+\begin{center}
   \path{<WAVE_PATH>/<YYYY>/<MM>/<DD>/<NET>.<STA>.*.*__<START_TIME>__<END_TIME>.mseed}
-  \label{eq:mseed_path_pattern}
-\end{equation}
+\end{center}
 
 The waveform segment is extracted with an operational temporal padding of
-$\pm 60\,\unit{\second}$ centered around the pick timestamp $t_{\mathrm{pick}}$,
-defined by the time delta constant \texttt{PICK\_TRAIN\_OFFSET = td(seconds=60)}
+$\pm \qty{60}{\second}$ centered around the pick timestamp
+$t_{\mathrm{pick}}$,
+defined by the time delta constant \texttt{PICK\_TRAIN\_OFFSET =
+td(seconds=60)}
 in \path{OGS/src/ogsconstants.py}:
 \begin{equation}
-  \mathcal{W}_{\mathrm{extract}} = \left[ t_{\mathrm{pick}} - 60\,\unit{\second}, \;
-  t_{\mathrm{pick}} + 60\,\unit{\second} \right].
+  \mathcal{W}_{\mathrm{extract}} = \left[ t_{\mathrm{pick}} -
+    \qty{60}{\second}, \;
+  t_{\mathrm{pick}} + \qty{60}{\second} \right].
   \label{eq:extraction_window}
 \end{equation}
-This $120\,\unit{\second}$ temporal window guarantees that both primary and secondary
-arrivals, the pre-P noise baseline, and the complete decaying coda are contained
+This \qty{120}{\second} temporal window guarantees that both
+primary and secondary
+arrivals, the pre-P noise baseline, and the complete decaying coda
+are contained
 within the raw trace prior to subsequent stochastic cropping.
 
 When continuous waveforms are absent from local scratch mounts, \texttt{OGSTrainer}
@@ -310,7 +329,7 @@ repositories.
 Raw waveforms recorded by heterogeneous digitizers exhibit DC offsets, linear
 instrumental drift, and high-frequency anthropogenic contamination. Prior to
 dataset compilation, every extracted trace is conditioned via the deterministic
-preprocessing method \texttt{get\_clean_trace()}:
+preprocessing method \texttt{get\_clean\_trace()}:
 \begin{equation}
   x(t) \xrightarrow{\text{Detrend}} x_1(t) \xrightarrow{\text{Demean}} x_2(t)
   \xrightarrow{\text{Taper}} x_3(t) \xrightarrow{\text{Bandpass}} x_4(t)
@@ -337,24 +356,32 @@ The mathematical operations comprising this pipeline include:
     \begin{equation}
       w(t) =
       \begin{cases}
-        \frac{1}{2}\left[ 1 - \cos\left( \frac{\pi t}{\alpha T} \right) \right], & 0 \le t < \alpha T, \\
+        \frac{1}{2}\left[ 1 - \cos\left( \frac{\pi t}{\alpha T}
+        \right) \right], & 0 \le t < \alpha T, \\
         1, & \alpha T \le t \le (1 - \alpha) T, \\
-        \frac{1}{2}\left[ 1 - \cos\left( \frac{\pi (T - t)}{\alpha T} \right) \right], & (1 - \alpha) T < t \le T.
+        \frac{1}{2}\left[ 1 - \cos\left( \frac{\pi (T - t)}{\alpha
+        T} \right) \right], & (1 - \alpha) T < t \le T.
       \end{cases}
     \end{equation}
   \item \textbf{4th-Order Zero-Phase Butterworth Bandpass Filtering}: Filtering
-    between $f_{\mathrm{min}} = 0.1\,\unit{\hertz}$ and $f_{\mathrm{max}} = 20.0\,\unit{\hertz}$.
+    between $f_{\mathrm{min}} = \qty{0.1}{\hertz}$ and
+    $f_{\mathrm{max}} = \qty{20.0}{\hertz}$.
     The 4th-order zero-phase implementation applies forward-backward filtering
-    to achieve zero group-delay distortion, preserving exact phase onset timing:
+    to achieve zero group-delay distortion, preserving exact phase
+    onset timing:
     \begin{equation}
       |H(f)|^2 = \frac{1}{1 + \left( \frac{f^2 - f_0^2}{f \cdot \Delta f} \right)^{2 n}}, \quad n = 4,
     \end{equation}
-    where $\Delta f = f_{\mathrm{max}} - f_{\mathrm{min}} = 19.9\,\unit{\hertz}$
+    where $\Delta f = f_{\mathrm{max}} - f_{\mathrm{min}} =
+    \qty{19.9}{\hertz}$
     and $f_0 = \sqrt{f_{\mathrm{min}} f_{\mathrm{max}}}$.
-  \item \textbf{Anti-Aliasing Resampling}: Resampling the conditioned stream to a
-    normalized sampling frequency $f_s = 100.0\,\unit{\hertz}$ ($\Delta t = 0.01\,\unit{\second}$)
-    using polyphase rational interpolation with an integrated anti-aliasing low-pass
-    filter at the Nyquist cutoff ($f_{\mathrm{Nyq}} = 50.0\,\unit{\hertz}$).
+  \item \textbf{Anti-Aliasing Resampling}: Resampling the
+    conditioned stream to a
+    normalized sampling frequency $f_s = \qty{100.0}{\hertz}$
+    ($\Delta t = \qty{0.01}{\second}$)
+    using polyphase rational interpolation with an integrated
+    anti-aliasing low-pass
+    filter at the Nyquist cutoff ($f_{\mathrm{Nyq}} = \qty{50.0}{\hertz}$).
 \end{enumerate}
 
 \subsection{SeisBench Waveform Dataset Serialization}
@@ -373,7 +400,8 @@ using \texttt{seisbench.data.WaveformDataWriter}. The writer generates:
 \begin{enumerate}
   \item \path{waveforms.hdf5}: An optimized hierarchical HDF5 container storing
     multi-component waveform arrays under chunked, contiguous binary datasets
-    with blosc compression, enabling zero-copy slicing of arbitrary window offsets.
+    with blosc compression, enabling zero-copy slicing of arbitrary
+    window offsets.
   \item \path{metadata.csv}: A standardized columnar schema indexing trace
     indices, sample arrival positions (\eg{\texttt{trace\_p\_arrival\_sample}} and
     \texttt{trace\_s\_arrival\_sample}), epicentral distances, and source magnitudes.
@@ -396,15 +424,18 @@ PhaseNet (\cite{PhaseNet}) and Earthquake Transformer (\ac{EQTransformer},
 \subsection{PhaseNet: 1D U-Net with Lateral Skip Connections}
 \label{subsec:phasenet_arch}
 
-PhaseNet adapts the U-Net architecture from biomedical image segmentation to
-one-dimensional multi-channel time series. The network consists of a contracting
-path (encoder) and an expanding path (decoder) joined by lateral skip connections,
-as formulated in Chapter~\ref{chap:pipeline}.
+\ac{PhaseNet} adapts the U-Net architecture from biomedical image
+segmentation to
+one-dimensional multi-channel time series. The network consists of a
+contracting
+path (encoder) and an expanding path (decoder) joined by lateral
+skip connections,
+as formulated in Chapter~\ref{chap:computational_pipeline}.
 
 \begin{itemize}
   \item \textbf{Input Dimensionality}: Three-component seismic waveform
     $\mathbf{X} \in \mathbb{R}^{3 \times L}$, where $L = 3{,}001$ samples
-    ($30.01\,\unit{\second}$ at $100\,\unit{\hertz}$).
+    (\qty{30.01}{\second} at \qty{100}{\hertz}).
   \item \textbf{Contracting Encoder}: Four sequential downsampling stages.
     Each stage comprises a 1D convolution with a large kernel size $k = 7$,
     stride $s = 1$, batch normalization, and a rectified linear unit (ReLU)
@@ -412,14 +443,18 @@ as formulated in Chapter~\ref{chap:pipeline}.
     and stride $s = 2$ that halves the temporal resolution while doubling the
     feature channel depth:
     \begin{equation}
-      C_l = 8 \times 2^l, \quad L_l = \left\lfloor \frac{L_{l-1} + 1}{2} \right\rfloor, \quad l \in \{1, 2, 3, 4\}.
+      C_l = 8 \times 2^l, \quad L_l = \left\lfloor \frac{L_{l-1} +
+      1}{2} \right\rfloor, \quad l \in \{1, 2, 3, 4\}.
     \end{equation}
   \item \textbf{Bottleneck}: A deep contextual representation layer with 128
-    feature channels operating on the downsampled feature map ($L_4 \approx 188$
-    samples), capturing long-period waveform envelopes and broad temporal context.
+    feature channels operating on the downsampled feature map ($L_4
+      \approx 188$
+    samples), capturing long-period waveform envelopes and broad
+    temporal context.
   \item \textbf{Expanding Decoder}: Four symmetric upsampling stages. Each
     stage employs transposed 1D convolutions with stride $s = 2$ to double the
-    temporal dimension, concatenates the resulting feature map laterally with the
+    temporal dimension, concatenates the resulting feature map
+    laterally with the
     corresponding high-resolution representation from the contracting encoder
     via skip connections, and processes the merged representation through 1D
     convolutions and ReLU activations.
@@ -427,16 +462,20 @@ as formulated in Chapter~\ref{chap:pipeline}.
     the 8-channel reconstructed feature map to three logits, followed by a
     temporal softmax projection producing posterior probabilities:
     \begin{equation}
-      \hat{y}_{c}(t) = \frac{\exp\bigl( z_c(t) \bigr)}{\sum_{k \in \{P, S, N\}} \exp\bigl( z_k(t) \bigr)}, \quad c \in \{P, S, N\},
+      \hat{y}_{c}(t) = \frac{\exp\bigl( z_c(t) \bigr)}{\sum_{k \in
+      \{P, S, N\}} \exp\bigl( z_k(t) \bigr)}, \quad c \in \{P, S, N\},
       \label{eq:phasenet_softmax}
     \end{equation}
-    where $\hat{y}_P(t)$ is the P-wave probability, $\hat{y}_S(t)$ is the S-wave
+    where $\hat{y}_P(t)$ is the P-wave probability, $\hat{y}_S(t)$
+    is the S-wave
     probability, and $\hat{y}_N(t)$ is the background noise probability.
 \end{itemize}
 
 The combination of deep downsampling and lateral skip connections enables
-PhaseNet to resolve large temporal receptive fields ($\approx 10\text{--}15\,\unit{\second}$)
-while preserving high-frequency onset timing down to the individual sample level.
+\ac{PhaseNet} to resolve large temporal receptive fields ($\approx
+\qtyrange{10}{15}{\second}$)
+while preserving high-frequency onset timing down to the individual
+sample level.
 
 \subsection{EQTransformer: Attentive Deep Hierarchical Architecture}
 \label{subsec:eqt_arch}
@@ -447,10 +486,13 @@ Earthquake Transformer (\ac{EQTransformer}, \cite{EQTransformer}) combines
 jointly perform earthquake detection and phase picking.
 
 \begin{itemize}
-  \item \textbf{Input Dimensionality}: Three-component waveform $\mathbf{X} \in \mathbb{R}^{3 \times L}$
-    with sequence length $L = 6{,}000$ samples ($60.00\,\unit{\second}$ at $100\,\unit{\hertz}$).
+  \item \textbf{Input Dimensionality}: Three-component waveform
+    $\mathbf{X} \in \mathbb{R}^{3 \times L}$
+    with sequence length $L = 6{,}000$ samples
+    (\qty{60.00}{\second} at \qty{100}{\hertz}).
   \item \textbf{1D ResNet Feature Extractor}: A hierarchy of 1D residual blocks
-    operating with strided convolutions that downsamples the input sequence by a
+    operating with strided convolutions that downsamples the input
+    sequence by a
     cumulative factor of 8 to $L_{\mathrm{down}} = 750$ time steps, extracting
     local temporal features while mitigating vanishing gradient degradation.
   \item \textbf{Bidirectional LSTM Sequence Modeling}: A bidirectional LSTM layer
@@ -479,9 +521,10 @@ jointly perform earthquake detection and phase picking.
 \subsection{Pretrained Baseline Model Repositories}
 \label{subsec:pretrained_repositories}
 
-The \texttt{ogstrainer.py} CLI exposes five benchmark pretrained weight variants
+The \texttt{ogstrainer.py} CLI exposes five benchmark pretrained
+weight variants
 via the \texttt{-s / --dataset} flag, corresponding to major public seismic
-corpora distributed within the SeisBench repository:
+dataset distributed within the SeisBench repository:
 \begin{enumerate}
   \item \texttt{instance} (\cite{INSTANCE}): Pretrained on the Italian Seismic
     Dataset for Machine Learning, comprising $1.15 \times 10^6$ three-component
@@ -501,14 +544,15 @@ corpora distributed within the SeisBench repository:
     collision zone.
 \end{enumerate}
 
-Table~\ref{tab:pretrained_corpora_comparison} synthesizes the key seismotectonic
-and instrumental properties of these five baseline training corpora.
+Table~\ref{tab:pretrained_corpora_comparison} synthesizes the key
+seismotectonic
+and instrumental properties of these five baseline training dataset.
 
 \begin{table}[htbp]
   \centering
   \small
-  \caption{Comparative synthesis of benchmark training corpora and pretrained
-    baseline weight repositories available for regional transfer learning.}
+  \caption{Comparative synthesis of benchmark training dataset and pretrained
+  baseline weight repositories available for regional transfer learning.}
   \label{tab:pretrained_corpora_comparison}
   \begin{threeparttable}
     \begin{tabularx}{\linewidth}{l l l c >{\raggedright\arraybackslash}X}
@@ -549,15 +593,21 @@ via \texttt{seisbench.generate}.
 \subsection{Stochastic Augmentation Graph via SeisBench Generate}
 \label{subsec:augmentation_graph}
 
-The augmentation pipeline is constructed dynamically in \texttt{\_build\_augmentations()}
-and integrated into \texttt{seisbench.generate.GenericGenerator}. The operational
+The augmentation pipeline is constructed dynamically in
+\texttt{\_build\_augmentations()}
+and integrated into \texttt{seisbench.generate.GenericGenerator}.
+The operational
 sequence comprises five sequential stochastic transformations:
 
 \begin{enumerate}
-  \item \textbf{WindowAroundSample}: Selects a wide candidate window guaranteed to
-    enclose a verified catalog arrival. Rather than centering the pick deterministically,
-    the pick is randomly positioned within a window of length $2 \times L_{\mathrm{in}}$
-    with $L_{\mathrm{in}}$ samples preceding the pick, using a variable strategy:
+  \item \textbf{WindowAroundSample}: Selects a wide candidate window
+    guaranteed to
+    enclose a verified catalog arrival. Rather than centering the
+    pick deterministically,
+    the pick is randomly positioned within a window of length $2
+    \times L_{\mathrm{in}}$
+    with $L_{\mathrm{in}}$ samples preceding the pick, using a
+    variable strategy:
     \begin{lstlisting}[language=python,basicstyle=\scriptsize\ttfamily]
 sbg.WindowAroundSample(
     list(PHASE_DICT.keys()),
@@ -570,20 +620,25 @@ sbg.WindowAroundSample(
     This prevents the neural network from learning a trivial spatial prior
     centered at the middle of the window.
   \item \textbf{RandomWindow}: Performs a secondary stochastic crop to extract
-    the exact model input sequence length ($L=3{,}001$ for PhaseNet, $L=6{,}000$
-    for EQTransformer) with edge zero-padding (\texttt{strategy="pad"}):
+    the exact model input sequence length ($L=3{,}001$ for \ac{PhaseNet},
+    $L=6{,}000$ for \ac{EQT}) with edge zero-padding (\texttt{strategy="pad"}):
     \begin{lstlisting}[language=python,basicstyle=\scriptsize\ttfamily]
 sbg.RandomWindow(windowlen=windowlen, strategy="pad")
     \end{lstlisting}
-    This exposes the model to arbitrary arrival offsets, including picks situated
+    This exposes the model to arbitrary arrival offsets, including
+    picks situated
     near the start or end of the inference window.
-  \item \textbf{ChangeDtype (Input $\mathbf{X}$)}: Explicitly casts waveform sample
+  \item \textbf{ChangeDtype (Input $\mathbf{X}$)}: Explicitly casts
+    waveform sample
     tensors to 32-bit floating point precision (\texttt{np.float32}), matching
-    PyTorch accelerator requirements and preventing double-precision memory overhead.
+    PyTorch accelerator requirements and preventing double-precision
+    memory overhead.
   \item \textbf{ProbabilisticLabeller}: Generates smooth Gaussian probability
-    trajectories centered at the exact fractional sample positions of the P and S
+    trajectories centered at the exact fractional sample positions
+    of the P and S
     arrivals, as detailed in Section~\ref{subsec:probabilistic_labeling}.
-  \item \textbf{ChangeDtype (Target $\mathbf{Y}$)}: Casts the output label probability
+  \item \textbf{ChangeDtype (Target $\mathbf{Y}$)}: Casts the output
+    label probability
     tensor $\mathbf{Y}$ to \texttt{np.float32} precision.
 \end{enumerate}
 
@@ -606,24 +661,32 @@ mathematical deficiencies:
     density and zero smooth gradient outside the single arrival sample.
 \end{enumerate}
 
-To establish a smooth convex optimization manifold that mirrors physical picking
-uncertainty, \texttt{ProbabilisticLabeller} parameterizes phase targets as continuous
+To establish a smooth convex optimization manifold that mirrors
+physical picking
+uncertainty, \texttt{ProbabilisticLabeller} parameterizes phase
+targets as continuous
 univariate Gaussian bell curves centered at arrival sample $t_{\mathrm{arr}}$:
 \begin{equation}
-  y_c(t) = \exp\left( -\frac{(t - t_{\mathrm{arr}})^2}{2\sigma^2} \right), \quad c \in \{P, S\},
+  y_c(t) = \exp\left( -\frac{(t - t_{\mathrm{arr}})^2}{2\sigma^2}
+  \right), \quad c \in \{P, S\},
   \label{eq:gaussian_target_bell}
 \end{equation}
 where the standard deviation $\sigma$ is set to $\sigma = 30$ samples ($0.30\,\unit{\second}$
 at $f_s = 100\,\unit{\hertz}$). The Full Width at Half Maximum (\ac{FWHM}) of the
 resulting target distribution is:
 \begin{equation}
-  \mathrm{FWHM} = 2\sqrt{2\ln 2}\,\sigma \approx 2.3548 \times 30\,\text{samples} \approx 70.64\,\text{samples} \approx 0.706\,\unit{\second}.
+  \mathrm{FWHM} = 2\sqrt{2\ln 2}\,\sigma \approx 2.3548 \times
+  30\,\text{samples} \approx 70.64\,\text{samples} \approx
+  \qty{0.706}{\second}.
   \label{eq:fwhm_calculation}
 \end{equation}
-This $0.71\,\unit{\second}$ effective probability envelope comfortably spans the
-$0.20\,\unit{\second}$ empirical timing uncertainty threshold associated with
-Hypo71 quality weight $w \le 2$ (Section~\ref{subsec:pick_filtering}), providing
-the network with smooth, non-vanishing gradient guidance proportional to temporal
+This \qty{0.71}{\second} effective probability envelope
+comfortably spans the
+\qty{0.20}{\second} empirical timing uncertainty threshold associated with
+Hypo71 quality weight $w \le 2$
+(Section~\ref{subsec:pick_filtering}), providing
+the network with smooth, non-vanishing gradient guidance
+proportional to temporal
 offset. Target values are truncated to zero when $y_c(t) < 10^{-4}$.
 
 \subsection{Noise Channel Normalization and Multi-Label Consistency}
@@ -639,13 +702,16 @@ probabilities:
 
 By construction, this formulation enforces two vital mathematical properties:
 \begin{equation}
-  \max_{c \in \{P, S, N\}} y_c(t) = 1, \quad \text{and} \quad \sum_{c \in \{P, S, N\}} y_c(t) \ge 1, \quad \forall t \in [1, L].
+  \max_{c \in \{P, S, N\}} y_c(t) = 1, \quad \text{and} \quad
+  \sum_{c \in \{P, S, N\}} y_c(t) \ge 1, \quad \forall t \in [1, L].
   \label{eq:label_convexity}
 \end{equation}
 Far from arrival times, $y_P(t) = 0$ and $y_S(t) = 0$, driving $y_N(t) = 1.0$.
-In the immediate vicinity of an arrival, $y_c(t_{\mathrm{arr}}) = 1.0$, which drives
+In the immediate vicinity of an arrival, $y_c(t_{\mathrm{arr}}) =
+1.0$, which drives
 the noise target $y_N(t_{\mathrm{arr}}) = 0.0$. In transition regimes between
-adjacent arrivals ($S - P$ intervals), the formulation ensures smooth probability
+adjacent arrivals ($S - P$ intervals), the formulation ensures
+smooth probability
 partitioning without artificial discontinuity.
 
 % =============================================================================
@@ -654,9 +720,11 @@ partitioning without artificial discontinuity.
 \section{Mathematical Loss Formulation and Optimization Dynamics}
 \label{sec:loss_and_optimization}
 
-Neural network optimization is governed by the vector cross-entropy loss function
+Neural network optimization is governed by the vector cross-entropy
+loss function
 implemented in \texttt{loss\_fn()} of \path{OGS/src/ogstrainer.py}, integrated
-with dynamic GPU waveform normalization and deterministic gradient descent.
+with dynamic \ac{GPU} waveform normalization and deterministic
+gradient descent.
 
 \subsection{Multi-Channel Vector Cross-Entropy Loss Derivation}
 \label{subsec:loss_derivation}
