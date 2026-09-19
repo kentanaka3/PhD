@@ -138,43 +138,14 @@ import ogsconstants as OGS_C
 # Local module: Clustering algorithms and utilities (parent class)
 import ogsclustering as OGS_CL
 
+# Local module: Utilities and argument parsers
+import ogsutils as OGS_U
+
 # Local module: Catalog loading and management
 from ogscatalog import OGSCatalog
 
 # Type hints for improved code documentation
 from typing import Tuple, Optional, Callable, Any, Dict
-
-
-# =============================================================================
-# ARGUMENT PARSER
-# =============================================================================
-
-def parse_arguments() -> argparse.Namespace:
-  """
-  Parse command-line arguments for the sequence clustering tool.
-
-  Returns:
-    argparse.Namespace with:
-      - input: Path to JSON metadata configuration file
-      - verbose: Boolean flag for debug output
-  """
-  parser = argparse.ArgumentParser(
-      description="OGS Sequence Clustering Tool"
-  )
-
-  # -i/--input: Path to JSON configuration file (required)
-  parser.add_argument(
-      "-i", "--input", required=True, type=OGS_C.is_file_path,
-      help="Input file containing seismic event data"
-  )
-
-  # -v/--verbose: Enable detailed logging output
-  parser.add_argument(
-      "-v", "--verbose", action='store_true', default=False,
-      help="Enable verbose output"
-  )
-
-  return parser.parse_args()
 
 
 # =============================================================================
@@ -1147,4 +1118,4 @@ def main(args: argparse.Namespace) -> None:
 
 # Script entry point: parse arguments and run main
 if __name__ == "__main__":
-  main(parse_arguments())
+  main(OGS_U.parse_sequence_args())

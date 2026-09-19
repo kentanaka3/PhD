@@ -33,14 +33,16 @@ AUTHORS:
 =============================================================================
 """
 
-from ogstxt import DataFileTXT, parse_arguments
 import ogsconstants as OGS_C
-from datetime import datetime
+from ogstxt import DataFileTXT
+from ogsutils import parse_txt_args
 import os
 import sys
-import pandas as pd
 import unittest.mock
+from datetime import datetime
 from pathlib import Path
+import pandas as pd
+
 THIS_DIR = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(THIS_DIR + "/../src"))
 
@@ -56,13 +58,22 @@ class TestOGSTXT(unittest.TestCase):
       "-v"
   ])
   def test_args(self):
-    args = parse_arguments()
+    args = parse_txt_args()
     self.assertEqual(args.file, [Path(DATA_DIR / "manual" / DATA_FILE)])
     self.assertEqual(args.dates[0],
                      datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT))
     self.assertEqual(args.dates[1],
                      datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT))
     self.assertTrue(args.verbose)
+
+  @unittest.mock.patch("sys.argv", [
+      "ogstxt.py", "-f", str(DATA_DIR / "manual" / DATA_FILE),
+      "-q"
+  ])
+  def test_quiet_arg(self):
+    args = parse_txt_args()
+    self.assertTrue(args.quiet)
+    self.assertFalse(args.verbose)
 
   def test_read(self):
     print()

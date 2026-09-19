@@ -26,3 +26,7 @@ AUTHORS:
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
 =============================================================================
 """
+
+__version__ = "0.1.0"
+__author__ = "健"
+__all__ = []

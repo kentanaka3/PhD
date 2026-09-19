@@ -74,9 +74,6 @@ AUTHORS:
 # Standard library: Regular expressions for pattern matching
 import re
 
-# Standard library: Command-line argument parsing
-import argparse
-
 # Pandas: DataFrame operations and data manipulation
 import pandas as pd
 
@@ -104,49 +101,6 @@ from ogsdatafile import OGSDataFile
 
 # Base path for data files (two levels up from this script's location)
 DATA_PATH = Path(__file__).parent.parent.parent
-
-
-# =============================================================================
-# ARGUMENT PARSER
-# =============================================================================
-
-def parse_arguments():
-  """
-  Parse command-line arguments for the DAT file processor.
-
-  Returns:
-    argparse.Namespace with:
-      - file: List of Path objects to input .dat files
-      - dates: Tuple of (start_date, end_date) for filtering
-      - verbose: Boolean flag for debug output
-  """
-  parser = argparse.ArgumentParser(description="Run OGS DAT quality checks")
-
-  # -f/--file: Input file path(s), required, accepts multiple files
-  parser.add_argument(
-      "-f", "--file", type=Path, required=True, nargs=OGS_C.ONE_MORECHAR_STR,
-      help="Path to the input file"
-  )
-
-  # -D/--dates: Date range filter, optional, format YYMMDD
-  # Uses custom SortDatesAction to ensure start <= end.
-  parser.add_argument(
-      '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
-      type=OGS_U.is_date, nargs=2, action=OGS_U.SortDatesAction,
-      default=[datetime.min, datetime.max - OGS_C.ONE_DAY],
-      help=(
-          "Specify the beginning and ending (inclusive) Gregorian date "
-          "(YYMMDD) range to work with."
-      )
-  )
-
-  # -v/--verbose: Enable detailed logging output
-  parser.add_argument(
-      '-v', "--verbose", default=False, action='store_true', required=False,
-      help="Enable verbose output"
-  )
-
-  return parser.parse_args()
 
 
 # =============================================================================
@@ -359,13 +313,15 @@ class DataFileDAT(OGSDataFile):
       # ---------------------------------------------------------------------
       # DATE RANGE FILTERING
       # ---------------------------------------------------------------------
-      if self.start is not None and event_time < self.start:
+      if self._is_before_start(event_time):
         self.logger.debug(f"Skipping pick before start date: {self.start}")
         self.logger.debug(line)
         continue
 
-      if self.end is not None and event_time >= self.end + OGS_C.ONE_DAY:
-        self.logger.debug(f"Stopping read at pick after end date: {self.end}")
+      if self._is_after_end(event_time):
+        self.logger.debug(
+            f"Stopping read at pick after end date: {self.end}"
+        )
         self.logger.debug(line)
         break
 
@@ -480,4 +436,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-  main(parse_arguments())
+  main(OGS_U.parse_dat_args())

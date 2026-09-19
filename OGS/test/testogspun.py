@@ -34,15 +34,17 @@ AUTHORS:
 =============================================================================
 """
 
-from ogspun import DataFilePUN, parse_arguments
 import ogsconstants as OGS_C
-from datetime import datetime
+from ogspun import DataFilePUN
+from ogsutils import parse_pun_args
 import os
 import sys
-import pandas as pd
 import unittest
 import unittest.mock
+from datetime import datetime
 from pathlib import Path
+import pandas as pd
+
 THIS_DIR = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(THIS_DIR + "/../src"))
 
@@ -54,19 +56,28 @@ DATA_FILE = "onlyEQ-2024.pun"
 class TestOGSPUN(unittest.TestCase):
   @unittest.mock.patch("sys.argv", [
       "ogspun.py", "-D", "20240320", "20240620",
-      "-f", str(DATA_DIR / "manual" / "onlyEQ-2024.pun"),
+      "-f", str(DATA_DIR / "manual" / DATA_FILE),
       "-v"
   ])
   def test_args(self):
-    args = parse_arguments()
+    args = parse_pun_args()
     self.assertEqual(
-        args.file, [Path(DATA_DIR / "manual" / "onlyEQ-2024.pun")]
+        args.file, [Path(DATA_DIR / "manual" / DATA_FILE)]
     )
     self.assertEqual(args.dates[0],
                      datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT))
     self.assertEqual(args.dates[1],
                      datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT))
     self.assertTrue(args.verbose)
+
+  @unittest.mock.patch("sys.argv", [
+      "ogspun.py", "-f", str(DATA_DIR / "manual" / DATA_FILE),
+      "-q"
+  ])
+  def test_quiet_arg(self):
+    args = parse_pun_args()
+    self.assertTrue(args.quiet)
+    self.assertFalse(args.verbose)
 
   def test_read(self):
     print()

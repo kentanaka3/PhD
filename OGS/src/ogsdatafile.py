@@ -297,6 +297,19 @@ class OGSDataFile(OGSCatalog):
   # SHARED PARSING UTILITIES
   # -------------------------------------------------------------------------
 
+  def _is_before_start(self, value: datetime) -> bool:
+    """Check if the given datetime is before the configured start date."""
+    return self.start is not None and value < self.start
+
+  def _is_after_end(self, value: datetime) -> bool:
+    """Check if the given datetime is after the configured end date."""
+    if self.end is None:
+      return False
+    try:
+      return value >= self.end + OGS_C.ONE_DAY
+    except OverflowError:
+      return value > self.end
+
   @staticmethod
   def _parse_seconds(value: str) -> td:
     """Convert a fixed-width seconds field into a timedelta."""

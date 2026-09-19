@@ -170,7 +170,8 @@ THRESHOLDS: list[str] = ["{:.1f}".format(t) for t in np.linspace(0.1, 0.9, 9)]
 # Standard format strings for parsing and formatting dates/times throughout
 # the OGS pipeline. Uses Python strftime/strptime conventions.
 
-DATE_STD = "YYMMDD"                   # Standard date representation string
+DATE_STD = "YYYYMMDD"                 # Standard date representation string
+DATE_JUL = "YYYYJJJ"                  # Julian date representation string
 DATE_FMT = "%Y-%m-%d"                 # ISO date format (2022-01-15)
 TIME_FMT = "%H%M%S"                   # Compact time format (143052)
 YYMMDD_FMT = "%y%m%d"                 # 2-digit year date (220115)

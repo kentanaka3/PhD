@@ -24,8 +24,11 @@
 #   make NLL1D              # Run NonLinLoc 1D with the default assoc+picking inputs
 #   make NLL3D              # Run NonLinLoc 3D with the default assoc+picking inputs
 #   make station YEAR=2025  # Generate station metadata for the given year
-#   make station START_DATE=20050101 END_DATE=20251231 base=OGS/ALL
+#   make station START_DATE=20050101 END_DATE=20251231 base=OGS/ALL CORES=112
+#   make stations           # Submit station metadata jobs for all YEARS
+#   make stations YEARS="2005 2006 2007 2008 2009 2010" CORES=112
 #   make parse              # Merge manual OGS pick files into a unified catalog
+#   make parse START_DATE=20050101 END_DATE=20251231 CORES=112
 #   make clean              # WARNING: deletes generated catalogs
 #   make MHPC               # Submit all registered models/assocs to SLURM for the given date range
 #   make PhD                # Submit all registered models/assocs to SLURM for the given date range
@@ -39,7 +42,7 @@
 #
 # Database/Picker/associator/NLL targets are generated from the registered
 # stage-name lists below via the
-# _INDEXER_RULES / _PICKER_RULES / _ASSOC_RULES / _NLL_RULES macros.
+# _PICKER_RULES / _ASSOC_RULES / _NLL_RULES macros.
 #
 # DEPENDENCIES:
 #   - LAUNCHME.sh           : SLURM job-submission wrapper (activates SBC env)
@@ -87,31 +90,32 @@ CONDA_INSTALLER	?= $(abspath $(WORK_PATH)/../Miniconda3-latest-Linux-x86_64.sh)
 CONDA_ROOT 			?= $(abspath $(WORK_PATH)/../.miniconda3)
 CATALOG_PATH 		?= $(abspath $(WORK_PATH)/catalog)
 DATASET_PATH 		?= $(abspath $(WORK_PATH)/dataset)
+TARGET          ?= OnlyEqNLL1D
 STATION_PATH 		?= $(abspath $(WORK_PATH)/station)
 WAVE_PATH   		?= $(abspath $(WORK_PATH)/waveform)
 
-START_DATE  ?= $(shell date -d "$(YEAR)-01-01 + $(OFFSET) days" +%Y%m%d)
-END_DATE    ?= $(shell date -d "$(YEAR)-12-31" +%Y%m%d)
+START_DATE  		?= $(shell date -d "$(YEAR)-01-01 + $(OFFSET) days" +%Y%m%d)
+END_DATE    		?= $(shell date -d "$(YEAR)-12-31" +%Y%m%d)
 
 $(if $(shell date -d "$(START_DATE)" +%Y%m%d 2>/dev/null),,$(error Invalid START_DATE: $(START_DATE)))
 $(if $(shell date -d "$(END_DATE)"   +%Y%m%d 2>/dev/null),,$(error Invalid END_DATE: $(END_DATE)))
 $(if $(shell [ "$(START_DATE)" -le "$(END_DATE)" ] 2>/dev/null && echo ok),,$(error Invalid date range: START_DATE=$(START_DATE) must be <= END_DATE=$(END_DATE)))
 
-YEAR := $(shell date -d "$(START_DATE)" +%Y)
+YEAR 						:= $(shell date -d "$(START_DATE)" +%Y)
 
-START_DATE_ISO := $(shell date -d "$(START_DATE)" +%Y-%m-%d)
-END_DATE_ISO   := $(shell date -d "$(END_DATE)" +%Y-%m-%d)
+START_DATE_ISO 	:= $(shell date -d "$(START_DATE)" +%Y-%m-%d)
+END_DATE_ISO   	:= $(shell date -d "$(END_DATE)" +%Y-%m-%d)
 
 # More paths
-TT_DB        	?= $(OGS_PATH)/data/VelocityModel/1D/tt_db.txt
+TT_DB        	 	?= $(OGS_PATH)/data/VelocityModel/1D/tt_db.txt
 
 # Executable binaries
-CONDA_BIN			?= $(CONDA_ROOT)/bin/conda
-PYTHON_BIN		?= $(CONDA_ROOT)/envs/$(CONDA_ENV)/bin/python
-SBC_RUN_BIN		?= ml_catalog_run --config-dir conf +libpath=.
+CONDA_BIN			 	?= $(CONDA_ROOT)/bin/conda
+PYTHON_BIN		 	?= $(CONDA_ROOT)/envs/$(CONDA_ENV)/bin/python
+SBC_RUN_BIN			?= ml_catalog_run --config-dir conf +libpath=.
 
 # SLURM template (defaults to user template if present, else default)
-SLURM_TEMPLATE ?= $(if $(wildcard $(OGS_PATH)/utils/Leonardo/$(USER).sh),$(USER),default)
+SLURM_TEMPLATE 	?= $(if $(wildcard $(OGS_PATH)/utils/Leonardo/$(USER).sh),$(USER),default)
 
 # Default picker/associator roots that chained stages can reuse.
 base        ?= OGS/$(YEAR)
@@ -120,8 +124,6 @@ BASE_ASSOC  := $(WORK_PATH)/catalogs/$(base)/PyOcto
 
 # Default selections and registered stage names for generated runtime targets.
 # The generated rules inject these values into the Hydra overrides.
-INDEXER     ?= Indexer
-INDEXERS		:= Indexer
 MODEL 			?= PhaseNet
 MODELS			:= PhaseNet EQTransformer
 DATASET 		?= INSTANCE
@@ -132,12 +134,12 @@ ASSOC			  ?= PyOcto
 ASSOCS			:= PyOcto GaMMA
 NLL				  ?= NLL1D
 NLLS				:= NLL1D NLL3D
+YEARS       := $(shell seq 2005 2025)
 
 # Training
 EPOCHS        ?= 5
 BATCH_SIZE    ?= 256
 LEARNING_RATE ?= 1e-2
-WORKERS       ?= 4
 
 # -----------------------------------------------------------------------------
 # PHONY DECLARATIONS
@@ -161,18 +163,22 @@ help: #
 	@echo "  make download                        (download waveforms in $(STEP_DAYS)-day chunks from $(START_DATE) to $(END_DATE))"
 	@echo "  make download   YEAR=YYYY STEP_DAYS=N [CORES=N]"
 	@echo "  make download   START_DATE=YYYYMMDD END_DATE=YYYYMMDD STEP_DAYS=N [CORES=N]"
-	@echo "  make station    YEAR=YYYY"           (generate station metadata for the given year)
-	@echo "  make station    START_DATE=YYYYMMDD END_DATE=YYYYMMDD base=OGS/ALL"
-	@echo "  make Indexer                         (index the downloaded waveforms)"
-	@echo "  make Indexer    START_DATE=YYYYMMDD END_DATE=YYYYMMDD [CORES=N]"
+	@echo "  make station    YEAR=YYYY            (generate station metadata for the given year)"
+	@echo "  make station    START_DATE=YYYYMMDD END_DATE=YYYYMMDD base=OGS/ALL [CORES=N]"
+	@echo "  make stations   											(submit station metadata jobs for all YEARS)"
+	@echo "  make stations   YEARS=\"YYYY ...\" [CORES=N]"
+	@echo "  make Index                           (index the downloaded waveforms)"
+	@echo "  make Index      START_DATE=YYYYMMDD END_DATE=YYYYMMDD [CORES=N]"
 	@echo "  make PhaseNet | EQTransformer | ...	(picker models with default dataset/threshold)"
 	@echo "  make PhaseNet[INSTANCE,0.1] | EQTransformer[STEAD,0.2] | ...	(picker models with dataset/threshold overrides)"
 	@echo "  make PyOcto | GaMMA | REAL           (associator with default picker input)"
 	@echo "  make PyOcto[PhaseNet,INSTANCE,0.1] | GaMMA[EQTransformer,STEAD,0.2] | REAL[PhaseNet,SCEDC,0.3] ...	(associator with picker overrides)"
 	@echo "  make NLL1D | NLL3D                   (locator with default picker+assoc input)"
 	@echo "  make NLL1D[PyOcto,PhaseNet,INSTANCE,0.1] | NLL3D[GaMMA,EQTransformer,STEAD,0.2] | ...	(locator with picker+assoc overrides)"
-	@echo "  make Trainer    [MODEL=PhaseNet DATASET=INSTANCE EPOCHS=5 BATCH_SIZE=256]  (fine-tune a SeisBench picker)"
-	@echo "  make parse														(merge manual OGS pick files into a unified catalog)"
+	@echo "  make Trainer    [MODEL=PhaseNet DATASET=INSTANCE EPOCHS=N BATCH_SIZE=N]  (fine-tune a SeisBench picker)"
+	@echo "  make parse                           (merge manual OGS pick files into a unified catalog)"
+	@echo "  make parse      YEAR=YYYY [CORES=N]"
+	@echo "  make parse      START_DATE=YYYYMMDD END_DATE=YYYYMMDD [CORES=N]"
 	@echo "  make MHPC                            (submit all registered models/assocs to SLURM for the given date range)"
 	@echo "  make PhD                             (submit all registered models/assocs to SLURM for the given date range)"
 	@echo "  make test                            (run a quick test of the SBC_RUN_BIN entrypoint)"
@@ -238,14 +244,23 @@ retrieve:
 # Station metadata for the configured date range.
 station:
 	@echo "Processing station metadata $(START_DATE) → $(END_DATE)..."
-	@bash LAUNCHME.sh $(SLURM_TEMPLATE) 1 1 "Stations_$(START_DATE)_$(END_DATE)" \
+	@OVERRIDE_CORES=$(CORES) CORE_COUNT=$(CORES) \
+	bash LAUNCHME.sh station 1 1 "Stations_$(START_DATE)_$(END_DATE)" \
 	  $(PYTHON_BIN) $(OGS_PATH)/src/ogsstation.py \
-	    $(OGS_PATH)/src $(WAVE_PATH) $(STATION_PATH) \
-	    $(START_DATE) $(END_DATE) $(WORK_PATH)/catalogs/$(base)
+	    $(OGS_PATH)/src \
+	    -S $(STATION_PATH) \
+	    -W $(WAVE_PATH) \
+	    -D $(START_DATE) $(END_DATE) \
+			-o $(WORK_PATH)/catalogs/$(base)
 
+# Submit yearly station metadata jobs across all YEARS
+stations:
+	@$(foreach y,$(YEARS), \
+	  $(MAKE) --no-print-directory station YEAR=$y ; )
+	@$(MAKE) --no-print-directory station START_DATE=20050101 END_DATE=20251231 base=OGS/ALL
 
 # =============================================================================
-# INDEXER / PICKER / ASSOCIATOR / NLL — RUNTIME PARAMETRIC RULES
+# PICKER / ASSOCIATOR / NLL — RUNTIME PARAMETRIC RULES
 # =============================================================================
 #
 # Instead of enumerating every combination in spec tables, we generate one
@@ -270,7 +285,6 @@ station:
 # =============================================================================
 
 # --- YAML mapping (override one line to point a stage at a different config) -
-INDEXER                ?= Indexer
 INDEXER_YAML           ?= ogsdata.yaml
 PICKER                 ?= SeisBenchPicker
 PICKER_YAML            ?= ogsseisbenchpicker.yaml
@@ -306,17 +320,6 @@ ASSOC_DIR_REAL         ?= REAL
 #   $$$$x → literal $x for the shell (Make consumes one $)
 #   $$*   → Make's $* automatic var, expanded when the rule fires
 # =============================================================================
-
-# --- INDEXER -------------------------------------------------------------------
-define _INDEXER_RULES
-$1:
-	@echo "Indexing waveforms from $$(START_DATE) to $$(END_DATE) with $$(CORES) cores"
-	@OVERRIDE_CORES=$(CORES) CORE_COUNT=$(CORES) \
-	bash LAUNCHME.sh index 1 1 "Index_$$(START_DATE)_$$(END_DATE)" \
-	  $$(SBC_RUN_BIN) +index_only=true data=ogsDB data.check=true \
-	  data.index_workers=$$(CORES) \
-	  data.starttime="$$(START_DATE_ISO)" data.endtime="$$(END_DATE_ISO)"
-endef
 
 # --- PICKER ------------------------------------------------------------------
 # id convention: <Model>[<Dataset>,<Threshold>]
@@ -380,14 +383,13 @@ $1[%]:
 	  "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$assoc_id/OGSPickStatQC"; \
 	ln -sfn "$$(WORK_PATH)/catalogs/$$(PROJECT)/$$$$picker_id/SeisBenchPicker" \
 	  "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$assoc_id/SeisBenchPicker"; \
-	bash LAUNCHME.sh $$(SLURM_TEMPLATE) 1 1 "$$$$nll_id" \
+	bash LAUNCHME.sh nonlinloc 1 1 "$$$$nll_id" \
 	  $$(SBC_RUN_BIN) output_path="catalogs/$$(PROJECT)/$1/$$$$assoc_id" \
 	  group_modules/nonlinloc=$(LOCATOR_YAML_$1) \
 	  data.starttime="$(START_DATE_ISO)" data.endtime="$(END_DATE_ISO)"
 endef
 
 # Instantiate rules — one pair per registered stage name.
-$(foreach i,$(INDEXERS),$(eval $(call _INDEXER_RULES,$i)))
 $(foreach m,$(MODELS),$(eval $(call _PICKER_RULES,$m)))
 $(foreach a,$(ASSOCS),$(eval $(call _ASSOC_RULES,$a)))
 $(foreach n,$(NLLS),  $(eval $(call _NLL_RULES,$n)))
@@ -400,7 +402,8 @@ $(foreach n,$(NLLS),  $(eval $(call _NLL_RULES,$n)))
 # TRAINING
 # =============================================================================
 
-# Fine-tune a SeisBench model on the OGS waveform archive and reference catalog.
+# Fine-tune a SeisBench model on the OGS waveform archive and reference
+# catalog.
 #
 # USAGE:
 #   make Trainer                                       # defaults
@@ -417,7 +420,7 @@ Trainer:
 	    -b $(BATCH_SIZE) \
 	    -e $(EPOCHS) \
 	    -lr $(LEARNING_RATE) \
-	    -w $(WORKERS) \
+	    -t $(CORES) \
 	    -o $(WORK_PATH)/models/$(MODEL)/$(DATASET)
 
 MHPC:
@@ -445,12 +448,27 @@ PhD:
 # CATALOG MANAGEMENT
 # =============================================================================
 
+Index:
+	@echo "Indexing waveforms from $(START_DATE) to $(END_DATE) with $(CORES) cores"
+	@OVERRIDE_CORES=$(CORES) CORE_COUNT=$(CORES) \
+	bash LAUNCHME.sh index 1 1 "Index_$(START_DATE)_$(END_DATE)" \
+	  $(SBC_RUN_BIN) +index_only=true data=ogsDB data.check=true \
+	  data.index_workers=$(CORES) \
+	  data.starttime="$(START_DATE_ISO)" data.endtime="$(END_DATE_ISO)"
+
+# Submit yearly indexing jobs across all YEARS
+Indexes:
+	@$(foreach y,$(YEARS), $(MAKE) --no-print-directory Index YEAR=$y ; )
+
 # Merge manual OGS pick files into a unified catalog.
-parse: # 3
+parse: # 5
+	@OVERRIDE_CORES=$(CORES) CORE_COUNT=$(CORES) \
+	bash LAUNCHME.sh parse 1 1 "Parse_$(TARGET)" \
 	$(PYTHON_BIN) $(OGS_PATH)/src/ogsparser.py \
-		-f $(DATASET_PATH)/* \
+		-D $(START_DATE) $(END_DATE) \
+		-f $(DATASET_PATH)/$(TARGET)/* \
 		--merge \
-	  -o $(WORK_PATH)/catalogs/$(notdir $(patsubst %/,%,$(DATASET_PATH)))
+		-o $(WORK_PATH)/catalogs/$(TARGET)
 
 test: # 2
 	$(SBC_RUN_BIN) output_path=$(base)/$(YEAR)
@@ -459,12 +477,14 @@ test: # 2
 clean: #
 	@test -n "$(WORK_PATH)" && \
 	test "$(WORK_PATH)" != "/" || { \
-		echo "ERROR: refusing to clean unsafe WORK_PATH=$(WORK_PATH)" >&2; exit 1; \
+		echo "ERROR: refusing to clean unsafe WORK_PATH=$(WORK_PATH)" >&2; \
+		exit 1; \
 	}
 	@echo "Removing generated files under $(WORK_PATH)"
 	@cd "$(WORK_PATH)" && \
 	rm -rf -- conf data src test && \
 	rm -rf -- ACTIVATEME.sh common.sh download.sh dummy.sh index.sh init.sh \
-		ktanakah.sh LAUNCHME.sh LEONARDO.yml Makefile
+		ktanakah.sh LAUNCHME.sh LEONARDO.yml Makefile nonlinloc.sh parse.sh \
+		station.sh
 	#@echo "Removing generated catalogs below $(WORK_PATH)/catalogs"
 	#@test -n "$(WORK_PATH)" && rm -rf -- "$(WORK_PATH)/catalogs"/*

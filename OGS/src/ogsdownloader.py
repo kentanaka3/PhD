@@ -23,8 +23,8 @@ The module implements:
     orientations.
 
 3. CLI HELPERS
-  - ``positive_int``, ``parse_arguments``: argparse validators and the full
-    parser definition with output, region, client and date arguments.
+  - ``OGS_U.parse_downloader_args``: argument parser in ``ogsutils`` with
+    output, region, client and date arguments.
   - ``_split_filter_values``: parses include / exclude tokens used for the
     network / station / location / channel filters.
   - ``_pyrocko_site`` / ``_client_label`` / ``_datetime_to_pyrocko_time``:
@@ -161,133 +161,6 @@ def _split_filter_values(values: list[str]) -> tuple[list[str], set[str]]:
   return includes or [OGS_C.ALL_WILDCHAR_STR], excludes
 
 
-def positive_int(value: str) -> int:
-  try:
-    parsed_value = int(value)
-  except ValueError as exc:
-    raise argparse.ArgumentTypeError("must be a positive integer") from exc
-  if parsed_value < 1:
-    raise argparse.ArgumentTypeError("must be a positive integer")
-  return parsed_value
-
-
-def parse_arguments() -> argparse.Namespace:
-  # Parse command-line arguments for waveform download.
-  parser = argparse.ArgumentParser(
-      description="Download waveform data from configured FDSN clients")
-  # TODO: Handle security issues
-  parser.add_argument(
-      '-K', "--key", default=None, required=False, type=OGS_U.is_file_path,
-      metavar=OGS_C.EMPTY_STR, help="Key to download the data from server."
-  )
-  parser.add_argument(
-      '-N', "--network", default=[OGS_C.ALL_WILDCHAR_STR], type=str,
-      nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR, required=False,
-      help=f"""
-          Specify a set of Networks to analyze. To allow downloading data
-          for any network, set this option to \'{OGS_C.ALL_WILDCHAR_STR}\'.
-          Use the negative sign \'-\' to exclude specific networks (e.g.
-          "\'-OX\')."
-      """
-  )
-  parser.add_argument(
-      '-S', "--station", default=[OGS_C.ALL_WILDCHAR_STR], type=str,
-      nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR, required=False,
-      help=f"""
-          Specify a set of Stations to analyze. To allow downloading data
-          for any station, set this option to \'{OGS_C.ALL_WILDCHAR_STR}\'.
-          Use the negative sign \'-\' to exclude specific stations (e.g.
-          \'-SP, -OL, -ED\')."
-      """
-  )
-  parser.add_argument(
-      "-c", "--clip", required=False, type=str, metavar="HHMMSS",
-      help="Specify the time of the center time"
-  )
-  parser.add_argument(
-      '-d', "--directory", required=False, type=OGS_U.is_dir_path,
-      default=DEFAULT_WAVE_PATH, metavar=OGS_C.EMPTY_STR,
-      help="Directory path to the raw files"
-  )
-  parser.add_argument(
-      "--client", metavar=OGS_C.EMPTY_STR, default=OGS_C.OGS_CLIENTS_DEFAULT,
-      required=False, type=str, nargs=OGS_C.ONE_MORECHAR_STR,
-      help="Client to download the data"
-  )
-  parser.add_argument(
-      "--force", default=False, action='store_true', required=False,
-      help="Force running all the pipeline"
-  )
-  parser.add_argument(
-      "--pyrocko", default=False, action='store_true',
-      help="Enable PyRocko calls"
-  )
-  parser.add_argument(
-      "--review", default=None, type=OGS_U.is_dir_path, required=False,
-      help="Review the downloaded data"
-  )
-  parser.add_argument(
-      "--timing", default=False, action='store_true', required=False,
-      help="Enable timing"
-  )
-  parser.add_argument(
-      "--threads", default=1, type=positive_int, required=False,
-      metavar=OGS_C.EMPTY_STR, help="Number of day-level download threads"
-  )
-  date_group = parser.add_mutually_exclusive_group(required=False)
-  date_group.add_argument(
-      '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
-      type=OGS_U.is_date, nargs=2, action=OGS_U.SortDatesAction,
-      default=[
-          datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT),
-          datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT)
-      ],
-      help="""
-          Specify the beginning and ending (inclusive) Gregorian date
-          (YYYYMMDD) range to work with.
-      """
-  )
-  date_group.add_argument(
-      '-J', "--julian", required=False, metavar=OGS_C.DATE_STD,
-      action=OGS_U.SortDatesAction, type=OGS_U.is_julian, default=None, nargs=2,
-      help="""
-          Specify the beginning and ending (inclusive) Julian date (YYYYJJJ)
-          range to work with.
-      """
-  )
-  domain_group = parser.add_mutually_exclusive_group(required=False)
-  domain_group.add_argument(
-      "--rectdomain", type=float, nargs=4, default=OGS_C.OGS_STUDY_REGION,
-      metavar=("lonW", "lonE", "latS", "latN"),
-      help="""
-          Rectangular domain to download the data: [longitude West]
-          [longitude East] [latitude South] [latitude North]
-      """
-  )
-  domain_group.add_argument(    # default=[12.808, 46.3583, 0., 0.3],
-      "--circdomain", nargs=4, type=float,
-      metavar=("lon", "lat", "min_r", "max_r"),
-      help="""
-          Circular domain to download the data: [center longitude]
-          [center latitude] [minimum radius] [maximum radius]
-      """
-  )
-  verbal_group = parser.add_mutually_exclusive_group(required=False)
-  verbal_group.add_argument(
-      "--silent", default=False, action='store_true', help="Silent mode"
-  )
-  # TODO: Add verbose LEVEL
-  verbal_group.add_argument(
-      "-v", "--verbose", default=False, action='store_true',
-      help="Verbose mode"
-  )
-  args = parser.parse_args()
-  # Handle special cases: if julian dates are provided, override standard dates
-  if args.julian is not None:
-    args.dates = args.julian
-  return args
-
-
 DIR_FMT = {
     "year": "{:04}",
     "month": "{:02}",
@@ -313,23 +186,13 @@ def day_window(args: argparse.Namespace, d_: date | datetime) -> tuple[datetime,
   )
 
 
-def day_directory(args: argparse.Namespace, d_: date | datetime) -> Path:
-  d_ = day_start(d_)
-  return Path(
-      args.directory /
-      DIR_FMT["year"].format(d_.year) /
-      DIR_FMT["month"].format(d_.month) /
-      DIR_FMT["day"].format(d_.day)
-  )
-
-
 def prepare_day_download(
     args: argparse.Namespace, d_: date | datetime
 ) -> tuple[str, datetime, datetime, Path]:
   d_ = day_start(d_)
   day_id = d_.strftime(OGS_C.YYYYMMDD_FMT)
   starttime, endtime = day_window(args, d_)
-  day_path = day_directory(args, d_)
+  day_path = OGS_U.day_directory(args.directory, d_)
   day_path.mkdir(parents=True, exist_ok=True)
   return day_id, starttime, endtime, day_path
 
@@ -357,7 +220,7 @@ class BaseDownloader(ABC):
 
   def __init__(self, args: argparse.Namespace):
     self.args = args
-    self.logger = OGS_U.setup_logger(__name__, args.verbose, args.silent)
+    self.logger = OGS_U.setup_logger(__name__, args.verbose, args.quiet)
     self.start, self.end = args.dates
     self.days = [
         self.start + index * OGS_C.ONE_DAY for index in range(
@@ -376,9 +239,6 @@ class BaseDownloader(ABC):
 
   def day_window(self, d_: date | datetime) -> tuple[datetime, datetime]:
     return day_window(self.args, d_)
-
-  def day_directory(self, d_: date | datetime) -> Path:
-    return day_directory(self.args, d_)
 
   def prepare_day_download(
       self, d_: date | datetime
@@ -618,7 +478,7 @@ class ObsPyDownloader(BaseDownloader):
 
   def _configure_obspy_logging(self) -> None:
     md_logger = logging.getLogger("obspy.clients.fdsn.mass_downloader")
-    if self.args.silent:
+    if self.args.quiet:
       md_logger.setLevel(logging.ERROR)
     elif self.args.verbose:
       md_logger.setLevel(logging.INFO)
@@ -763,4 +623,4 @@ def data_downloader(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
-  data_downloader(parse_arguments())
+  data_downloader(OGS_U.parse_downloader_args())

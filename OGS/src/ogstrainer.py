@@ -17,7 +17,7 @@ CLI ARGUMENTS:
   -b, --batch_size Training batch size (default: 256).
   -e, --epochs     Number of training epochs (default: 5).
   -lr, --learning_rate  Learning rate for Adam optimizer (default: 1e-2).
-  -w, --workers    Number of DataLoader workers (default: 4).
+  -t, --threads    Number of DataLoader workers (default: 4).
   -o, --output     Path for model checkpoints (default: ./checkpoints).
   -d, --download   Download waveforms if not locally cached.
 
@@ -203,14 +203,19 @@ class OGSTrainer:
         else ("", sta, "")
     )
 
-  def get_event_params(self, event):
-    print(event)
-    exit()
-    origin = event.preferred_origin()
-    mag = event.preferred_magnitude()
+  def get_event_params(self, event_row):
+    """Extract event parameters from a catalog event DataFrame row.
 
-    source_id = str(event.resource_id)
+    Parameters
+    ----------
+    event_row : pd.Series
+      A row from the events DataFrame containing origin parameters.
 
+    Returns
+    -------
+    dict
+      Event parameters for the SeisBench WaveformDataWriter.
+    """
     event_params = {
         "source_id": source_id,
         "source_origin_time": str(origin.time),
@@ -254,6 +259,10 @@ class OGSTrainer:
         event_params = self.get_event_params(event)
 
   def get_clean_trace(self, trace, freqmin=0.1, freqmax=20.0, fs=100.0):
+    """Apply standard preprocessing to a waveform trace.
+
+    Pipeline: detrend(linear) → detrend(demean) → taper → bandpass → resample.
+    """
     trace.detrend("linear")
     trace.detrend("demean")
     trace.taper(max_percentage=0.05, type="cosine")
@@ -330,13 +339,19 @@ class OGSTrainer:
           files_ = glob.glob(str(filepath))
           dataset = []
           for wf_file in files_:
-            trace = self.get_clean_trace(op.read(wf_file))
+            try:
+              trace = self.get_clean_trace(op.read(wf_file))
+            except Exception:
+              logger.warning("Failed to read waveform: %s", wf_file)
+              continue
             stats = trace[0].stats
             event = df_events[
                 df_events[OGS_C.IDX_EVENTS_STR] == pick[OGS_C.IDX_PICKS_STR]
             ]
             if event.empty:
-              print(f"Missing event for pick ID: {pick[OGS_C.IDX_PICKS_STR]}")
+              logger.debug(
+                  "Missing event for pick ID: %s", pick[OGS_C.IDX_PICKS_STR]
+              )
               continue
             event_row = event.iloc[0]
             dataset.append({

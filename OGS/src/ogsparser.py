@@ -148,103 +148,6 @@ def is_polygon(points: str) -> mplPath:
 
 
 # =============================================================================
-# ARGUMENT PARSER
-# =============================================================================
-
-def parse_arguments() -> argparse.Namespace:
-  """
-  Parse command-line arguments for the catalog parser.
-
-  Supports two input modes:
-    1. File mode (-f): Process specific files
-    2. Directory mode (-d): Process all matching files in directory
-
-  Returns:
-    argparse.Namespace with:
-      - merge: Boolean flag to merge all files into single catalog
-      - ext: List of file extensions to process
-      - verbose: Boolean flag for debug output
-      - directory: Path to input directory (mutually exclusive with file)
-      - file: List of input file paths (mutually exclusive with directory)
-      - dates: Tuple of (start_date, end_date) for filtering
-      - julian: Alternative Julian date range specification
-      - output: Path for output catalog directory
-      - polygon: matplotlib Path for geographic filtering
-  """
-  parser = argparse.ArgumentParser(description="Parse OGS Manual Catalogs")
-
-  # -m/--merge: Consolidate all parsed files into a single unified catalog
-  parser.add_argument(
-      "-m", "--merge", action='store_true', default=False,
-      help="Merge all data files into a single catalog"
-  )
-
-  # -x/--ext: File extensions to process (default: all known extensions)
-  parser.add_argument(
-      "-x", "--ext", default=OGS_C.ALL_WILDCHAR_STR, type=str,
-      nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR,
-      help="File extension to process"
-  )
-
-  # -v/--verbose: Enable detailed logging output
-  parser.add_argument(
-      '-v', "--verbose", action='store_true', default=False,
-      help="Enable verbose output"
-  )
-
-  # -------------------------------------------------------------------------
-  # INPUT PATH GROUP (mutually exclusive: directory OR file)
-  # -------------------------------------------------------------------------
-  path_group = parser.add_mutually_exclusive_group(required=True)
-
-  # -d/--directory: Process all matching files in a directory recursively
-  path_group.add_argument(
-      '-d', "--directory", required=False, type=OGS_U.is_dir_path,
-      default=None, help="Base directory for data files."
-  )
-
-  # -f/--file: Process specific file(s) by path
-  path_group.add_argument(
-      '-f', "--file", required=False, type=OGS_U.is_file_path, default=None,
-      nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR,
-      help="Base file for data files."
-  )
-
-  # -------------------------------------------------------------------------
-  # DATE RANGE GROUP (mutually exclusive: Gregorian OR Julian)
-  # -------------------------------------------------------------------------
-  date_group = parser.add_mutually_exclusive_group(required=False)
-
-  # -D/--dates: Gregorian date range (YYYYMMDD format)
-  date_group.add_argument(
-      '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
-      type=OGS_U.is_date, nargs=2, action=OGS_U.SortDatesAction,
-      default=[datetime.min, datetime.max - OGS_C.ONE_DAY],
-      help="""
-          Specify the beginning and ending (inclusive) Gregorian date
-          (YYYYMMDD) range to work with.
-      """
-  )
-
-  # -J/--julian: Julian date range (YYYYJJJ format)
-  date_group.add_argument(
-      '-J', "--julian", required=False, metavar=OGS_C.DATE_STD, nargs=2,
-      action=OGS_U.SortDatesAction, type=OGS_U.is_julian, default=None,
-      help="""
-          Specify the beginning and ending (inclusive) Julian date (YYYYJJJ)
-          range to work with.
-      """
-  )
-
-  # -o/--output: Output directory for the merged catalog
-  parser.add_argument(
-      "-o", "--output", required=False, type=str,
-      default=str(DATA_PATH / "catalog" / "OGSCatalog"),
-      help="Name of the catalog"
-  )
-  return parser.parse_args()
-
-# =============================================================================
 # DataCatalog Class - Multi-Format Catalog Aggregator
 # =============================================================================
 
@@ -636,4 +539,4 @@ def main(args: argparse.Namespace) -> None:
 
 # Script entry point: parse arguments and run main
 if __name__ == "__main__":
-  main(parse_arguments())
+  main(OGS_U.parse_catalog_args())
