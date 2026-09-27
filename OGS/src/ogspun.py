@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS PUN File Parser - Hypo71 Event Summary Extractor
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module parses OGS .pun format files containing event-level summaries
@@ -53,15 +53,13 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 # -----------------------------------------------------------------------------
 # IMPORTS
 # -----------------------------------------------------------------------------
-
-# Standard library: command-line argument parsing
-import argparse
 
 # Standard library: filesystem path handling
 from pathlib import Path
@@ -90,49 +88,6 @@ from ogsdatafile import OGSDataFile
 
 # Base path for data files (two levels up from this script's location)
 DATA_PATH = Path(__file__).parent.parent.parent
-
-
-# =============================================================================
-# ARGUMENT PARSER
-# =============================================================================
-
-def parse_arguments():
-  """
-  Parse command-line arguments for the PUN file processor.
-
-  Returns:
-    argparse.Namespace with:
-      - file: List of Path objects to input .pun files
-      - dates: Tuple of (start_date, end_date) for filtering
-      - verbose: Boolean flag for debug output
-  """
-  parser = argparse.ArgumentParser(description="Run OGS PUN quality checks")
-
-  # -f/--file: Input file path(s), required, accepts multiple files
-  parser.add_argument(
-      "-f", "--file", type=Path, required=True, nargs=OGS_C.ONE_MORECHAR_STR,
-      help="Path to the input file (can specify multiple files)."
-  )
-
-  # -D/--dates: Date range filter, optional, format YYYYMMDD
-  parser.add_argument(
-      '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
-      type=OGS_U.is_date, nargs=2, action=OGS_U.SortDatesAction,
-      default=[datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT),
-               datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT)],
-      help="""
-          Specify the beginning and ending (inclusive) Gregorian date
-          (YYYYMMDD) range to work with.
-      """
-  )
-
-  # -v/--verbose: Enable detailed logging output
-  parser.add_argument(
-      '-v', "--verbose", action='store_true', default=False,
-      help="Enable verbose output"
-  )
-
-  return parser.parse_args()
 
 
 # =============================================================================
@@ -246,16 +201,15 @@ class DataFilePUN(OGSDataFile):
           result[OGS_C.DATE_STR], result[OGS_C.SECONDS_STR]
       )
 
-      if self.start is not None and result[OGS_C.DATE_STR] < self.start:
+      if self._is_before_start(result[OGS_C.DATE_STR]):
         self.logger.debug(f"Skipping event before start date: {self.start}")
         self.logger.debug(line)
         continue
 
-      if (
-          self.end is not None
-          and result[OGS_C.DATE_STR] >= self.end + OGS_C.ONE_DAY
-      ):
-        self.logger.debug(f"Stopping read at event after end date: {self.end}")
+      if self._is_after_end(result[OGS_C.DATE_STR]):
+        self.logger.debug(
+            f"Stopping read at event after end date: {self.end}"
+        )
         self.logger.debug(line)
         break
 
@@ -354,4 +308,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-  main(parse_arguments())
+  main(OGS_U.parse_pun_args())

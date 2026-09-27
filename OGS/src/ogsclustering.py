@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Clustering Module - Scikit-learn Wrappers with Integrated Visualization
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module provides a comprehensive framework for clustering analysis in
@@ -60,13 +60,13 @@ ARCHITECTURE:
   │ │ • n_clusters()                                                      │ │
   │ └─────────────────────────────────────────────────────────────────────┘ │
   │                                     ▲                                   │
-  │   ┌────────── ─────────── ──────────┴───────────────┐                   │
+  │   ┌──────────┬───────────┬──────────┴───────────────┐                   │
   │   │          │           │                          │                   │
   │  OGSKMeans  OGSHDBSCAN  OGSAdvancedDensityPeaksPP  OGSAgglomerative ... │
   ├─────────────────────────────────────────────────────────────────────────┤
   │                         BaseClusteringScores (ABC)                      │
   │                                     ▲                                   │
-  │  ┌───────────────── ────────────────┴──┐                                │
+  │  ┌─────────────────┬────────────────┴──┐                                │
   │  │                 │                   │                                │
   │ SilhouetteScore   AdjustedRandScore   PAkDensitySeparationScore  ...    │
   ├─────────────────────────────────────────────────────────────────────────┤
@@ -115,7 +115,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 # =============================================================================
@@ -6393,7 +6394,6 @@ class ManifoldBenchmark:
       print('=' * 72)
 
     for idx, (name, gen_func, d, D, desc) in enumerate(self.REGISTRY):
-      t0 = time.time()
       if verbose:
         print(f'\n[{idx+1:2d}/21]  {name:<5s}  d={d}, D={D}  ({desc})')
 
@@ -6430,15 +6430,13 @@ class ManifoldBenchmark:
       n_clust = adp.n_clusters_
       d_est_adp = adp.intrinsic_dim_
       log_den = adp.log_den_
-      elapsed = time.time() - t0
       if verbose:
-        print(f'        ADP++ →  d̂={d_est_adp:.1f}  K={n_clust}'
-              f'  ({elapsed:.1f}s)')
+        print(f'        ADP++ →  d̂={d_est_adp:.1f}  K={n_clust}')
 
       self.results.append(dict(
           name=name, desc=desc, d=d, D=D, pak_score=pak_score,
           d_est_pak=d_est_pak, n_clust=n_clust, d_est_adp=d_est_adp,
-          adp_labels=adp_labels, log_den=log_den, elapsed=elapsed,
+          adp_labels=adp_labels, log_den=log_den,
       ))
 
     if verbose:
@@ -6453,14 +6451,13 @@ class ManifoldBenchmark:
   def _print_summary(self):
     print('\n' + '=' * 72)
     print(f'  {"ID":<6s} {"d":>3s} {"D":>4s} {"d̂_PAk":>6s} {"S_PAk":>7s}'
-          f'  {"d̂_ADP":>6s} {"K_ADP":>5s}  {"Time":>5s}')
+          f'  {"d̂_ADP":>6s} {"K_ADP":>5s}')
     print('-' * 72)
     for r in self.results:
       s = f'{r["pak_score"]:.2f}' if r['pak_score'] is not None else 'None'
       print(f'  {r["name"]:<6s} {r["d"]:3d} {r["D"]:4d}'
             f' {r["d_est_pak"]:6.1f} {s:>7s}'
-            f'  {r["d_est_adp"]:6.1f} {r["n_clust"]:5d}'
-            f'  {r["elapsed"]:5.1f}s')
+            f'  {r["d_est_adp"]:6.1f} {r["n_clust"]:5d}')
     print('=' * 72)
 
   # -----------------------------------------------------------------------

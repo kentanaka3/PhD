@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 REAL Associator Module - Rapid Earthquake Association and Location Wrapper
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 Pipeline integration wrapper around the C-based REAL (Rapid Earthquake
@@ -39,7 +39,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 import datetime

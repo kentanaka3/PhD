@@ -81,8 +81,7 @@ class TestOGSData(unittest.TestCase):
         [root], UTCDateTime("2020-01-02"), UTCDateTime("2020-01-04")
     )
 
-    self.assertEqual(
-        selected, [start, middle, end])
+    self.assertEqual(selected, [start, middle, end])
     self.assertNotIn(before, selected)
     self.assertNotIn(after, selected)
 

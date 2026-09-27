@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Model Trainer - PyTorch / SeisBench Phase Picking Training CLI
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 Command-line training utility for deep-learning seismic phase pickers. Uses
@@ -17,7 +17,7 @@ CLI ARGUMENTS:
   -b, --batch_size Training batch size (default: 256).
   -e, --epochs     Number of training epochs (default: 5).
   -lr, --learning_rate  Learning rate for Adam optimizer (default: 1e-2).
-  -w, --workers    Number of DataLoader workers (default: 4).
+  -t, --threads    Number of DataLoader workers (default: 4).
   -o, --output     Path for model checkpoints (default: ./checkpoints).
   -d, --download   Download waveforms if not locally cached.
 
@@ -43,7 +43,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 import glob
@@ -95,68 +96,6 @@ PHASE_DICT = {
 }
 
 
-def parse_arguments():
-  parser = argparse.ArgumentParser(description="Train OGS models")
-  parser.add_argument(
-      "-C", "--catalog", type=Path, required=True,
-      help="Path to the catalog directory"
-  )
-  date_group = parser.add_mutually_exclusive_group(required=False)
-  date_group.add_argument(
-      '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
-      type=OGS_U.is_date, nargs=2, action=OGS_U.SortDatesAction,
-      default=[
-          datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT),
-          datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT)
-      ],
-      help="""
-          Specify the beginning and ending (inclusive) Gregorian date
-          (YYYYMMDD) range to work with.
-      """
-  )
-  parser.add_argument(
-      "-W", "--waveforms", type=Path, required=True,
-      help="Path to the waveforms directory"
-  )
-  parser.add_argument(
-      "-m", "--model", type=str, default=OGS_C.PHASENET_STR,
-      choices=list(MODEL_REGISTRY.keys()),
-      help="SeisBench model class name (default: PhaseNet)"
-  )
-  parser.add_argument(
-      "-s", "--dataset", type=str, default=OGS_C.INSTANCE_STR,
-      choices=[
-          OGS_C.INSTANCE_STR, OGS_C.STEAD_STR, OGS_C.SCEDC_STR,
-          OGS_C.ORIGINAL_STR, OGS_C.ADRIAARRAY_STR
-      ],
-      help="Pretrained weights name to fine-tune from (default: instance)"
-  )
-  parser.add_argument(
-      "-b", "--batch_size", type=int, default=BATCH_SIZE,
-      help="Batch size for training"
-  )
-  parser.add_argument(
-      "-d", "--download", action="store_true", help="Enable download mode"
-  )
-  parser.add_argument(
-      "-e", "--epochs", type=int, default=EPOCHS,
-      help="Number of training epochs"
-  )
-  parser.add_argument(
-      "-lr", "--learning_rate", type=float, default=LEARNING_RATE,
-      help="Learning rate for training"
-  )
-  parser.add_argument(
-      "-w", "--workers", type=int, default=NUM_WORKERS,
-      help="Number of workers for data loading"
-  )
-  parser.add_argument(
-      "-o", "--output", type=Path, default=Path("./checkpoints"),
-      help="Output directory for model checkpoints"
-  )
-  return parser.parse_args()
-
-
 def loss_fn(y_pred, y_true, eps=1e-5):
   """Vector cross entropy loss for probabilistic phase labels.
 
@@ -203,14 +142,19 @@ class OGSTrainer:
         else ("", sta, "")
     )
 
-  def get_event_params(self, event):
-    print(event)
-    exit()
-    origin = event.preferred_origin()
-    mag = event.preferred_magnitude()
+  def get_event_params(self, event_row):
+    """Extract event parameters from a catalog event DataFrame row.
 
-    source_id = str(event.resource_id)
+    Parameters
+    ----------
+    event_row : pd.Series
+      A row from the events DataFrame containing origin parameters.
 
+    Returns
+    -------
+    dict
+      Event parameters for the SeisBench WaveformDataWriter.
+    """
     event_params = {
         "source_id": source_id,
         "source_origin_time": str(origin.time),
@@ -254,6 +198,10 @@ class OGSTrainer:
         event_params = self.get_event_params(event)
 
   def get_clean_trace(self, trace, freqmin=0.1, freqmax=20.0, fs=100.0):
+    """Apply standard preprocessing to a waveform trace.
+
+    Pipeline: detrend(linear) → detrend(demean) → taper → bandpass → resample.
+    """
     trace.detrend("linear")
     trace.detrend("demean")
     trace.taper(max_percentage=0.05, type="cosine")
@@ -330,13 +278,19 @@ class OGSTrainer:
           files_ = glob.glob(str(filepath))
           dataset = []
           for wf_file in files_:
-            trace = self.get_clean_trace(op.read(wf_file))
+            try:
+              trace = self.get_clean_trace(op.read(wf_file))
+            except Exception:
+              self.logger.warning("Failed to read waveform: %s", wf_file)
+              continue
             stats = trace[0].stats
             event = df_events[
                 df_events[OGS_C.IDX_EVENTS_STR] == pick[OGS_C.IDX_PICKS_STR]
             ]
             if event.empty:
-              print(f"Missing event for pick ID: {pick[OGS_C.IDX_PICKS_STR]}")
+              self.logger.debug(
+                  "Missing event for pick ID: %s", pick[OGS_C.IDX_PICKS_STR]
+              )
               continue
             event_row = event.iloc[0]
             dataset.append({
@@ -399,4 +353,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-  main(parse_arguments())
+  main(OGS_U.parse_trainer_args())

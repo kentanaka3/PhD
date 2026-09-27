@@ -11,10 +11,8 @@
 # QUICK START / USAGE EXAMPLES:
 #   make help
 #   make init [DRY_RUN=1]   # Initialize the WORK directory structure
-#   make download YEAR=2025 STEP_DAYS=5 OFFSET=0 END_DAY=365
-#   make download YEAR=2025 STEP_DAYS=5 OFFSET=0 END_DAY=365 THREADS=4
-#	  make compress           # Compress raw waveforms into yearly tar.gz files
-#	  make decompress         # Decompress yearly tar.gz files into raw waveforms
+#   make download START_DATE=20250127 STEP_DAYS=5
+#   make download OFFSET=5 END_DATE=20250213 STEP_DAYS=5 CORES=4
 #   make index              # Build/update Squirrel indexes for the waveform archive
 #   make PyOcto             # Run PyOcto with the default picker input
 #   make GaMMA              # Run GaMMA with the default picker input
@@ -42,14 +40,25 @@
 #   - $(SBC_RUN_BIN)        : ML catalog generation entrypoint (Hydra) [= ml_catalog_run]
 #   - $(OGS_PATH)/src/*.py  : OGS-specific Python scripts
 #
-# This Makefile intentionally does not submit SLURM jobs, load modules, install
-# packages, or modify OGS/utils/Leonardo. It provides a local wrapper around
-# the checked-in OGS Python utilities and the scripts in this directory.
-#
 # Use `DRY_RUN=1` with filesystem or command targets to inspect actions without
 # creating directories, links, or running a process.  For arbitrary commands,
+# creating directories, links, or running a process. For arbitrary commands,
 # invoke LAUNCHME.sh directly; keeping argv in the caller's shell avoids
 # reparsing a command string in Make.
+#
+# NOTE: START_DATE defaults to $(YEAR)-01-01 + $(OFFSET) days. If START_DATE is
+#       passed explicitly on the command line, OFFSET is ignored.
+#
+# AUTHORS:
+#   - 健
+#   - Istituto Nazionale di Oceanografia e di Geofisica Sperimentale (OGS)
+#     Centro di Ricerche Sismologiche (CRS)
+#   - Università degli Studi di Trieste (UniTS)
+#     Dipartimento di Matematica, Informatica e Geoscienze (MIGe)
+#     Applied Data Science and Artificial Intelligence (ADSAI)
+#   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
+#     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
+#
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -57,56 +66,56 @@
 # -----------------------------------------------------------------------------
 
 # General
-USER     ?= $(shell whoami)
-ROOT     := $(CURDIR)
-PYTHON   ?= python
-# bash needed for the shell parameter expansion used in generated rules.
-PROJECT  := ""
-THREADS  ?= 4
-
+USER        ?= $(shell id -un)
+USER        ?= $(shell whoami)
+PROJECT     ?= Local_Dev
+NODES 		  ?= 1
+TASKS			  ?= 1
+CORES			  ?= 1
+CONDA_ENV   ?= SBC_3.12
 
 # Date Variables
-YEAR         ?= 2026
-STEP_DAYS    ?= 5
-OFFSET       ?= 0
-END_DAY      ?= 366    # max 366 (leap years); loop clamps to year end
+YEAR        ?= 2026
+STEP_DAYS   ?= 5
+OFFSET      ?= 0
 
 # Paths
-OGS_PATH     ?= $(abspath $(LOCAL_DIR)/../..)
-WORK_PATH    ?= $(if $(HOME),$(HOME),$(CURDIR))/AISeism/WORK
-NLL_PATH     ?= $(abspath $(WORK_PATH)/../NonLinLoc)
-SBC_PATH     ?= $(abspath $(WORK_PATH)/../ml_catalog_main)
-CATALOG_PATH ?= $(abspath $(WORK_PATH)/catalog)
-DATASET_PATH ?= $(abspath $(WORK_PATH)/dataset)
-STATION_PATH ?= $(abspath $(WORK_PATH)/station)
-WAVE_PATH    ?= $(abspath $(WORK_PATH)/waveform)
+WORK_PATH    		?= $(if $(HOME),$(HOME)/Documents/AISeism/WORK,$(CURDIR))
+OGS_PATH    		?= $(abspath $(WORK_PATH)/../PhD/OGS)
+NLL_PATH    		?= $(abspath $(WORK_PATH)/../NonLinLoc)
+SBC_PATH				?= $(abspath $(WORK_PATH)/../ml_catalog_main)
+CONDA_INSTALLER	?= $(abspath $(WORK_PATH)/../Miniconda3-latest-Linux-x86_64.sh)
+CONDA_ROOT 			?= $(abspath $(WORK_PATH)/../.miniconda3)
+CATALOG_PATH 		?= $(abspath $(WORK_PATH)/catalog)
+DATASET_PATH 		?= $(abspath $(WORK_PATH)/dataset)
+STATION_PATH 		?= $(abspath $(WORK_PATH)/station)
+WAVE_PATH    		?= $(abspath $(WORK_PATH)/waveform)
 
-START_DATE   ?= $(shell date -d "$(YEAR)-01-01 + $(OFFSET) days" +%Y%m%d)
-END_DATE     ?= $(shell date -d "$(YEAR)-12-31" +%Y%m%d)
+START_DATE  ?= $(shell date -d "$(YEAR)-01-01 + $(OFFSET) days" +%Y%m%d)
+END_DATE    ?= $(shell date -d "$(YEAR)-12-31" +%Y%m%d)
 
-_START_DATE_CHECK := $(shell date -d "$(START_DATE)" +%Y%m%d 2>/dev/null || echo invalid)
-_END_DATE_CHECK   := $(shell date -d  "$(END_DATE)"  +%Y%m%d 2>/dev/null || echo invalid)
-$(if $(filter invalid,$(_START_DATE_CHECK)),$(error Invalid START_DATE: $(START_DATE)))
-$(if $(filter invalid,$(_END_DATE_CHECK)),$(error Invalid END_DATE: $(END_DATE)))
+$(if $(shell date -d "$(START_DATE)" +%Y%m%d 2>/dev/null),,$(error Invalid START_DATE: $(START_DATE)))
+$(if $(shell date -d "$(END_DATE)"   +%Y%m%d 2>/dev/null),,$(error Invalid END_DATE: $(END_DATE)))
+$(if $(shell [ "$(START_DATE)" -le "$(END_DATE)" ] 2>/dev/null && echo ok),,$(error Invalid date range: START_DATE=$(START_DATE) must be <= END_DATE=$(END_DATE)))
 
-ifeq ($(YEAR),$(shell date -d "$(START_DATE)" +%Y))
-else
-  YEAR := $(shell date -d "$(START_DATE)" +%Y)
+YEAR := $(shell date -d "$(START_DATE)" +%Y)
+
+# More paths
+TT_DB        	?= $(OGS_PATH)/data/VelocityModel/1D/tt_db.txt
+
+# Executable binaries
+CONDA_BIN			?= $(CONDA_ROOT)/bin/conda
+PYTHON_BIN		?= $(CONDA_ROOT)/envs/$(CONDA_ENV)/bin/python
+SBC_RUN_BIN  	?= ml_catalog_run +libpath=.
+
+# Local helper scripts
+LOCAL_INIT   := $(LOCAL_DIR)/init.sh
+LOCAL_CHECK  := $(LOCAL_DIR)/dummy.sh
+LOCAL_RUN    := $(LOCAL_DIR)/LAUNCHME.sh
+DRY_FLAG     := $(if $(filter 1 true yes,$(DRY_RUN)),--dry-run,)
+ifneq ($(filter 0 1 true false yes no,$(DRY_RUN)),$(DRY_RUN))
+$(error DRY_RUN must be one of 0, 1, true, false, yes, or no)
 endif
-
-# Paths
-WORK_ROOT    ?= /leonardo_work/IscrC_AISeism/WORK
-SRC_PATH     ?= /leonardo_work/IscrC_AISeism/PhD/OGS/src
-WAVE_PATH    ?= $(WORK_ROOT)/waveform
-MANUAL_PATH  ?= $(WORK_ROOT)/manual/OnlyEqNLL1D
-CONDA_PATH   ?= /leonardo_work/IscrC_AISeism/.miniconda3/bin/conda
-PYTHON_PATH  ?= /leonardo_work/IscrC_AISeism/.miniconda3/envs/SBC_3.12/bin/python
-STATION_PATH ?= $(WAVE_PATH)/station
-TT_DB        ?= $(ROOT)/OGS/data/VelocityModel/1D/tt_db.txt
-
-# ml_catalog_run launcher — wrapped via Analyze.sh for SLURM submission.
-# `$$@` in `define` bodies expands to the target name inside generated rules.
-ML_CATALOG_RUN := HYDRA_FULL_ERROR=1 ml_catalog_run +libpath=.
 
 # Default picker/associator roots that chained stages can reuse.
 base         := OGS/$(YEAR)
@@ -131,9 +140,11 @@ NLLS         := NLL1D NLL3D
 # -----------------------------------------------------------------------------
 # PHONY DECLARATIONS
 # -----------------------------------------------------------------------------
-.PHONY: help setup all base SeisBenchPicker parse test clean \
-	download compress decompress station index \
-	$(MODELS) $(ASSOCS) $(NLLS)
+.DEFAULT_GOAL := help
+
+.PHONY: help setup all check init base parse test clean \
+  download compress decompress station index \
+  $(MODELS) $(ASSOCS) $(NLLS)
 
 # -----------------------------------------------------------------------------
 # DEFAULT / META
@@ -141,13 +152,13 @@ NLLS         := NLL1D NLL3D
 all: base # 2
 	@$(MAKE) --no-print-directory '$(NLL)[$(ASSOC),$(MODEL),$(DATASET),$(THRESHOLD)]'
 
-help:
-	@echo "AISeism Makefile — common targets:"
-	@echo "  make download   YEAR=YYYY STEP_DAYS=N OFFSET=D END_DAY=D"
-	@echo "  make download   YEAR=YYYY STEP_DAYS=N OFFSET=D END_DAY=D THREADS=4"
-	@echo "  make compress | decompress   YEAR=YYYY (deprecated; retained for compatibility)"
+help: #
+	@echo "AISeism Makefile (local) — common targets:"
+	@echo "  make init  [DRY_RUN=1]"
+	@echo "  make download   YEAR=YYYY STEP_DAYS=N [CORES=4]"
+	@echo "  make download   START_DATE=YYYYMMDD END_DATE=YYYYMMDD STEP_DAYS=N [CORES=4]"
 	@echo "  make station    YEAR=YYYY"
-	@echo "  make index THREADS=8 START_DATE=1977-01-01 END_DATE=2025-12-31"
+	@echo "  make index CORES=8 START_DATE=2005-01-01 END_DATE=2025-12-31"
 	@echo "  make PhaseNet | EQTransformer | ...	(picker models with default dataset/threshold)"
 	@echo "  make PhaseNet[INSTANCE,0.1] | EQTransformer[STEAD,0.2] | ...	(picker models with dataset/threshold overrides)"
 	@echo "  make PyOcto | GaMMA | REAL           (associator with default picker input)"
@@ -156,53 +167,81 @@ help:
 	@echo "  make NLL1D[PyOcto,PhaseNet,INSTANCE,0.1] | NLL3D[GaMMA,EQTransformer,STEAD,0.2] | ...	(locator with picker+assoc overrides)"
 	@echo "  make base                            (just make the base catalog for quick iteration on later stages)"
 	@echo "  make parse | clean"
+	@echo "  make MHPC                            (submit all registered models/assocs for the given date range)"
+	@echo "  make PhD                             (submit all registered models/assocs for the given date range)"
+	@echo "  make test                            (run a quick test of the SBC_RUN_BIN entrypoint)"
+	@echo "  make help                            (this message)"
+	@echo "  make test                      		  (run a quick test of the SBC_RUN_BIN entrypoint)"
+	@echo "  make help                      		  (this message)"
+	@echo ""
+	@echo "  Configuration:"
+	@echo "    OGS_PATH=$(OGS_PATH)"
+	@echo "    WORK_PATH=$(WORK_PATH)"
+	@echo "    PYTHON_BIN=$(PYTHON_BIN)"
+	@echo "    SBC_RUN_BIN=$(SBC_RUN_BIN)"
+	@echo "    CORES=$(CORES)"
+	@echo ""
+	@echo "  All command targets accept DRY_RUN=1.  No target submits to SLURM or"
+	@echo "  installs an environment.  Use 'bash LAUNCHME.sh --help' for arbitrary"
+	@echo "  argv-safe command execution."
 
-setup:
-	@echo "Setup placeholder — module loads / env activation go here."
+check:
+	@echo "Checking configuration..."
+	"$(LOCAL_CHECK)" --ogs-root "$(OGS_PATH)" --workspace "$(WORK_PATH)" \
+		--python "$(PYTHON_BIN)"
+
+setup: check
+
+# =============================================================================
+# INITIALIZATION
+# =============================================================================
+init:
+	@WORK_PATH="$(WORK_PATH)" OGS_PATH="$(OGS_PATH)" NLL_PATH="$(NLL_PATH)" \
+		DATASET_PATH="$(DATASET_PATH)" CONDA_ROOT="$(CONDA_ROOT)" \
+		CONDA_INSTALLER="$(CONDA_INSTALLER)" CONDA_ENV="$(CONDA_ENV)" \
+		SBC_PATH="$(SBC_PATH)" bash "$(OGS_PATH)/utils/Leonardo/init.sh"
 
 # =============================================================================
 # DATA ACQUISITION
 # =============================================================================
 
-# Download waveforms in $(STEP_DAYS)-day chunks, clamped to $(YEAR).
-download:
-	@for i in $$(seq $(OFFSET) $(STEP_DAYS) $(END_DAY)); do \
-		start=$$(date -d "$(YEAR)-01-01 + $$i days" +%Y%m%d); \
-		end=$$(date -d "$(YEAR)-01-01 + $$((i+$(STEP_DAYS))) days" +%Y%m%d); \
-		[ "$$(date -d "$(YEAR)-01-01 + $$i days" +%Y)" = "$(YEAR)" ] || continue; \
-		[ "$$(date -d "$(YEAR)-01-01 + $$((i+$(STEP_DAYS))) days" +%Y)" = "$(YEAR)" ] || end=$(YEAR)1231; \
-		echo "Downloading waveforms $$start → $$end (offset $$i days)"; \
-		$(PYTHON_PATH) $(SRC_PATH)/ogsdownloader.py -D $$start $$end -d $(WAVE_PATH) \
-			--threads $(THREADS) -S "* -SP -OL -ED"; \
+# Download waveforms in $(STEP_DAYS)-day chunks from $(START_DATE) to $(END_DATE).
+download: #
+	@[[ "$(STEP_DAYS)" =~ ^[1-9][0-9]*$$ ]] || { \
+		printf 'ERROR: STEP_DAYS must be a positive integer: %s\n' "$(STEP_DAYS)" >&2; \
+		exit 2; \
+	}
+	@set -e; \
+	start="$(START_DATE)"; \
+	while [ "$$start" -le "$(END_DATE)" ]; do \
+		end=$$(date -d "$$start + $(STEP_DAYS) days - 1 day" +%Y%m%d); \
+		[ "$$end" -le "$(END_DATE)" ] || end="$(END_DATE)"; \
+		echo "Downloading waveforms $$start → $$end"; \
+		OVERRIDE_CORES=$(CORES) CORE_COUNT=$(CORES) bash LAUNCHME.sh download 1 1 "DownLoad_$${start}_$${end}" \
+			$(PYTHON_BIN) $(OGS_PATH)/src/ogsdownloader.py \
+				-D $$start $$end \
+				-d $(WAVE_PATH) \
+				--threads $(CORES) \
+				-S "* -SP -OL -ED"; \
+		start=$$(date -d "$$end + 1 day" +%Y%m%d); \
 	done
-
-compress: #
-	@echo "WARNING: make compress is deprecated; use the current waveform archive workflow instead." >&2
-	"$(LOCAL_RUN)" --workdir "$(WORK_PATH)" --threads "$(THREADS)" \
-		$(DRY_FLAG) -- "$(PYTHON_BIN)" "$(WORK_PATH)/compressor.py" \
-		-C "$(WAVE_PATH)" . -v
-
-decompress:
-	@echo "WARNING: make decompress is deprecated; use the current waveform archive workflow instead." >&2
-	"$(LOCAL_RUN)" --workdir "$(WORK_PATH)" --threads "$(THREADS)" \
-		$(DRY_FLAG) -- "$(PYTHON_BIN)" "$(WORK_PATH)/compressor.py" \
-		-D "$(WAVE_PATH)/$(YEAR)" \
-		"$(WAVE_PATH)" -v
-	find "$(WAVE_PATH)/$(YEAR)"/* -type f -name "*.tar.gz" -print -delete
 
 # Station metadata for the configured date range.
 station:
 	@echo "Processing station metadata $(START_DATE) → $(END_DATE)..."
-	$(PYTHON_PATH) $(SRC_PATH)/ogsstation.py \
-		$(SRC_PATH) $(WAVE_PATH) $(STATION_PATH) \
-		$(START_DATE) $(END_DATE) $(WORK_ROOT)/catalogs/$(base)
+	"$(LOCAL_RUN)" --workdir "$(WORK_PATH)" --threads "$(CORES)" \
+		$(DRY_FLAG) -- "$(PYTHON_BIN)" "$(OGS_PATH)/src/ogsstation.py" \
+		"$(OGS_PATH)/src" "$(WAVE_PATH)" "$(STATION_PATH)" \
+		"$(START_DATE)" "$(END_DATE)" "$(WORK_PATH)/catalogs/$(base)"
 
 # Build/update the sharded Squirrel indexes for the full waveform archive.
 index:
-	$(ML_CATALOG_RUN) +index_only=true data=ogsDB data.check=true \
-		data.index_workers=$(THREADS) \
-		data.starttime=$(START_DATE) \
-		data.endtime=$(END_DATE)
+	"$(LOCAL_RUN)" --workdir "$(WORK_PATH)" --threads "$(CORES)" \
+		--env HYDRA_FULL_ERROR=1 $(DRY_FLAG) -- $(SBC_RUN_BIN) \
+		+index_only=true data=ogsDB data.check=true \
+		data.index_workers="$(CORES)" \
+		data.starttime="$(START_DATE)" \
+		data.endtime="$(END_DATE)"
 
 # =============================================================================
 # INDEXER / PICKER / ASSOCIATOR / NLL — RUNTIME PARAMETRIC RULES
@@ -213,7 +252,7 @@ index:
 # and parse the bracketed argument list at recipe time.
 #
 # USAGE EXAMPLES:
-#   make <Index>   																# runs the indexer stage (no args)
+#   make <Index>   							# runs the indexer stage (no args)
 #   make <Model>                                  # uses $(DATASET),$(THRESHOLD)
 #   make '<Model>[<Dataset>,<Threshold>]'
 #   make <Assoc>                                  # chains off $(BASE_PICKER)
@@ -265,16 +304,20 @@ ASSOC_DIR_REAL         ?= REAL
 #   $$X   → literal $X for Make (expanded once `eval` parses the rule)
 #   $$$$x → literal $x for the shell (Make consumes one $)
 #   $$*   → Make's $* automatic var, expanded when the rule fires
+#
+# LOCAL DIFFERENCE: Instead of `bash LAUNCHME.sh <template> <tasks> <cpus> <id>`
+# (SLURM submission), local rules call `$(LOCAL_RUN)` directly with the command
+# argv. The `--dry-run` flag propagates via $(DRY_FLAG).
 # =============================================================================
 
 # --- INDEXER -------------------------------------------------------------------
 define _INDEXER_RULES
 
 $1:
-	"$$(LOCAL_RUN)" --workdir "$$(WORK_PATH)" --threads "$$(THREADS)" \
-	  --env HYDRA_FULL_ERROR=1 $$(DRY_FLAG) -- $$(SBC_RUN_BIN) \
-	  +index_only=true data=ogsDB data.check=true \
-	  data.index_workers=$$(THREADS) \
+	"$$(LOCAL_RUN)" --workdir "$$(WORK_PATH)" --threads "$$(CORES)" \
+	  --env HYDRA_FULL_ERROR=1 $$(DRY_FLAG) -- $$(SBC_RUN_BIN) +index_only=true \
+		data=ogsDB data.check=true \
+	  data.index_workers=$$(CORES) \
 	  data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
 endef
 
@@ -287,14 +330,16 @@ $1[%]:
 	@stem='$$*'; dataset="$$$${stem%%,*}"; threshold="$$$${stem##*,}"; \
 	id="$1[$$$$dataset,$$$$threshold]"; \
 	picker_id="$$$$dataset/$$$$threshold/$$(YEAR)"; \
-	mkdir -p "$$(ROOT)/catalogs/$$(PROJECT)/$1/$$$$picker_id/SeisBenchPicker"; \
-	$$(ML_CATALOG_RUN) output_path="catalogs/$$(PROJECT)/$1/$$$$picker_id" \
-		group_modules/picker=$(PICKER_YAML_$1) \
-		group_modules.picker.model._target_="seisbench.models.$1.from_pretrained" \
-		group_modules.picker.model.name=$$$${dataset,,} \
-		group_modules.picker.classify_args.P_threshold=$$$$threshold \
-		group_modules.picker.classify_args.S_threshold=$$$$threshold \
-		data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
+	mkdir -p "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$picker_id/SeisBenchPicker"; \
+	"$$(LOCAL_RUN)" --workdir "$$(WORK_PATH)" --threads "$$(CORES)" \
+	  --env HYDRA_FULL_ERROR=1 $$(DRY_FLAG) -- $$(SBC_RUN_BIN) \
+	  output_path="catalogs/$$(PROJECT)/$1/$$$$picker_id" \
+	  group_modules/picker=$(PICKER_YAML_$1) \
+	  group_modules.picker.model._target_="seisbench.models.$1.from_pretrained" \
+	  group_modules.picker.model.name=$$$${dataset,,} \
+	  group_modules.picker.classify_args.P_threshold=$$$$threshold \
+	  group_modules.picker.classify_args.S_threshold=$$$$threshold \
+	  data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
 endef
 
 # --- ASSOCIATOR --------------------------------------------------------------
@@ -307,14 +352,17 @@ $1[%]:
 	@stem='$$*'; \
 	model="$$$${stem%%,*}"; rest="$$$${stem#*,}"; \
 	dataset="$$$${rest%%,*}"; threshold="$$$${rest##*,}"; \
+	id="$1[$$$$model,$$$$dataset,$$$$threshold]"; \
 	picker_id="$$$$model/$$$$dataset/$$$$threshold/$$(YEAR)"; \
-	mkdir -p "$$(ROOT)/catalogs/$$(PROJECT)/$1/$$$$picker_id"; \
-	mkdir -p "$$(ROOT)/catalogs/$$(PROJECT)/$$$$picker_id"; \
-	ln -sfn "$$(ROOT)/catalogs/$$(PROJECT)/$$$$picker_id/SeisBenchPicker" \
-		"$$(ROOT)/catalogs/$$(PROJECT)/$1/$$$$picker_id/SeisBenchPicker"; \
-	$$(ML_CATALOG_RUN) output_path="catalogs/$$(PROJECT)/$1/$$$$picker_id" \
-		group_modules/associator=$(ASSOC_YAML_$1) \
-		data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
+	mkdir -p "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$picker_id"; \
+	mkdir -p "$$(WORK_PATH)/catalogs/$$(PROJECT)/$$$$picker_id"; \
+	ln -sfn "$$(WORK_PATH)/catalogs/$$(PROJECT)/$$$$picker_id/SeisBenchPicker" \
+	  "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$picker_id/SeisBenchPicker"; \
+	"$$(LOCAL_RUN)" --workdir "$$(WORK_PATH)" --threads "$$(CORES)" \
+	  --env HYDRA_FULL_ERROR=1 $$(DRY_FLAG) -- $$(SBC_RUN_BIN) \
+	  output_path="catalogs/$$(PROJECT)/$1/$$$$picker_id" \
+	  group_modules/associator=$(ASSOC_YAML_$1) \
+	  data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
 endef
 
 # --- NONLINLOC ---------------------------------------------------------------
@@ -328,17 +376,20 @@ $1[%]:
 	assoc_="$$$${stem%%,*}"; rest="$$$${stem#*,}"; \
 	model_="$$$${rest%%,*}"; rest="$$$${rest#*,}"; \
 	dataset_="$$$${rest%%,*}"; threshold_="$$$${rest##*,}"; \
+	nll_id="$1[$$$$assoc_,$$$$model_,$$$$dataset_,$$$$threshold_]"; \
 	picker_id="$$$$model_/$$$$dataset_/$$$$threshold_/$$(YEAR)"; \
 	assoc_id="$$$$assoc_/$$$$picker_id"; \
-	mkdir -p "$$(ROOT)/catalogs/$$(PROJECT)/$1/$$$$assoc_id"; \
-	mkdir -p "$$(ROOT)/catalogs/$$(PROJECT)/$$$$assoc_id/OGSPickStatQC"; \
-	ln -sfn "$$(ROOT)/catalogs/$$(PROJECT)/$$$$assoc_id/OGSPickStatQC" \
-		"$$(ROOT)/catalogs/$$(PROJECT)/$1/$$$$assoc_id/OGSPickStatQC"; \
-	ln -sfn "$$(ROOT)/catalogs/$$(PROJECT)/$$$$picker_id/SeisBenchPicker" \
-		"$$(ROOT)/catalogs/$$(PROJECT)/$1/$$$$assoc_id/SeisBenchPicker"; \
-	$$(ML_CATALOG_RUN) output_path="catalogs/$$(PROJECT)/$1/$$$$assoc_id" \
-		group_modules/nonlinloc=$(LOCATOR_YAML_$1) \
-		data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
+	mkdir -p "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$assoc_id"; \
+	mkdir -p "$$(WORK_PATH)/catalogs/$$(PROJECT)/$$$$assoc_id/OGSPickStatQC"; \
+	ln -sfn "$$(WORK_PATH)/catalogs/$$(PROJECT)/$$$$assoc_id/OGSPickStatQC" \
+	  "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$assoc_id/OGSPickStatQC"; \
+	ln -sfn "$$(WORK_PATH)/catalogs/$$(PROJECT)/$$$$picker_id/SeisBenchPicker" \
+	  "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$assoc_id/SeisBenchPicker"; \
+	"$$(LOCAL_RUN)" --workdir "$$(WORK_PATH)" --threads "$$(CORES)" \
+	  --env HYDRA_FULL_ERROR=1 $$(DRY_FLAG) -- $$(SBC_RUN_BIN) \
+	  output_path="catalogs/$$(PROJECT)/$1/$$$$assoc_id" \
+	  group_modules/nonlinloc=$(LOCATOR_YAML_$1) \
+	  data.starttime=$$(START_DATE) data.endtime=$$(END_DATE)
 endef
 
 # Instantiate rules — one pair per registered stage name.
@@ -351,33 +402,39 @@ $(foreach n,$(NLLS),  $(eval $(call _NLL_RULES,$n)))
 # BASE catalog — single quick-iteration run reused as input by chained stages.
 # -----------------------------------------------------------------------------
 base:
-	mkdir -p "$(ROOT)/catalogs/$(base)/$(YEAR)"
-
-MHPC:
-	@$(foreach m,$(MODELS),$(foreach d,$(DATASETS),$(foreach t,$(THRESHOLDS), \
-		echo "Submitting $m[$d,$t] to SLURM..."; \
-		$(MAKE) --no-print-directory '$m[$d,$t]' PROJECT=MHPC \
-			START_DATE=20240320 END_DATE=20240620 ; )))
-	@$(foreach a,$(ASSOCS),$(foreach t,$(THRESHOLDS), \
-		echo "Submitting NLL1D[$a,PhaseNet,INSTANCE,$t] to SLURM..."; \
-		$(MAKE) --no-print-directory 'NLL1D[$a,PhaseNet,INSTANCE,$t]' \
-			PROJECT=MHPC \
-			START_DATE=20240320 END_DATE=20240620 ; ))
+	if [[ -n "$(DRY_FLAG)" ]]; then
+		printf 'Would create directory: %s\n' "$(WORK_PATH)/catalogs/$(base)/$(YEAR)"
+	else
+		mkdir -p -- "$(WORK_PATH)/catalogs/$(base)/$(YEAR)"
+		printf 'Created or verified: %s\n' "$(WORK_PATH)/catalogs/$(base)/$(YEAR)"
+	fi
 
 # =============================================================================
 # CATALOG MANAGEMENT
 # =============================================================================
 
 # Merge manual OGS pick files into a unified catalog.
-parse:
-	$(PYTHON_PATH) $(SRC_PATH)/ogsparser.py -f $(MANUAL_PATH)/* --merge \
-		-o $(WORK_ROOT)/catalogs/$(notdir $(patsubst %/,%,$(MANUAL_PATH)))
+parse: # 3
+	$(PYTHON_BIN) $(OGS_PATH)/src/ogsparser.py \
+		-f $(DATASET_PATH)/* \
+		--merge \
+	  -o $(WORK_PATH)/catalogs/$(notdir $(patsubst %/,%,$(DATASET_PATH)))
 
-test:
-	$(ML_CATALOG_RUN) output_path=$(base)/$(YEAR)
+test: # 2
+	"$(LOCAL_RUN)" --workdir "$(WORK_PATH)" --threads "$(CORES)" \
+		--env HYDRA_FULL_ERROR=1 $(DRY_FLAG) -- $(SBC_RUN_BIN) \
+		output_path=$(base)/$(YEAR)
 
-# WARNING: deletes every generated catalog under $(ROOT)/catalogs
-clean:
-	rm -rf $(ROOT)/catalogs/*/assignments/*
-	rm -rf $(ROOT)/catalogs/*/events/*
-	rm -rf $(ROOT)/catalogs/*
+# WARNING: deletes every generated catalog under $(WORK_PATH)/catalogs
+clean: #
+	@test -n "$(WORK_PATH)" && \
+	test "$(WORK_PATH)" != "/" || { \
+		echo "ERROR: refusing to clean unsafe WORK_PATH=$(WORK_PATH)" >&2; exit 1; \
+	}
+	@echo "Removing generated files under $(WORK_PATH)"
+	@cd "$(WORK_PATH)" && \
+	rm -rf -- config data src test && \
+	rm -rf -- ACTIVATEME.sh download.sh dummy.sh init.sh \
+		LAUNCHME.sh Makefile
+	#@echo "Removing generated catalogs below $(WORK_PATH)/catalogs"
+	#@test -n "$(WORK_PATH)" && rm -rf -- "$(WORK_PATH)/catalogs"/*

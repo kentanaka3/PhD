@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Data Module - Day-Sharded Pyrocko Squirrel Data Access
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module provides a high-throughput data source for OGS waveform archives.
@@ -98,7 +98,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 # =============================================================================
@@ -109,7 +110,6 @@ import copy                       # Defensive copies of cached group lists
 import datetime                   # Date arithmetic for OGS archive windows
 import shutil                     # Temporary Squirrel directory cleanup/copying
 import tempfile                   # Isolated read-only Squirrel workspaces
-from abc import ABC, abstractmethod  # Kept for compatibility with older imports
 from pathlib import Path          # Filesystem path normalization and traversal
 from typing import Iterable, Optional  # Type hints for public helper signatures
 
@@ -537,10 +537,14 @@ def _index_day_worker(
       init_environment(str(db_dir))
 
     sq = Squirrel(env=str(db_dir), persistent=persistent)
-
-    squirrel_add_paths = _select_squirrel_add_paths(paths, day, day)
-
-    _fast_update_squirrel_db(sq, squirrel_add_paths)
+    try:
+      squirrel_add_paths = _select_squirrel_add_paths(paths, day, day)
+      _fast_update_squirrel_db(sq, squirrel_add_paths)
+    finally:
+      try:
+        sq.close()
+      except Exception:
+        pass
 
     return f"Day {day_iso} indexed successfully."
   except Exception as e:

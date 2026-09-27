@@ -209,7 +209,8 @@ validate_managed_functions() { # 13
 	local -r scan_root="$1"
 	local failures=0 script
 	local -a managed_scripts=(
-		common.sh handler.sh init.sh navigate.sh validate.sh
+		common.sh handler.sh init.sh md_nav.sh md_val.sh navigate.sh validate.sh
+		yaml_nav.sh yaml_val.sh
 	)
 
 	for script in "${managed_scripts[@]}"; do
@@ -221,7 +222,7 @@ validate_managed_functions() { # 13
 
 # validate
 # --------
-# Validate repository Markdown and Bash files plus critical entry points.
+# Validate repository Markdown, YAML, and Bash files plus critical entry points.
 validate() { # 36
 	local -r scan_root="$1"
 	local failures=0 file files_checked=0
@@ -250,8 +251,8 @@ validate() { # 36
 		((failures += 1))
 	}
 
-	validate_markdown "$scan_root" || failures=$((failures + $?))
-	validate_scripts "$scan_root" || failures=$((failures + $?))
+	bash "$SCRIPT_DIR/md_val.sh" --root "$scan_root" || failures=$((failures + $?))
+	bash "$SCRIPT_DIR/yaml_val.sh" --root "$scan_root" || failures=$((failures + $?))
 	validate_bash "$scan_root" || failures=$((failures + $?))
 	validate_managed_functions "$scan_root" || failures=$((failures + $?))
 

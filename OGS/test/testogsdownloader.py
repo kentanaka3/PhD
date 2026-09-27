@@ -39,11 +39,16 @@ AUTHORS:
 =============================================================================
 """
 
+import ogsconstants as OGS_C
+import ogsdownloader
+from ogsdownloader import data_downloader
+from ogsutils import parse_downloader_args
 import argparse
 import io
 import json
 import os
 import sys
+import logging
 import tempfile
 import threading
 import types
@@ -54,11 +59,6 @@ from pathlib import Path
 
 THIS_DIR = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(THIS_DIR + "/../src"))
-
-# Local imports
-import ogsconstants as OGS_C
-import ogsdownloader
-from ogsdownloader import data_downloader, parse_arguments
 
 
 def _install_obspy_import_stub():
@@ -320,12 +320,12 @@ def _fake_pyrocko_modules(recorder):
 class TestOGSDownloaderArguments(unittest.TestCase):
   def test_threads_argument_defaults_and_accepts_positive_values(self):
     with unittest.mock.patch.object(sys, "argv", ["ogsdownloader.py"]):
-      self.assertEqual(parse_arguments().threads, 1)
+      self.assertEqual(parse_downloader_args().threads, 1)
 
     with unittest.mock.patch.object(
         sys, "argv", ["ogsdownloader.py", "--threads", "3"]
     ):
-      self.assertEqual(parse_arguments().threads, 3)
+      self.assertEqual(parse_downloader_args().threads, 3)
 
   def test_threads_argument_rejects_non_positive_values(self):
     with (
@@ -335,13 +335,13 @@ class TestOGSDownloaderArguments(unittest.TestCase):
         unittest.mock.patch("sys.stderr", new=io.StringIO())
     ):
       with self.assertRaises(SystemExit) as error_context:
-        parse_arguments()
+        parse_downloader_args()
 
     self.assertEqual(error_context.exception.code, 2)
 
   def test_directory_argument_defaults_to_default_wave_path(self):
     with unittest.mock.patch.object(sys, "argv", ["ogsdownloader.py"]):
-      args = parse_arguments()
+      args = parse_downloader_args()
       self.assertEqual(args.directory, ogsdownloader.DEFAULT_WAVE_PATH)
 
   def test_day_start_truncates_datetime_to_midnight(self):
@@ -349,13 +349,49 @@ class TestOGSDownloaderArguments(unittest.TestCase):
     result = ogsdownloader.day_start(dt_with_time)
     self.assertEqual(result, datetime(2024, 3, 20, 0, 0, 0))
 
+  def test_verbosity_arguments(self):
+    with unittest.mock.patch.object(sys, "argv", ["ogsdownloader.py"]):
+      args = parse_downloader_args()
+      self.assertFalse(args.verbose)
+      self.assertFalse(args.quiet)
+
+    with unittest.mock.patch.object(
+        sys, "argv", ["ogsdownloader.py", "-v"]
+    ):
+      args = parse_downloader_args()
+      self.assertTrue(args.verbose)
+      self.assertFalse(args.quiet)
+
+    with unittest.mock.patch.object(
+        sys, "argv", ["ogsdownloader.py", "-q"]
+    ):
+      args = parse_downloader_args()
+      self.assertFalse(args.verbose)
+      self.assertTrue(args.quiet)
+
+  def test_downloader_init_with_parsed_args(self):
+    with unittest.mock.patch.object(sys, "argv", ["ogsdownloader.py"]):
+      args = parse_downloader_args()
+      dl = ogsdownloader.ObsPyDownloader(args)
+      self.assertEqual(dl.logger.level, logging.INFO)
+
+    with unittest.mock.patch.object(sys, "argv", ["ogsdownloader.py", "-q"]):
+      args = parse_downloader_args()
+      dl = ogsdownloader.ObsPyDownloader(args)
+      self.assertEqual(dl.logger.level, logging.WARNING)
+
+    with unittest.mock.patch.object(sys, "argv", ["ogsdownloader.py", "-v"]):
+      args = parse_downloader_args()
+      dl = ogsdownloader.ObsPyDownloader(args)
+      self.assertEqual(dl.logger.level, logging.DEBUG)
+
 
 class TestOGSDownloaderThreading(unittest.TestCase):
   def _args(self, directory, start="20240101", end="20240101", threads=1,
             pyrocko=False, client=None, key=None, network=None, station=None):
     return argparse.Namespace(
         verbose=False,
-        silent=True,
+        quiet=True,
         review=None,
         pyrocko=pyrocko,
         rectdomain=[9.5, 15.0, 44.3, 47.5],

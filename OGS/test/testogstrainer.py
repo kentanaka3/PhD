@@ -56,25 +56,26 @@ AUTHORS:
 =============================================================================
 """
 
-from ogstrainer import OGSTrainer, loss_fn, parse_arguments
-import ogstrainer
 import ogsconstants as OGS_C
-import seisbench.models as sbm
+import ogstrainer
+from ogsutils import parse_trainer_args
+from ogstrainer import OGSTrainer, loss_fn
 import seisbench.generate as sbg
+import seisbench.models as sbm
+import obspy as op
 from torch.utils.data import DataLoader, Dataset
 import torch
 import pandas as pd
-import obspy as op
+import numpy as np
+import unittest.mock
+import unittest
+import tempfile
+import argparse
 from pathlib import Path
 from datetime import datetime
-import numpy as np
-import argparse
-import ctypes
 import os
 import sys
-import tempfile
-import unittest
-import unittest.mock
+import ctypes
 
 # Preload Conda environment libstdc++.so.6 if present to avoid GLIBCXX version mismatch
 _conda_prefix = os.path.dirname(os.path.dirname(sys.executable))
@@ -85,14 +86,13 @@ if os.path.exists(_libstdcxx):
   except Exception:
     pass
 
+THIS_DIR = os.path.dirname(__file__)
+sys.path.append(os.path.abspath(THIS_DIR + "/../src"))
+
 
 # NumPy 2.0+ compatibility: restore np.trapz for xdas / seisbench
 if not hasattr(np, "trapz"):
   np.trapz = getattr(np, "trapezoid", None)
-
-
-THIS_DIR = os.path.dirname(__file__)
-sys.path.append(os.path.abspath(THIS_DIR + "/../src"))
 
 
 # -----------------------------------------------------------------------------
@@ -149,14 +149,14 @@ class TestOGSTrainerCLI(unittest.TestCase):
         "-W", "/path/to/waveforms",
     ]
     with unittest.mock.patch("sys.argv", test_argv):
-      args = parse_arguments()
+      args = parse_trainer_args()
 
     self.assertEqual(args.catalog, Path("/path/to/catalog"))
     self.assertEqual(args.waveforms, Path("/path/to/waveforms"))
     self.assertEqual(args.batch_size, 256)
     self.assertEqual(args.epochs, 5)
     self.assertEqual(args.learning_rate, 1e-2)
-    self.assertEqual(args.workers, 4)
+    self.assertEqual(args.threads, 4)
     self.assertEqual(args.model, OGS_C.PHASENET_STR)
     self.assertEqual(args.dataset, OGS_C.INSTANCE_STR)
     self.assertEqual(args.output, Path("./checkpoints"))
@@ -174,17 +174,17 @@ class TestOGSTrainerCLI(unittest.TestCase):
     # Missing both
     with unittest.mock.patch("sys.argv", ["ogstrainer.py"]), \
             self.assertRaises(SystemExit):
-      parse_arguments()
+      parse_trainer_args()
 
     # Missing waveforms
     with unittest.mock.patch("sys.argv", ["ogstrainer.py", "-C", "/path/to/cat"]), \
             self.assertRaises(SystemExit):
-      parse_arguments()
+      parse_trainer_args()
 
     # Missing catalog
     with unittest.mock.patch("sys.argv", ["ogstrainer.py", "-W", "/path/to/wf"]), \
             self.assertRaises(SystemExit):
-      parse_arguments()
+      parse_trainer_args()
 
   def test_cli_custom_overrides(self):
     """Verifies that custom command-line flags properly override defaults."""
@@ -197,13 +197,13 @@ class TestOGSTrainerCLI(unittest.TestCase):
         "-b", "64",
         "-e", "10",
         "-lr", "0.001",
-        "-w", "2",
+        "-t", "2",
         "-o", "/tmp/test_ckpt",
         "-d",
         "-D", "20240101", "20240115",
     ]
     with unittest.mock.patch("sys.argv", test_argv):
-      args = parse_arguments()
+      args = parse_trainer_args()
 
     self.assertEqual(args.catalog, Path("/custom/catalog"))
     self.assertEqual(args.waveforms, Path("/custom/waveforms"))
@@ -212,7 +212,7 @@ class TestOGSTrainerCLI(unittest.TestCase):
     self.assertEqual(args.batch_size, 64)
     self.assertEqual(args.epochs, 10)
     self.assertEqual(args.learning_rate, 0.001)
-    self.assertEqual(args.workers, 2)
+    self.assertEqual(args.threads, 2)
     self.assertEqual(args.output, Path("/tmp/test_ckpt"))
     self.assertTrue(args.download)
     self.assertEqual(
@@ -234,7 +234,7 @@ class TestOGSTrainerCLI(unittest.TestCase):
     ]
     with unittest.mock.patch("sys.argv", invalid_model_argv), \
             self.assertRaises(SystemExit):
-      parse_arguments()
+      parse_trainer_args()
 
     # Invalid dataset
     invalid_dataset_argv = [
@@ -245,7 +245,7 @@ class TestOGSTrainerCLI(unittest.TestCase):
     ]
     with unittest.mock.patch("sys.argv", invalid_dataset_argv), \
             self.assertRaises(SystemExit):
-      parse_arguments()
+      parse_trainer_args()
 
   def test_cli_all_valid_choices(self):
     """Verifies that all registered models and datasets are accepted."""
@@ -261,7 +261,7 @@ class TestOGSTrainerCLI(unittest.TestCase):
             "-s", ds_name,
         ]
         with unittest.mock.patch("sys.argv", argv):
-          args = parse_arguments()
+          args = parse_trainer_args()
           self.assertEqual(args.model, model_name)
           self.assertEqual(args.dataset, ds_name)
 
@@ -634,6 +634,8 @@ class TestOGSTrainerLifecycle(unittest.TestCase):
           model=OGS_C.PHASENET_STR,
           dataset=OGS_C.INSTANCE_STR,
           output=Path(tmpdir) / "checkpoints",
+          verbose=False,
+          quiet=False,
       )
 
       mock_model = unittest.mock.MagicMock()

@@ -20,6 +20,7 @@ set -euo pipefail
 # load_modules        | Load the compiler/CUDA modules required on Leonardo.
 # install_conda       | Verify or install Miniconda.
 # ensure_environment  | Verify or create the configured Conda environment.
+# build_nonlinloc     | Verify or build NonLinLoc binaries into NLL_PATH/bin.
 # copy_directories    | Copy configured directories into the work directory.
 # extract_directories | Extract configured directory contents into the work directory.
 # link_directories    | Create the configured workspace symlinks.
@@ -153,7 +154,7 @@ load_modules() { # 10
     fi
 
     log "Loading Leonardo modules"
-    module load nvhpc/ cuda/
+    module load nvhpc/ cuda/ intel-oneapi-compilers/2024.1.0
 }
 
 # install_conda
@@ -188,6 +189,35 @@ ensure_environment() { # 13
         log "Installing ml_catalog_main in editable mode"
         "$conda" run -n "$CONDA_ENV" python -m pip install --editable "$SBC_PATH"
     fi
+}
+
+# build_nonlinloc
+# ---------------
+# Verify or build NonLinLoc native binaries into $NLL_PATH/bin.
+build_nonlinloc() { # 25
+    local -r nll_bin="$NLL_PATH/bin"
+    if [[ -x "$nll_bin/NLLoc" ]] && file "$nll_bin/NLLoc" | grep -q "ELF"; then
+        log "Verified existing NonLinLoc installation: $nll_bin"
+        return 0
+    fi
+
+    log "Building NonLinLoc binaries into $NLL_PATH/bin"
+    local -r build_dir="$NLL_PATH/build"
+    if [[ -L "$nll_bin" ]]; then
+        rm -f -- "$nll_bin"
+    fi
+    mkdir -p -- "$nll_bin" "$build_dir"
+    local -x CC="icx"
+    local -x CFLAGS="-O3 -xICELAKE-SERVER -axSAPPHIRE-RAPIDS -flto -fp-model=fast=1 -qopt-zmm-usage=high -fno-math-errno -fno-trapping-math"
+    # icx 2024.1 accepts -fp-model=fast; normalize classic icc fast=1 for icx compatibility
+    CFLAGS="${CFLAGS//-fp-model=fast=1/-fp-model=fast}"
+    local -x MYBIN="$nll_bin"
+    cmake -B "$build_dir" -S "$NLL_PATH/src" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_COMPILER="$CC" \
+        -DCMAKE_C_FLAGS="$CFLAGS" \
+        -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=TRUE
+    cmake --build "$build_dir" -j "${SLURM_CPUS_PER_TASK:-4}"
 }
 
 # ---------------------------------------------------------------------------
@@ -267,7 +297,7 @@ link_directories() { # 19
 # run_smoke_test
 # --------------
 # Run the existing dummy pipeline test.
-run_smoke_test() { # 9
+run_smoke_test() { # 11
     log "Running the dummy pipeline smoke test"
     (
         cd "$WORK_PATH"
@@ -286,7 +316,7 @@ run_smoke_test() { # 9
 # main
 # ----
 # Validate configuration and perform initialization.
-main() { # 55
+main() { # 61
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -h|--help)
@@ -300,10 +330,15 @@ main() { # 55
     done
 
     local variable_name
-    local -a required_commands=(awk bash cp curl grep ln mkdir sbatch)
+    local -a required_commands=(
+        awk bash cmake cp curl file grep ln mkdir sbatch tar unzip
+    )
     local -a required_variables=(
         WORK_PATH OGS_PATH NLL_PATH DATASET_PATH CONDA_ROOT CONDA_ENV SBC_PATH
         CONDA_INSTALLER SBC_RUN_BIN
+    )
+    local -a required_directories=(
+        WORK_PATH OGS_PATH NLL_PATH DATASET_PATH
     )
     local -a extracted_directories=(
         utils/Leonardo
@@ -324,9 +359,9 @@ main() { # 55
     for variable_name in "${required_commands[@]}"; do
         require_command "$variable_name"
     done
-
-    require_directory WORK_PATH
-    require_directory OGS_PATH
+    for variable_name in "${required_directories[@]}"; do
+        require_directory "$variable_name"
+    done
 
     copy_directories copied_directories[@]
     extract_directories extracted_directories[@]
@@ -336,6 +371,7 @@ main() { # 55
     load_modules
     install_conda
     ensure_environment
+    build_nonlinloc
     run_smoke_test
 
     printf '\nInitialization complete!\nWork directory: %s\nNext step:\n    cd %s && make help\n\n' \

@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Utilities Module - Shared Helpers for Catalog Comparison Workflows
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module is the catch-all toolbox used by the rest of the ``ogs*`` package.
@@ -16,7 +16,7 @@ CONTENTS BY SECTION:
    - ``ColorFormatter``: ANSI-colored ``logging.Formatter`` with per-level
      symbol prefixes (``>>>``, ``/!\\``, ``[X]``, ``...``, ``!!!``).
    - ``setup_logger``: One-call configuration that wires the formatter onto
-     a per-name logger with verbose / silent toggles.
+     a per-name logger with verbose / quiet toggles.
 
 2. DISTANCE & SIMILARITY FUNCTIONS
    - Pick-level: ``dist_prob``, ``dist_phase``, ``diff_time``, ``dist_time``,
@@ -77,32 +77,38 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 # =============================================================================
 # STANDARD LIBRARY IMPORTS
 # =============================================================================
-import os                               # Operating system interface
-import sys                              # System-specific parameters
-import logging                          # Logging facility
 import argparse                         # Command-line argument parsing
+import logging                          # Logging facility
+import networkx as nx                   # Graph algorithms (bipartite matching)
+import numpy as np                      # Numerical computing
+import os                               # Operating system interface
+import pandas as pd                     # Data manipulation and analysis
+import sys                              # System-specific parameters
+from concurrent.futures import ThreadPoolExecutor  # Multi-threaded scanning
+# Date and time manipulation
+from datetime import date, datetime, time, timedelta as td
+from obspy import UTCDateTime           # Seismology-specific datetime
 from pathlib import Path                # Object-oriented filesystem paths
-from datetime import datetime, timedelta as td  # Date and time manipulation
 from typing import Any, Optional, Sequence, Tuple, cast  # Type hinting
 
-try:
-  from . import ogsconstants as OGS_C
-except ImportError:
-  import ogsconstants as OGS_C
+import ogsconstants as OGS_C
 
-# =============================================================================
-# THIRD-PARTY LIBRARY IMPORTS
-# =============================================================================
-import numpy as np                      # Numerical computing
-import pandas as pd                     # Data manipulation and analysis
-import networkx as nx                   # Graph algorithms (bipartite matching)
-from obspy import UTCDateTime           # Seismology-specific datetime
+# Project root and default data paths
+DATA_PATH = Path(__file__).parent.parent.parent
+DEFAULT_WAVE_PATH = Path(
+    os.environ.get("WORK_PATH", DATA_PATH), OGS_C.WAVEFORM_STR
+)
+DEFAULT_STATION_PATH = Path(
+    os.environ.get("WORK_PATH", DATA_PATH), OGS_C.STATION_STR
+)
+
 
 # =============================================================================
 # LOGGING
@@ -146,7 +152,7 @@ class ColorFormatter(logging.Formatter):
 def setup_logger(
     name: str,
     verbose: bool = False,
-    silent: bool = False,
+    quiet: bool = False,
 ) -> logging.Logger:
   """Create and configure a logger with colored, step-tracing output.
 
@@ -156,7 +162,7 @@ def setup_logger(
     Logger name (typically ``__name__`` or a class-qualified name).
   verbose : bool
     If True, set log level to DEBUG.
-  silent : bool
+  quiet : bool
     If True, set log level to WARNING (overrides *verbose*).
 
   Returns
@@ -173,7 +179,7 @@ def setup_logger(
     )
     handler.setFormatter(formatter)
     logger.addHandler(handler)
-  if silent:
+  if quiet:
     logger.setLevel(logging.WARNING)
   else:
     logger.setLevel(logging.DEBUG if verbose else logging.INFO)
@@ -474,9 +480,9 @@ def dist_pick(B: pd.Series, T: pd.Series,
       Weighted similarity score between 0 and 1.
   """
   return (
-      97. * dist_time(T, B, time_offset_sec) +    # Time dominates (97%)
-      2. * dist_phase(T, B) +                     # Phase type (2%)
-      1. * dist_prob(T, B)                        # Probability ratio (1%)
+      97. * dist_time(B, T, time_offset_sec) +    # Time dominates (97%)
+      2. * dist_phase(B, T) +                     # Phase type (2%)
+      1. * dist_prob(B, T)                        # Probability ratio (1%)
   ) / 100.
 
 
@@ -540,6 +546,24 @@ def is_julian(string: str) -> datetime:
     ValueError: If string doesn't match expected format.
   """
   return datetime.strptime(string, "%Y%j")
+
+
+def is_time(string: str) -> time:
+  """
+  Parse a time string in HHMMSS format.
+
+  Used as argparse type converter for time arguments.
+
+  Args:
+    string: Time string in HHMMSS format (e.g., "153045").
+
+  Returns:
+    datetime.time object representing the parsed time.
+
+  Raises:
+    ValueError: If string doesn't match expected format.
+  """
+  return datetime.strptime(string, OGS_C.TIME_FMT).time()
 
 
 def is_file_path(string: str) -> Path:
@@ -664,7 +688,7 @@ def labels_to_colormap(
   encoded = np.vectorize(label_to_idx.get, otypes=[int])(labels)
 
   # Create discrete colormap with exactly len(unique) colors
-  cmap = cast(Any, cm.get_cmap('tab20')).resampled(len(unique))
+  cmap = cast(Any, cm.get_cmap('nipy_spectral')).resampled(len(unique))
 
   # Create boundary norm for discrete color assignment
   # Boundaries at -0.5, 0.5, 1.5, ... ensure each integer maps to one color
@@ -779,19 +803,38 @@ def inventory(
 # =============================================================================
 
 
+def day_directory(target: Path, d_: date | datetime) -> Path:
+  """Return the YYYY/MM/DD directory path for a given date under target."""
+  return Path(target) / f"{d_.year:04d}" / f"{d_.month:02d}" / f"{d_.day:02d}"
+
+
+def _scan_day_dir(d_path: Path) -> list[list[Any]]:
+  records: list[list[Any]] = []
+  for wf in d_path.glob("*.mseed"):
+    if wf.name.startswith("."):
+      continue
+    parts = wf.stem.split(OGS_C.UNDERSCORE_STR + OGS_C.UNDERSCORE_STR)
+    if len(parts) >= 2:
+      file_date = UTCDateTime(parts[1]).date
+      records.append([*parts[0].split(OGS_C.PERIOD_STR), file_date, wf])
+  return records
+
+
 def waveforms(
     waveforms: Path,
     stations: Path,
     start: datetime,
     end: datetime,
     output: Path = Path("."),
-    vlines: list[tuple[datetime, str, str]] = []
+    vlines: list[tuple[datetime, str, str]] = [],
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
   """
   Scan directory for waveform files within a specified date range.
 
-  Recursively searches for MiniSEED files, organizes them by date and
-  station, and generates a data availability plot.
+  Discovers daily MiniSEED files across date-structured directories
+  in parallel using threads determined from the environment (CORES or
+  SLURM_CPUS_PER_TASK), organizes them by date and station, and
+  generates data availability and station distribution plots.
 
   Args:
     waveforms: Path to the waveforms directory to scan.
@@ -818,20 +861,35 @@ def waveforms(
   import ogsplotter as OGS_P
   from matplotlib import pyplot as plt
 
-  elements = []
-  # Scan all MiniSEED files recursively
-  for wf in waveforms.glob("**/*.mseed"):
-    if not wf.name.startswith("."):
-      # Parse filename: NET.STA.LOC.CHA__YYYYMMDDTHHMMSS__suffix.mseed
-      stid, dateinitid, _ = wf.stem.split(
-          OGS_C.UNDERSCORE_STR + OGS_C.UNDERSCORE_STR
-      )
+  logger = setup_logger(__name__)
 
-    # Parse date from filename
-    dateinitid = UTCDateTime(dateinitid).date
-    if dateinitid < start.date() or dateinitid > end.date():
-      continue  # Skip files outside date range
-    elements.append([*stid.split(OGS_C.PERIOD_STR), dateinitid, wf])
+  threads = OGS_C.DEFAULT_CORES_COUNT
+
+  start_day = start.date()
+  end_day = end.date()
+  days = [
+      start_day + td(days=offset)
+      for offset in range((end_day - start_day).days + 1)
+  ]
+
+  candidate_dirs: list[Path] = []
+  for d in days:
+    day_dir = day_directory(waveforms, d)
+    if day_dir.is_dir():
+      candidate_dirs.append(day_dir)
+    else:
+      logger.warning("Missing waveform day directory: %s", day_dir)
+
+  elements: list[list[Any]] = []
+  if threads > 1 and len(candidate_dirs) > 1:
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+      for result in executor.map(_scan_day_dir, candidate_dirs):
+        elements.extend(result)
+  else:
+    for d_path in candidate_dirs:
+      elements.extend(_scan_day_dir(d_path))
+
+  elements.sort(key=lambda row: (row[4], row[0], row[1], row[3]))
 
   WAVEFORMS = pd.DataFrame(
       elements,
@@ -840,7 +898,6 @@ def waveforms(
           OGS_C.CHANNEL_STR, OGS_C.DATE_STR, OGS_C.FILENAME_STR
       ]
   )
-  logger = setup_logger(__name__)
   WAVEFORMS.to_csv(output / "OGSWaveforms.csv", index=False)
   logger.info(f"Saved file to {output / 'OGSWaveforms.csv'}")
   INVENTORY = inventory(stations)
@@ -930,6 +987,490 @@ class SortDatesAction(argparse.Action):
 
 
 # =============================================================================
+# SHARED ARGUMENT HELPERS & CLI PARSERS
+# =============================================================================
+
+
+def positive_int(value: str) -> int:
+  """Validate that a CLI argument is a positive integer."""
+  try:
+    parsed_value = int(value)
+  except ValueError:
+    raise argparse.ArgumentTypeError(f"invalid positive int value: {value!r}")
+  if parsed_value <= 0:
+    raise argparse.ArgumentTypeError("must be a positive integer")
+  return parsed_value
+
+
+def add_date_range_arguments(
+    parser: argparse.ArgumentParser,
+    default_dates: Optional[list[datetime]] = None,
+) -> Any:
+  """
+  Add mutually exclusive Gregorian (-D/--dates) and
+  Julian (-J/--julian) arguments.
+  """
+  date_group = parser.add_mutually_exclusive_group(required=False)
+  date_group.add_argument(
+      '-D', "--dates", dest="dates", required=False, metavar=OGS_C.DATE_STD,
+      type=is_date, nargs=2, action=SortDatesAction,
+      default=default_dates if default_dates is not None else [
+          datetime.min, datetime.max - OGS_C.ONE_DAY
+      ],
+      help="Specify the beginning and ending (inclusive) Gregorian date (YYYYMMDD) range."
+  )
+  date_group.add_argument(
+      '-J', "--julian", dest="dates", required=False, metavar=OGS_C.DATE_JUL,
+      action=SortDatesAction, type=is_julian, nargs=2,
+      help="Specify the beginning and ending (inclusive) Julian date (YYYYJJJ) range."
+  )
+  return date_group
+
+
+def add_time_arguments(
+    parser: argparse.ArgumentParser,
+    *flags: str,
+    required: bool = False,
+    help: str = "Time in HHMMSS format",
+    default: Any = None,
+    metavar: Optional[str] = None,
+) -> Any:
+  """Add time argument (-t/--time or custom flags) to an argument parser or group."""
+  if not flags:
+    flags = ("-t", "--time")
+  kwargs: dict[str, Any] = {
+      "type": is_time,
+      "required": required,
+      "help": help,
+  }
+  if default is not None:
+    kwargs["default"] = default
+  if metavar is not None:
+    kwargs["metavar"] = metavar
+  return parser.add_argument(*flags, **kwargs)
+
+
+def add_file_arguments(
+    parser: Any,
+    *flags: str,
+    required: bool = True,
+    nargs: Any = OGS_C.ONE_MORECHAR_STR,
+    help: str = "Path to the input file",
+    default: Any = None,
+    metavar: Optional[str] = None,
+) -> Any:
+  """Add file input (-f/--file or custom flags) argument to an argument parser or group."""
+  if not flags:
+    flags = ("-f", "--file")
+  kwargs: dict[str, Any] = {
+      "type": is_file_path,
+      "required": required,
+      "help": help,
+  }
+  if nargs is not None:
+    kwargs["nargs"] = nargs
+  if default is not None:
+    kwargs["default"] = default
+  if metavar is not None:
+    kwargs["metavar"] = metavar
+  return parser.add_argument(*flags, **kwargs)
+
+
+def add_directory_arguments(
+    parser: Any,
+    *flags: str,
+    required: bool = False,
+    default: Any = None,
+    help: str = "Directory path",
+    metavar: Optional[str] = None,
+) -> Any:
+  """Add directory argument (-d/--directory or custom flags) to an argument parser or group."""
+  if not flags:
+    flags = ('-d', "--directory")
+  kwargs: dict[str, Any] = {
+      "type": is_dir_path,
+      "required": required,
+      "help": help,
+  }
+  if default is not None:
+    kwargs["default"] = default
+  if metavar is not None:
+    kwargs["metavar"] = metavar
+  return parser.add_argument(*flags, **kwargs)
+
+
+def add_output_arguments(
+    parser: argparse.ArgumentParser,
+    *flags: str,
+    required: bool = False,
+    default: Any = None,
+    help: str = "Path or name for output",
+    metavar: Optional[str] = None,
+) -> Any:
+  """Add output argument (-o/--output or custom flags) to an argument parser or group."""
+  if not flags:
+    flags = ("-o", "--output")
+  kwargs: dict[str, Any] = {
+      "type": Path,
+      "required": required,
+      "help": help,
+  }
+  if default is not None:
+    kwargs["default"] = default
+  if metavar is not None:
+    kwargs["metavar"] = metavar
+  return parser.add_argument(*flags, **kwargs)
+
+
+def add_stations_arguments(
+    parser: argparse.ArgumentParser,
+    required: bool = True,
+    default: Any = DEFAULT_STATION_PATH,
+    help: str = "Station metadata directory",
+    metavar: Optional[str] = None,
+) -> Any:
+  """Add stations (-S/--stations) argument to an argument parser."""
+  return add_directory_arguments(
+      parser,
+      "-S", "--stations",
+      required=required,
+      default=default,
+      help=help,
+      metavar=metavar,
+  )
+
+
+def add_waveforms_arguments(
+    parser: argparse.ArgumentParser,
+    required: bool = True,
+    default: Any = DEFAULT_WAVE_PATH,
+    help: str = "Path to the waveforms directory",
+    metavar: Optional[str] = None,
+) -> Any:
+  """Add waveforms (-W/--waveforms) argument to an argument parser."""
+  return add_directory_arguments(
+      parser,
+      "-W", "--waveforms",
+      required=required,
+      default=default,
+      help=help,
+      metavar=metavar,
+  )
+
+
+def add_threads_arguments(
+    parser: argparse.ArgumentParser,
+    default: int = OGS_C.DEFAULT_CORES_COUNT,
+    help: str = "Number of worker threads (default: from SLURM or CPU count)",
+    metavar: Optional[str] = None,
+) -> Any:
+  """Add threads (-t/--threads) argument to an argument parser."""
+  kwargs: dict[str, Any] = {
+      "type": positive_int,
+      "default": default,
+      "help": help,
+  }
+  if metavar is not None:
+    kwargs["metavar"] = metavar
+  return parser.add_argument("-t", "--threads", **kwargs)
+
+
+def add_file_or_dir_arguments(
+    parser: argparse.ArgumentParser,
+    required: bool = True,
+    default_dir: Optional[Path] = None,
+) -> Any:
+  """Add mutually exclusive input directory (-d/--directory) and file (-f/--file) arguments."""
+  path_group = parser.add_mutually_exclusive_group(required=required)
+  add_directory_arguments(
+      path_group,
+      required=False,
+      default=default_dir,
+      help="Base directory for data files.",
+  )
+  add_file_arguments(
+      path_group,
+      required=False,
+      default=None,
+      metavar=OGS_C.EMPTY_STR,
+      help="Path(s) to input data file(s)."
+  )
+  return path_group
+
+
+def add_verbosity_arguments(parser: argparse.ArgumentParser) -> Any:
+  """Add verbosity (-v/--verbose) and quiet (-q/--quiet) arguments."""
+  group = parser.add_mutually_exclusive_group(required=False)
+  group.add_argument(
+      '-v', "--verbose", action='store_true', default=False,
+      help="Enable verbose output"
+  )
+  group.add_argument(
+      "-q", "--quiet", action='store_true', default=False,
+      help="Run without standard logging outputs"
+  )
+  return group
+
+
+def parse_station_args(
+    args: Optional[Sequence[str]] = None
+) -> argparse.Namespace:
+  """Parse command-line arguments for station inventory extraction."""
+  parser = argparse.ArgumentParser(
+      description="Discover and summarize per-station waveform inventory."
+  )
+  parser.add_argument(
+      "src_root", type=str, help="Source root path prepended to sys.path"
+  )
+  add_date_range_arguments(
+      parser,
+      default_dates=[
+          datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT),
+          datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT)
+      ],
+  )
+  add_output_arguments(
+      parser,
+      default=Path("."),
+      help="Output directory (default: current directory)"
+  )
+  add_stations_arguments(parser, required=False)
+  add_waveforms_arguments(parser, required=False)
+  return parser.parse_args(args)
+
+
+def parse_downloader_args(
+    args: Optional[Sequence[str]] = None
+) -> argparse.Namespace:
+  """Parse command-line arguments for waveform downloading."""
+  parser = argparse.ArgumentParser(
+      description="Download waveform data from configured FDSN clients"
+  )
+  add_file_arguments(
+      parser, '-K', "--key", default=None, required=False, nargs=None,
+      metavar=OGS_C.EMPTY_STR, help="Key to download the data from server."
+  )
+  parser.add_argument(
+      "--network", default=[OGS_C.ALL_WILDCHAR_STR], type=str,
+      nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR, required=False,
+      help=f"""
+          Specify a set of Networks to analyze and negate using a '-' prefix.
+          (default: '{OGS_C.ALL_WILDCHAR_STR}').
+          Example 0: --network "*" (all networks)\n
+          Example 1: --network "OX NI" (exclusively these networks)\n
+          Example 2: --network "-OX -NI" (negate these networks)
+      """
+  )
+  parser.add_argument(
+      "--station", default=[OGS_C.ALL_WILDCHAR_STR], type=str,
+      nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR, required=False,
+      help=f"""
+          Specify a set of Stations to analyze and negate using a '-' prefix.
+          (default: '{OGS_C.ALL_WILDCHAR_STR}').
+          Example 0: --station "*"\n
+          Example 1: --station "APF VNZE"\n
+          Example 2: --station "-ED -OL -SP -VNZE"
+      """
+  )
+  parser.add_argument(
+      "--client", metavar=OGS_C.EMPTY_STR, default=OGS_C.OGS_CLIENTS_DEFAULT,
+      required=False, type=str, nargs=OGS_C.ONE_MORECHAR_STR,
+      help="Client to download the data"
+  )
+  parser.add_argument(
+      "--force", default=False, action='store_true', required=False,
+      help="Force running all the pipeline"
+  )
+  parser.add_argument(
+      "--pyrocko", default=False, action='store_true',
+      help="Enable PyRocko calls"
+  )
+  parser.add_argument(
+      "--timing", default=False, action='store_true', required=False,
+      help="Enable timing"
+  )
+  parser.add_argument(
+      "--timeout", default=OGS_C.OGS_TIMEOUT, type=float, required=False,
+      help=f"Timeout for downloading data (default: {OGS_C.OGS_TIMEOUT} sec)"
+  )
+  parser.add_argument(
+      "--retry", default=OGS_C.OGS_RETRY, type=positive_int, required=False,
+      help=f"Number of retries for downloading data (default: {OGS_C.OGS_RETRY})"
+  )
+  domain_group = parser.add_mutually_exclusive_group(required=False)
+  domain_group.add_argument(
+      "--rectdomain", type=float, nargs=4, default=OGS_C.OGS_STUDY_REGION,
+      metavar=("lonW", "lonE", "latS", "latN"),
+      help="Rectangular domain to download data: [lonW lonE latS latN]"
+  )
+  domain_group.add_argument(
+      "--circdomain", nargs=4, type=float,
+      metavar=("lon", "lat", "min_r", "max_r"),
+      help="Circular domain to download data: [center lon, center lat, min r, max r]"
+  )
+  add_threads_arguments(
+      parser,
+      metavar=OGS_C.EMPTY_STR,
+      help="Number of threads to use for downloading"
+  )
+  add_time_arguments(
+      parser,
+      "-c", "--clip",
+      required=False,
+      help="Specify the time of the center time"
+  )
+  add_date_range_arguments(
+      parser,
+      default_dates=[
+          datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT),
+          datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT)
+      ],
+  )
+  add_stations_arguments(parser, required=False)
+  add_waveforms_arguments(parser, required=False)
+  add_verbosity_arguments(parser)
+  return parser.parse_args(args)
+
+
+def parse_catalog_args(
+    args: Optional[Sequence[str]] = None
+) -> argparse.Namespace:
+  """Parse command-line arguments for catalog aggregation."""
+  data_path = Path(__file__).parent.parent.parent
+  parser = argparse.ArgumentParser(description="Parse OGS Manual Catalogs")
+  parser.add_argument(
+      "-m", "--merge", action='store_true', default=False,
+      help="Merge all data files into a single catalog"
+  )
+  parser.add_argument(
+      "-x", "--ext", default=OGS_C.ALL_WILDCHAR_STR, type=str,
+      nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR,
+      help="File extension to process"
+  )
+  add_date_range_arguments(
+      parser,
+      default_dates=[datetime.min, datetime.max - OGS_C.ONE_DAY],
+  )
+  add_file_or_dir_arguments(parser, required=True)
+  add_output_arguments(
+      parser,
+      default=Path(data_path, "catalog", "OGSCatalog"),
+      help="Name of the catalog"
+  )
+  add_verbosity_arguments(parser)
+  return parser.parse_args(args)
+
+
+def parse_trainer_args(
+    args: Optional[Sequence[str]] = None
+) -> argparse.Namespace:
+  """Parse command-line arguments for model training."""
+  parser = argparse.ArgumentParser(description="Train OGS models")
+  add_directory_arguments(
+      parser, "-C", "--catalog", required=True,
+      help="Path to the catalog directory"
+  )
+  parser.add_argument(
+      "-m", "--model", type=str, default=OGS_C.PHASENET_STR,
+      choices=["PhaseNet", "EQTransformer"],
+      help="SeisBench model class name (default: PhaseNet)"
+  )
+  parser.add_argument(
+      "-s", "--dataset", type=str, default=OGS_C.INSTANCE_STR,
+      choices=[
+          OGS_C.INSTANCE_STR, OGS_C.STEAD_STR, OGS_C.SCEDC_STR,
+          OGS_C.ORIGINAL_STR, OGS_C.ADRIAARRAY_STR
+      ],
+      help="Pretrained weights name to fine-tune from (default: instance)"
+  )
+  parser.add_argument(
+      "-b", "--batch_size", type=positive_int, default=256,
+      help="Batch size for training"
+  )
+  parser.add_argument(
+      "-d", "--download", action="store_true", help="Enable download mode"
+  )
+  parser.add_argument(
+      "-e", "--epochs", type=positive_int, default=5,
+      help="Number of training epochs"
+  )
+  parser.add_argument(
+      "-lr", "--learning_rate", type=float, default=1e-2,
+      help="Learning rate for training"
+  )
+  add_threads_arguments(
+      parser, default=4, help="Number of data loader workers"
+  )
+  add_date_range_arguments(
+      parser,
+      default_dates=[
+          datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT),
+          datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT)
+      ],
+  )
+  add_output_arguments(
+      parser,
+      default=Path("./checkpoints"),
+      help="Output directory for model checkpoints"
+  )
+  add_verbosity_arguments(parser)
+  add_waveforms_arguments(parser)
+  return parser.parse_args(args)
+
+
+def parse_sequence_args(
+    args: Optional[Sequence[str]] = None
+) -> argparse.Namespace:
+  """Parse command-line arguments for sequence clustering."""
+  parser = argparse.ArgumentParser(
+      description="OGS Sequence Clustering Tool"
+  )
+  add_file_arguments(
+      parser, "-i", "--input", required=True, nargs=None,
+      help="Input file containing seismic event data"
+  )
+  add_verbosity_arguments(parser)
+  return parser.parse_args(args)
+
+
+def _parse_bulletin_args(
+    format_name: str,
+    args: Optional[Sequence[str]] = None,
+) -> argparse.Namespace:
+  """Shared argument parser for legacy bulletin quality check scripts."""
+  parser = argparse.ArgumentParser(
+      description=f"Run OGS {format_name} quality checks"
+  )
+  add_file_arguments(parser)
+  add_date_range_arguments(
+      parser,
+      default_dates=[datetime.min, datetime.max - OGS_C.ONE_DAY],
+  )
+  add_verbosity_arguments(parser)
+  return parser.parse_args(args)
+
+
+def parse_hpl_args(args: Optional[Sequence[str]] = None) -> argparse.Namespace:
+  """Parse command-line arguments for the HPL file processor."""
+  return _parse_bulletin_args("HPL", args)
+
+
+def parse_dat_args(args: Optional[Sequence[str]] = None) -> argparse.Namespace:
+  """Parse command-line arguments for the DAT file processor."""
+  return _parse_bulletin_args("DAT", args)
+
+
+def parse_pun_args(args: Optional[Sequence[str]] = None) -> argparse.Namespace:
+  """Parse command-line arguments for the PUN file processor."""
+  return _parse_bulletin_args("PUN", args)
+
+
+def parse_txt_args(args: Optional[Sequence[str]] = None) -> argparse.Namespace:
+  """Parse command-line arguments for the TXT file processor."""
+  return _parse_bulletin_args("TXT", args)
+
+
+# =============================================================================
 # BIPARTITE GRAPH MATCHING CLASSES
 # =============================================================================
 # Classes for optimal assignment between ground truth and predicted data
@@ -977,7 +1518,7 @@ class OGSBPGraph():
     self.E: set[tuple[int, int]] = set()
 
     self.logger = setup_logger(f"{__name__}.{self.__class__.__name__}",
-                               verbose=verbose, silent=False)
+                               verbose=verbose, quiet=False)
 
     # Build graph and compute matching if both datasets are non-empty
     if not self.Base.empty and not self.Target.empty:

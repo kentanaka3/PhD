@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
+# =============================================================================
 # Markdown Navigator
-# ==================
+# =============================================================================
 #
 # Navigate Markdown documents by listing headers or extracting sections and
 # explicit line ranges. The script treats fenced code blocks as content, not
@@ -39,6 +40,11 @@
 # run_slice                  | Print an inclusive source line range.
 # run_navigation_command     | Parse commands, validate configuration, and dispatch.
 # main                       | Delegate command handling to the common navigator.
+#
+# AUTHORS:
+#   - 健
+#
+# =============================================================================
 
 set -euo pipefail
 umask 077

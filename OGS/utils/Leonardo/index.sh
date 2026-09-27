@@ -7,8 +7,7 @@
 #SBATCH --account=OGS23_PRACE_IT_1
 # #SBATCH --account=IscrC_AI2Seism
 #SBATCH --time 1-00:00:00
-# #SBATCH --time 00:30:00
-#SBATCH --mem=30800MB
+#SBATCH --mem=490000MB
 #SBATCH --partition=dcgp_usr_prod
 # #SBATCH --qos=dcgp_qos_dbg
 # #SBATCH --qos=dcgp_qos_bprod

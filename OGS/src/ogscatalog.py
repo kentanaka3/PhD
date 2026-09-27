@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Catalog Module - Lazy-loading Seismic Event/Pick Catalog + BGMA Review
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module implements ``OGSCatalog``, a single-class container that lazily
@@ -121,7 +121,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 from __future__ import annotations
@@ -129,10 +130,11 @@ from __future__ import annotations
 # =============================================================================
 # STANDARD LIBRARY IMPORTS
 # =============================================================================
-from collections import Counter
 from pathlib import Path
 from datetime import datetime, timedelta as td
-from typing import Any, Dict, Hashable, Iterator, Literal, Optional, Sequence, cast
+from typing import (
+    Any, Dict, Hashable, Iterator, Literal, Optional, Sequence, cast
+)
 
 # =============================================================================
 # THIRD-PARTY LIBRARY IMPORTS
@@ -145,14 +147,8 @@ from matplotlib.path import Path as mplPath     # Polygon containment tests
 # =============================================================================
 # LOCAL PACKAGE IMPORTS
 # =============================================================================
-# Support both package import (``from .ogscatalog import ...``) and direct
-# script execution (``python ogscatalog.py``) by falling back to flat imports.
-try:
-  from . import ogsconstants as OGS_C
-  from . import ogsutils as OGS_U
-except ImportError:
-  import ogsconstants as OGS_C
-  import ogsutils as OGS_U
+import ogsconstants as OGS_C
+import ogsutils as OGS_U
 
 # =============================================================================
 # MODULE-LEVEL CONSTANTS — frame layouts and BGMA review schemas
@@ -341,8 +337,9 @@ class OGSCatalog:
     self.start = start
     self.end = end
     self.polygon: Optional[mplPath] = polygon
-    self.logger = OGS_U.setup_logger(f"{__name__}.{self.__class__.__name__}",
-                                     verbose)
+    self.logger = OGS_U.setup_logger(
+        f"{__name__}.{self.__class__.__name__}", verbose
+    )
     self.output = output
     self.output.mkdir(parents=True, exist_ok=True)
     (self.output / "img").mkdir(parents=True, exist_ok=True)
@@ -392,9 +389,11 @@ class OGSCatalog:
           continue
         self._preload_index[subdir].append((date, filepath))
 
-    for subdir, target in (("events", self.events_),
-                           ("assignments", self.picks_),
-                           ("picks", self.picks_)):
+    for subdir, target in (
+        ("events", self.events_),
+        ("assignments", self.picks_),
+        ("picks", self.picks_)
+    ):
       for date, filepath in self._preload_index[subdir]:
         if start_d <= date <= end_d:
           target[date] = filepath
@@ -1309,7 +1308,7 @@ class OGSCatalog:
     self._plot_histogram(
         OGS_C.ERH_STR, "ERH (km)", "ERH Histogram", "ERH",
         targets=targets, bins=bins, output=output, color=OGS_C.OGS_BLUE,
-        xlim=(0, 20), yscale='log'
+        xlim=(0, 40), yscale='log'
     )
 
   def plot_ert_histogram(self, targets=[], bins=OGS_C.NUM_BINS, output=None):
@@ -1336,8 +1335,9 @@ class OGSCatalog:
         targets=targets, bins=bins, output=output, xlim=(0, 50)
     )
 
-  def plot_magnitude_histogram(self, targets=[], bins=OGS_C.NUM_BINS,
-                               output=None):
+  def plot_magnitude_histogram(
+      self, targets=[], bins=OGS_C.NUM_BINS, output=None
+  ):
     """Public wrapper around :meth:`_plot_histogram` for event magnitudes.
 
     ``targets`` are overlaid as comparison histograms, ``bins`` is forwarded

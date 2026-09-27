@@ -42,6 +42,11 @@ AUTHORS:
 =============================================================================
 """
 
+import ogsclustering as OGSCL
+from sklearn.datasets import make_blobs
+from matplotlib.figure import Figure
+from matplotlib.axes import Axes
+import matplotlib.pyplot as plt
 import os
 import sys
 import unittest
@@ -55,15 +60,7 @@ from scipy.special import gammaln
 
 import matplotlib
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
-from sklearn.datasets import make_blobs
 
-THIS_DIR = os.path.dirname(__file__)
-sys.path.append(os.path.abspath(THIS_DIR + "/../src"))
-
-import ogsclustering as OGSCL
 
 # Silence warnings during tests
 warnings.filterwarnings('ignore', category=RuntimeWarning)
@@ -81,7 +78,7 @@ HAS_SILHOUETTE = hasattr(OGSCL, 'SilhouetteScore')
 def _make_3blob_data():
   """Helper: 600-point 3-blob dataset with well-separated clusters."""
   return make_blobs(
-    n_samples=600, centers=3, n_features=2, cluster_std=0.6, random_state=42,
+      n_samples=600, centers=3, n_features=2, cluster_std=0.6, random_state=42,
   )
 
 
@@ -90,27 +87,27 @@ def _make_3blob_data():
 # =============================================================================
 
 MANIFOLD_GENERATORS = {
-  'M1':    (OGSCL.ManifoldBenchmark.gen_M1,    10),
-  'M2':    (OGSCL.ManifoldBenchmark.gen_M2,     3),
-  'M3':    (OGSCL.ManifoldBenchmark.gen_M3,     4),
-  'M4':    (OGSCL.ManifoldBenchmark.gen_M4,     4),
-  'M5':    (OGSCL.ManifoldBenchmark.gen_M5,     2),
-  'M6':    (OGSCL.ManifoldBenchmark.gen_M6,     6),
-  'M7':    (OGSCL.ManifoldBenchmark.gen_M7,     2),
-  'M9':    (OGSCL.ManifoldBenchmark.gen_M9,    20),
-  'M10a':  (OGSCL.ManifoldBenchmark.gen_M10a,  10),
-  'M10b':  (OGSCL.ManifoldBenchmark.gen_M10b,  17),
-  'M10c':  (OGSCL.ManifoldBenchmark.gen_M10c,  24),
-  'M10d':  (OGSCL.ManifoldBenchmark.gen_M10d,  70),
-  'M11':   (OGSCL.ManifoldBenchmark.gen_M11,    2),
-  'M12':   (OGSCL.ManifoldBenchmark.gen_M12,   20),
-  'M13':   (OGSCL.ManifoldBenchmark.gen_M13,    1),
-  'MN1':   (OGSCL.ManifoldBenchmark.gen_MN1,   18),
-  'MN2':   (OGSCL.ManifoldBenchmark.gen_MN2,   24),
-  'Mbeta': (OGSCL.ManifoldBenchmark.gen_Mbeta,  10),
-  'MP3':   (OGSCL.ManifoldBenchmark.gen_MP3,    3),
-  'MP6':   (OGSCL.ManifoldBenchmark.gen_MP6,    6),
-  'MP9':   (OGSCL.ManifoldBenchmark.gen_MP9,    9),
+    'M1':    (OGSCL.ManifoldBenchmark.gen_M1,    10),
+    'M2':    (OGSCL.ManifoldBenchmark.gen_M2,     3),
+    'M3':    (OGSCL.ManifoldBenchmark.gen_M3,     4),
+    'M4':    (OGSCL.ManifoldBenchmark.gen_M4,     4),
+    'M5':    (OGSCL.ManifoldBenchmark.gen_M5,     2),
+    'M6':    (OGSCL.ManifoldBenchmark.gen_M6,     6),
+    'M7':    (OGSCL.ManifoldBenchmark.gen_M7,     2),
+    'M9':    (OGSCL.ManifoldBenchmark.gen_M9,    20),
+    'M10a':  (OGSCL.ManifoldBenchmark.gen_M10a,  10),
+    'M10b':  (OGSCL.ManifoldBenchmark.gen_M10b,  17),
+    'M10c':  (OGSCL.ManifoldBenchmark.gen_M10c,  24),
+    'M10d':  (OGSCL.ManifoldBenchmark.gen_M10d,  70),
+    'M11':   (OGSCL.ManifoldBenchmark.gen_M11,    2),
+    'M12':   (OGSCL.ManifoldBenchmark.gen_M12,   20),
+    'M13':   (OGSCL.ManifoldBenchmark.gen_M13,    1),
+    'MN1':   (OGSCL.ManifoldBenchmark.gen_MN1,   18),
+    'MN2':   (OGSCL.ManifoldBenchmark.gen_MN2,   24),
+    'Mbeta': (OGSCL.ManifoldBenchmark.gen_Mbeta, 10),
+    'MP3':   (OGSCL.ManifoldBenchmark.gen_MP3,    3),
+    'MP6':   (OGSCL.ManifoldBenchmark.gen_MP6,    6),
+    'MP9':   (OGSCL.ManifoldBenchmark.gen_MP9,    9),
 }
 
 
@@ -119,9 +116,10 @@ MANIFOLD_GENERATORS = {
 # =============================================================================
 
 
-def make_well_separated(gen_func, N_per_cluster: int = 500,
-                        n_clusters: int = 2, separation: float = 20.0,
-                        seed: int = 42):
+def make_well_separated(
+    gen_func, N_per_cluster: int = 500, n_clusters: int = 2,
+    separation: float = 20.0, seed: int = 42
+):
   """
   Create well-separated clusters by generating n_clusters copies of a
   manifold, each translated by `separation` along orthogonal axes.
@@ -148,14 +146,16 @@ def make_well_separated(gen_func, N_per_cluster: int = 500,
   return X, labels, d_true
 
 
-def make_overlapping(gen_func, N_per_cluster: int = 500,
-                     n_clusters: int = 2, separation: float = 0.01,
-                     seed: int = 42):
+def make_overlapping(
+    gen_func, N_per_cluster: int = 500, n_clusters: int = 2,
+    separation: float = 0.01, seed: int = 42
+):
   """
   Create heavily overlapping clusters (nearly coincident manifold copies).
   """
-  return make_well_separated(gen_func, N_per_cluster, n_clusters,
-                             separation=separation, seed=seed)
+  return make_well_separated(
+      gen_func, N_per_cluster, n_clusters, separation=separation, seed=seed
+  )
 
 
 # =============================================================================
@@ -187,8 +187,8 @@ def _download_data(url, filename):
 def _load_dihedrals():
   """Load and select 15 dihedral angles from CLN025 trajectory."""
   path = _download_data(
-    DATA_URL_DIHEDRALS,
-    'cln025traj_dihedrals_decimated_equilibrated.npy',
+      DATA_URL_DIHEDRALS,
+      'cln025traj_dihedrals_decimated_equilibrated.npy',
   )
   all_dihedrals = np.load(path)
   coords = [1, 4, 5, 7, 10, 12, 13, 14, 15, 16, 17, 18, 19, 24, 25]
@@ -199,8 +199,8 @@ def _load_dihedrals():
 def _load_distances():
   """Load heavy atom distances from CLN025 trajectory."""
   path = _download_data(
-    DATA_URL_DISTANCES,
-    'cln025traj_distances_decimated_equilibrated.npy',
+      DATA_URL_DISTANCES,
+      'cln025traj_distances_decimated_equilibrated.npy',
   )
   return np.load(path)
 
@@ -221,8 +221,7 @@ def _generate_synthetic_data():
   # Three well-separated clusters in 15-D
   centers_dih = rng.randn(3, d_dih) * 6
   blobs_dih = np.vstack([
-    rng.randn(N_per, d_dih) * 0.8 + centers_dih[i]
-    for i in range(3)
+      rng.randn(N_per, d_dih) * 0.8 + centers_dih[i] for i in range(3)
   ])
 
   # Map to 30-D via a random linear projection + cluster shift
@@ -321,9 +320,9 @@ class TestOGSClusteringModels(unittest.TestCase):
 
   def test_zoo_create_dbscan_params(self):
     metadata = {
-      "algorithms": ["DBSCAN"],
-      "eps": 0.3,
-      "min_samples": 4
+        "algorithms": ["DBSCAN"],
+        "eps": 0.3,
+        "min_samples": 4
     }
     zoo: OGSCL.OGSClusteringZoo = OGSCL.OGSClusteringZoo(metadata=metadata)
     clusterer = zoo.create("DBSCAN")
@@ -350,10 +349,10 @@ class TestOGSClusteringModels(unittest.TestCase):
     X, _ = make_blobs(n_samples=80, centers=3, n_features=2,
                       random_state=2)
     metadata = {
-      "algorithms": ["KMeans"],
-      "eval_metrics": ["SilhouetteScore"],
-      "num_clusters_range": (2, 5, 1),
-      "random_state": 0
+        "algorithms": ["KMeans"],
+        "eval_metrics": ["SilhouetteScore"],
+        "num_clusters_range": (2, 5, 1),
+        "random_state": 0
     }
     zoo: OGSCL.OGSClusteringZoo = OGSCL.OGSClusteringZoo(metadata=metadata)
     params = zoo._optimize_for_metric("KMeans", X, "SilhouetteScore")
@@ -783,9 +782,9 @@ class TestOGSAdvancedDensityPeaksPP(unittest.TestCase):
     labels_adp = adp.fit_predict(X)
     labels_adppp = adppp.fit_predict(X)
     self.assertTrue(
-      np.array_equal(labels_adp, labels_adppp),
-      f"ADP and ADP++ labels differ (PAk). "
-      f"ADP clusters: {adp.n_clusters_}, ADP++ clusters: {adppp.n_clusters_}"
+        np.array_equal(labels_adp, labels_adppp),
+        f"ADP and ADP++ labels differ (PAk). "
+        f"ADP clusters: {adp.n_clusters_}, ADP++ clusters: {adppp.n_clusters_}"
     )
 
   def test_equivalence_knn(self):
@@ -796,9 +795,9 @@ class TestOGSAdvancedDensityPeaksPP(unittest.TestCase):
     labels_adp = adp.fit_predict(X)
     labels_adppp = adppp.fit_predict(X)
     self.assertTrue(
-      np.array_equal(labels_adp, labels_adppp),
-      f"ADP and ADP++ labels differ (kNN). "
-      f"ADP clusters: {adp.n_clusters_}, ADP++ clusters: {adppp.n_clusters_}"
+        np.array_equal(labels_adp, labels_adppp),
+        f"ADP and ADP++ labels differ (kNN). "
+        f"ADP clusters: {adp.n_clusters_}, ADP++ clusters: {adppp.n_clusters_}"
     )
 
   def test_equivalence_kstarnn(self):
@@ -809,9 +808,9 @@ class TestOGSAdvancedDensityPeaksPP(unittest.TestCase):
     labels_adp = adp.fit_predict(X)
     labels_adppp = adppp.fit_predict(X)
     self.assertTrue(
-      np.array_equal(labels_adp, labels_adppp),
-      f"ADP and ADP++ labels differ (kstarNN). "
-      f"ADP clusters: {adp.n_clusters_}, ADP++ clusters: {adppp.n_clusters_}"
+        np.array_equal(labels_adp, labels_adppp),
+        f"ADP and ADP++ labels differ (kstarNN). "
+        f"ADP clusters: {adp.n_clusters_}, ADP++ clusters: {adppp.n_clusters_}"
     )
 
 
@@ -856,19 +855,24 @@ class TestManifoldBenchmark(unittest.TestCase):
     """Each generator in REGISTRY should run with N=100 and return (X, d)."""
     for name, gen_func, d_true, D, desc in OGSCL.ManifoldBenchmark.REGISTRY:
       X, d = gen_func(N=100, seed=42)
-      self.assertEqual(X.shape[0], 100,
-        f"{name}: expected 100 rows, got {X.shape[0]}")
-      self.assertEqual(X.shape[1], D,
-        f"{name}: expected D={D} columns, got {X.shape[1]}")
-      self.assertEqual(d, d_true,
-        f"{name}: expected d={d_true}, got {d}")
-      self.assertTrue(np.all(np.isfinite(X)),
-        f"{name}: X contains non-finite values")
+      self.assertEqual(
+          X.shape[0], 100, f"{name}: expected 100 rows, got {X.shape[0]}"
+      )
+      self.assertEqual(
+          X.shape[1], D, f"{name}: expected D={D} columns, got {X.shape[1]}"
+      )
+      self.assertEqual(
+          d, d_true, f"{name}: expected d={d_true}, got {d}"
+      )
+      self.assertTrue(
+          np.all(np.isfinite(X)), f"{name}: X contains non-finite values"
+      )
 
   def test_make_two_cluster(self):
     """make_two_cluster should produce correct shapes and labels."""
     X, labels, d = OGSCL.ManifoldBenchmark.make_two_cluster(
-      OGSCL.ManifoldBenchmark.gen_M5, N_per=50)
+        OGSCL.ManifoldBenchmark.gen_M5, N_per=50
+    )
     self.assertEqual(X.shape[0], 100)  # 2 * 50
     self.assertEqual(labels.shape[0], 100)
     self.assertEqual(d, 2)  # M5 has d=2
@@ -1011,9 +1015,9 @@ class TestPAkScoreOrdering(unittest.TestCase):
     rng = np.random.RandomState(42)
     # Well-separated 3D Gaussians
     cls.X_sep = np.vstack([
-      rng.randn(300, 3) * 0.5 + np.array([0, 0, 0]),
-      rng.randn(300, 3) * 0.5 + np.array([8, 8, 8]),
-      rng.randn(300, 3) * 0.5 + np.array([-8, 8, 0]),
+        rng.randn(300, 3) * 0.5 + np.array([0, 0, 0]),
+        rng.randn(300, 3) * 0.5 + np.array([8, 8, 8]),
+        rng.randn(300, 3) * 0.5 + np.array([-8, 8, 0]),
     ])
     cls.labels_sep = np.array([0] * 300 + [1] * 300 + [2] * 300)
 
@@ -1022,9 +1026,9 @@ class TestPAkScoreOrdering(unittest.TestCase):
 
     # Overlapping 3D Gaussians (same centers, large sigma)
     cls.X_overlap = np.vstack([
-      rng.randn(300, 3) * 5.0 + np.array([0, 0, 0]),
-      rng.randn(300, 3) * 5.0 + np.array([1, 1, 1]),
-      rng.randn(300, 3) * 5.0 + np.array([2, 2, 2]),
+        rng.randn(300, 3) * 5.0 + np.array([0, 0, 0]),
+        rng.randn(300, 3) * 5.0 + np.array([1, 1, 1]),
+        rng.randn(300, 3) * 5.0 + np.array([2, 2, 2]),
     ])
     cls.labels_overlap = np.array([0] * 300 + [1] * 300 + [2] * 300)
 
@@ -1035,26 +1039,33 @@ class TestPAkScoreOrdering(unittest.TestCase):
     score_rnd = s_rnd.compute()
     self.assertIsNotNone(score_sep)
     self.assertIsNotNone(score_rnd)
-    self.assertGreater(score_sep, score_rnd,
-      f"Separated ({score_sep:.2f}) should beat random ({score_rnd:.2f})")
+    self.assertGreater(
+        score_sep, score_rnd,
+        f"Separated ({score_sep:.2f}) should beat random ({score_rnd:.2f})"
+    )
 
   def test_separated_higher_than_overlap(self):
     s_sep = OGSCL.PAkDensitySeparationScore(self.X_sep, self.labels_sep)
-    s_ovl = OGSCL.PAkDensitySeparationScore(self.X_overlap, self.labels_overlap)
+    s_ovl = OGSCL.PAkDensitySeparationScore(
+        self.X_overlap, self.labels_overlap
+    )
     score_sep = s_sep.compute()
     score_ovl = s_ovl.compute()
     self.assertIsNotNone(score_sep)
     self.assertIsNotNone(score_ovl)
-    self.assertGreater(score_sep, score_ovl,
-      f"Separated ({score_sep:.2f}) should beat overlap ({score_ovl:.2f})")
+    self.assertGreater(
+        score_sep, score_ovl,
+        f"Separated ({score_sep:.2f}) should beat overlap ({score_ovl:.2f})"
+    )
 
   def test_well_separated_above_threshold(self):
     """Well-separated Gaussians should produce Z > 1.65 (90% confidence)."""
     s = OGSCL.PAkDensitySeparationScore(self.X_sep, self.labels_sep)
     score = s.compute()
     self.assertIsNotNone(score)
-    self.assertGreater(score, 1.65,
-      f"Well-separated score={score:.2f} should exceed 1.65")
+    self.assertGreater(
+        score, 1.65, f"Well-separated score={score:.2f} should exceed 1.65"
+    )
 
 
 class TestPAkScoreIntrinsicDimension(unittest.TestCase):
@@ -1063,8 +1074,7 @@ class TestPAkScoreIntrinsicDimension(unittest.TestCase):
   produces reasonable estimates for each manifold.
   """
 
-  def _check_intrinsic_dim(self, name, gen_func, d_true,
-                            tol_factor=0.5):
+  def _check_intrinsic_dim(self, name, gen_func, d_true, tol_factor=0.5):
     """
     Run the scorer on a single-manifold 2-cluster dataset and check
     that the estimated intrinsic dimension is within tolerance.
@@ -1072,8 +1082,9 @@ class TestPAkScoreIntrinsicDimension(unittest.TestCase):
     We allow |d̂ - d_true| ≤ tol_factor * d_true + 2 to account for
     finite-sample and boundary effects, especially at high d.
     """
-    X, labels, _ = make_well_separated(gen_func, N_per_cluster=500,
-                                        n_clusters=2, seed=42)
+    X, labels, _ = make_well_separated(
+        gen_func, N_per_cluster=500, n_clusters=2, seed=42
+    )
     scorer = OGSCL.PAkDensitySeparationScore(X, labels, maxk=min(80, 499))
     scorer.compute()
 
@@ -1081,8 +1092,10 @@ class TestPAkScoreIntrinsicDimension(unittest.TestCase):
     self.assertIsNotNone(d_est, f"{name}: intrinsic_dim_ is None")
 
     tol = tol_factor * d_true + 2.0
-    self.assertAlmostEqual(d_est, d_true, delta=tol,
-      msg=f"{name}: d_hat={d_est:.1f} vs d_true={d_true} (tol={tol:.1f})")
+    self.assertAlmostEqual(
+        d_est, d_true, delta=tol,
+        msg=f"{name}: d_hat={d_est:.1f} vs d_true={d_true} (tol={tol:.1f})"
+    )
 
   def test_M1_hypersphere(self):
     self._check_intrinsic_dim('M1', OGSCL.ManifoldBenchmark.gen_M1, 10)
@@ -1123,7 +1136,7 @@ class TestPAkScoreManifoldClusters(unittest.TestCase):
     """Test well-separated vs random-label Z-scores for a manifold."""
     N_per = 400
     X, labels_true, d_true = make_well_separated(
-      gen_func, N_per_cluster=N_per, n_clusters=2, separation=20.0, seed=42
+        gen_func, N_per_cluster=N_per, n_clusters=2, separation=20.0, seed=42
     )
     rng = np.random.RandomState(99)
     labels_random = rng.randint(0, 2, size=len(labels_true))
@@ -1137,18 +1150,21 @@ class TestPAkScoreManifoldClusters(unittest.TestCase):
     score_rand = scorer_rand.compute()
 
     # True labels should give a positive score
-    self.assertIsNotNone(score_true,
-      f"{name}: score with true labels is None")
-    self.assertGreater(score_true, 0,
-      f"{name}: score_true={score_true:.2f} should be > 0")
-    self.assertTrue(np.isfinite(score_true),
-      f"{name}: score_true is not finite")
+    self.assertIsNotNone(score_true, f"{name}: score with true labels is None")
+    self.assertGreater(
+        score_true, 0, f"{name}: score_true={score_true:.2f} should be > 0"
+    )
+    self.assertTrue(
+        np.isfinite(score_true), f"{name}: score_true is not finite"
+    )
 
     # True labels should beat random labels
     if score_rand is not None:
-      self.assertGreater(score_true, score_rand,
-        f"{name}: true ({score_true:.2f}) should beat "
-        f"random ({score_rand:.2f})")
+      self.assertGreater(
+          score_true, score_rand,
+          f"{name}: true ({score_true:.2f}) should beat random "
+          f"({score_rand:.2f})"
+      )
 
   # --- Low-dimensional manifolds (fast) ---
   def test_M2_affine_3d(self):
@@ -1252,8 +1268,9 @@ class TestPAkScoreNonConvex(unittest.TestCase):
     scorer = OGSCL.PAkDensitySeparationScore(self.X_moons, self.labels_moons)
     score = scorer.compute()
     self.assertIsNotNone(score)
-    self.assertGreater(score, 0,
-      f"PAk score on moons = {score:.2f}, expected > 0")
+    self.assertGreater(
+        score, 0, f"PAk score on moons = {score:.2f}, expected > 0"
+    )
 
   def test_pak_strongly_positive_on_moons(self):
     """
@@ -1261,10 +1278,12 @@ class TestPAkScoreNonConvex(unittest.TestCase):
     are density-separated even though they are geometrically interleaved.
     """
     pak_true = OGSCL.PAkDensitySeparationScore(
-      self.X_moons, self.labels_moons).compute()
+        self.X_moons, self.labels_moons
+    ).compute()
     self.assertIsNotNone(pak_true)
-    self.assertGreater(pak_true, 1.0,
-      f"PAk on moons = {pak_true:.2f}, expected > 1.0")
+    self.assertGreater(
+        pak_true, 1.0, f"PAk on moons = {pak_true:.2f}, expected > 1.0"
+    )
 
 
 class TestPAkScoreMultiCluster(unittest.TestCase):
@@ -1276,7 +1295,7 @@ class TestPAkScoreMultiCluster(unittest.TestCase):
     n_clusters = 5
     N_per = 200
     centers = np.array([
-      [0, 0, 0], [10, 0, 0], [0, 10, 0], [10, 10, 0], [5, 5, 10]
+        [0, 0, 0], [10, 0, 0], [0, 10, 0], [10, 10, 0], [5, 5, 10]
     ], dtype=float)
     parts = []
     labs = []
@@ -1290,8 +1309,9 @@ class TestPAkScoreMultiCluster(unittest.TestCase):
     score = scorer.compute()
 
     self.assertIsNotNone(score)
-    self.assertGreater(score, 1.0,
-      f"5-Gaussian score={score:.2f} should be > 1.0")
+    self.assertGreater(
+        score, 1.0, f"5-Gaussian score={score:.2f} should be > 1.0"
+    )
 
     # Check correct number of pair Z-scores
     n_pairs = len(scorer.pair_zscores_)
@@ -1303,17 +1323,18 @@ class TestPAkScoreMultiCluster(unittest.TestCase):
     """All individual pair Z-scores must be finite."""
     rng = np.random.RandomState(42)
     X = np.vstack([
-      rng.randn(150, 3) + np.array([0, 0, 0]),
-      rng.randn(150, 3) + np.array([8, 0, 0]),
-      rng.randn(150, 3) + np.array([0, 8, 0]),
+        rng.randn(150, 3) + np.array([0, 0, 0]),
+        rng.randn(150, 3) + np.array([8, 0, 0]),
+        rng.randn(150, 3) + np.array([0, 8, 0]),
     ])
     labels = np.array([0] * 150 + [1] * 150 + [2] * 150)
     scorer = OGSCL.PAkDensitySeparationScore(X, labels)
     scorer.compute()
     if scorer.pair_zscores_:
       for pair, z in scorer.pair_zscores_.items():
-        self.assertTrue(np.isfinite(z),
-          f"Z-score for pair {pair} = {z} is not finite")
+        self.assertTrue(
+            np.isfinite(z), f"Z-score for pair {pair} = {z} is not finite"
+        )
 
 
 class TestPAkScoreSwissRollNonConvex(unittest.TestCase):
@@ -1343,8 +1364,9 @@ class TestPAkScoreSwissRollNonConvex(unittest.TestCase):
     score = scorer.compute()
 
     self.assertIsNotNone(score)
-    self.assertGreater(score, 0,
-      f"Swiss-Roll spiral score={score:.2f} should be > 0")
+    self.assertGreater(
+        score, 0, f"Swiss-Roll spiral score={score:.2f} should be > 0"
+    )
 
 
 class TestPAkScoreWeightedAggregation(unittest.TestCase):
@@ -1357,8 +1379,8 @@ class TestPAkScoreWeightedAggregation(unittest.TestCase):
     rng = np.random.RandomState(42)
     # Unequal cluster sizes: 100 vs 400
     X = np.vstack([
-      rng.randn(100, 2) + np.array([0, 0]),
-      rng.randn(400, 2) + np.array([10, 0]),
+        rng.randn(100, 2) + np.array([0, 0]),
+        rng.randn(400, 2) + np.array([10, 0]),
     ])
     labels = np.array([0] * 100 + [1] * 400)
 
@@ -1376,8 +1398,9 @@ class TestPAkScoreWeightedAggregation(unittest.TestCase):
         wz_sum += w * z
         total_w += w
       expected = wz_sum / total_w
-      self.assertAlmostEqual(score, expected, places=10,
-        msg="Weighted mean mismatch")
+      self.assertAlmostEqual(
+          score, expected, places=10, msg="Weighted mean mismatch"
+      )
 
 
 class TestPAkScoreMaxk(unittest.TestCase):
@@ -1450,8 +1473,7 @@ class TestPAkScoreFullBenchmark(unittest.TestCase):
     maxk = min(80, N_per - 1)
 
     X, labels_true, _ = make_well_separated(
-      gen_func, N_per_cluster=N_per, n_clusters=2,
-      separation=20.0, seed=42,
+        gen_func, N_per_cluster=N_per, n_clusters=2, separation=20.0, seed=42,
     )
 
     t0 = time.time()
@@ -1462,13 +1484,13 @@ class TestPAkScoreFullBenchmark(unittest.TestCase):
     d_est = scorer.intrinsic_dim_
 
     self.__class__.results[name] = {
-      'd_true': d_true,
-      'd_est': d_est,
-      'D': X.shape[1],
-      'N': X.shape[0],
-      'score': score,
-      'time_s': dt,
-      'n_pairs': len(scorer.saddle_densities_ or {}),
+        'd_true': d_true,
+        'd_est': d_est,
+        'D': X.shape[1],
+        'N': X.shape[0],
+        'score': score,
+        'time_s': dt,
+        'n_pairs': len(scorer.saddle_densities_ or {}),
     }
 
     # Basic assertions
@@ -1476,27 +1498,68 @@ class TestPAkScoreFullBenchmark(unittest.TestCase):
     self.assertGreater(score, 0, f"{name}: score={score:.2f} should be > 0")
     self.assertTrue(np.isfinite(score), f"{name}: score is not finite")
 
-  def test_bench_M1(self):   self._bench_one('M1',   OGSCL.ManifoldBenchmark.gen_M1,   10)
-  def test_bench_M2(self):   self._bench_one('M2',   OGSCL.ManifoldBenchmark.gen_M2,    3)
-  def test_bench_M3(self):   self._bench_one('M3',   OGSCL.ManifoldBenchmark.gen_M3,    4)
-  def test_bench_M4(self):   self._bench_one('M4',   OGSCL.ManifoldBenchmark.gen_M4,    4)
-  def test_bench_M5(self):   self._bench_one('M5',   OGSCL.ManifoldBenchmark.gen_M5,    2)
-  def test_bench_M6(self):   self._bench_one('M6',   OGSCL.ManifoldBenchmark.gen_M6,    6)
-  def test_bench_M7(self):   self._bench_one('M7',   OGSCL.ManifoldBenchmark.gen_M7,    2)
-  def test_bench_M9(self):   self._bench_one('M9',   OGSCL.ManifoldBenchmark.gen_M9,   20)
-  def test_bench_M10a(self): self._bench_one('M10a', OGSCL.ManifoldBenchmark.gen_M10a, 10)
-  def test_bench_M10b(self): self._bench_one('M10b', OGSCL.ManifoldBenchmark.gen_M10b, 17)
-  def test_bench_M10c(self): self._bench_one('M10c', OGSCL.ManifoldBenchmark.gen_M10c, 24)
-  def test_bench_M10d(self): self._bench_one('M10d', OGSCL.ManifoldBenchmark.gen_M10d, 70)
-  def test_bench_M11(self):  self._bench_one('M11',  OGSCL.ManifoldBenchmark.gen_M11,   2)
-  def test_bench_M12(self):  self._bench_one('M12',  OGSCL.ManifoldBenchmark.gen_M12,  20)
-  def test_bench_M13(self):  self._bench_one('M13',  OGSCL.ManifoldBenchmark.gen_M13,   1)
-  def test_bench_MN1(self):  self._bench_one('MN1',  OGSCL.ManifoldBenchmark.gen_MN1,  18)
-  def test_bench_MN2(self):  self._bench_one('MN2',  OGSCL.ManifoldBenchmark.gen_MN2,  24)
-  def test_bench_Mbeta(self):self._bench_one('Mbeta',OGSCL.ManifoldBenchmark.gen_Mbeta,10)
-  def test_bench_MP3(self):  self._bench_one('MP3',  OGSCL.ManifoldBenchmark.gen_MP3,   3)
-  def test_bench_MP6(self):  self._bench_one('MP6',  OGSCL.ManifoldBenchmark.gen_MP6,   6)
-  def test_bench_MP9(self):  self._bench_one('MP9',  OGSCL.ManifoldBenchmark.gen_MP9,   9)
+  def test_bench_M1(self):
+    self._bench_one('M1', OGSCL.ManifoldBenchmark.gen_M1, 10)
+
+  def test_bench_M2(self):
+    self._bench_one('M2', OGSCL.ManifoldBenchmark.gen_M2, 3)
+
+  def test_bench_M3(self):
+    self._bench_one('M3', OGSCL.ManifoldBenchmark.gen_M3, 4)
+
+  def test_bench_M4(self):
+    self._bench_one('M4', OGSCL.ManifoldBenchmark.gen_M4, 4)
+
+  def test_bench_M5(self):
+    self._bench_one('M5', OGSCL.ManifoldBenchmark.gen_M5, 2)
+
+  def test_bench_M6(self):
+    self._bench_one('M6', OGSCL.ManifoldBenchmark.gen_M6, 6)
+
+  def test_bench_M7(self):
+    self._bench_one('M7', OGSCL.ManifoldBenchmark.gen_M7, 2)
+
+  def test_bench_M9(self):
+    self._bench_one('M9', OGSCL.ManifoldBenchmark.gen_M9, 20)
+
+  def test_bench_M10a(self):
+    self._bench_one('M10a', OGSCL.ManifoldBenchmark.gen_M10a, 10)
+
+  def test_bench_M10b(self):
+    self._bench_one('M10b', OGSCL.ManifoldBenchmark.gen_M10b, 17)
+
+  def test_bench_M10c(self):
+    self._bench_one('M10c', OGSCL.ManifoldBenchmark.gen_M10c, 24)
+
+  def test_bench_M10d(self):
+    self._bench_one('M10d', OGSCL.ManifoldBenchmark.gen_M10d, 70)
+
+  def test_bench_M11(self):
+    self._bench_one('M11',  OGSCL.ManifoldBenchmark.gen_M11, 2)
+
+  def test_bench_M12(self):
+    self._bench_one('M12',  OGSCL.ManifoldBenchmark.gen_M12, 20)
+
+  def test_bench_M13(self):
+    self._bench_one('M13',  OGSCL.ManifoldBenchmark.gen_M13, 1)
+
+  def test_bench_MN1(self):
+    self._bench_one('MN1',  OGSCL.ManifoldBenchmark.gen_MN1, 18)
+
+  def test_bench_MN2(self):
+    self._bench_one('MN2',  OGSCL.ManifoldBenchmark.gen_MN2, 24)
+
+  def test_bench_Mbeta(self):
+    self._bench_one('Mbeta', OGSCL.ManifoldBenchmark.gen_Mbeta, 10)
+
+  def test_bench_MP3(self):
+    self._bench_one('MP3',  OGSCL.ManifoldBenchmark.gen_MP3, 3)
+
+  def test_bench_MP6(self):
+    self._bench_one('MP6',  OGSCL.ManifoldBenchmark.gen_MP6, 6)
+
+  def test_bench_MP9(self):
+    self._bench_one('MP9',  OGSCL.ManifoldBenchmark.gen_MP9, 9)
 
   @classmethod
   def tearDownClass(cls):
@@ -1633,7 +1696,7 @@ class TestADPClusteringDihedrals(unittest.TestCase):
       data = data + np.pi
     cls._N = data.shape[0]
     cls._adp = OGSCL.OGSAdvancedDensityPeaks(
-      Z=4.5, halo=False, density_method='PAk',
+        Z=4.5, halo=False, density_method='PAk',
     )
     cls._labels = cls._adp.fit_predict(data)
 
@@ -1692,7 +1755,7 @@ class TestADPClusteringDistances(unittest.TestCase):
     data = _distances_cache.copy()
     cls._N = data.shape[0]
     cls._adp = OGSCL.OGSAdvancedDensityPeaks(
-      Z=3.5, halo=False, density_method='PAk',
+        Z=3.5, halo=False, density_method='PAk',
     )
     cls._labels = cls._adp.fit_predict(data)
 
@@ -1738,7 +1801,7 @@ class TestCrossRepresentationConsistency(unittest.TestCase):
     if _REAL_DATA:
       data_dih = data_dih + np.pi
     adp_dih = OGSCL.OGSAdvancedDensityPeaks(
-      Z=4.5, halo=False, density_method='PAk',
+        Z=4.5, halo=False, density_method='PAk',
     )
     cls._labels_dih = adp_dih.fit_predict(data_dih)
     cls._n_clusters_dih = adp_dih.n_clusters_
@@ -1746,7 +1809,7 @@ class TestCrossRepresentationConsistency(unittest.TestCase):
     # Distances
     data_dist = _distances_cache.copy()
     adp_dist = OGSCL.OGSAdvancedDensityPeaks(
-      Z=3.5, halo=False, density_method='PAk',
+        Z=3.5, halo=False, density_method='PAk',
     )
     cls._labels_dist = adp_dist.fit_predict(data_dist)
     cls._n_clusters_dist = adp_dist.n_clusters_
@@ -1781,15 +1844,15 @@ class TestCrossRepresentationConsistency(unittest.TestCase):
       best_agreement = 0.0
       for perm in permutations(range(n_c)):
         remapped = np.array(
-          [perm[l] if l < len(perm) else l for l in labels2]
+            [perm[l] if l < len(perm) else l for l in labels2]
         )
         agreement = np.mean(labels1 == remapped)
         best_agreement = max(best_agreement, agreement)
 
     chance = 1.0 / max(n_c, 1)
     self.assertGreater(
-      best_agreement, chance,
-      f"Best agreement {best_agreement:.2%} is below chance {chance:.2%}",
+        best_agreement, chance,
+        f"Best agreement {best_agreement:.2%} is below chance {chance:.2%}",
     )
 
   @staticmethod
@@ -1831,7 +1894,7 @@ class TestPAkScoreOnADPClustering(unittest.TestCase):
     if _REAL_DATA:
       data = data + np.pi
     adp = OGSCL.OGSAdvancedDensityPeaks(
-      Z=4.5, halo=False, density_method='PAk',
+        Z=4.5, halo=False, density_method='PAk',
     )
     labels = adp.fit_predict(data)
 
@@ -1873,8 +1936,8 @@ class TestPAkScoreOnADPClustering(unittest.TestCase):
 
     if random_score is not None:
       self.assertGreater(
-        self._score, random_score,
-        "ADP score should exceed random labeling score",
+          self._score, random_score,
+          "ADP score should exceed random labeling score",
       )
 
 
@@ -1890,7 +1953,7 @@ class TestPlottingMethods(unittest.TestCase):
   def setUpClass(cls):
     data = _dihedrals_cache[:500].copy()
     if _REAL_DATA:
-        data = data + np.pi
+      data = data + np.pi
     adp = OGSCL.OGSAdvancedDensityPeaks(
         Z=4.5, halo=False, density_method='PAk',
     )
@@ -1961,7 +2024,7 @@ class TestDensityEstimation(unittest.TestCase):
       data = data + np.pi
     cls._N = data.shape[0]
     cls._adp = OGSCL.OGSAdvancedDensityPeaks(
-      Z=4.5, halo=False, density_method='PAk',
+        Z=4.5, halo=False, density_method='PAk',
     )
     cls._adp.fit_predict(data)
 
@@ -1995,11 +2058,11 @@ class TestDensityEstimation(unittest.TestCase):
       cluster_densities = log_den[cluster_mask]
       center_density = log_den[center_idx]
       self.assertAlmostEqual(
-        center_density, np.max(cluster_densities), places=10,
-        msg=(
-          f"Center {center_idx} (cluster {cluster_label}) density "
-          f"{center_density:.4f} != max {np.max(cluster_densities):.4f}"
-        ),
+          center_density, np.max(cluster_densities), places=10,
+          msg=(
+              f"Center {center_idx} (cluster {cluster_label}) density "
+              f"{center_density:.4f} != max {np.max(cluster_densities):.4f}"
+          ),
       )
 
 

@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Sequence Clustering Pipeline - Seismic Event Cluster Analysis
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module implements an automated seismic sequence clustering pipeline for
@@ -21,15 +21,15 @@ KEY FEATURES:
   - Inter-event time features: Uses temporal spacing as clustering feature
 
 PIPELINE STAGES:
-  ┌─────────────────────────────────────────────────────────────────────────┐
-  │ 1. LOAD CATALOG     Load seismic events for each time window            │
-  │ 2. PREPARE FEATURES Convert to Cartesian, compute inter-event times     │
-  │ 3. STANDARDIZE      Scale features using StandardScaler                 │
-  │ 4. OPTIMIZE         Find best parameters per algorithm/metric           │
-  │ 5. CLUSTER          Assign events to clusters                           │
-  │ 6. SAVE             Export per-cluster CSV files                        │
-  │ 7. VISUALIZE        Generate map and cross-section plots                │
-  └─────────────────────────────────────────────────────────────────────────┘
+  ┌───────────────────────────────────────────────────────────────────────┐
+  │ 1. LOAD CATALOG      Load seismic events for each time window         │
+  │ 2. PREPARE FEATURES  Convert to Cartesian, compute inter-event times  │
+  │ 3. STANDARDIZE       Scale features using StandardScaler              │
+  │ 4. OPTIMIZE          Find best parameters per algorithm/metric        │
+  │ 5. CLUSTER           Assign events to clusters                        │
+  │ 6. SAVE              Export per-cluster CSV files                     │
+  │ 7. VISUALIZE         Generate map and cross-section plots             │
+  └───────────────────────────────────────────────────────────────────────┘
 
 FEATURE SET:
   The clustering uses 4 features (all standardized):
@@ -92,7 +92,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 # -----------------------------------------------------------------------------
@@ -138,43 +139,14 @@ import ogsconstants as OGS_C
 # Local module: Clustering algorithms and utilities (parent class)
 import ogsclustering as OGS_CL
 
+# Local module: Utilities and argument parsers
+import ogsutils as OGS_U
+
 # Local module: Catalog loading and management
 from ogscatalog import OGSCatalog
 
 # Type hints for improved code documentation
 from typing import Tuple, Optional, Callable, Any, Dict
-
-
-# =============================================================================
-# ARGUMENT PARSER
-# =============================================================================
-
-def parse_arguments() -> argparse.Namespace:
-  """
-  Parse command-line arguments for the sequence clustering tool.
-
-  Returns:
-    argparse.Namespace with:
-      - input: Path to JSON metadata configuration file
-      - verbose: Boolean flag for debug output
-  """
-  parser = argparse.ArgumentParser(
-      description="OGS Sequence Clustering Tool"
-  )
-
-  # -i/--input: Path to JSON configuration file (required)
-  parser.add_argument(
-      "-i", "--input", required=True, type=OGS_C.is_file_path,
-      help="Input file containing seismic event data"
-  )
-
-  # -v/--verbose: Enable detailed logging output
-  parser.add_argument(
-      "-v", "--verbose", action='store_true', default=False,
-      help="Enable verbose output"
-  )
-
-  return parser.parse_args()
 
 
 # =============================================================================
@@ -277,7 +249,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     self.best_params: dict[int, dict[str, dict[str, Any]]] = {}
 
     # Configure module-level logger
-    self.logger = OGS_C.setup_logger(self.__class__.__name__, self.verbose)
+    self.logger = OGS_U.setup_logger(self.__class__.__name__, self.verbose)
 
   # -------------------------------------------------------------------------
   # PROPERTIES: Metadata Accessors
@@ -1147,4 +1119,4 @@ def main(args: argparse.Namespace) -> None:
 
 # Script entry point: parse arguments and run main
 if __name__ == "__main__":
-  main(parse_arguments())
+  main(OGS_U.parse_sequence_args())

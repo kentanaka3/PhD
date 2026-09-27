@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Amplitude Extractor - Wood-Anderson Simulation with SNR Gating
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 Provides :class:`OGSAmplitudeExtractor`, a subclass of
@@ -54,7 +54,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 import obspy

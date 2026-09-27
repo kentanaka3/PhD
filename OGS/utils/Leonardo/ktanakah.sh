@@ -5,9 +5,9 @@
 #SBATCH --tasks-per-node=#
 #SBATCH --gres=gpu:#
 #SBATCH --cpus-per-task=#
-# #SBATCH --account=IscrC_AISeism
+#SBATCH --account=IscrC_AISeism
 # #SBATCH --account=ICT24_MHPC
-#SBATCH --account=OGS23_PRACE_IT_0
+# #SBATCH --account=OGS23_PRACE_IT_0
 #SBATCH --time 1-00:00:00
 # #SBATCH --time 00:30:00
 #SBATCH --mem=490000MB

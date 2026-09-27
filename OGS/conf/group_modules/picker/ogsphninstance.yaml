@@ -10,4 +10,4 @@ classify_args:
   batch_size: 16384
 
 amplitude_extractor:
-  _target_: OGS.src.ogspicker.OGSAmplitudeExtractor
+  _target_: src.ogspicker.OGSAmplitudeExtractor

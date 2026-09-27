@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS TXT File Parser - Catalog Event Summary Extractor
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module parses OGS .txt catalog exports containing event-level summaries.
@@ -54,15 +54,13 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 # -----------------------------------------------------------------------------
 # IMPORTS
 # -----------------------------------------------------------------------------
-
-# Standard library: command-line argument parsing
-import argparse
 
 # Standard library: filesystem path handling
 from pathlib import Path
@@ -94,44 +92,6 @@ DATA_PATH = Path(__file__).parent.parent.parent
 
 
 # =============================================================================
-# ARGUMENT PARSER
-# =============================================================================
-
-def parse_arguments():
-  """
-  Parse command-line arguments for the TXT file processor.
-
-  Returns:
-    argparse.Namespace with:
-      - file: List of Path objects to input .txt files
-      - dates: Tuple of (start_date, end_date) for filtering
-      - verbose: Boolean flag for debug output
-  """
-  parser = argparse.ArgumentParser(description="Run OGS TXT quality checks")
-
-  # -f/--file: Input file path(s), required, accepts multiple files
-  parser.add_argument(
-    "-f", "--file", type=Path, required=True, nargs=OGS_C.ONE_MORECHAR_STR,
-    help="Path to the input file")
-
-  # -D/--dates: Date range filter, optional, format YYYYMMDD
-  parser.add_argument(
-    '-D', "--dates", required=False, metavar=OGS_C.DATE_STD,
-    type=OGS_U.is_date, nargs=2, action=OGS_U.SortDatesAction,
-    default=[datetime.strptime("20240320", OGS_C.YYYYMMDD_FMT),
-             datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT)],
-    help="Specify the beginning and ending (inclusive) Gregorian date " \
-         "(YYYYMMDD) range to work with.")
-
-  # -v/--verbose: Enable detailed logging output
-  parser.add_argument(
-    '-v', "--verbose", action='store_true', default=False,
-    help="Enable verbose output")
-
-  return parser.parse_args()
-
-
-# =============================================================================
 # DataFileTXT Class - TXT Format Parser
 # =============================================================================
 
@@ -151,25 +111,27 @@ class DataFileTXT(OGSDataFile):
   # RECORD EXTRACTOR: fixed-width event summary line
   # -------------------------------------------------------------------------
   RECORD_EXTRACTOR_LIST = [
-    fr"^(?P<{OGS_C.INDEX_STR}>\d{{5}})\s",                        # Index
-    fr"\d{{4}}_\d{{5}}\s",                                        # Legacy
-    fr"(?P<{OGS_C.TIME_STR}>\d{{4}}-\d{{2}}-\d{{2}}T",            # Date
-    fr"\d{{2}}:\d{{2}}:\d{{2}}\.\d{{3}})\s",                      # Time
-    fr"(?P<{OGS_C.ERT_STR}>[\s\d\.\-]{{5}})\s",                   # ERT
-    fr"(?P<{OGS_C.LATITUDE_STR}>[\s\d\-\.]{{7}})\s",              # Latitude
-    fr"(?P<{OGS_C.LONGITUDE_STR}>[\s\d\-\.]{{7}})\s",             # Longitude
-    fr"(?P<{OGS_C.ERH_STR}>[\s\d\.\-]{{5}})\s",                   # ERH
-    fr"(?P<{OGS_C.DEPTH_STR}>[\s\d\.\-]{{5}})\s",                 # Depth
-    fr"(?P<{OGS_C.ERZ_STR}>[\s\d\.\-]{{5}})\s",                   # ERZ
-    fr"(?P<{OGS_C.GAP_STR}>([\s\d\-]{{3}}))\s",                   # GAP
-    fr"(?P<{OGS_C.MAGNITUDE_L_STR}>([\-\s\d\.]{{4}}))\s",         # ML
-    fr"(?P<{OGS_C.MAGNITUDE_D_STR}>([\-\s\d\.]{{4}}))\s",         # MD
-    fr"(?P<{OGS_C.LOC_NAME_STR}>['\.\-\w\s\(\)]+)\s",             # Place
-    fr"(?P<{OGS_C.EVENT_TYPE_STR}>\[.*\])$",                      # Event Type
+      fr"^(?P<{OGS_C.INDEX_STR}>\d{{5}})\s",                      # Index
+      fr"\d{{4}}_\d{{5}}\s",                                      # Legacy
+      fr"(?P<{OGS_C.TIME_STR}>\d{{4}}-\d{{2}}-\d{{2}}T",          # Date
+      fr"\d{{2}}:\d{{2}}:\d{{2}}\.\d{{3}})\s",                    # Time
+      fr"(?P<{OGS_C.ERT_STR}>[\s\d\.\-]{{5}})\s",                 # ERT
+      fr"(?P<{OGS_C.LATITUDE_STR}>[\s\d\-\.]{{7}})\s",            # Latitude
+      fr"(?P<{OGS_C.LONGITUDE_STR}>[\s\d\-\.]{{7}})\s",           # Longitude
+      fr"(?P<{OGS_C.ERH_STR}>[\s\d\.\-]{{5}})\s",                 # ERH
+      fr"(?P<{OGS_C.DEPTH_STR}>[\s\d\.\-]{{5}})\s",               # Depth
+      fr"(?P<{OGS_C.ERZ_STR}>[\s\d\.\-]{{5}})\s",                 # ERZ
+      fr"(?P<{OGS_C.GAP_STR}>([\s\d\-]{{3}}))\s",                 # GAP
+      fr"(?P<{OGS_C.MAGNITUDE_L_STR}>([\-\s\d\.]{{4}}))\s",       # ML
+      fr"(?P<{OGS_C.MAGNITUDE_D_STR}>([\-\s\d\.]{{4}}))\s",       # MD
+      fr"(?P<{OGS_C.LOC_NAME_STR}>['\.\-\w\s\(\)]+)\s",           # Place
+      fr"(?P<{OGS_C.EVENT_TYPE_STR}>\[.*\])$",                    # Event Type
   ]
 
   @staticmethod
-  def _parse_numeric_series(series: pd.Series, missing_marker: str) -> pd.Series:
+  def _parse_numeric_series(
+      series: pd.Series, missing_marker: str
+  ) -> pd.Series:
     """Convert placeholder-marked numeric strings to float values."""
     return series.replace(missing_marker, "NaN").apply(float)
 
@@ -223,14 +185,15 @@ class DataFileTXT(OGSDataFile):
       # ---------------------------------------------------------------------
       # DATE RANGE FILTERING
       # ---------------------------------------------------------------------
-      if self.start is not None and result[OGS_C.TIME_STR] < self.start:
+      if self._is_before_start(result[OGS_C.TIME_STR]):
         self.logger.debug(f"Skipping event before start date: {self.start}")
         self.logger.debug(line)
         continue
 
-      if (self.end is not None and
-          result[OGS_C.TIME_STR] > self.end + OGS_C.ONE_DAY):
-        self.logger.debug(f"Stopping read at event after end date: {self.end}")
+      if self._is_after_end(result[OGS_C.TIME_STR]):
+        self.logger.debug(
+            f"Stopping read at event after end date: {self.end}"
+        )
         self.logger.debug(line)
         break
 
@@ -238,38 +201,38 @@ class DataFileTXT(OGSDataFile):
       # APPEND RAW EVENT SUMMARY TO RESULTS
       # ---------------------------------------------------------------------
       records.append([
-        result[OGS_C.INDEX_STR],
-        result[OGS_C.TIME_STR],
-        result[OGS_C.ERT_STR],
-        result[OGS_C.LATITUDE_STR],
-        result[OGS_C.LONGITUDE_STR],
-        result[OGS_C.ERH_STR],
-        result[OGS_C.DEPTH_STR],
-        result[OGS_C.ERZ_STR],
-        result[OGS_C.GAP_STR],
-        result[OGS_C.MAGNITUDE_L_STR],
-        result[OGS_C.MAGNITUDE_D_STR],
-        result[OGS_C.LOC_NAME_STR],
-        result[OGS_C.EVENT_TYPE_STR],
+          result[OGS_C.INDEX_STR],
+          result[OGS_C.TIME_STR],
+          result[OGS_C.ERT_STR],
+          result[OGS_C.LATITUDE_STR],
+          result[OGS_C.LONGITUDE_STR],
+          result[OGS_C.ERH_STR],
+          result[OGS_C.DEPTH_STR],
+          result[OGS_C.ERZ_STR],
+          result[OGS_C.GAP_STR],
+          result[OGS_C.MAGNITUDE_L_STR],
+          result[OGS_C.MAGNITUDE_D_STR],
+          result[OGS_C.LOC_NAME_STR],
+          result[OGS_C.EVENT_TYPE_STR],
       ])
 
     # -----------------------------------------------------------------------
     # BUILD OUTPUT DATAFRAME
     # -----------------------------------------------------------------------
     self.EVENTS = pd.DataFrame(records, columns=[
-      OGS_C.INDEX_STR,
-      OGS_C.TIME_STR,
-      OGS_C.ERT_STR,
-      OGS_C.LATITUDE_STR,
-      OGS_C.LONGITUDE_STR,
-      OGS_C.ERH_STR,
-      OGS_C.DEPTH_STR,
-      OGS_C.ERZ_STR,
-      OGS_C.GAP_STR,
-      OGS_C.MAGNITUDE_L_STR,
-      OGS_C.MAGNITUDE_D_STR,
-      OGS_C.LOC_NAME_STR,
-      OGS_C.EVENT_TYPE_STR,
+        OGS_C.INDEX_STR,
+        OGS_C.TIME_STR,
+        OGS_C.ERT_STR,
+        OGS_C.LATITUDE_STR,
+        OGS_C.LONGITUDE_STR,
+        OGS_C.ERH_STR,
+        OGS_C.DEPTH_STR,
+        OGS_C.ERZ_STR,
+        OGS_C.GAP_STR,
+        OGS_C.MAGNITUDE_L_STR,
+        OGS_C.MAGNITUDE_D_STR,
+        OGS_C.LOC_NAME_STR,
+        OGS_C.EVENT_TYPE_STR,
     ])
 
     if self.EVENTS.empty:
@@ -279,23 +242,24 @@ class DataFileTXT(OGSDataFile):
     time_series = pd.to_datetime(self.EVENTS[OGS_C.TIME_STR])
     self.EVENTS[OGS_C.TIME_STR] = time_series
     self.EVENTS[OGS_C.INDEX_STR] = self.EVENTS[OGS_C.INDEX_STR].apply(int) + \
-      time_series.dt.year * OGS_C.MAX_PICKS_YEAR
+        time_series.dt.year * OGS_C.MAX_PICKS_YEAR
     self.EVENTS[OGS_C.GROUPS_STR] = time_series.dt.date
 
     numeric_columns = [
-      (OGS_C.ERT_STR, OGS_C.DASH_STR * 5),
-      (OGS_C.LONGITUDE_STR, OGS_C.DASH_STR * 7),
-      (OGS_C.LATITUDE_STR, OGS_C.DASH_STR * 7),
-      (OGS_C.ERH_STR, OGS_C.DASH_STR * 5),
-      (OGS_C.DEPTH_STR, OGS_C.DASH_STR * 5),
-      (OGS_C.ERZ_STR, OGS_C.DASH_STR * 5),
-      (OGS_C.GAP_STR, OGS_C.DASH_STR * 3),
-      (OGS_C.MAGNITUDE_L_STR, OGS_C.DASH_STR * 4),
-      (OGS_C.MAGNITUDE_D_STR, OGS_C.DASH_STR * 4),
+        (OGS_C.ERT_STR, OGS_C.DASH_STR * 5),
+        (OGS_C.LONGITUDE_STR, OGS_C.DASH_STR * 7),
+        (OGS_C.LATITUDE_STR, OGS_C.DASH_STR * 7),
+        (OGS_C.ERH_STR, OGS_C.DASH_STR * 5),
+        (OGS_C.DEPTH_STR, OGS_C.DASH_STR * 5),
+        (OGS_C.ERZ_STR, OGS_C.DASH_STR * 5),
+        (OGS_C.GAP_STR, OGS_C.DASH_STR * 3),
+        (OGS_C.MAGNITUDE_L_STR, OGS_C.DASH_STR * 4),
+        (OGS_C.MAGNITUDE_D_STR, OGS_C.DASH_STR * 4),
     ]
     for column, missing_marker in numeric_columns:
       self.EVENTS[column] = self._parse_numeric_series(
-        self.EVENTS[column], missing_marker)
+          self.EVENTS[column], missing_marker
+      )
 
     self.EVENTS[OGS_C.NOTES_STR] = None
     self.EVENTS = self.EVENTS.astype({OGS_C.INDEX_STR: int})
@@ -339,4 +303,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-  main(parse_arguments())
+  main(OGS_U.parse_txt_args())

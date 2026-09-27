@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Data File Abstractions and Logging Helpers
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module provides the OGSDataFile class, an abstract base class for parsing
@@ -47,7 +47,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 # -----------------------------------------------------------------------------
@@ -72,11 +73,17 @@ from pathlib import Path
 # Standard library: Date and time objects for temporal filtering
 from datetime import datetime, timedelta as td
 
+# Standard library: Threaded writes for independent date partitions
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 # ObsPy: Seismological library - UTCDateTime for precise earthquake timing
 from obspy import UTCDateTime
 
 # Matplotlib: Path object for polygon-based geographic containment tests
 from matplotlib.path import Path as mplPath
+
+# Pandas: DataFrame operations, merging, and Parquet I/O
+import pandas as pd
 
 
 # =============================================================================
@@ -129,10 +136,12 @@ class OGSDataFile(OGSCatalog):
   # CONSTRUCTOR
   # -------------------------------------------------------------------------
 
-  def __init__(self, input: Path, start: datetime = datetime.max,
-               end: datetime = datetime.min, verbose: bool = False,
-               polygon: mplPath = mplPath(OGS_C.OGS_POLY_REGION, closed=True),
-               output: Path = OGS_C.THIS_FILE.parent / "data" / "OGSCatalog"):
+  def __init__(
+      self, input: Path, start: datetime = datetime.max,
+      end: datetime = datetime.min, verbose: bool = False,
+      polygon: mplPath = mplPath(OGS_C.OGS_POLY_REGION, closed=True),
+      output: Path = OGS_C.THIS_FILE.parent / "data" / "OGSCatalog"
+  ):
     """
     Initialize the data file wrapper and compile regex extractors.
 
@@ -182,6 +191,37 @@ class OGSDataFile(OGSCatalog):
     """
     raise NotImplementedError
 
+  def log_file(self, file_type: str, date: datetime, df: pd.DataFrame):
+    """
+    Log a single DataFrame to the appropriate Parquet file based on file type
+    and date.
+
+    Args:
+      file_type (str): Type of data being logged ("picks" or "events").
+      date (datetime): Date associated with the data.
+      df (pd.DataFrame): DataFrame containing the data to be logged.
+    """
+    # Convert date key to Python date object for path construction
+    date = UTCDateTime(date).date
+
+    # Construct base output path using file extension as subdirectory
+    log = self.output / self.input.suffix
+
+    # Preserve the historical picks output directory name
+    subdirectory = "assignments" if file_type == "picks" else file_type
+
+    # Build date-based directory path
+    dir_path = log / subdirectory / OGS_C.DASH_STR.join([
+        f"{date.year}", f"{date.month:02}", f"{date.day:02}"
+    ])
+
+    # Create parent directories if they don't exist
+    dir_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Write DataFrame to Parquet format
+    df.to_parquet(dir_path, index=False)
+    self.logger.debug(f"Saved {file_type.upper()} for {date} to {dir_path}")
+
   # -------------------------------------------------------------------------
   # METHOD: log()
   # -------------------------------------------------------------------------
@@ -195,42 +235,31 @@ class OGSDataFile(OGSCatalog):
 
     Uses Parquet format for efficient columnar storage and fast I/O.
     """
-    # Construct base output path using file extension as subdirectory
-    log = self.output / self.input.suffix
-    self.logger.info(f"Logging data to: {log}")
+    tasks = [
+        (key, date, df)
+        for key in ("picks", "events")
+        for date, df in self.postload(key).items()
+    ]
+    if not tasks:
+      return
 
-    # ----- SAVE PICKS (phase arrival assignments) -----
-    # Iterate over picks grouped by date from postload() method
-    for date, df in self.postload("picks").items():
-      # Convert date key to Python date object for path construction
-      date = UTCDateTime(date).date
+    max_workers = max(1, min(OGS_C.DEFAULT_CORES_COUNT, len(tasks)))
+    failures = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+      futures = {
+          executor.submit(self.log_file, key, date, df): (key, date)
+          for key, date, df in tasks
+      }
+      for future in as_completed(futures):
+        key, date = futures[future]
+        try:
+          future.result()
+        except Exception as exc:
+          failures.append(exc)
+          self.logger.exception(f"Failed to save {key.upper()} for {date}")
 
-      # Build date-based directory path: {log}/assignments/YYYY-MM-DD
-      dir_path = log / "assignments" / OGS_C.DASH_STR.join([
-          f"{date.year}", f"{date.month:02}", f"{date.day:02}"
-      ])
-
-      # Create parent directories if they don't exist
-      dir_path.parent.mkdir(parents=True, exist_ok=True)
-
-      # Write DataFrame to Parquet format (efficient columnar storage)
-      df.to_parquet(dir_path, index=False)
-      self.logger.debug(f"Saved PICKS for {date} to {dir_path}")
-
-    # ----- SAVE EVENTS (earthquake catalog entries) -----
-    # Iterate over events grouped by date from postload() method
-    for date, df in self.postload("events").items():
-      # Build date-based directory path: {log}/events/YYYY-MM-DD
-      dir_path = log / "events" / OGS_C.DASH_STR.join([
-          f"{date.year}", f"{date.month:02}", f"{date.day:02}"
-      ])
-
-      # Create parent directories if they don't exist
-      dir_path.parent.mkdir(parents=True, exist_ok=True)
-
-      # Write DataFrame to Parquet format
-      df.to_parquet(dir_path, index=False)
-      self.logger.debug(f"Saved EVENTS for {date} to {dir_path}")
+    for failure in failures:
+      self.logger.error(f"Failure encountered: {failure}")
 
   # -------------------------------------------------------------------------
   # METHOD: debug()
@@ -296,6 +325,19 @@ class OGSDataFile(OGSCatalog):
   # -------------------------------------------------------------------------
   # SHARED PARSING UTILITIES
   # -------------------------------------------------------------------------
+
+  def _is_before_start(self, value: datetime) -> bool:
+    """Check if the given datetime is before the configured start date."""
+    return self.start is not None and value < self.start
+
+  def _is_after_end(self, value: datetime) -> bool:
+    """Check if the given datetime is after the configured end date."""
+    if self.end is None:
+      return False
+    try:
+      return value >= self.end + OGS_C.ONE_DAY
+    except OverflowError:
+      return value > self.end
 
   @staticmethod
   def _parse_seconds(value: str) -> td:

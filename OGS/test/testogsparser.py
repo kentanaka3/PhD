@@ -34,15 +34,15 @@ AUTHORS:
 =============================================================================
 """
 
-from ogsparser import DataCatalog, parse_arguments
 import ogsconstants as OGS_C
+from ogsparser import DataCatalog
+from ogsutils import parse_catalog_args
 import os
 import sys
 import unittest
 import unittest.mock
 from pathlib import Path
 from datetime import datetime
-
 import pandas as pd
 
 THIS_DIR = os.path.dirname(__file__)
@@ -62,7 +62,7 @@ class TestOGSParser(unittest.TestCase):
       "--merge"
   ])
   def test_parse_arguments_file_mode(self, mock_isfile):
-    args = parse_arguments()
+    args = parse_catalog_args()
     self.assertEqual(
         args.file, [Path(DATA_DIR / "manual" / "onlyEQ-2024.hpl")]
     )

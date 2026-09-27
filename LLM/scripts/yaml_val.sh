@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 
+# =============================================================================
 # YAML Validator
-# ==============
+# =============================================================================
 #
 # Parse YAML documents with Ruby's standard Psych parser. The validator reads
 # source files only and reports syntax findings to standard error.
 #
 # USAGE
 #   bash yaml_val.sh [--root DIR|--file FILE]
+#
+# AUTHORS:
+#   - 健
+#
+# =============================================================================
 
 set -euo pipefail
 umask 077

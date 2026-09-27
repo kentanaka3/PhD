@@ -122,7 +122,7 @@ Existing paths are preserved. With `--dry-run`, it reports missing directories a
 bash LLM/scripts/navigate.sh [--root DIR] [--module PATH] [--include-assets] [--scripts]
 ```
 
-`navigate.sh` accepts only the options above and no positional arguments. It requires `date` and `printf`; its scan also uses standard shell utilities such as `find`, `grep`, `cut`, `sort`, and `sed` without preflight checks. `--root` must resolve to an existing directory. If omitted, the scan root is the repository parent of `LLM/`. The script emits YAML to standard output and does not write a manifest file.
+`navigate.sh` accepts only the options above and no positional arguments. It requires `date`, `printf`, `ruby`, `mktemp`, `rm`, `cat`, `bash`, and `awk`. Ruby's standard YAML support builds the manifest from structured mappings and sequences. The complete output is staged in a private temporary file and copied to standard output only after generation succeeds; generation failures leave standard output empty. `--root` must resolve to an existing directory. If omitted, the scan root is the repository parent of `LLM/`. The script does not write a manifest file.
 
 Without `--module`, it emits a Tier 1 manifest for the `OGS`, `doc`, and
 `LLM` modules. The optional `--include-assets` is accepted in this mode but
@@ -135,17 +135,23 @@ The Tier 1 manifest invokes `md_nav.sh` for `OGS/README.md`,
 alongside the exact direct command for further exploration. Thus a caller of
 `bash LLM/scripts/handler.sh navigate --root "$PWD"` receives both module
 entry points and the next read-only commands needed to inspect their Markdown
-or YAML structure.
+or YAML structure. Missing entry-point files are recorded as conflicts and
+omitted from navigation entries; entry collections remain YAML sequences even
+when empty. Delegated outline failures abort generation without partial YAML
+on standard output.
 
-With `--module REL_PATH`, the script emits a Tier 2 manifest. The module must
-be relative, exist beneath the resolved root after canonicalization, and may
-not escape that root through path traversal or a symlink. Tier 2 inventories
-non-hidden text files with extensions `.md`, `.py`, `.sh`, `.tex`, `.bib`,
+With `--module REL_PATH`, the script emits a Tier 2 manifest. The supplied
+value must be non-empty and relative; its existing canonical target must be
+beneath the resolved root, so path traversal and symlinks escaping that root
+are rejected. Tier 2 inventories non-hidden regular files with extensions `.md`, `.py`, `.sh`, `.tex`, `.bib`,
 `.yml`, `.yaml`, or `.json`, plus `Makefile`. `--include-assets` additionally
 lists `.png`, `.jpg`, `.jpeg`, `.pdf`, and `.svg` files. `--scripts` appends
 Make targets, Bash function declarations, and Python `def` declarations found
-under the selected module. Listed paths are stably sorted by the commands in
-the implementation.
+under the selected module. Listed paths are stably sorted. Every inventory and
+symbol category is emitted as a YAML sequence, including empty categories.
+Punctuation in supported paths is safely serialized; paths containing control
+characters are rejected with a diagnostic. The manifest is emitted only when
+all discovery and serialization stages succeed.
 
 `--help` passed directly to `navigate.sh` fails with status 2 and directs the
 caller to handler help. Use `bash LLM/scripts/handler.sh --help` for usage.
@@ -167,11 +173,8 @@ function declaration's documented body count.
 Without `--file`, the resolved root defaults to the repository root and the
 complete validation runs. It first checks that `AGENTS.md`, `LLM/README.md`,
 and `LLM/scripts/handler.sh` are non-empty, and that `handler.sh` is
-executable. It then inspects all non-git `*.md` and `*.sh` files below the
-root for non-empty content, Markdown fences and local links, script
-references, and Bash parse syntax. It additionally checks documented function
-body counts for the managed set: `common.sh`, `handler.sh`, `init.sh`,
-`navigate.sh`, and `validate.sh`.
+executable. It then inspects all non-git `*.md` and `*.sh` files below the root
+for non-empty content. [`md_val.sh`](md_val.sh) checks Markdown fences, local links, and script references; [`yaml_val.sh`](yaml_val.sh) parses every YAML file, including intentionally empty placeholders, with Ruby's standard Psych parser without constructing application objects; and [`validate.sh`](validate.sh) checks Bash parse syntax. It additionally checks documented function body counts for every managed command script, including both navigators and both format-specific validators.
 
 The validator reads only; `bash -n` parses but does not execute Bash scripts.
 It reports findings to standard error, returns nonzero on detected failures,
@@ -260,10 +263,14 @@ the implemented body; shared functions are listed only under
 | [`common.sh`](common.sh) | `log`: timestamped standard-error diagnostic; `fail`: log and exit a supplied status; `require_command`: require an executable on `PATH`; `validate_positive_integer`: enforce a nonzero decimal integer; `validate_navigation_config`: require the selected navigator dependency; `run_navigation_command`: parse and dispatch `outline`, `get`, or `slice`. |
 | [`handler.sh`](handler.sh) | `usage`: print dispatcher usage; `main`: validate the top-level command and `exec` its implementation. |
 | [`init.sh`](init.sh) | `initialize`: conditionally create workspace paths and starter records; `main`: parse optional dry-run mode and invoke initialization. |
-| [`navigate.sh`](navigate.sh) | `yaml_escape`: encode a YAML scalar when needed; `discover_validate`: statically list validation-like Make targets; `scan_conflicts`: report missing entry points or a missing scoped target; `emit_tier1`: produce global routing YAML; `extract_symbols`: list Make, Bash, and Python declarations; `emit_tier2`: produce scoped inventory YAML; `main`: parse options, contain module paths, and select a tier. |
-| [`validate.sh`](validate.sh) | `validate_markdown`: scan Markdown fences and local paths; `validate_scripts`: scan Markdown for stale project script references; `validate_bash`: parse all discovered Bash files; `validate_functions`: compare annotated and counted function bodies; `validate_single`: select the supported one-file checks; `validate_managed_functions`: check the curated managed-script list; `validate`: run full-root checks; `main`: parse options and dispatch. |
+| [`navigate.sh`](navigate.sh) | `validate_path_characters`: reject control characters in CLI paths; `main`: validate options and paths, invoke the structured manifest generator, and publish complete staged output only on success. |
+| [`navigate_manifest.rb`](navigate_manifest.rb) | `NavigateManifest`: discover Tier 1/Tier 2 content, capture delegated outlines, preserve empty collections, validate canonical paths, and serialize the structured manifest with Ruby's standard YAML library. |
+| [`tests/navigate_contract.sh`](tests/navigate_contract.sh) | Synthetic public-CLI contract checks for YAML parsing, path round-tripping, empty collections, deterministic output, path rejection, and failure atomicity. |
+| [`validate.sh`](validate.sh) | `validate_bash`: parse all discovered Bash files; `validate_functions`: compare annotated and counted function bodies; `validate_managed_functions`: check the managed command-script list; `validate`: coordinate full-root checks; `main`: parse options and dispatch. |
 | [`md_nav.sh`](md_nav.sh) | `usage`: print command usage; `validate_file`: require a readable regular file; `run_outline`: list headings outside code fences; `run_get`: extract a heading's section; `run_slice`: extract an inclusive line range; `main`: call the shared dispatcher. |
 | [`yaml_nav.sh`](yaml_nav.sh) | `usage`: print command usage; `validate_yaml_file`: require a readable YAML-named file; `run_outline`: list recognized mappings outside block scalars; `run_get`: extract a recognized mapping block; `run_slice`: extract an inclusive line range; `main`: call the shared dispatcher. |
+| [`md_val.sh`](md_val.sh) | `validate_markdown_links`: check one file's local links; `validate_script_references`: check one file's documented script paths; `validate_markdown`: scan all Markdown below a root; `validate_single`: run focused Markdown checks; `main`: parse options and dispatch. |
+| [`yaml_val.sh`](yaml_val.sh) | `validate_yaml_file`: parse one YAML input with Psych; `validate_yaml`: scan all YAML below a root; `main`: parse options and dispatch. |
 | [`default.sh`](default.sh) | `usage`: print template usage; `validate_config`: placeholder prerequisite validation; `run`: placeholder operation; `main`: template option parsing and lifecycle ordering. |
 
 ## Shared Helper Contract
