@@ -11,7 +11,7 @@
 \label{sec:supp_derivation_wave_equation}
 
 Let $\Omega \subseteq \mathbb{R}^{3}$ be the spatial domain while time
-$t\in\mathbb{R}$, with indices $i,j,k\in\{1,2,3\}$ following the Einstein
+$t \in \mathbb{R}$, with indices $i,j,k\in\{1,2,3\}$ following the Einstein
 summation convention \ie{repeated indices are summed}. The displacement is
 $\mathbf{u}(\mathbf{x},t)$; the density $\rho(\mathbf{x}) > 0$, and the Lamé
 parameters $\lambda(\mathbf{x}), \mu(\mathbf{x}) > 0$ are spatially constant
@@ -88,9 +88,9 @@ conservation of linear momentum gives
   \label{eq:supp_navier_cauchy}
 \end{equation}
 The first line is the component-wise balance. Substituting
-\eqref{eq:supp_stress_divergence} into it and collecting the three
+\cref{eq:supp_stress_divergence} into it and collecting the three
 components produces the second line, the vector Navier--Cauchy equation in
-\eqref{eq:navier_cauchy} of the main text.
+\cref{eq:navier_cauchy} of the main text.
 
 \subsection*{P- and S-wave projections}
 
@@ -98,7 +98,8 @@ For source-free body-wave modes, set $\mathbf{f} = \mathbf{0}$. In an unbounded
 homogeneous medium \ie{one with no physical boundaries and with a smooth
 displacement field that decays sufficiently rapidly at infinity}, the Helmholtz
 decomposition expresses $\mathbf{u}(\mathbf{x},t)$ through a scalar potential
-$\phi$ and a vector potential $\boldsymbol{\psi}$ \cite{MorseFeshbach1953}.
+$\phi$ and a vector potential $\boldsymbol{\psi}$
+\parencite{MorseFeshbach1953}.
 The Coulomb gauge $\nabla \cdot \boldsymbol{\psi} = 0$, together with the
 stated decay condition, excludes nonzero harmonic residuals:
 \begin{equation*}
@@ -110,7 +111,7 @@ stated decay condition, excludes nonzero harmonic residuals:
     &\nabla \times \mathbf{u}& = -\nabla^2\boldsymbol{\psi}.
   \end{aligned}
 \end{equation*}
-Taking the divergence of \eqref{eq:supp_navier_cauchy} gives
+Taking the divergence of \cref{eq:supp_navier_cauchy} gives
 \begin{equation*}
   \begin{aligned}
     \rho\frac{\partial^2}{\partial t^2}(\nabla \cdot \mathbf{u})
@@ -138,7 +139,7 @@ nonzero harmonic residual, so the scalar potential satisfies
   \label{eq:supp_p_wave_equation}
 \end{equation}
 
-Taking the curl of \eqref{eq:supp_navier_cauchy} gives
+Taking the curl of \cref{eq:supp_navier_cauchy} gives
 \begin{equation*}
   \begin{aligned}
     \rho\nabla \times \frac{\partial^2\mathbf{u}}{\partial t^2}
@@ -199,7 +200,7 @@ Using the vector identity for the Laplacian of a vector field,
   \nabla^2\mathbf{u}
   = \nabla(\nabla \cdot \mathbf{u}) - \nabla \times (\nabla \times \mathbf{u})
 \end{equation*}
-the source-free Navier--Cauchy \eqref{eq:supp_navier_cauchy} becomes
+the source-free Navier--Cauchy equation in \cref{eq:supp_navier_cauchy} becomes
 \begin{equation}
   \begin{aligned}
     \rho\frac{\partial^2\mathbf{u}}{\partial t^2}
@@ -217,7 +218,7 @@ The first term is the irrotational force associated with volumetric dilation or
 compression. The second is the rotational force associated with equivoluminal
 shear deformation.
 
-Substitution into \eqref{eq:supp_curl_curl_navier_cauchy} gives
+Substitution into \cref{eq:supp_curl_curl_navier_cauchy} gives
 \begin{equation*}
   \begin{aligned}
     \rho\frac{\partial^2}{\partial t^2}
@@ -239,12 +240,12 @@ Consequently, the irrotational and solenoidal contributions satisfy
   - \mu\nabla^2\boldsymbol{\psi}\right] = \mathbf{0}.
   \label{eq:supp_helmholtz_decoupling}
 \end{equation}
-Taking the divergence of \eqref{eq:supp_helmholtz_decoupling} gives the
+Taking the divergence of \cref{eq:supp_helmholtz_decoupling} gives the
 harmonic scalar residual derived above. Taking its curl gives a vanishing
 double curl of the vector residual; the Coulomb gauge makes that residual
 divergence-free, so the vector identity implies that it is harmonic as well.
 Under the stated decay condition, both residuals vanish. Therefore,
-\eqref{eq:supp_helmholtz_decoupling} recovers the previously obtained
+\Cref{eq:supp_helmholtz_decoupling} recovers the previously obtained
 independent potential equations:
 \begin{equation}
   \rho\frac{\partial^2\phi}{\partial t^2} = (\lambda + 2\mu)\nabla^2\phi,\qquad
@@ -272,8 +273,7 @@ amplitude with $\mathbf{k}_\psi \cdot \mathbf{B} = 0$. For
     & = -\lVert\mathbf{k}_\psi\rVert^2\boldsymbol{\psi}.
   \end{aligned}
 \end{equation*}
-Substitution into the two potential equations \eqref{eq:supp_p_wave_equation}
-and \eqref{eq:supp_s_wave_equation} gives
+Substitution into \cref{eq:supp_p_wave_equation,eq:supp_s_wave_equation} gives
 \begin{equation}
   \omega_\phi^2 = \alpha^2\lVert\mathbf{k}_\phi\rVert^2,
   \qquad v_{\mathrm{P}} =
@@ -288,7 +288,7 @@ The same substitution for $\boldsymbol{\psi}$ gives
   \label{eq:supp_s_dispersion}
 \end{equation}
 These relations reproduce the P- and S-wave velocities stated in
-\eqref{eq:wave_velocities}. The result is limited to the homogeneous,
+\cref{eq:wave_velocities}. The result is limited to the homogeneous,
 isotropic, linear-elastic, source-free body-wave derivation; interfaces,
 attenuation, anisotropy, and free-surface effects require additional boundary
 conditions and constitutive terms.

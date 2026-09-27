@@ -48,11 +48,11 @@ work is deployed on the Leonardo Booster partition, which provides
 dense hardware acceleration for deep neural network tensor inference.
 
 \subsection{Booster Compute Node Blade Architecture}
-The Booster module comprises $3{,}456$ compute nodes housed in Atos
+The Booster module comprises \num{3456} compute nodes housed in Atos
 BullSequana X2135 ``Da Vinci'' liquid-cooled blades. Each Booster
-node integrates a tightly coupled hybrid \ac{CPU}-\ac{GPU} computing platform
+node integrates a tightly coupled hybrid \ac{CPU}--\ac{GPU} computing platform
 whose architectural parameters are summarized in
-Table~\ref{tab:leonardo_hardware}:
+\cref{tab:leonardo_hardware}:
 
 \begin{table}[htbp]
   \centering
@@ -66,14 +66,13 @@ Table~\ref{tab:leonardo_hardware}:
       \textbf{Subsystem / Component} & \textbf{Hardware
       Specification} & \textbf{Operational Role / Performance Attribute} \\
       \midrule
-      Host Processor (\ac{CPU}) & $1 \times$ Intel Xeon Platinum 8358 & 32
-      physical cores, 64 cores, $\qty{2.60}{\giga\hertz}$ base,
-      $\qty{54}{\mega\byte}$ L3
-      cache \\
-      Host Memory (DDR4) & $\qty{512}{\giga\byte}$ DDR4-3200 ECC & 8
+      Host Processor (\ac{CPU}) & $\num{1} \times$ Intel Xeon Platinum 8358 &
+      \num{32} physical cores, \num{64} virtual cores,
+      $\qty{2.60}{\giga\hertz}$ base, $\qty{54}{\mega\byte}$ L3 cache \\
+      Host Memory (DDR4) & $\qty{512}{\giga\byte}$ DDR4-3200 ECC & \num{8}
       memory channels, theoretical bandwidth
       $\qty{204.8}{\giga\byte\per\second}$ \\
-      Accelerators (\ac{GPU}) & $4 \times$ NVIDIA Ampere A100 SXM4 &
+      Accelerators (\ac{GPU}) & $\num{4} \times$ NVIDIA Ampere A100 SXM4 &
       $\qty{64}{\giga\byte}$ HBM2e memory per \ac{GPU} ($\qty{256}{\giga\byte}$
       total node \ac{GPU} \ac{RAM}) \\
       \ac{GPU} Memory Bandwidth &
@@ -85,7 +84,7 @@ Table~\ref{tab:leonardo_hardware}:
       Tensor Processing & Third-Gen Tensor Cores &
       \qty{19.5}{\tera\text{FLOPS}} (FP32), \qty{156}{\tera\text{FLOPS}} (TF32
       Tensor Core) \\
-      Network Interface & $2 \times$ \qty{200}{\giga\bit\per\second}
+      Network Interface & $\num{2} \times \qty{200}{\giga\bit\per\second}$
       HDR InfiniBand & Mellanox
       ConnectX-6 adapters, Dragonfly+ network topology \\
       Node Storage & Diskless blade & High-speed scratch mounts
@@ -96,10 +95,9 @@ Table~\ref{tab:leonardo_hardware}:
       \footnotesize
     \item Target \& Scope: Architecture of the Atos BullSequana
       X2135 Da Vinci blade in the Leonardo Booster partition.
-    \item Notice the high \ac{GPU}-to-\ac{CPU} ratio (4:1) and massive
-      aggregate memory bandwidth ($\qty{6.2}{\tera\byte\per\second}$
-        across 4 A100
-      \ac{GPU}s).
+    \item Notice the high \ac{GPU}-to-\ac{CPU} ratio (\num{4}:\num{1}) and
+      massive aggregate memory bandwidth ($\qty{6.2}{\tera\byte\per\second}$
+      across \num{4} NVIDIA Ampere A100 \acp{GPU}).
     \item Evidence limitation: the submission templates express
       resource requests, not measured hardware specifications.
       Confirm against a dated \ac{CINECA} system specification
@@ -163,7 +161,7 @@ requirements:
     Access requires the \ac{GPU} project account allocation
     \eg{\texttt{OGS23\_PRACE\_IT\_0} or \texttt{IscrC\_AISeism}}.
     Default walltime is $\qty{30}{\minute}$, with a partition maximum of
-    $\qty{24}{\hour}$ and up to $64$ nodes per job.
+    $\qty{24}{\hour}$ and up to \num{64} nodes per job.
   \item \textbf{Data-Centric General-Purpose Module
     (\texttt{dcgp\_usr\_prod})}: Comprises $1{,}473$ dual-socket \ac{CPU}-only
     compute nodes ($164{,}976$ total cores). Each blade integrates $2 \times$
@@ -178,7 +176,7 @@ requirements:
     account suffix \eg{\texttt{OGS23\_PRACE\_IT\_1} or
     \texttt{IscrC\_AISeism\_0}}. Default walltime is
     $\qty{30}{\minute}$, with a
-    partition maximum of $\qty{24}{\hour}$ and up to $16$ nodes per job.
+    partition maximum of $\qty{24}{\hour}$ and up to \num{16} nodes per job.
   \item \textbf{Serial / Interactive Utility Partition
     (\texttt{lrd\_all\_serial})}: Hosted on dedicated cluster login and utility
     nodes (\texttt{login[08,13]}). Subject to strict per-user quotas (maximum 8
@@ -200,15 +198,15 @@ Within these partitions, job scheduling is prioritized via defined QoS tiers:
   \item \textbf{Production QoS (\texttt{boost\_qos\_bprod} /
     \texttt{dcgp\_qos\_bprod})}: Allocated for large-scale retrospective
     evaluations and long-running multi-station processing jobs. Permits up to
-    24 hours of execution time across standard partition node limits.
+    \qty{24}{\hour} of execution time across standard partition node limits.
   \item \textbf{Extended-Runtime QoS (\texttt{boost\_qos\_lprod} /
     \texttt{dcgp\_qos\_lprod})}: Reserved for long-horizon iterative training
     runs or multi-year continuous inversion chains, extending permissible
     walltime up to \qty{4}{\day} ($\qty{96}{\hour}$) for bounded node
-    groups (max 3 nodes on \ac{DCGP}, max 8 on Booster).
+    groups (max \num{3} nodes on \ac{DCGP}, max \num{8} on Booster).
 \end{itemize}
 
-Table~\ref{tab:leonardo_partitions} summarizes the operational parameters
+\cref{tab:leonardo_partitions} summarizes the operational parameters
 and architectural constraints across these primary partitions.
 
 \begin{table}[htbp]
@@ -218,32 +216,35 @@ and architectural constraints across these primary partitions.
   Leonardo partitions and QoS classes.}
   \label{tab:leonardo_partitions}
   \begin{threeparttable}
-    \begin{tabularx}{\linewidth}{l l c c c c X}
+    \begin{tabularx}{\linewidth}{l l c c c c >{\raggedright\arraybackslash}X}
       \toprule
       \textbf{Partition} & \textbf{QoS Class} & \textbf{Max Wall} &
       \textbf{Max Nodes} & \textbf{\ac{CPU}s/Node} & \textbf{\ac{GPU}s/Node} &
       \textbf{Account / Role} \\
       \midrule
       \texttt{boost\_usr\_prod} & \texttt{boost\_qos\_dbg}   &
-      $\qty{30}{\minute}$ & 8  & 32  & $4 \times $ A100 &
+      \qty{30}{\minute} & \num{8}  & \num{32}  & $\num{4} \times $
+      NVIDIA Ampere A100 &
       \texttt{*\_0} / Debug \ac{GPU} \\
       \texttt{boost\_usr\_prod} & \texttt{boost\_qos\_bprod} &
-      $\qty{24}{\hour}$   & 64 & 32  & $4 \times $ A100 &
+      \qty{24}{\hour}   & \num{64} & \num{32}  & $\num{4} \times $
+      NVIDIA Ampere A100 &
       \texttt{*\_0} / Production ML \\
       \texttt{boost\_usr\_prod} & \texttt{boost\_qos\_lprod} &
-      $\qty{96}{\hour}$   & 8  & 32  & $4 \times $ A100 &
+      \qty{96}{\hour}   & \num{8}  & \num{32}  & $\num{4} \times $
+      NVIDIA Ampere A100 &
       \texttt{*\_0} / Long ML Training \\
       \texttt{dcgp\_usr\_prod}  & \texttt{dcgp\_qos\_dbg}    &
-      $\qty{30}{\minute}$ & 2  & 112 & None             &
+      \qty{30}{\minute} & \num{2}  & \num{112} & None             &
       \texttt{*\_1} / Debug \ac{CPU} \\
       \texttt{dcgp\_usr\_prod}  & \texttt{dcgp\_qos\_bprod}  &
-      $\qty{24}{\hour}$   & 16 & 112 & None             &
+      \qty{24}{\hour}   & \num{16} & \num{112} & None             &
       \texttt{*\_1} / Production Indexing \\
       \texttt{dcgp\_usr\_prod}  & \texttt{dcgp\_qos\_lprod}  &
-      $\qty{96}{\hour}$   & 3  & 112 & None             &
+      \qty{96}{\hour}   & \num{3}  & \num{112} & None             &
       \texttt{*\_1} / Extended \ac{CPU} \\
       \texttt{lrd\_all\_serial} & \texttt{lrd\_all\_serial}  &
-      $\qty{4}{\hour}$    & 1  & $\le 8$ & None         & Default /
+      \qty{4}{\hour}    & \num{1}  & $\le \num{8}$ & None         & Default /
       Interactive utility \\
       \bottomrule
     \end{tabularx}
@@ -258,13 +259,14 @@ and architectural constraints across these primary partitions.
 \end{table}
 
 \subsection{Processor Affinity and NUMA Socket Binding}
-Because the Intel Xeon 8358 \ac{CPU} comprises 32 physical cores
-interfaced with four distinct A100 \ac{GPU} PCIe/NVLink controllers,
+Because the Intel Xeon 8358 \ac{CPU} comprises \num{32} physical cores
+interfaced with \num{4} distinct NVIDIA Ampere A100 \ac{GPU}
+PCIe/NVLink controllers,
 sub-optimal task placement can induce severe Non-Uniform Memory
 Access (\ac{NUMA}) penalties. If a process running on a core mapped
 to NUMA Node 0 attempts to communicate with a \ac{GPU} attached to NUMA
 Node 1, memory traffic must cross the internal UPI bus, reducing
-effective host-to-device transfer bandwidth by up to $40\%$.
+effective host-to-device transfer bandwidth by up to \qty{40}{\percent}.
 
 To enforce hardware affinity, Slurm directives bind each \ac{MPI} rank or
 Python process to a dedicated \ac{CPU} core group and its physically
@@ -328,7 +330,7 @@ using a two-tier orchestration layer: \textbf{Hydra} for
 configuration management and \textbf{GNU Make} for dependency tracking.
 
 \subsection{Hydra Hierarchical Configuration Management}
-Hydra (\cite{Hydra}), an open-source framework developed by Meta
+Hydra \parencite{Hydra}, an open-source framework developed by Meta
 Research, serves as the configuration backbone for the Python-level
 entry points (\texttt{ml\_catalog\_run}).
 
@@ -380,8 +382,8 @@ ml_catalog_run +libpath=. picker=phasenet picker.threshold=0.2 associator=pyocto
 \subsection{Makefile-Driven Directed Acyclic Graph (DAG) Execution}
 The macro-scale orchestration across cluster nodes is driven by a
 master Makefile (\texttt{OGS/utils/Leonardo/Makefile}). The workflow
-defines a Directed Acyclic Graph (DAG) governing data dependencies,
-as illustrated in Figure~\ref{fig:hpc_dag}.
+defines a \ac{DAG} governing data dependencies,
+as illustrated in \cref{fig:hpc_dag}.
 
 \begin{figure}[htbp]
   \centering
@@ -473,10 +475,10 @@ conservation law:
 \begin{equation}
   N_{\mathrm{tasks}} \times N_{\mathrm{cores}} = N_{\mathrm{cores}} = 32,
 \end{equation}
-where $N_{\mathrm{cores}} = 32$ corresponds to the total physical
+where $N_{\mathrm{cores}} = \num{32}$ corresponds to the total physical
 core count of the Intel Xeon 8358 processor.
 
-Table~\ref{tab:thread_allocation} demonstrates how this invariant
+\Cref{tab:thread_allocation} demonstrates how this invariant
 configures varying operational execution modes:
 
 \begin{table}[htbp]
@@ -492,11 +494,12 @@ configures varying operational execution modes:
       \textbf{Threads} ($N_{\mathrm{cores}}$) &
       \textbf{\ac{GPU}s} & \textbf{Target Pipeline Stage / Paradigm} \\
       \midrule
-      1 & 32 & 1 & Serial orchestration / Deep grid generation
-      (\ac{NonLinLoc}) \\
-      2 & 16 & 2 & Memory-intensive association (large \ac{GaMMA} swarms) \\
-      4 & 8 & 1 & Multi-\ac{GPU} deep learning inference (\ac{PhaseNet} /
-      \ac{EQT}) \\
+      \num{1} & \num{32} & \num{1} & Serial orchestration / Deep
+      grid generation (\ac{NonLinLoc}) \\
+      \num{2} & \num{16} & \num{2} & Memory-intensive association
+      (large \ac{GaMMA} swarms) \\
+      \num{4} & \num{8}  & \num{1} & Multi-\ac{GPU} deep learning
+      inference (\ac{PhaseNet} / \ac{EQT}) \\
       \bottomrule
     \end{tabularx}
     \begin{tablenotes}[flushleft]
@@ -513,8 +516,8 @@ configures varying operational execution modes:
 
 \subsection{Multi-GPU Neural Network Inference Optimization}
 Phase picking is computationally dominant in terms of raw
-floating-point operations. Accelerating inference across the 4
-NVIDIA A100 \ac{GPU}s involves four key optimizations:
+floating-point operations. Accelerating inference across the \num{4}
+NVIDIA Ampere A100 \acp{GPU} involves four key optimizations:
 \begin{enumerate}
   \item \textbf{Asynchronous CUDA Streams and Pinned Memory}:
     Waveform arrays are staged in page-locked (pinned) host memory
@@ -530,10 +533,11 @@ NVIDIA A100 \ac{GPU}s involves four key optimizations:
     active network stations are assembled into contiguous 3D tensors:
     \begin{equation}
       \mathbf{B} \in \mathbb{R}^{B_{\mathrm{size}} \times 3 \times
-      N_w}, \quad B_{\mathrm{size}} \in [128, 512],
+      N_w}, \quad B_{\mathrm{size}} \in [\num{128}, \num{512}],
     \end{equation}
-    saturating the $108$ Streaming Multiprocessors (SMs) of the A100
-    \ac{GPU} and sustaining $> 85\%$ active compute utilization.
+    saturating the \num{108} Streaming Multiprocessors (SMs) of the
+    NVIDIA Ampere A100
+    \ac{GPU} and sustaining $> \qty{85}{\percent}$ active compute utilization.
 \end{enumerate}
 
 \subsection{Shared-Memory Multithreading (OpenMP and Numba)}
@@ -567,12 +571,12 @@ To ensure high I/O throughput:
   \begin{lstlisting}[language=bash,basicstyle=\scriptsize\ttfamily]
 lfs setstripe -c 4 -S 4M /leonardo_work/IscrC_AISeism/WORK/waveform
   \end{lstlisting}
-    This distributes contiguous waveform blocks across four OSTs,
+    This distributes contiguous waveform blocks across \num{4} OSTs,
     enabling parallel read streams during multi-station loading.
   \item \textbf{Memory-Mapped Serialization}: Output picks and event
     associations are serialized using the Apache Parquet columnar
     format with Snappy compression, reducing disk storage footprint
-    by $75\%$ compared to text-based CSVs and accelerating
+    by \qty{75}{\percent} compared to text-based CSVs and accelerating
     downstream bipartite matching ingestion by an order of magnitude.
   \item \textbf{Day-Sharded SQLite Waveform Indexing}: Maintaining a
     single monolithic SQLite database (\texttt{ogsDB/.squirrel}) across
@@ -587,18 +591,19 @@ lfs setstripe -c 4 -S 4M /leonardo_work/IscrC_AISeism/WORK/waveform
   \item \textbf{Node-Level Multithreading and Ephemeral Staging}: During
     full-archive indexing (\texttt{ogsdata.py}), a thread pool
     (\texttt{ThreadPoolExecutor}) distributes daily shards across all
-    available physical \ac{CPU} cores ($N_{\mathrm{cores}} = 32$ on Booster or
-    $112$ on \ac{DCGP}). Furthermore, when downstream phase pickers query
-    waveforms, each day shard (typically $< \qty{5}{\mega\byte}$) is optionally
-    staged into node-local temporary storage (\path{/tmp} or \texttt{tmpfs})
-    via \texttt{copy\_to\_tmp=True}, achieving $100\%$ lock-free, low-latency
+    available physical \ac{CPU} cores ($N_{\mathrm{cores}} \coloneqq \num{32}$
+    on Booster or \num{112} on \ac{DCGP}). Furthermore, when downstream phase
+    pickers query waveforms, each day shard (typically $< \qty{5}{\mega\byte}$)
+    is optionally staged into node-local temporary storage (\path{/tmp} or
+    \texttt{tmpfs}) via \texttt{copy\_to\_tmp=True}, achieving
+    \qty{100}{\percent} lock-free, low-latency
     waveform lookups during high-concurrency neural inference.
 \end{enumerate}
 
 % =============================================================================
 % SECTION 5: HPC SCALABILITY ANALYSIS AND RESOURCE SYNTHESIS
 % =============================================================================
-\section{HPC Scalability Analysis and Resource Synthesis}
+\section{\acs{HPC} Scalability Analysis and Resource Synthesis}
 \label{sec:scalability}
 
 To evaluate the operational throughput of the computational pipeline
@@ -606,10 +611,10 @@ on the Leonardo supercomputer, comprehensive scaling benchmarks were
 conducted across each distinct processing stage.
 
 \subsection{Pipeline Stage Resource Allocation and Throughput}
-Table~\ref{tab:stage_benchmarks} records the intended
+\Cref{tab:stage_benchmarks} records the intended
 resource-allocation and throughput reporting layout for a benchmark
-dataset of 30 continuous seismic stations over one operational
-calendar year ($365$ continuous days). Its quantities require
+dataset of \num{30} continuous seismic stations over one operational
+calendar year (\num{365} continuous days). Its quantities require
 replacement with values from versioned benchmark logs.
 \begin{landscape}
   \begin{table}[htbp]
@@ -629,7 +634,8 @@ replacement with values from versioned benchmark logs.
         \textbf{Threads} & \textbf{Accelerators} & \textbf{Empirical
         Throughput / Runtime\tnote{a}} \\
         \midrule
-        0. Preprocessing \& Filtering & 1 & 4 & 8 & \ac{CPU} & $\sim
+        0. Preprocessing \& Filtering & \num{1} & \num{4} & \num{8}
+        & \ac{CPU} & $\sim
         \qty{2.5}{\minute} / \text{station-year}$ [Derived Index] \\
         1. Phase Picking (\ac{PhaseNet}) & 1 & 4 & 8 & $4 \times $ A100 &
         $\sim \qty{42}{\second} / \text{station-year}$ ($> 2{,}000 \times $

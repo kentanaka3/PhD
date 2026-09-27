@@ -1,7 +1,7 @@
 % Purpose: Academic introduction to earthquake mechanics, wave
 % propagation physics, regional seismotectonics, SMINO network,
 % classical vs. ML picking, and research roadmap.
-% Status: Draft; under academic review.
+% Status: REVISED
 % Source-of-truth: OGS/src/, SMINO documentation, literature
 % citations in lib.bib.
 
@@ -16,497 +16,479 @@ The lithosphere behaves as a brittle-elastic medium under tectonic differential
 stress; when shear stresses acting along a pre-existing fault plane exceed the
 frictional resistance governed by Byerlee's law or rate-and-state friction,
 dynamic shear failure nucleates and ruptures along the fault surface
-\cite{Byerlee1978,Dieterich1979}. This catastrophic dislocation radiates
+\parencite{Byerlee1978,Dieterich1979}. This catastrophic dislocation radiates
 transient elastodynamic stress waves that propagate through the heterogeneous
-interior and along the free surface of the Earth \cite{KanamoriBrodsky2004}.
+interior and along the free surface of the Earth
+\parencite{KanamoriBrodsky2004}.
 
 In a continuous, isotropic, linearly elastic medium characterized by mass
 density $\rho(\mathbf{x})$ and Lamé elastic moduli $\lambda(\mathbf{x})$ and
 $\mu(\mathbf{x})$, the infinitesimal elastodynamic equation of motion
 expressing conservation of linear momentum is formulated as:
 \begin{equation}
-  \rho(\mathbf{x}) \frac{\partial^2 u_i}{\partial t^2}(\mathbf{x}, t) =
-  \frac{\partial \sigma_{ij}}{\partial x_j}(\mathbf{x}, t) + f_i(\mathbf{x}, t)
+  \rho(\mathbf{x}) \frac{\partial^2 \mathbf{u}}{\partial t^2}(\mathbf{x}, t) =
+  \nabla \cdot \bm{\sigma}(\mathbf{x}, t) + \mathbf{f}(\mathbf{x}, t),
   \label{eq:momentum_conservation}
 \end{equation}
-where $\mathbf{u}(\mathbf{x}, t) = [u_1, u_2, u_3]^{\mathrm{T}}$ denotes the
-displacement vector field, $\boldsymbol{\sigma}(\mathbf{x}, t)$ is the
-symmetric Cauchy stress tensor, and $\mathbf{f}(\mathbf{x}, t)$ represents
-external body force distributions per unit volume (such as equivalent
-double-couple source representations of fault rupture). Under the generalized
-Hooke's law for isotropic elasticity, the constitutive stress-strain relation
-is given by:
+where $\mathbf{u}(\mathbf{x}, t) = [u_1, u_2, u_3]^\top$ denotes the
+displacement vector field, $\bm{\sigma}(\mathbf{x}, t)$ is the symmetric
+Cauchy stress tensor, and $\mathbf{f}(\mathbf{x}, t)$ represents external body
+force distributions per unit volume (such as equivalent double-couple source
+representations of fault rupture).
+
+Under the generalized Hooke's law for isotropic linear elasticity, the
+constitutive stress-strain relation binds Cauchy stress to the
+infinitesimal strain tensor $\bm{\varepsilon}$:
 \begin{equation}
-  \sigma_{ij} = \lambda \delta_{ij} \epsilon_{kk} + 2\mu \epsilon_{ij},
+  \bm{\sigma} \coloneqq \lambda (\nabla \cdot \mathbf{u}) \mathbf{I} +
+  2\mu \bm{\varepsilon} \equiv \lambda (\operatorname{div}
+  \mathbf{u}) \mathbf{I} +
+  \mu \left( \nabla \mathbf{u} + (\nabla \mathbf{u})^\top \right),
+  \label{eq:hooke_law_tensor}
+\end{equation}
+or in component index notation:
+\begin{equation}
+  \sigma_{ij} \coloneqq \lambda \delta_{ij} \epsilon_{kk} + 2\mu \epsilon_{ij},
   \label{eq:hooke_law}
 \end{equation}
-where $\delta_{ij}$ is the Kronecker delta, $\epsilon_{ij} =
-\left(\partial_{x_j} u_i + \partial_{x_i} u_j\right)/2$ is the infinitesimal
-strain tensor, and Einstein summation convention over repeated indices is
-implied. For the homogeneous-medium specialization used below, let $\rho > 0$
-and $\lambda,\mu > 0$ be spatially constant. Substituting the constitutive
-law~\eqref{eq:hooke_law} into the equation of
-motion~\eqref{eq:momentum_conservation} then yields the Navier--Cauchy
-elastodynamic wave equation:
+where $\delta_{ij}$ is the Kronecker delta, $\epsilon_{ij} \coloneqq
+\frac{1}{2}\left(\partial_{x_j} u_i + \partial_{x_i} u_j\right)$ denotes the
+symmetric infinitesimal strain tensor, and Einstein summation convention over
+repeated indices is implied.
+
+For the \textbf{homogeneous-medium} specialization used below, let $\rho > 0$
+and $\lambda,\mu > 0$ be spatially constant ($\nabla \rho = \nabla \lambda =
+\nabla \mu = \mathbf{0}$). Substituting the constitutive law in
+\cref{eq:hooke_law} into the equation of motion in
+\cref{eq:momentum_conservation} yields the Navier--Cauchy elastodynamic wave
+equation:
 \begin{equation}
-  \rho \frac{\partial^2 \mathbf{u}}{\partial t^2} = (\lambda +
-  \mu)\nabla(\nabla \cdot \mathbf{u}) + \mu \nabla^2 \mathbf{u} + \mathbf{f}.
+  \rho \ddot{\mathbf{u}} = (\lambda +
+  \mu)\nabla(\nabla \cdot \mathbf{u}) + \mu \nabla^2 \mathbf{u} + \mathbf{f},
   \label{eq:navier_cauchy}
 \end{equation}
 
-For source-free body-wave modes, set $\mathbf{f} = \mathbf{0}$. On an
-unbounded domain, assume that the displacement and potentials decay
-sufficiently rapidly at infinity. With the Coulomb gauge
-$\nabla \cdot \boldsymbol{\psi} = 0$, Helmholtz's decomposition represents
-the displacement as an irrotational (curl-free) scalar potential
-$\phi(\mathbf{x}, t)$ and a solenoidal (divergence-free) vector potential
-$\boldsymbol{\psi}(\mathbf{x}, t)$:
+For \textbf{source-free} body-wave modes, set $\mathbf{f} = \mathbf{0}$. On an
+\textbf{unbounded domain}, \textbf{assume} that the displacement and potentials
+decay sufficiently rapidly at infinity. With the Coulomb gauge
+($\nabla \cdot \bm{\psi} \equiv 0$), Helmholtz's decomposition expresses the
+vector displacement field as the sum of an irrotational (curl-free) scalar
+potential $\phi(\mathbf{x}, t)$ and a solenoidal (divergence-free) vector
+potential $\bm{\psi}(\mathbf{x}, t)$:
 \begin{equation}
-  \mathbf{u} = \nabla \phi + \nabla \times \boldsymbol{\psi}, \quad
-  \text{with} \quad \nabla \cdot \boldsymbol{\psi} = 0.
+  \mathbf{u} \coloneqq \nabla \phi + \nabla \times \bm{\psi}, \quad
+  \text{with} \quad \nabla \cdot \bm{\psi} \equiv 0.
   \label{eq:helmholtz}
 \end{equation}
-The gauge and decay conditions remove harmonic residuals in the potential
-equations. Substituting decomposition~\eqref{eq:helmholtz} into the
-source-free homogeneous equation of motion~\eqref{eq:navier_cauchy} therefore
-decouples the wavefield into two independent wave equations propagating
-through the medium at distinct characteristic phase velocities:
+The Coulomb gauge condition ($\nabla \cdot \bm{\psi} \equiv 0$) and decay
+conditions, remove harmonic residuals. Applying the divergence operator
+and curl operator to \cref{eq:helmholtz}, and exploiting the fundamental vector
+nullity identities $\nabla \times (\nabla \phi) \equiv \mathbf{0}$ and
+$\nabla \cdot (\nabla \times \bm{\psi}) \equiv 0$, decomposes the wavefield
+into orthogonal kinematic projections:
 \begin{equation}
-  \frac{\partial^2 \phi}{\partial t^2} = \alpha^2 \nabla^2 \phi,
-  \quad \frac{\partial^2 \boldsymbol{\psi}}{\partial t^2} = \beta^2
-  \nabla^2 \boldsymbol{\psi},
+  \nabla \cdot \mathbf{u} = \nabla^2 \phi, \quad
+  \nabla \times \mathbf{u} = -\nabla^2 \bm{\psi}.
+  \label{eq:helmholtz_projections}
+\end{equation}
+Substituting \cref{eq:helmholtz,eq:helmholtz_projections} into the source-free
+Navier--Cauchy equation in \cref{eq:navier_cauchy} decouples the elastodynamic
+wavefield into two independent wave equations governing the temporal kinematic
+acceleration rates of the potentials:
+\begin{equation}
+  \ddot{\phi} = \alpha^2 \nabla^2 \phi, \quad
+  \ddot{\bm{\psi}} = \beta^2 \nabla^2 \bm{\psi},
   \label{eq:decoupled_wave_equations}
 \end{equation}
-where $\alpha$ and $\beta$ represent the longitudinal compressional
-(Primary, P) and transverse shear (Secondary, S) wave propagation
-velocities, respectively:
+where $\ddot{\phi} \equiv \frac{\partial^2 \phi}{\partial t^2}$ and
+$\ddot{\bm{\psi}} \equiv \frac{\partial^2 \bm{\psi}}{\partial t^2}$ denote the
+second-order temporal kinematic rates of change for the compressional and
+equivoluminal potential fields, and $\alpha$ and $\beta$ represent the
+longitudinal compressional (Primary, P) and transverse shear (Secondary, S)
+wave propagation phase velocities, respectively:
 \begin{equation}
-  \alpha = \sqrt{\frac{\lambda + 2\mu}{\rho}}, \quad \beta =
+  \alpha \coloneqq \sqrt{\frac{\lambda + 2\mu}{\rho}}, \quad \beta \coloneqq
   \sqrt{\frac{\mu}{\rho}}.
   \label{eq:wave_velocities}
 \end{equation}
 
-The physical characteristics and particle motion trajectories of
-these seismic phases govern the observational records captured by
-modern seismological sensor systems:
+The physical characteristics and particle motion trajectories of these seismic
+phases govern the observational records captured by modern seismological sensor
+systems:
 \begin{enumerate}[label=(\alph*)]
-  \item \textbf{Primary (P) Waves}: Compressional or dilatational
-    longitudinal waves that propagate via volumetric deformation
-    ($\nabla \cdot \mathbf{u} \neq 0, \nabla \times \mathbf{u} =
-    \mathbf{0}$). Particle motion is strictly parallel to the
-    direction of wave propagation. Because $\lambda > 0$ and $\mu >
-    0$, $\alpha > \beta$ holds universally, ensuring that P waves
-    represent the fastest seismic phase and form the first onset
-    arrival observed on seismograms. P waves propagate through
-    solids, fluids, and gases.
-  \item \textbf{Secondary (S) Waves}: Equivoluminal transverse shear
-    waves that propagate via shear deformation without volume change
-    ($\nabla \cdot \mathbf{u} = 0, \nabla \times \mathbf{u} \neq
-    0$). Particle displacement occurs perpendicular to the ray
-    propagation vector. In a Cartesian coordinate system aligned
-    with the incidence plane, S waves are decomposed into vertically
-    polarized shear motion (SV) and horizontally polarized shear
-    motion (SH). Because fluids have zero shear modulus ($\mu = 0$),
-    S waves propagate exclusively through solid elastic media.
+  \item \textbf{Primary (P) Waves}: Compressional or dilatational longitudinal
+    waves that propagate via volumetric deformation ($\nabla \cdot \mathbf{u}
+    \not\equiv 0, \; \nabla \times \mathbf{u} \equiv \mathbf{0}$). Particle
+    motion is strictly parallel to the direction of wave propagation. Because
+    $\lambda > 0$ and $\mu > 0$; $\alpha > \beta$ holds universally, ensuring
+    that P-waves represent the fastest seismic phase and form the first onset
+    arrival observed on seismograms.
+  \item \textbf{Secondary (S) Waves}: Equivoluminal transverse shear waves that
+    propagate via shear deformation without volume change
+    ($\nabla \cdot \mathbf{u} \equiv 0, \; \nabla \times \mathbf{u} \not\equiv
+    \mathbf{0}$). Particle displacement occurs perpendicular to the ray
+    propagation vector. In a Cartesian coordinate system aligned with the
+    incidence plane, S-waves are decomposed into \ac{SV} and \ac{SH}.
+    Because fluids have zero shear modulus ($\mu = 0$), S-waves propagate
+    exclusively through solid elastic media.
 \end{enumerate}
 
-In an ideal Poissonian solid ($\lambda = \mu$, equivalent to
-Poisson's ratio $\nu = 0.25$), the kinematic velocity ratio satisfies:
+In an ideal Poissonian solid ($\lambda = \mu$, equivalent to Poisson's ratio
+$\nu = \num{0.25}$), the kinematic velocity ratio satisfies:
 \begin{equation}
-  \frac{\alpha}{\beta} = \sqrt{\frac{\lambda + 2\mu}{\mu}} =
-  \sqrt{3} \approx 1.732.
+  \frac{\alpha}{\beta} \equiv \sqrt{\frac{\lambda + 2\mu}{\mu}} = \sqrt{3}
+  \approx \num{1.732}.
   \label{eq:poisson_ratio}
 \end{equation}
-In complex geological crustal formations, lithological variations,
-microcrack porosity, and fluid saturation cause the observed
-$V_{\mathrm{P}}/V_{\mathrm{S}}$ ratio to vary typically between
-$1.65$ and $1.90$.
+In complex geological crustal formations, lithological variations, microcrack
+porosity, and fluid saturation cause the observed
+$V_{\mathrm{P}}/V_{\mathrm{S}}$ ratio to vary typically between $\num{1.65}$
+and $\num{1.90}$ \placeholder{CITE}.
 
-At discontinuous geological interfaces and the Earth's stress-free
-surface ($\sigma_{i3}|_{z = 0} = 0$), mode conversion and interference
-between body waves generate \textbf{surface waves}. These propagate
-horizontally along the crustal waveguide with amplitudes decaying
+At \textbf{discontinuous} geological interfaces and the Earth's
+\textbf{stress-free} surface ($\sigma_{i3}|_{z = 0} = 0$), mode conversion and
+interference between body waves generate \textbf{surface waves}. These
+propagate horizontally along the crustal waveguide with amplitudes decaying
 exponentially with depth:
 \begin{itemize}
-  \item \textbf{Rayleigh Waves}: Resulting from constructive P-SV
-    interference at the free boundary, exhibiting retrograde
-    elliptical particle motion in the vertical-radial propagation
-    plane, with phase velocities $c_{\mathrm{R}} \approx 0.92\beta$.
-  \item \textbf{Love Waves}: Resulting from constructive SH wave
-    trapping within low-velocity surface layers overlying a
-    higher-velocity half-space, exhibiting purely horizontal
-    transverse motion perpendicular to the propagation path.
+  \item \textbf{Rayleigh Waves}: Resulting from constructive P-\ac{SV}
+    interference at the free boundary, exhibiting retrograde elliptical
+    particle motion in the vertical-radial propagation plane, with phase
+    velocities $c_{\mathrm{R}} \approx \num{0.92}\beta$.
+  \item \textbf{Love Waves}: Resulting from constructive \ac{SH} wave trapping
+    within low-velocity surface layers overlying a higher-velocity half-space,
+    exhibiting purely horizontal transverse motion perpendicular to the
+    propagation path.
 \end{itemize}
 
-Modern digital seismological observatories record these vector
-ground motions along three mutually orthogonal spatial components:
-Vertical (Z), North-South (N), and East-West (E). Observational
-stations deploy high-gain broadband seismometers \eg{measuring velocity
-  $\dot{\mathbf{u}}(t)$ over flat bandwidths from \qty{0.01}{\hertz}
-to \qty{50}{\hertz}}
-and strong-motion accelerometers \eg{measuring ground acceleration
-  $\ddot{\mathbf{u}}(t)$ without clipping during high-amplitude near-source
-shaking}. Data are continuously digitized at high sampling rates
-(\qty{100}{\hertz}) and packaged into standard miniSEED (MSEED) containers,
-with instrumental transfer functions, calibration poles, zeros, and geodetic
-station coordinates formally cataloged in StationXML schemas.
+Modern digital seismological stations record these vector ground motions along
+three mutually orthogonal spatial components: Vertical (Z), North-South (N),
+and East-West (E). Typically, modern seismic stations of local networks deploy
+high-gain broadband seismometers to measure ground velocity
+$\dot{\mathbf{u}}(t)$ over flat bandwidths (\qtyrange{50}{100}{\hertz})
+and strong-motion accelerometers to measure ground acceleration
+$\ddot{\mathbf{u}}(t)$. Data are continuously digitized at high sampling rates
+(generally \qtyrange{100}{200}{\hertz}) and distributed in standard miniSEED
+(MSEED) format, with instrumental response information and geodetic station
+coordinates formally cataloged in StationXML schemas.
 
 \section{Seismotectonic Context of Northeastern Italy and the 1976 Legacy}
 \label{sec:tectonics}
 
-Northeastern Italy, embracing the Friuli Venezia Giulia (FVG) and
-Veneto regions, represents one of the most tectonically active and
-seismically hazardous sectors of the entire European Alpine arc. The
-geodynamic evolution of the region is governed by the active
-collision and northward indentation of the Adriatic microplate
-(Adria) into the stable Eurasian plate. Geodetic measurements from
-continuous GNSS networks indicate that the Adria microplate rotates
-counterclockwise around an Eulerian pole in the Western Po Plain,
-producing active crustal shortening across the Eastern Southern Alps
-at rates of $1.5\text{--}3.0\,\mathrm{mm/yr}$ in a NNW-SSE orientation
-\cite{AndersonJackson1987,Handy2014}.
+Northeastern Italy, embracing the \acf{FVG} and Veneto regions, represents one
+of the most tectonically active and seismically hazardous sectors of the entire
+European Alpine arc. The geodynamic evolution of the region is governed by the
+active collision and northward indentation of the Adriatic microplate (Adria)
+into the stable Eurasian plate. Geodetic measurements from continuous GNSS
+networks indicate that the Adria microplate rotates counterclockwise around an
+Eulerian pole in the Western Po Plain, producing active crustal shortening
+across the Eastern Southern Alps at rates of
+\qtyrange{1.5}{3.0}{\milli\meter\per\year} in a NNW-SSE orientation
+\parencite{AndersonJackson1987,Handy2014,Tunini2024}.
 
-Structurally, Northeastern Italy constitutes a complex tectonic
-junction where two major collisional orogenic belts converge:
+Structurally, Northeastern Italy constitutes a complex tectonic junction where
+two major collisional orogenic belts converge:
 \begin{enumerate}
-  \item The \textbf{Eastern Southern Alps}: A south-verging
-    thrust-and-fold retro-wedge characterized by E-W to WNW-ESE
-    striking thrust faults and ramp-anticlines (including the
-      Periadriatic Lineament, the Fella-Sava fault, the Maniago
-    thrust, and the Buia-Tricesimo thrust system) that accommodate
-    crustal shortening through north-dipping blind and exposed thrusting.
-  \item The \textbf{External Dinarides}: A dextral strike-slip
-    structural system extending from Slovenia into Eastern Friuli,
-    dominated by NW-SE trending transcurrent fault structures such
-    as the Idrija and Ravne fault networks.
-    \cite{Bressan1998}
+  \item The \textbf{Eastern Southern Alps}: A south-verging thrust-and-fold
+    retro-wedge characterized by ENE-WSW to WNW-ESE striking thrust faults and
+    ramp-anticlines (including the Periadriatic Lineament, the Fella-Sava
+    fault, the Maniago thrust, and the Buia-Tricesimo thrust system) that
+    accommodate crustal shortening through north-dipping blind and exposed
+    thrusting \parencite{Bressan2018}.
+  \item The \textbf{External Dinarides}: A dextral strike-slip structural
+    system extending from Slovenia into Eastern Friuli, dominated by NW-SE
+    trending transcurrent fault structures such as the Idrija and Ravne fault
+    networks \parencite{Bressan1998}.
 \end{enumerate}
 
-This tectonic configuration results in concentrated intraplate
-seismicity characterized by shallow hypocenters (typically
-$\qtyrange{5}{15}{\kilo\meter}$ depth), predominantly compressive
-thrust-faulting mechanisms with subordinate strike-slip kinematics,
-and recurrent destructive earthquake sequences.
+This tectonic configuration results in concentrated seismicity characterized by
+shallow hypocenters (typically \qtyrange{5}{15}{\kilo\meter} depth),
+predominantly compressive thrust-faulting mechanisms with subordinate
+strike-slip kinematics, and destructive earthquake sequences
+\parencite{Sarao2021}.
 
-The defining modern seismic episode in this region is the
-catastrophic \textbf{1976 Friuli earthquake sequence}. On May 6,
-1976, at 20:00:12 UTC, a major earthquake of moment magnitude
-$M_{\mathrm{w}}~6.4$ ($M_{\mathrm{L}}~6.5$) nucleated near Gemona
-del Friuli, producing epicentral intensities of $I_0 =
-\mathrm{IX}\text{--}\mathrm{X}$ on the Mercalli-Cancani-Sieberg
-(MCS) scale. The mainshock ruptured blind thrust faults along the
-Southalpine front \cite{Aoudia2000}. The sequence was compounded in
-September 1976 by
-two devastating aftershocks on September 11 ($M_{\mathrm{w}}~5.9$)
-and September 15 ($M_{\mathrm{w}}~6.0$). In total, the 1976 Friuli
-seismic crisis claimed 989 lives, injured over 2,800 people, left
-over 100,000 homeless, and destroyed entire medieval villages across
-the Tagliamento and Fella river basins.
+The strongest seismic event recorded in this region is the catastrophic
+\textbf{1976 Friuli earthquake sequence}. On May 6, 1976, at 20:00:12 UTC, a
+major earthquake of moment magnitude $M_{\mathrm{w}} = \num{6.5}$ nucleated
+near Gemona del Friuli, producing epicentral intensities of $I_0 =
+\mathrm{IX}\text{--}\mathrm{X}$ on the \ac{MCS} scale. The mainshock ruptured
+blind thrust faults along the Southalpine front \parencite{Aoudia2000}. The
+sequence was compounded in September 1976 by two devastating aftershocks on
+September 15 ($M_{\mathrm{w}} = 5.6$ and $M_{\mathrm{w}} = \num{6.0}$). In
+total, the 1976 Friuli seismic crisis claimed \num{989} lives, injured over
+\num{2800} people, left over \num{100000} homeless, and destroyed entire
+medieval villages across the Tagliamento and Fella river basins.
 
-The tragedy of the 1976 disaster catalyzed a profound transformation
-in European seismology, earthquake engineering, civil protection
-organization, and disaster response legislation. Crucially, it led
-the Regional Government of Friuli Venezia Giulia to mandate the
-establishment of a dedicated permanent seismological monitoring
-infrastructure. In 1977, the \acf{OGS} established the \acf{CRS} in
-Udine and Trieste. Since its inception, \ac{OGS} \ac{CRS} has maintained
-continuous, high-resolution seismic monitoring across Northeastern
-Italy, serving as the official technical-scientific body supporting
-the regional Civil Protection agencies of Friuli Venezia Giulia and Veneto.
+The tragedy of the 1976 disaster catalyzed a profound transformation in
+European seismology, earthquake engineering, civil protection organization, and
+disaster response legislation. Crucially, it led the Regional Government of
+\ac{FVG} to mandate the establishment of a dedicated permanent seismological
+monitoring infrastructure. In 1977, the \acf{OGS} established the \acf{CRS} in
+Udine. Since its inception, \ac{OGS} \ac{CRS} has maintained continuous,
+high-resolution seismic monitoring across Northeastern Italy, serving as the
+official technical-scientific body supporting the regional Civil Protection
+agencies of \ac{FVG}.
 
-\section{The \ac{OGS}-\ac{SMINO} Monitoring Network Infrastructure}
+\section{The \ac{OGS}-\acs{SMINO} Monitoring Network Infrastructure}
 \label{sec:smino_network}
 
-Over four decades of technological development, the initial sparse
-analog network deployed after the 1976 earthquake evolved into the
-modern \acf{SMINO}. The \ac{SMINO} monitoring
-infrastructure represents a state-of-the-art, multi-parametric,
-real-time observation system covering Friuli Venezia Giulia, Veneto,
-and surrounding border areas.
+Over five decades of technological development, the initial sparse analog
+network deployed after the 1976 earthquake evolved into the modern \acf{SMINO}.
+The \ac{SMINO} monitoring infrastructure represents a state-of-the-art,
+multi-parametric, real-time observation system covering \ac{FVG}, Veneto, and
+surrounding border areas.
 
 The regional monitoring infrastructure integrates:
 \begin{itemize}
-  \item A dense permanent backbone of digital three-component
-    broadband and very-broadband seismometers (principally
-    Streckeisen STS-2, Nanometrics Trillium, and Guralp sensors)
-    installed in vaults, tunnels, and boreholes to minimize cultural
-    and atmospheric noise.
-  \item High-dynamic-range strong-motion accelerometers (Kinemetrics
-    Episensor) collocated at broadband sites and deployed across
-    urban centers and critical engineering infrastructures to ensure
-    on-scale recordings of strong ground motions.
-  \item Cross-border data exchange with neighboring Italian,
-    Austrian, and Slovenian institutions, creating a unified
-    transboundary seismic monitoring domain.
+  \item A dense permanent backbone of digital three component broadband and
+    very broadband seismometers.
+  \item High-dynamic-range strong-motion accelerometers collocated at broadband
+    sites and deployed across urban centers and critical engineering
+    infrastructures to ensure on-scale recordings of strong ground motions.
+  \item Cross-border data exchange with neighboring Italian, Austrian, and
+    Slovenian institutions, creating a unified transboundary seismic monitoring
+    domain.
 \end{itemize}
 
-In operational practice, seismic monitoring in Northeastern Italy is
-not conducted in isolation; wavefield propagation respects no
-administrative boundaries. As described in
-Chapter~\ref{chap:datasets}, the complete regional monitoring
-aperture analyzed in this study encompasses \placeholder{NUM STATIONS} stations
-originating from 18 distinct regional, national, and international
-networks (including \ac{OGS}, \ac{INGV}, GeoSphere Austria, the
-\ac{ARSO}, the \ac{SED}, and the \ac{RAN}). The continuous
-recording from this dense collective array provides the empirical
-foundation for our machine learning and computational investigations.
+As described in \cref{chap:datasets}, the complete regional monitoring aperture
+analyzed in this study encompasses \placeholder{NUM STATIONS} stations
+originating from \placeholder{NUM NETWORKS} distinct regional,
+national, and international networks (\cref{tab:network_inventory} provides a
+  systematic synthesis of these network assets, followed by formal
+bibliographic and data repository citations). The continuous
+recording from these seismic stations provides the empirical
+foundation for our \ac{ML} and computational investigations.
 
-\section{Classical Automated Picking and Association Limitations}
+\section{Classical Automated Picking}
 \label{sec:classical_picking}
 
-Transforming continuous, multi-channel ground motion velocity
-streams into discrete, scientifically verified earthquake catalogs
-requires identifying the exact onset times of P- and S-wave phase
-arrivals (phase picking) and grouping arrivals originating from the
-same physical hypocentral rupture (phase association).
+Transforming continuous, multi-channel seismic streams into discrete, verified
+earthquake catalogs requires identifying the exact onset times of P- and S-wave
+phase arrivals (phase picking) and grouping arrivals originating from the same
+physical hypocentral rupture (phase association).
 
-For over four decades, automated seismological processing has relied
-on classical heuristic algorithms:
+For over four decades, automated seismological processing has relied on
+classical heuristic algorithms:
 \begin{enumerate}
-  \item \textbf{Short-Time Average over Long-Time Average
-    (\ac{STA/LTA})}: Introduced in foundational form by
-    \textcite{STALTA}, the method calculates the ratio of energy or
-    amplitude within a short sliding time window
-    ($T_{\mathrm{STA}}$) to that within a preceding long time window
-    ($T_{\mathrm{LTA}}$) over a characteristic function $\mathit{CF}(t)$:
+  \item \textbf{\acf{STA/LTA}}: The method calculates the ratio of energy or
+    amplitude within a short sliding time window ($T_{\mathrm{STA}}$) to that
+    within a preceding long time window ($T_{\mathrm{LTA}}$) over a
+    characteristic function $\mathrm{CF}(t)$:
     \begin{equation}
-      R(t) = \frac{\mathit{STA}(t)}{\mathit{LTA}(t)} =
+      R(t) \coloneqq \frac{\mathrm{STA}(t)}{\mathrm{LTA}(t)} =
       \frac{\frac{1}{T_{\mathrm{STA}}}\int_{t - T_{\mathrm{STA}}}^t
-      \mathit{CF}(\tau)\,\mathrm{d}\tau}{\frac{1}{T_{\mathrm{LTA}}}\int_{t
-      - T_{\mathrm{LTA}}}^t\mathit{CF}(\tau)\,\mathrm{d}\tau},
+      \mathrm{CF}(\tau)\,\mathrm{d}\tau}{\frac{1}{T_{\mathrm{LTA}}}\int_{t
+      - T_{\mathrm{LTA}}}^t\mathrm{CF}(\tau)\,\mathrm{d}\tau},
       \label{eq:stalta}
     \end{equation}
-    where $\mathit{CF}(t)$ is commonly defined as $y(t)^2$ or
-    $y(t)^2 + C \dot{y}(t)^2$. A pick trigger is declared when $R(t)
-    \ge \eta_{\mathrm{on}}$, and deactivated when $R(t) \le
-    \eta_{\mathrm{off}}$.
-  \item \textbf{Autoregressive Akaike Information Criterion
-    (\ac{AIC})}: Applied to seismic phase timing by
-    \textcite{LEONARD1999247}, the AIC models the seismogram before
-    and after an arbitrary split point $k$ as two distinct
-    stationary autoregressive processes. The minimum of the AIC
-    function identifies the optimal transition between background
-    noise and seismic onset:
+    where $\mathrm{CF}(t)$ is commonly defined as $y(t)^2$ or $y(t)^2 +
+    C \dot{y}(t)^2$. A pick trigger is declared when $R(t) \ge
+    \eta_{\mathrm{on}}$, and deactivated when $R(t) \le \eta_{\mathrm{off}}$.
+  \item \textbf{Autoregressive \ac{AIC}}: Applied to seismic phase timing by
+    \textcite{LEONARD1999247}, the \ac{AIC} models the seismogram before and
+    after an arbitrary split point $k$ as two distinct stationary
+    autoregressive processes. The minimum of the \ac{AIC} function identifies
+    the optimal transition between background noise and seismic onset:
     \begin{equation}
-      \mathit{AIC}(k) = k \log(\hat{\sigma}_1^2) + (N - k)
-      \log(\hat{\sigma}_2^2),
+      \mathrm{AIC}(k) \coloneqq k \log\bigl(\hat{\sigma}_1^2\bigr) + (N - k)
+      \log\bigl(\hat{\sigma}_2^2\bigr),
       \label{eq:aic}
     \end{equation}
-    where $\hat{\sigma}_1^2$ and $\hat{\sigma}_2^2$ are the variance
-    estimators of the prediction errors for intervals $[1, k]$ and
-    $[k + 1, N]$, respectively.
+    where $\hat{\sigma}_1^2$ and $\hat{\sigma}_2^2$ are the variance estimators
+    of the prediction errors for intervals $[1, k]$ and $[k + 1, N]$,
+    respectively.
 \end{enumerate}
 
-Despite their enduring historical utility, classical algorithms
-suffer from fundamental physical and algorithmic limitations:
+Despite their enduring historical utility, classical algorithms suffer from
+fundamental physical and algorithmic limitations:
 \begin{itemize}
-  \item \textbf{Vulnerability to Noise and False Triggers}: \ac{STA/LTA}
-    is highly sensitive to non-stationary transient noise, cultural
-    vibrations, electrical glitches, and meteorological
-    disturbances, causing excessive false trigger rates in densely
-    populated or industrial valleys.
-  \item \textbf{Emergent and Low-SNR Degradation}: Onsets of
-    small-magnitude earthquakes ($M_{\mathrm{L}} < 2.0$) or emergent
-    arrivals traveling through attenuative, heterogeneous crustal
-    paths exhibit low \acp{SNR}. \ac{STA/LTA}
-    triggers systematically late, while \ac{AIC} minimization frequently
-    settles into local minima created by noise fluctuations.
+  \item \textbf{Vulnerability to Noise and False Triggers}: \ac{STA/LTA} is
+    highly sensitive to non-stationary transient noise, cultural vibrations,
+    electrical glitches, and meteorological disturbances, causing false
+    triggers in densely populated or industrial valleys.
+  \item \textbf{Emergent and Low-SNR Degradation}: Onsets of small-magnitude
+    earthquakes ($M_{\mathrm{L}} < \num{2.0}$) or emergent arrivals traveling
+    through attenuative, heterogeneous crustal paths exhibit low \acp{SNR}.
   \item \textbf{Phase Misidentification}: Neither \ac{STA/LTA} nor \ac{AIC}
     natively distinguishes between compressional (P) and shear (S)
     phases without ad-hoc, brittle horizontal-to-vertical amplitude
-    ratios or polarization filters. S-wave arrivals arriving within
-    the high-amplitude, reverberating P-wave coda are regularly
-    missed or misclassified.
-  \item \textbf{Combinatorial Association Bottlenecks}: Grid-search
-    associators that cluster picks by evaluating travel-time
-    residuals across spatial velocity grids exhibit exponential
-    computational scaling $\mathcal{O}(N_{\mathrm{picks}}^k)$ with
-    pick volume. When spurious noise picks enter the pipeline,
-    association algorithms suffer combinatoric explosion or form
-    hallucinated, unphysical hypocenters.
+    ratios or polarization filters.
+  \item \textbf{Combinatorial Association Bottlenecks}: Grid-search associators
+    that cluster picks by evaluating travel-time residuals across spatial
+    velocity grids exhibit exponential computational scaling
+    $\mathcal{O}(N_{\mathrm{picks}}^k)$ with pick volume. When spurious noise
+    picks enter the pipeline, association algorithms suffer combinatoric
+    explosion or form hallucinated, unphysical hypocenters.
 \end{itemize}
 
-Because of these limitations, operational seismological
-observatories have historically required dedicated human analysts to
-inspect, refine, or manually pick phase arrivals for every candidate
-event. This manual intervention introduces severe operational
-latency (often hours to days), creates subjective timing
-inconsistencies between analysts, and establishes an insurmountable
-operational ceiling that forces observatories to discard
-microseismic events below completeness thresholds ($M_{\mathrm{c}}
-\approx 1.5$).
+Because of these limitations, operational seismological observatories have
+historically required dedicated human analysts to inspect, refine, or manually
+pick phase arrivals for every candidate event. This manual intervention
+introduces severe operational latency (often hours to days), creates subjective
+timing inconsistencies between analysts.
 
 \section{The Big Data Era and Deep Learning in Seismology}
 \label{sec:dl_seismology}
 
-Over the past decade, the rapid expansion of permanent networks,
-dense nodal geophone arrays, and real-time transboundary telemetry
-has propelled observational seismology into the era of ``Big Data.''
-Continuous seismic archives at regional and national data centers
-ingest tens of gigabytes per day and routinely accumulate terabytes
-to petabytes of continuous waveform data annually. Analyzing these
-continuous, multi-channel data streams exhaustively is beyond human
-manual processing capacity.
+Over the past decade, the rapid expansion of permanent seismic networks, dense
+nodal geophone arrays, and real-time transboundary telemetry has propelled
+observational seismology into the era of ``Big Data''. Continuous seismic
+archives at regional and national data centers ingest tens of gigabytes per day
+and routinely accumulate terabytes to petabytes of continuous waveform data
+annually. Analyzing these continuous, multi-channel data streams exhaustively
+is beyond human manual processing capacity.
 
-This data deluge has coincided with revolutionary advances in
-\acf{DL}. Deep neural networks possess the unique ability to learn
-rich, non-linear, hierarchical feature representations directly from
-continuous, uncurated sensor time series without requiring manual
-feature engineering. Applied to seismic waveforms, deep
-convolutional and attention-based architectures learn the
-multi-scale spatio-temporal signatures of wave propagation,
-dispersion, impedance contrasts, and noise textures
-\parencite{MousaviBeroza2022}.
+This data collection has coincided with revolutionary advances in \acf{DL}.
+Deep neural networks possess the unique ability to learn rich, non-linear,
+hierarchical feature representations directly from continuous sensor time
+series without requiring manual feature engineering. Applied to seismic
+waveforms, deep convolutional and attention-based architectures learn the
+multi-scale spatio-temporal signatures of wave propagation, dispersion, and
+noise textures \parencite{MousaviBeroza2022}.
 
-Key architectural breakthroughs include:
+Key architectural breakthroughs include among others:
 \begin{itemize}
-  \item \textbf{PhaseNet} (\cite{PhaseNet}): A deep 1D Convolutional
-    Neural Network (\ac{CNN}) based on the U-Net architecture.
-    PhaseNet employs an encoder-decoder topology with skip
-    connections, processing three-component waveforms through
-    successive downsampling and upsampling convolutional stages to
-    produce continuous probability distributions for P-wave
-    arrivals, S-wave arrivals, and noise.
-  \item \textbf{\acf{EQT}}: A sophisticated multi-task deep network
-    that integrates 1D convolutional layers, bidirectional \ac{LSTM}
-    recurrent units, and multiple multi-head self-attention
-    mechanisms. \ac{EQT} models both local waveform geometries
-    and long-range temporal dependencies across 60-second windows,
-    simultaneously outputting detection probabilities for earthquake
-    presence, P-wave arrival, and S-wave arrival.
+  \item \textbf{\acl{PhaseNet}}: A deep 1D \ac{CNN} with a U-Net architecture,
+    designed for precise P- and S-wave arrival time picking on three component
+    seismograms.
+  \item \textbf{\acl{EQT}}: A hierarchical \ac{DL} architecture combining
+    \ac{CNN} layers, bidirectional \ac{LSTM}, and multi-head self-attention
+    mechanisms to capture local waveform patterns and long-range temporal
+    dependencies across \qty{60}{\second} windows, simultaneously outputting
+    detection probabilities for earthquake presence, P-wave arrival, and S-wave
+    arrival.
 \end{itemize}
 
-To overcome software fragmentation and provide standardized
-interfaces for benchmarking, \textcite{SeisBench} introduced
-\textbf{SeisBench} (\cite{SeisBench}), an open-source platform
-offering unified Python APIs for machine learning in seismology.
-SeisBench provides standardized data loaders, benchmark training
-datasets, and pre-trained weights for state-of-the-art
-architectures, dramatically enhancing the reproducibility of
-deep-learning seismic workflows. In this thesis, SeisBench serves as
-the core foundation for evaluating pre-trained phase pickers across
-diverse training datasets.
+To overcome software fragmentation and provide standardized interfaces for
+benchmarking, \textcite{SeisBench} introduced \textbf{SeisBench}, an
+open-source platform offering unified Python \acp{API} for \ac{ML} in
+seismology. SeisBench provides standardized data loaders, benchmark training
+datasets, and pre-trained weights for state-of-the-art architectures,
+dramatically enhancing the reproducibility of \ac{DL} seismic workflows. In
+this thesis, SeisBench serves as the core foundation for evaluating pre-trained
+phase pickers across diverse training datasets.
 
 \section{The March 27, 2024 Socchieve Earthquake Sequence}
 \label{sec:socchieve_sequence}
 
-To test the operational efficacy, robustness, and scientific
-fidelity of deep-learning pipelines under demanding real-world
-conditions, this research focuses on an intense seismic sequence
-that struck Friuli in early 2024.
+To test the operational efficacy, robustness, and scientific fidelity of
+\ac{DL} pipelines under demanding real-world conditions, this research focuses
+on an intense seismic sequence that occurred in Friuli in early 2024.
 
-On \textbf{March 27, 2024, at 21:19:37 UTC} (22:19:37 local time), a
-magnitude $M_{\mathrm{L}}~4.6 \pm 0.3$ ($M_{\mathrm{w}}~4.5$)
-earthquake occurred in the Carnic Prealps, approximately
-\qty{5}{\kilo\meter} south-southwest of Socchieve, Udine province
-(hypocentral coordinates: Latitude $46.3583^\circ\,\mathrm{N}$,
-  Longitude $12.8080^\circ\,\mathrm{E}$, focal depth
-\qty{10.22}{\kilo\meter}). The earthquake was strongly felt across the
-entire Friuli Venezia Giulia and Veneto regions, as well as in
-neighboring Austria and Slovenia, causing localized structural
-damage, masonry cracking, and rockfalls in the epicentral area.
+On \textbf{March 27, 2024, at 21:19:37 UTC} (22:19:37 local time), a magnitude
+$M_{\mathrm{L}} = \num{4.6 \pm 0.3}$ ($M_{\mathrm{w}} = \num{4.5}$) earthquake
+occurred in the Carnic Prealps. The earthquake was strongly felt across the
+entire \ac{FVG} and Veneto regions, as well as in neighboring Austria and
+Slovenia.
 
-This earthquake constitutes the \textbf{most energetic tectonic
-event to occur in Friuli since the 1976--1980 crisis}. It initiated
-a vigorous aftershock sequence comprising hundreds of minor
-earthquakes and microseismic events that decayed over subsequent
-weeks and months. The spatial proximity of dense seismic
-instrumentation, combined with the presence of complex Alpine
-topography, variable focal mechanisms, and realistic operational
-cultural noise, renders the Socchieve sequence a pristine natural
-testbed for stress-testing machine learning detection, phase
-association, and hypocentral relocation against an expert analyst ground truth.
+This earthquake constitutes one of the \textbf{most energetic tectonic event to
+occur in Friuli since the 1976--1980 crisis}. It initiated a vigorous
+aftershock sequence comprising hundreds of minor earthquakes and microseismic
+events that decayed over subsequent weeks and months. The spatial proximity of
+dense seismic networks, renders the Socchieve sequence a natural testbed for
+stress-testing \ac{ML} detection, phase association, and hypocentral relocation
+against an expert analyst ground truth.
 
 \section{Research Objectives and Scope of the Dissertation}
 \label{sec:objectives}
 
-The overarching scientific objective of this doctoral dissertation
-is to construct, optimize, deploy, and rigorously validate a
-complete, automated, procedural machine learning pipeline for
-earthquake pick detection, phase association, and event
-characterization, specifically engineered for scalable execution on
-\ac{HPC} infrastructures.
+The scientific objective of this doctoral dissertation is to construct,
+optimize, deploy, and rigorously validate a complete, automated, procedural
+\ac{ML} pipeline for earthquake pick detection, phase association, and event
+characterization, specifically engineered for scalable execution on \ac{HPC}
+infrastructures.
 
 The key research questions addressed in this thesis are:
 \begin{enumerate}
-  \item \textbf{Domain Adaptation and Generalization}: How
-    effectively do deep-learning phase pickers (PhaseNet and
-    \ac{EQT}) trained on large external datasets (\ac{INSTANCE} in
-    Italy, \ac{STEAD} globally, \ac{SCEDC} in California) generalize to the
-    complex geological and noise environment of Northeastern Italy?
-    Does regional training data (\ac{INSTANCE}) outperform massive but
-    geographically foreign datasets (\ac{SCEDC}, \ac{STEAD})?
-  \item \textbf{Associator Scaling and Performance}: How do advanced
-    phase association algorithms—specifically the Bayesian Gaussian
-    Mixture Model Associator (\ac{GaMMA}) and the high-throughput
-    octree-based associator (\ac{PyOcto})—compare in association
-    recall, computational efficiency, and robustness against
-    false-positive pick contamination?
-  \item \textbf{Physically Bounded Performance Validation}: How can
-    model-generated earthquake catalogs be compared against manual
-    analyst reference catalogs without introducing spatiotemporal
-    bias or duplicate assignment artifacts?
-  \item \textbf{HPC Scalability and Operational Viability}: Can the
-    entire processing workflow—from continuous multi-client \ac{FDSN}
-    waveform ingestion to deep inference, association, and
-    relocation—be parallelized across modern \ac{GPU}-accelerated
-    supercomputing architectures (such as the \ac{CINECA} Leonardo Tier-0
-    system) to support near-real-time operational monitoring and
-    rapid historical archive reprocessing?
+  \item \textbf{Domain Adaptation and Generalization}:
+    \begin{itemize}
+      \item How effectively do \ac{DL} phase pickers (\ac{PhaseNet} and
+        \ac{EQT}) trained on large external datasets (\ac{INSTANCE} in
+        Italy, \ac{STEAD} globally, \ac{SCEDC} in California) generalize to the
+        complex geological and noise environment of Northeastern Italy?
+      \item Does regional training data (\ac{INSTANCE}) outperform massive but
+        geographically foreign datasets (\ac{SCEDC}, \ac{STEAD})?
+    \end{itemize}
+  \item \textbf{Associator Scaling and Performance}:
+    \begin{itemize}
+      \item How do advanced phase association algorithms (specifically the
+        Bayesian \acf{GaMMA} and the \acf{PyOcto}) compare in association
+        recall, computational efficiency, and robustness against \ac{FP} pick
+        contamination?
+    \end{itemize}
+  \item \textbf{Physically Bounded Performance Validation}:
+    \begin{itemize}
+      \item How can model-generated earthquake catalogs be compared against
+        manual analyst reference catalogs without introducing spatiotemporal
+        bias or duplicate assignment artifacts?
+    \end{itemize}
+  \item \textbf{HPC Scalability and Operational Viability}:
+    \begin{itemize}
+      \item Can the entire processing workflow \ie{from continuous multi-client
+          \ac{FDSN} waveform ingestion to deep inference, association, and
+        relocation} be parallelized across modern \ac{GPU}-accelerated
+        supercomputing architectures (such as the \ac{CINECA} Leonardo Tier-0
+        system) to support near-real-time operational monitoring and rapid
+        historical archive reprocessing?
+    \end{itemize}
 \end{enumerate}
 
 \section{Dissertation Structure and Chapter Roadmap}
 \label{sec:roadmap}
 
-The remainder of this dissertation is organized into eight
-interconnected chapters, followed by a dedicated Data and Resources
-statement and technical appendices:
+The remainder of this dissertation is organized into eight chapters followed by
+a concluding synthesis, a dedicated Data and Resources statement, and technical
+appendices:
 \begin{itemize}
-  \item \textbf{Chapter~\ref{chap:datasets} (Datasets)}: Details the
-    operational case study data acquired across Northeastern Italy evaluating
-    \textbf{+20 years} of observational data (\textbf{January 1st, 2005 to
-    December 31st, 2025}) across \placeholder{NUM STATIONS} stations,
-    (\placeholder{NUM EVENTS} relocated \ac{OGS} reference events with
-    \placeholder{NUM PICKS} picks) and reviews the four benchmark training
-    datasets (\ac{INSTANCE}, \ac{STEAD}, \ac{SCEDC}, and Original sets).
-  \item \textbf{Chapter~\ref{chap:data_engineering} (Data Engineering)}:
-    Presents the software architecture of the pipeline, detailing the central
+  \item \textbf{\Cref{chap:datasets} (Datasets)}: Details the operational case
+    study data acquired across Northeastern Italy evaluating over twenty years
+    of observational data (\textbf{January 1st, 2005 to December 31st, 2025})
+    across \placeholder{NUM STATIONS} stations, (\placeholder{NUM EVENTS}
+    relocated \ac{OGS} reference events with \placeholder{NUM PICKS} picks) and
+    reviews the four benchmark training datasets (\ac{INSTANCE}, \ac{STEAD},
+    \ac{SCEDC}, and Original sets).
+  \item \textbf{\Cref{chap:data_engineering} (Data Engineering)}: Presents the
+    software architecture of the pipeline, detailing the central
     \texttt{ogsconstants} configuration, weight-to-uncertainty mappings,
     automated \ac{FDSN} multi-client waveform downloading, multi-format legacy
-    catalog parsing (HPL, DAT, TXT, PUN), catalog aggregation, geodetic math,
+    catalog parsing (\placeholder{TODO} HPL, DAT, TXT, PUN), catalog
+    aggregation, geodetic math,
     and visualization frameworks.
-  \item \textbf{Chapter~\ref{chap:computational_pipeline}
-    (Computational Pipeline)}:
+  \item \textbf{\Cref{chap:computational_pipeline} (Computational Pipeline)}:
     Formulates the complete procedural workflow, detailing continuous waveform
-    preprocessing, deep-learning phase picking inference, Bayesian (\ac{GaMMA})
+    preprocessing, \ac{DL} phase picking inference, Bayesian (\ac{GaMMA})
     and octree (\ac{PyOcto}) phase association, 1D \ac{NonLinLoc} probabilistic
-    relocation, and local magnitude ($M_{\mathrm{L}}$) inversion.
-  \item \textbf{Chapter~\ref{chap:methodology} (Pipeline Evaluation
-    Framework)}: Develops the formal evaluation methodology, defining bipartite
-    graph maximum-weight matching (\ac{BPGMA}) for both picks and events, the
-    construction of domain-specific confusion matrices, and the mathematical
-    derivation of recall, precision, and $F_1$ scores.
-  \item \textbf{Chapter~\ref{chap:hpc} (HPC Implementation)}: Analyzes the
-    \ac{HPC} implementation deployed on the \ac{CINECA} Leonardo supercomputer
-    (EuroHPC Booster partition), detailing SLURM job orchestration, \ac{MPI}
-    and \ac{GPU} process allocation, parallel I/O throughput, and
-    execution scaling
+    relocation, and local magnitude ($M_{\mathrm{L}}$) estimation.
+  \item \textbf{\Cref{chap:pipeline_evaluation} (Pipeline Evaluation
+    Framework)}: Develops the formal evaluation methodology, defining the
+    \acf{BPGMA} for both picks and events, the construction of domain-specific
+    confusion matrices, and the mathematical derivation of recall, precision,
+    and \acp{F1}.
+  \item \textbf{\Cref{chap:hpc} (HPC Implementation)}: Analyzes the \ac{HPC}
+    implementation deployed on the \ac{CINECA} Leonardo supercomputer (EuroHPC
+    Booster partition), detailing SLURM job orchestration, \ac{MPI} and
+    \ac{GPU} process allocation, parallel I/O throughput, and execution scaling
     profiles.
-  \item \textbf{Chapter~\ref{chap:results} (Results)}: Delivers a comprehensive
-    empirical evaluation of the benchmarking campaign on the
-    Northeastern Italy dataset, presenting pick detection recall
-    curves, timing residual distributions, hypocentral relocation
-    offsets, magnitude fidelity, and comparative associator analysis.
-  \item \textbf{Chapter~\ref{chap:conclusion} (Conclusion)}:
-    Synthesizes the core
-    scientific and engineering findings, discusses the implications
-    for modern operational seismological observatories, outlines
-    current limitations, and charts future directions for AI-driven
-    seismological monitoring.
-  \item \textbf{Data and Resources}: Declares the persistent digital
-    object identifiers (DOIs), software repositories, and access
-    endpoints for all code, models, and catalogs developed in this work.
-  \item \textbf{Appendix}: Documents supplementary mathematical
-    derivations, configuration schemas, and detailed per-station
-    performance tables.
+  \item \textbf{\Cref{chap:training} (Training)}: Details the \ac{DL} training
+    pipeline, loss functions, optimization, and \ac{HPC} scaling for model
+    fine-tuning and regional domain adaptation on continuous waveform archives.
+  \item \textbf{\Cref{chap:clustering} (Seismic Swarm and Density-Based
+    Clustering)}: Develops density-based and manifold-learning clustering
+    formulations, information-theoretic cluster validity indices, and
+    epidemic-type aftershock sequence modeling for resolving fine
+    spatiotemporal seismicity structures and swarm dynamics.
+  \item \textbf{\Cref{chap:results} (Results)}: Delivers a comprehensive
+    empirical evaluation of the benchmarking campaign on the Northeastern Italy
+    dataset, presenting pick detection recall curves, timing residual
+    distributions, hypocentral relocation offsets, magnitude fidelity, and
+    comparative associator analysis.
+  \item \textbf{\Cref{chap:conclusion} (Conclusion)}: Synthesizes the core
+    scientific and engineering findings, discusses the implications for modern
+    operational seismological observatories, outlines current limitations, and
+    charts future directions for \ac{AI}-driven seismological monitoring.
+  \item \textbf{Data and Resources}: Declares the persistent \acp{DOI},
+    software repositories, and access endpoints for all code, models, and
+    catalogs developed in this work.
+  \item \textbf{Appendix}: Documents supplementary mathematical derivations,
+    configuration schemas, and detailed per-station performance tables.
 \end{itemize}

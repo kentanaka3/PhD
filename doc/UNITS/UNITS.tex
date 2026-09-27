@@ -32,7 +32,7 @@
 \usepackage{titling}
 \usepackage{eso-pic}
 \usepackage{transparent}
-\usepackage{amsmath, amsfonts, amssymb, amsthm}
+\usepackage{amsmath, amsfonts, amssymb, amsthm, bm}
 \usepackage{epstopdf}
 \usepackage[
   style        = authoryear,
@@ -81,6 +81,23 @@
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.18}
 \usepackage{xspace}
+\usepackage{cleveref}
+\crefname{equation}{Eq.}{Eqs.}
+\Crefname{equation}{Equation}{Equations}
+\creflabelformat{equation}{(#2#1#3)}
+\crefname{figure}{Figure}{Figures}
+\Crefname{figure}{Figure}{Figures}
+\crefname{table}{Table}{Tables}
+\Crefname{table}{Table}{Tables}
+\crefname{section}{Section}{Sections}
+\Crefname{section}{Section}{Sections}
+\crefname{chapter}{Chapter}{Chapters}
+\Crefname{chapter}{Chapter}{Chapters}
+\crefname{appendix}{Appendix}{Appendices}
+\Crefname{appendix}{Appendix}{Appendices}
+\crefname{algorithm}{Algorithm}{Algorithms}
+\Crefname{algorithm}{Algorithm}{Algorithms}
+
 \newcommand{\ie}[1]{(\textit{i.e.},\ #1)}
 \newcommand{\eg}[1]{(\textit{e.g.},\ #1)}
 % Semantic mathematical operators
@@ -88,6 +105,13 @@
 \DeclareMathOperator{\argmax}{arg\,max}
 \DeclareMathOperator{\Var}{Var}
 \DeclareMathOperator{\Cov}{Cov}
+\DeclareMathOperator{\Tr}{Tr}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\rank}{rank}
+\DeclareMathOperator{\MSE}{MSE}
+\DeclareMathOperator{\RMSE}{RMSE}
+\DeclareMathOperator{\MAE}{MAE}
+\DeclareMathOperator{\softmax}{softmax}
 
 % Theorem and mathematical environments
 \newtheorem{theorem}{Theorem}[chapter]
@@ -210,7 +234,12 @@
 \DeclareAcronym{CPU}{short = CPU, long = Central Processing Unit}
 \DeclareAcronym{CRS}{short = CRS, long = Centro di Ricerche Sismologiche}
 \DeclareAcronym{CUDA}{short = CUDA, long = Compute Unified Device Architecture}
-
+\DeclareAcronym{CVI}{
+  short = $\mathrm{CVI}$,
+  long = Cluster Validity Index,
+  long-plural = Cluster Validity Indices,
+  cite = arbelaitz2013
+}
 \DeclareAcronym{DB}{
   short = $\mathrm{DB}$,
   long = Davies--Bouldin Index,
@@ -238,7 +267,7 @@
   long = Epidemic-Type Aftershock Sequence,
   cite = ogata1988
 }
-\DeclareAcronym{F1}{short = F1, long = F1 Score}
+\DeclareAcronym{F1}{short = $\mathrm{F}_1$, long = F1 Score}
 \DeclareAcronym{FDR}{short = FDR, long = False Discovery Rate}
 \DeclareAcronym{FDSN}{
   short = FDSN,
@@ -272,6 +301,7 @@
   long = Italian Seismic Dataset for Machine Learning,
   cite = INSTANCE
 }
+\DeclareAcronym{IQR}{short = IQR, long = Interquartile Range}
 \DeclareAcronym{KNN}{
   short = KNN,
   long = K-Nearest Neighbors
@@ -283,6 +313,7 @@
 }
 \DeclareAcronym{KPI}{short = KPI, long = Key Performance Indicator}
 \DeclareAcronym{LSTM}{short = LSTM, long = Long Short-Term Memory}
+\DeclareAcronym{MAD}{short = $\mathrm{MAD}$, long = Median Absolute Deviation}
 \DeclareAcronym{MAE}{short = $\mathrm{MAE}$, long = Mean Absolute Error}
 \DeclareAcronym{MDL}{
   short = MDL,
@@ -336,6 +367,7 @@
   short = PNRR,
   long = Piano Nazionale di Ripresa e Resilienza
 }
+\DeclareAcronym{PR}{short = PR, long = Precision-Recall}
 \DeclareAcronym{PS}{short = PS, long = Proposed}
 \DeclareAcronym{PSHA}{
   short = PSHA,
@@ -353,6 +385,11 @@
 \DeclareAcronym{RF}{short = RF, long = Random Forest}
 \DeclareAcronym{RNN}{short = RNN, long = Recurrent Neural Network}
 \DeclareAcronym{RMSE}{short = RMSE, long = Root Mean Square Error}
+\DeclareAcronym{ROC}{short = ROC, long = Receiver Operating Characteristic}
+\DeclareAcronym{ROC-AUC}{
+  short = ROC-AUC,
+  long = Area Under the Receiver Operating Characteristic Curve
+}
 \DeclareAcronym{SC}{
   short = $\mathrm{SC}$,
   long = Silhouette Coefficient,
@@ -396,12 +433,18 @@
 }
 \DeclareAcronym{TN}{short = TN, long = True Negative}
 \DeclareAcronym{TP}{short = TP, long = True Positive}
+\DeclareAcronym{TWO-NN}{
+  short = TWO-NN,
+  long = Two Nearest Neighbors,
+  cite = facco2017
+}
 \DeclareAcronym{UniTS}{short = UniTS, long = Università degli Studi di Trieste}
 \DeclareAcronym{UMVUE}{
   short = $\mathrm{UMVUE}$,
   long = Uniformly Minimum-Variance Unbiased Estimator,
   cite = lehmann1950
 }
+\DeclareAcronym{UTC}{short = UTC, long = Coordinated Universal Time}
 
 \usepackage[onehalfspacing]{setspace}
 
