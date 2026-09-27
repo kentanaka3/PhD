@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Sequence Clustering Pipeline - Seismic Event Cluster Analysis
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module implements an automated seismic sequence clustering pipeline for
@@ -21,15 +21,15 @@ KEY FEATURES:
   - Inter-event time features: Uses temporal spacing as clustering feature
 
 PIPELINE STAGES:
-  ┌─────────────────────────────────────────────────────────────────────────┐
-  │ 1. LOAD CATALOG     Load seismic events for each time window            │
-  │ 2. PREPARE FEATURES Convert to Cartesian, compute inter-event times     │
-  │ 3. STANDARDIZE      Scale features using StandardScaler                 │
-  │ 4. OPTIMIZE         Find best parameters per algorithm/metric           │
-  │ 5. CLUSTER          Assign events to clusters                           │
-  │ 6. SAVE             Export per-cluster CSV files                        │
-  │ 7. VISUALIZE        Generate map and cross-section plots                │
-  └─────────────────────────────────────────────────────────────────────────┘
+  ┌───────────────────────────────────────────────────────────────────────┐
+  │ 1. LOAD CATALOG      Load seismic events for each time window         │
+  │ 2. PREPARE FEATURES  Convert to Cartesian, compute inter-event times  │
+  │ 3. STANDARDIZE       Scale features using StandardScaler              │
+  │ 4. OPTIMIZE          Find best parameters per algorithm/metric        │
+  │ 5. CLUSTER           Assign events to clusters                        │
+  │ 6. SAVE              Export per-cluster CSV files                     │
+  │ 7. VISUALIZE         Generate map and cross-section plots             │
+  └───────────────────────────────────────────────────────────────────────┘
 
 FEATURE SET:
   The clustering uses 4 features (all standardized):
@@ -92,7 +92,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 # -----------------------------------------------------------------------------
@@ -248,7 +249,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     self.best_params: dict[int, dict[str, dict[str, Any]]] = {}
 
     # Configure module-level logger
-    self.logger = OGS_C.setup_logger(self.__class__.__name__, self.verbose)
+    self.logger = OGS_U.setup_logger(self.__class__.__name__, self.verbose)
 
   # -------------------------------------------------------------------------
   # PROPERTIES: Metadata Accessors

@@ -1,13 +1,24 @@
 #!/usr/bin/env bash
 
+# =============================================================================
 # Markdown Validator
-# ==================
+# =============================================================================
 #
 # Validate Markdown structure, local links, and project script references.
 # The validator reads source files only and reports findings to standard error.
 #
 # USAGE
 #   bash md_val.sh [--root DIR|--file FILE]
+#
+# OPTIONS
+#   --root DIR   Validate all Markdown files under the specified root directory.
+#   --file FILE  Validate a single Markdown file.
+#   -h, --help   Display this help message.
+#
+# AUTHORS
+#   - 健
+#
+# =============================================================================
 
 set -euo pipefail
 umask 077

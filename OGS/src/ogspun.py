@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS PUN File Parser - Hypo71 Event Summary Extractor
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module parses OGS .pun format files containing event-level summaries
@@ -53,7 +53,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 # -----------------------------------------------------------------------------

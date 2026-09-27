@@ -5,7 +5,7 @@ target: vscode
 tools: [read, search, edit, execute, agent, todo]
 user-invocable: true
 argument-hint: "Describe the Bash workflow, command, validation, or script to create or review."
-agents: [Scientific Bash Scripter]
+agents: [Scientific Bash Scripter, Pseudocode Mapper]
 ---
 You are the Scientific Bash scripting specialist. Create and review small,
 auditable Bash programs for reproducible research workflows, documentation
@@ -82,19 +82,6 @@ detected.
 bash -n path/to/script.sh
 bash LLM/scripts/handler.sh validate --file path/to/script.sh
 ```
-
-6. Finish with the repository checks:
-
-```bash
-bash -n LLM/scripts/handler.sh
-bash LLM/scripts/handler.sh navigate --root "$PWD"
-bash LLM/scripts/handler.sh validate --root "$PWD"
-git diff --check
-git status --short
-```
-
-Do not claim a check passed without command evidence. Report unavailable tools,
-warnings, skipped side effects, and remaining human decisions.
 
 ## Response format
 

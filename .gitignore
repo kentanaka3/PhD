@@ -520,3 +520,5 @@ data/*
 # Output
 *.csv
 *.xml
+doc/imgs/OnlyEqNLL1D/*/assignments/*
+doc/imgs/OnlyEqNLL1D/*/events/*

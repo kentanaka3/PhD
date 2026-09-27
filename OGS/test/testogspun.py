@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS PUN Parser Test Suite - Unit Tests for Hypo71 Summary Extraction
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 Unit test suite for ``ogspun.py``. Validates command-line arguments and
@@ -31,7 +31,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 import ogsconstants as OGS_C
@@ -46,8 +47,6 @@ from pathlib import Path
 import pandas as pd
 
 THIS_DIR = os.path.dirname(__file__)
-sys.path.append(os.path.abspath(THIS_DIR + "/../src"))
-
 
 DATA_DIR = Path(os.path.abspath(THIS_DIR + "/../data"))
 DATA_FILE = "onlyEQ-2024.pun"

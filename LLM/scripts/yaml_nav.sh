@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
+# =============================================================================
 # YAML Navigator
-# ==============
+# =============================================================================
 #
 # Navigate YAML-named documents by listing conservative block-mapping paths or
 # extracting structural blocks and explicit line ranges. This is not a YAML
@@ -37,6 +38,12 @@
 # run_slice                   | Print an inclusive source line range.
 # run_navigation_command      | Parse commands, validate configuration, and dispatch.
 # main                        | Delegate command handling to the common navigator.
+#
+# AUTHORS:
+#   - 健
+#
+# =============================================================================
+
 
 set -euo pipefail
 umask 077

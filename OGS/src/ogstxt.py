@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS TXT File Parser - Catalog Event Summary Extractor
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module parses OGS .txt catalog exports containing event-level summaries.
@@ -54,7 +54,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 # -----------------------------------------------------------------------------

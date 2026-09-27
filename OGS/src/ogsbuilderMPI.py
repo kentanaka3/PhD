@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Catalog Builder MPI - Distributed Dask-MPI Catalog Construction Engine
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 HPC-optimized catalog builder implementing distributed execution via Dask-MPI.
@@ -38,7 +38,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 import os

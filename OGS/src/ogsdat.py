@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS DAT File Parser - Seismic Phase Pick Extractor
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module parses OGS .dat format files containing seismic phase picks
@@ -64,7 +64,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 # -----------------------------------------------------------------------------

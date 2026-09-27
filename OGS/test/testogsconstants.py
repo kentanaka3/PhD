@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Constants Test Suite - Unit Tests for Inventory & Waveform Lookups
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 Unit test suite for ``ogsconstants.py`` and associated data lookups. Verifies
@@ -33,19 +33,18 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
-import ogsutils as OGS_U
 import ogsconstants as OGS_C
+import ogsutils as OGS_U
 import os
-import sys
 import pandas as pd
 import unittest
 from pathlib import Path
 from datetime import datetime
 THIS_DIR = os.path.dirname(__file__)
-sys.path.append(THIS_DIR + "/../src")
 
 
 class TestOGSConstants(unittest.TestCase):

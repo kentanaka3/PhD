@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Utilities Module - Shared Helpers for Catalog Comparison Workflows
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module is the catch-all toolbox used by the rest of the ``ogs*`` package.
@@ -77,33 +77,38 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 # =============================================================================
 # STANDARD LIBRARY IMPORTS
 # =============================================================================
-import os                               # Operating system interface
-import sys                              # System-specific parameters
-import logging                          # Logging facility
 import argparse                         # Command-line argument parsing
-from pathlib import Path                # Object-oriented filesystem paths
-from datetime import date, datetime, timedelta as td  # Date and time manipulation
-from typing import Any, Optional, Sequence, Tuple, cast  # Type hinting
-from concurrent.futures import ThreadPoolExecutor  # Multi-threaded scanning
-
-try:
-  from . import ogsconstants as OGS_C
-except ImportError:
-  import ogsconstants as OGS_C
-
-# =============================================================================
-# THIRD-PARTY LIBRARY IMPORTS
-# =============================================================================
-import numpy as np                      # Numerical computing
-import pandas as pd                     # Data manipulation and analysis
+import logging                          # Logging facility
 import networkx as nx                   # Graph algorithms (bipartite matching)
+import numpy as np                      # Numerical computing
+import os                               # Operating system interface
+import pandas as pd                     # Data manipulation and analysis
+import sys                              # System-specific parameters
+from concurrent.futures import ThreadPoolExecutor  # Multi-threaded scanning
+# Date and time manipulation
+from datetime import date, datetime, time, timedelta as td
 from obspy import UTCDateTime           # Seismology-specific datetime
+from pathlib import Path                # Object-oriented filesystem paths
+from typing import Any, Optional, Sequence, Tuple, cast  # Type hinting
+
+import ogsconstants as OGS_C
+
+# Project root and default data paths
+DATA_PATH = Path(__file__).parent.parent.parent
+DEFAULT_WAVE_PATH = Path(
+    os.environ.get("WORK_PATH", DATA_PATH), OGS_C.WAVEFORM_STR
+)
+DEFAULT_STATION_PATH = Path(
+    os.environ.get("WORK_PATH", DATA_PATH), OGS_C.STATION_STR
+)
+
 
 # =============================================================================
 # LOGGING
@@ -475,9 +480,9 @@ def dist_pick(B: pd.Series, T: pd.Series,
       Weighted similarity score between 0 and 1.
   """
   return (
-      97. * dist_time(T, B, time_offset_sec) +    # Time dominates (97%)
-      2. * dist_phase(T, B) +                     # Phase type (2%)
-      1. * dist_prob(T, B)                        # Probability ratio (1%)
+      97. * dist_time(B, T, time_offset_sec) +    # Time dominates (97%)
+      2. * dist_phase(B, T) +                     # Phase type (2%)
+      1. * dist_prob(B, T)                        # Probability ratio (1%)
   ) / 100.
 
 
@@ -541,6 +546,24 @@ def is_julian(string: str) -> datetime:
     ValueError: If string doesn't match expected format.
   """
   return datetime.strptime(string, "%Y%j")
+
+
+def is_time(string: str) -> time:
+  """
+  Parse a time string in HHMMSS format.
+
+  Used as argparse type converter for time arguments.
+
+  Args:
+    string: Time string in HHMMSS format (e.g., "153045").
+
+  Returns:
+    datetime.time object representing the parsed time.
+
+  Raises:
+    ValueError: If string doesn't match expected format.
+  """
+  return datetime.strptime(string, OGS_C.TIME_FMT).time()
 
 
 def is_file_path(string: str) -> Path:
@@ -840,9 +863,7 @@ def waveforms(
 
   logger = setup_logger(__name__)
 
-  threads = int(
-    os.environ.get("CORES", os.environ.get("SLURM_CPUS_PER_TASK", "1"))
-  )
+  threads = OGS_C.DEFAULT_CORES_COUNT
 
   start_day = start.date()
   end_day = end.date()
@@ -1006,6 +1027,29 @@ def add_date_range_arguments(
   return date_group
 
 
+def add_time_arguments(
+    parser: argparse.ArgumentParser,
+    *flags: str,
+    required: bool = False,
+    help: str = "Time in HHMMSS format",
+    default: Any = None,
+    metavar: Optional[str] = None,
+) -> Any:
+  """Add time argument (-t/--time or custom flags) to an argument parser or group."""
+  if not flags:
+    flags = ("-t", "--time")
+  kwargs: dict[str, Any] = {
+      "type": is_time,
+      "required": required,
+      "help": help,
+  }
+  if default is not None:
+    kwargs["default"] = default
+  if metavar is not None:
+    kwargs["metavar"] = metavar
+  return parser.add_argument(*flags, **kwargs)
+
+
 def add_file_arguments(
     parser: Any,
     *flags: str,
@@ -1056,7 +1100,7 @@ def add_directory_arguments(
 
 
 def add_output_arguments(
-    parser: Any,
+    parser: argparse.ArgumentParser,
     *flags: str,
     required: bool = False,
     default: Any = None,
@@ -1079,9 +1123,9 @@ def add_output_arguments(
 
 
 def add_stations_arguments(
-    parser: Any,
+    parser: argparse.ArgumentParser,
     required: bool = True,
-    default: Any = None,
+    default: Any = DEFAULT_STATION_PATH,
     help: str = "Station metadata directory",
     metavar: Optional[str] = None,
 ) -> Any:
@@ -1097,9 +1141,9 @@ def add_stations_arguments(
 
 
 def add_waveforms_arguments(
-    parser: Any,
+    parser: argparse.ArgumentParser,
     required: bool = True,
-    default: Any = None,
+    default: Any = DEFAULT_WAVE_PATH,
     help: str = "Path to the waveforms directory",
     metavar: Optional[str] = None,
 ) -> Any:
@@ -1115,8 +1159,8 @@ def add_waveforms_arguments(
 
 
 def add_threads_arguments(
-    parser: Any,
-    default: Any = None,
+    parser: argparse.ArgumentParser,
+    default: int = OGS_C.DEFAULT_CORES_COUNT,
     help: str = "Number of worker threads (default: from SLURM or CPU count)",
     metavar: Optional[str] = None,
 ) -> Any:
@@ -1154,7 +1198,7 @@ def add_file_or_dir_arguments(
   return path_group
 
 
-def add_verbosity_arguments(parser: argparse.ArgumentParser,) -> Any:
+def add_verbosity_arguments(parser: argparse.ArgumentParser) -> Any:
   """Add verbosity (-v/--verbose) and quiet (-q/--quiet) arguments."""
   group = parser.add_mutually_exclusive_group(required=False)
   group.add_argument(
@@ -1190,8 +1234,8 @@ def parse_station_args(
       default=Path("."),
       help="Output directory (default: current directory)"
   )
-  add_stations_arguments(parser)
-  add_waveforms_arguments(parser)
+  add_stations_arguments(parser, required=False)
+  add_waveforms_arguments(parser, required=False)
   return parser.parse_args(args)
 
 
@@ -1199,10 +1243,6 @@ def parse_downloader_args(
     args: Optional[Sequence[str]] = None
 ) -> argparse.Namespace:
   """Parse command-line arguments for waveform downloading."""
-  data_path = Path(__file__).parent.parent.parent
-  default_wave_path = Path(
-      os.environ.get("WORK_PATH", data_path), OGS_C.WAVEFORMS_STR
-  )
   parser = argparse.ArgumentParser(
       description="Download waveform data from configured FDSN clients"
   )
@@ -1211,24 +1251,26 @@ def parse_downloader_args(
       metavar=OGS_C.EMPTY_STR, help="Key to download the data from server."
   )
   parser.add_argument(
-      '-N', "--network", default=[OGS_C.ALL_WILDCHAR_STR], type=str,
+      "--network", default=[OGS_C.ALL_WILDCHAR_STR], type=str,
       nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR, required=False,
-      help=f"Specify a set of Networks to analyze (default: '{OGS_C.ALL_WILDCHAR_STR}')."
+      help=f"""
+          Specify a set of Networks to analyze and negate using a '-' prefix.
+          (default: '{OGS_C.ALL_WILDCHAR_STR}').
+          Example 0: --network "*" (all networks)\n
+          Example 1: --network "OX NI" (exclusively these networks)\n
+          Example 2: --network "-OX -NI" (negate these networks)
+      """
   )
   parser.add_argument(
-      '-S', "--station", default=[OGS_C.ALL_WILDCHAR_STR], type=str,
+      "--station", default=[OGS_C.ALL_WILDCHAR_STR], type=str,
       nargs=OGS_C.ONE_MORECHAR_STR, metavar=OGS_C.EMPTY_STR, required=False,
-      help=f"Specify a set of Stations to analyze (default: '{OGS_C.ALL_WILDCHAR_STR}')."
-  )
-  parser.add_argument(
-      "-c", "--clip", required=False, type=str, metavar="HHMMSS",
-      help="Specify the time of the center time"
-  )
-  add_directory_arguments(
-      parser,
-      default=default_wave_path,
-      metavar=OGS_C.EMPTY_STR,
-      help="Directory path to the raw files",
+      help=f"""
+          Specify a set of Stations to analyze and negate using a '-' prefix.
+          (default: '{OGS_C.ALL_WILDCHAR_STR}').
+          Example 0: --station "*"\n
+          Example 1: --station "APF VNZE"\n
+          Example 2: --station "-ED -OL -SP -VNZE"
+      """
   )
   parser.add_argument(
       "--client", metavar=OGS_C.EMPTY_STR, default=OGS_C.OGS_CLIENTS_DEFAULT,
@@ -1243,13 +1285,17 @@ def parse_downloader_args(
       "--pyrocko", default=False, action='store_true',
       help="Enable PyRocko calls"
   )
-  add_directory_arguments(
-      parser, "--review", default=None, required=False,
-      help="Review the downloaded data"
-  )
   parser.add_argument(
       "--timing", default=False, action='store_true', required=False,
       help="Enable timing"
+  )
+  parser.add_argument(
+      "--timeout", default=OGS_C.OGS_TIMEOUT, type=float, required=False,
+      help=f"Timeout for downloading data (default: {OGS_C.OGS_TIMEOUT} sec)"
+  )
+  parser.add_argument(
+      "--retry", default=OGS_C.OGS_RETRY, type=positive_int, required=False,
+      help=f"Number of retries for downloading data (default: {OGS_C.OGS_RETRY})"
   )
   domain_group = parser.add_mutually_exclusive_group(required=False)
   domain_group.add_argument(
@@ -1262,6 +1308,17 @@ def parse_downloader_args(
       metavar=("lon", "lat", "min_r", "max_r"),
       help="Circular domain to download data: [center lon, center lat, min r, max r]"
   )
+  add_threads_arguments(
+      parser,
+      metavar=OGS_C.EMPTY_STR,
+      help="Number of threads to use for downloading"
+  )
+  add_time_arguments(
+      parser,
+      "-c", "--clip",
+      required=False,
+      help="Specify the time of the center time"
+  )
   add_date_range_arguments(
       parser,
       default_dates=[
@@ -1269,12 +1326,8 @@ def parse_downloader_args(
           datetime.strptime("20240620", OGS_C.YYYYMMDD_FMT)
       ],
   )
-  add_threads_arguments(
-      parser,
-      default=1,
-      metavar=OGS_C.EMPTY_STR,
-      help="Number of day-level download threads"
-  )
+  add_stations_arguments(parser, required=False)
+  add_waveforms_arguments(parser, required=False)
   add_verbosity_arguments(parser)
   return parser.parse_args(args)
 

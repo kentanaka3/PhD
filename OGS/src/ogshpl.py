@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS HPL File Parser - Hypo71 Event and Pick Extractor
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module parses OGS .hpl format files produced by legacy Hypo71 workflows.
@@ -51,7 +51,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 # -----------------------------------------------------------------------------
@@ -214,7 +215,7 @@ class DataFileHPL(OGSDataFile):
       fr"(?P<A>[\s\d\.]{{5}})\s",                             # Unknown
       fr"(?P<B>[\s\d]{{2}})",                                 # Velocity Model
       fr"(?P<C>[\s\d]{{3}})",                                 # Num Picks
-      fr"(?P<D>[\-\s\d\.]{{5}})",                             # Mean Residual
+      fr"(?P<D>[\-\s\d\.]{{5,6}})",                           # Mean Residual
       fr"(?P<E>[\s\d\.]{{5}})\s",                             # StDev Residual
       fr"(?P<F>[\s\d]{{2}})\s",                               # Unknown
       fr"(?P<G>[\s\d\-\.]{{4}})\s",                           # Unknown

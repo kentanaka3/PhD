@@ -78,7 +78,7 @@ CONDA_ENV   ?= SBC_3.12
 
 # Date Variables
 YEAR        ?= 2026
-STEP_DAYS   ?= 5
+STEP_DAYS   ?= 37
 OFFSET      ?= 0
 
 # Paths
@@ -91,8 +91,9 @@ CONDA_ROOT 			?= $(abspath $(WORK_PATH)/../.miniconda3)
 CATALOG_PATH 		?= $(abspath $(WORK_PATH)/catalog)
 DATASET_PATH 		?= $(abspath $(WORK_PATH)/dataset)
 TARGET          ?= OnlyEqNLL1D
+DATABASE_PATH 	?= $(abspath $(WORK_PATH)/ogsDB)
 STATION_PATH 		?= $(abspath $(WORK_PATH)/station)
-WAVE_PATH   		?= $(abspath $(WORK_PATH)/waveform)
+WAVEFORM_PATH   ?= $(abspath $(WORK_PATH)/waveform)
 
 START_DATE  		?= $(shell date -d "$(YEAR)-01-01 + $(OFFSET) days" +%Y%m%d)
 END_DATE    		?= $(shell date -d "$(YEAR)-12-31" +%Y%m%d)
@@ -215,9 +216,9 @@ download: #
 		bash LAUNCHME.sh download 1 1 "DownLoad_$${start}_$${end}" \
 			$(PYTHON_BIN) $(OGS_PATH)/src/ogsdownloader.py \
 				-D $$start $$end \
-				-d $(WAVE_PATH) \
+				-W $(WAVEFORM_PATH) \
 				--threads $(CORES) \
-				-S "* -SP -OL -ED"; \
+				--station "* -SP -OL -ED -VNZE"; \
 		start=$$(date -d "$$end + 1 day" +%Y%m%d); \
 	done
 
@@ -225,15 +226,14 @@ compress: #
 	@echo "WARNING: make compress is deprecated; use the current waveform archive workflow instead." >&2
 	@bash LAUNCHME.sh compress 1 1 Compressor \
 	  $(PYTHON_BIN) $(WORK_PATH)/compressor.py \
-			-C $(WAVE_PATH) . -v
+			-C $(WAVEFORM_PATH) . -v
 
 decompress:
 	@echo "WARNING: make decompress is deprecated; use the current waveform archive workflow instead." >&2
 	@bash LAUNCHME.sh compress 1 1 Decompressor \
 	  $(PYTHON_BIN) $(WORK_PATH)/compressor.py \
-			-D $(WAVE_PATH)/$(YEAR) \
-	    $(WAVE_PATH) -v && \
-	find $(WAVE_PATH)/$(YEAR)/* -type f -name "*.tar.gz" -print -delete
+			-D $(WAVEFORM_PATH)/$(YEAR) $(WAVEFORM_PATH) -v && \
+	find $(WAVEFORM_PATH)/$(YEAR)/* -type f -name "*.tar.gz" -print -delete
 
 retrieve:
 	@echo "WARNING: make retrieve is deprecated; use the current waveform archive workflow instead." >&2
@@ -249,7 +249,7 @@ station:
 	  $(PYTHON_BIN) $(OGS_PATH)/src/ogsstation.py \
 	    $(OGS_PATH)/src \
 	    -S $(STATION_PATH) \
-	    -W $(WAVE_PATH) \
+	    -W $(WAVEFORM_PATH) \
 	    -D $(START_DATE) $(END_DATE) \
 			-o $(WORK_PATH)/catalogs/$(base)
 
@@ -413,7 +413,7 @@ Trainer:
 	@bash LAUNCHME.sh $(SLURM_TEMPLATE) 1 1 "Trainer_$(MODEL)_$(DATASET)" \
 	  $(PYTHON_BIN) $(OGS_PATH)/src/ogstrainer.py \
 	    -C $(CATALOG_PATH) \
-	    -W $(WAVE_PATH) \
+	    -W $(WAVEFORM_PATH) \
 	    -D $(START_DATE) $(END_DATE) \
 	    -m $(MODEL) \
 	    -s $(DATASET) \
@@ -426,12 +426,15 @@ Trainer:
 MHPC:
 	@$(foreach m,$(MODELS),$(foreach d,$(DATASETS),$(foreach t,$(THRESHOLDS), \
 	  echo "Submitting $m[$d,$t] to SLURM..."; \
-	  $(MAKE) --no-print-directory '$m[$d,$t]' PROJECT=MHPC \
+	  $(MAKE) --no-print-directory '$m[$d,$t]' PROJECT=MHPC\
 	    START_DATE=20240320 END_DATE=20240620 ; )))
 	@$(foreach a,$(ASSOCS),$(foreach t,$(THRESHOLDS), \
+	  echo "Submitting $a[PhaseNet,INSTANCE,$t] to SLURM..."; \
+	  $(MAKE) --no-print-directory '$a[PhaseNet,INSTANCE,$t]' PROJECT=MHPC\
+	    START_DATE=20240320 END_DATE=20240620 ; ))
+	@$(foreach a,$(ASSOCS),$(foreach t,$(THRESHOLDS), \
 	  echo "Submitting NLL1D[$a,PhaseNet,INSTANCE,$t] to SLURM..."; \
-	  $(MAKE) --no-print-directory 'NLL1D[$a,PhaseNet,INSTANCE,$t]' \
-	    PROJECT=MHPC \
+	  $(MAKE) --no-print-directory 'NLL1D[$a,PhaseNet,INSTANCE,$t]' PROJECT=MHPC\
 	    START_DATE=20240320 END_DATE=20240620 ; ))
 
 PhD:
@@ -439,6 +442,10 @@ PhD:
 	  echo "Submitting $m[$d,$t] to SLURM..."; \
 	  $(MAKE) --no-print-directory '$m[$d,$t]' PROJECT=PhD \
 	    START_DATE=20050101 END_DATE=20251231 ; )))
+	@$(foreach a,$(ASSOCS),$(foreach t,$(THRESHOLDS), \
+	  echo "Submitting $a[PhaseNet,INSTANCE,$t] to SLURM..."; \
+	  $(MAKE) --no-print-directory '$a[PhaseNet,INSTANCE,$t]' PROJECT=PhD \
+	    START_DATE=20050101 END_DATE=20251231 ; ))
 	@$(foreach a,$(ASSOCS),$(foreach t,$(THRESHOLDS), \
 	  echo "Submitting NLL1D[$a,PhaseNet,INSTANCE,$t] to SLURM..."; \
 	  $(MAKE) --no-print-directory 'NLL1D[$a,PhaseNet,INSTANCE,$t]' PROJECT=PhD \
@@ -458,7 +465,8 @@ Index:
 
 # Submit yearly indexing jobs across all YEARS
 Indexes:
-	@$(foreach y,$(YEARS), $(MAKE) --no-print-directory Index YEAR=$y ; )
+	@$(foreach y,$(YEARS), \
+	  $(MAKE) --no-print-directory Index YEAR=$y CORES=$(CORES) ; )
 
 # Merge manual OGS pick files into a unified catalog.
 parse: # 5
@@ -468,7 +476,8 @@ parse: # 5
 		-D $(START_DATE) $(END_DATE) \
 		-f $(DATASET_PATH)/$(TARGET)/* \
 		--merge \
-		-o $(WORK_PATH)/catalogs/$(TARGET)
+		-o $(WORK_PATH)/catalogs/$(TARGET) \
+		-v
 
 test: # 2
 	$(SBC_RUN_BIN) output_path=$(base)/$(YEAR)

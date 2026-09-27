@@ -8,3 +8,5 @@ export NUMBA_NUM_THREADS=${SLURM_CPUS_PER_TASK:-1}
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 export HYDRA_FULL_ERROR=1
+NLL_PATH="${NLL_PATH:-/leonardo_work/IscrC_AISeism/NonLinLoc}"
+export PATH="${NLL_PATH}/bin:${PATH}"

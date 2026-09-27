@@ -40,20 +40,16 @@ AUTHORS:
 =============================================================================
 """
 
-from ogsutils import OGSBPGraphPicks, dist_prob, dist_pick, dist_event
-from ogscatalog import OGSCatalog, _EVENTS_MH_COLUMNS, _EVENTS_PHASES
+from matplotlib.path import Path as mplPath
+import pandas as pd
+import numpy as np
 import ogsconstants as OGS_C
+from ogscatalog import OGSCatalog, _EVENTS_MH_COLUMNS, _EVENTS_PHASES
+from ogsutils import OGSBPGraphPicks, dist_prob, dist_pick, dist_event
 import os
 import sys
 import unittest
 import unittest.mock
-
-import numpy as np
-import pandas as pd
-from matplotlib.path import Path as mplPath
-
-THIS_DIR = os.path.dirname(__file__)
-sys.path.append(os.path.abspath(THIS_DIR + "/../src"))
 
 
 class TestOGSCatalogEventPrefilter(unittest.TestCase):

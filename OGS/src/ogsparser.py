@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Catalog Parser - Multi-Format Seismic Catalog Aggregator
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module provides a unified interface for parsing and merging seismic
@@ -19,14 +19,14 @@ KEY FEATURES:
   - Optimized aggregation: Uses vectorized pandas operations for efficiency
 
 SUPPORTED FILE FORMATS:
-  ┌──────────┬─────────────────┬────────────────────────────────────┐
-  │ Extension│ Parser Class    │ Content Description                │
-  ├──────────┼─────────────────┼────────────────────────────────────┤
-  │ .hpl     │ DataFileHPL     │ Hypocenter locations (recommended) │
-  │ .dat     │ DataFileDAT     │ Phase picks (P/S arrivals)         │
-  │ .txt     │ DataFileTXT     │ Local magnitude (ML) information   │
-  │ .pun     │ DataFilePUN     │ Event punch cards                  │
-  └──────────┴─────────────────┴────────────────────────────────────┘
+  ┌───────────┬──────────────┬────────────────────────────────────┐
+  │ Extension │ Parser Class │ Content Description                │
+  ├───────────┼──────────────┼────────────────────────────────────┤
+  │ .hpl      │ DataFileHPL  │ Hypocenter locations (recommended) │
+  │ .dat      │ DataFileDAT  │ Phase picks (P/S arrivals)         │
+  │ .txt      │ DataFileTXT  │ Local magnitude (ML) information   │
+  │ .pun      │ DataFilePUN  │ Event punch cards                  │
+  └───────────┴──────────────┴────────────────────────────────────┘
 
 ARCHITECTURE:
   Command Line / API
@@ -82,7 +82,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 # -----------------------------------------------------------------------------
@@ -100,9 +101,6 @@ from pathlib import Path
 
 # Matplotlib: Path object for polygon-based geographic containment tests
 from matplotlib.path import Path as mplPath
-
-# Standard library: Date/time objects
-from datetime import datetime
 
 # Local module: OGS-specific constants (extensions, column names, formats)
 import ogsconstants as OGS_C
@@ -125,26 +123,6 @@ from ogstxt import DataFileTXT  # Text format magnitude files
 
 # Base path for data files (two levels up from this script's location)
 DATA_PATH = Path(__file__).parent.parent.parent
-
-
-# =============================================================================
-# UTILITY FUNCTIONS
-# =============================================================================
-
-def is_polygon(points: str) -> mplPath:
-  """
-  Convert a string of polygon vertices to a matplotlib Path object.
-
-  Used by argparse to validate and convert polygon arguments for
-  geographic filtering of seismic events.
-
-  Args:
-    points: String representation of polygon vertices
-
-  Returns:
-    mplPath: Closed matplotlib Path for containment testing
-  """
-  return mplPath(points, closed=True)
 
 
 # =============================================================================
@@ -277,8 +255,8 @@ class DataCatalog(OGSDataFile):
     Normalize event group identifiers to calendar dates before merging.
 
     Legacy parsers emit the ``group`` column as a mix of ISO strings,
-    pandas timestamps, and Python ``date`` objects. Coercing everything to a
-    date keeps the merge keys stable across HPL, TXT, and PUN inputs.
+    pandas timestamps, and Python ``date`` objects. Coercing everything to an
+    ISO date string ('YYYY-MM-DD') keeps merge keys and Parquet schemas stable.
     """
     if events.empty or OGS_C.GROUPS_STR not in events.columns:
       return events
@@ -288,7 +266,7 @@ class DataCatalog(OGSDataFile):
       time_series = pd.to_datetime(events[OGS_C.TIME_STR], errors='coerce')
       group_series = group_series.where(group_series.notna(), time_series)
 
-    events[OGS_C.GROUPS_STR] = group_series.dt.date
+    events[OGS_C.GROUPS_STR] = group_series.dt.strftime(OGS_C.DATE_FMT)
     return events
 
   # -------------------------------------------------------------------------
@@ -429,15 +407,12 @@ class DataCatalog(OGSDataFile):
       # Step 3: Count such stations per event
       stations_with_both = station_phase_counts[
           station_phase_counts >= 2
-      ].groupby(
-          level=0  # Group by event_id (first level of MultiIndex)
-      ).size()
+      ].groupby(level=0).size()
 
       # Map station counts to events
       self.EVENTS[OGS_C.NUMBER_P_AND_S_PICKS_STR] = self.EVENTS[
           OGS_C.IDX_EVENTS_STR
       ].map(stations_with_both).fillna(0).astype(int)
-
     else:
       # No picks available: Set all counts to zero
       self.EVENTS[OGS_C.NUMBER_P_PICKS_STR] = 0
@@ -467,15 +442,15 @@ class DataCatalog(OGSDataFile):
     Returns:
       pd.DataFrame: Consolidated picks from all input files
     """
+    self.logger.info("Merging picks from files...")
     for f in self.files:
-      # First file: Initialize with copy of its picks
+      picks = f.get("PICKS").copy()
+      if picks.empty:
+        continue
       if self.PICKS.empty:
-        self.PICKS = f.get("PICKS").copy()
+        self.PICKS = picks
       else:
-        # Subsequent files: Concatenate picks
-        picks = f.get("PICKS").copy()
-        if not picks.empty:
-          self.PICKS = pd.concat([self.PICKS, picks], ignore_index=True)
+        self.PICKS = pd.concat([self.PICKS, picks], ignore_index=True)
 
     return self.PICKS
 
@@ -494,20 +469,20 @@ class DataCatalog(OGSDataFile):
 
     Output is written to {input}.all/ directory structure.
     """
+    self.logger.info("Starting full catalog merge...")
     # Merge picks first (events depend on pick statistics)
-    self.logger.info(self.merge_picks())
+    self.logger.info(f"Total merged picks: {len(self.merge_picks())}")
 
     # Merge events and compute statistics
-    self.merge_events()
-
-    # Log output path for debugging
-    self.logger.info(self.input)
+    self.logger.info(f"Total merged events: {len(self.merge_events())}")
 
     # Append ".all" suffix to output path for merged catalog
-    self.input = Path(str(self.input) + ".all")
+    self.input = Path(str(self.input)) / ".all"
+    self.logger.info(f"Output path for merged catalog: {self.input}")
 
     # Write merged catalog to Parquet files
     self.log()
+    self.plot()
 
 
 # =============================================================================

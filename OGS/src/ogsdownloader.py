@@ -1,7 +1,9 @@
+#!/usr/bin/env python
+
 """
-=============================================================================
+===============================================================================
 OGS Downloader - Multi-Backend FDSN Waveform Retrieval CLI
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 Command-line tool that downloads waveform data (and associated station
@@ -9,55 +11,19 @@ metadata) from FDSN-compatible data centers, supporting both Pyrocko and
 ObsPy backends with the same arguments. Designed to populate the OGS waveform
 archive used by the rest of the pipeline.
 
-The module implements:
-
-1. CLIENT ALIASING
-  - ``PYROCKO_CLIENT_ALIASES``: maps OGS-named clients (INGV, GFZ, ETH, ORFEUS,
-    etc.) onto Pyrocko's internal client identifiers.
-  - ``TOKEN_CLIENTS``: data centers that require restricted-data tokens.
-
-2. CHANNEL PRIORITIES
-  - ``BAND_CODES``: high-rate band codes considered (HH, EH, HN, HG).
-  - ``PYROCKO_CHANNEL_PRIORITIES`` and ``OBSPY_CHANNEL_PRIORITIES``: per-
-    component preference lists; horizontal fallbacks include the 1/2
-    orientations.
-
-3. CLI HELPERS
-  - ``OGS_U.parse_downloader_args``: argument parser in ``ogsutils`` with
-    output, region, client and date arguments.
-  - ``_split_filter_values``: parses include / exclude tokens used for the
-    network / station / location / channel filters.
-  - ``_pyrocko_site`` / ``_client_label`` / ``_datetime_to_pyrocko_time``:
-    small format / id converters.
-
-4. DAY-WINDOW PLANNING
-  - ``day_start`` / ``day_window`` / ``day_directory`` /
-    ``prepare_day_download`` / ``domain_kwargs``: split a date range into
-    per-day download windows, resolve output directories under DATA_PATH, and
-    build the rectangular geographic ``domain_kwargs`` dict expected by both
-    backends.
-
-5. DOWNLOADER CLASSES
-  - ``BaseDownloader``: abstract base capturing CLI args, threading, and shared
-    logging behavior.
-  - ``PyrockoDownloader`` / ``ObsPyDownloader``: concrete backends that
-    implement ``run()`` using their respective FDSN client libraries.
-  - ``get_downloader``: factory that dispatches based on ``args.backend``.
-  - ``data_downloader``: entry-point used by the CLI script.
-
 USAGE:
   python ogsdownloader.py --client INGV ETH \
                           --network OX NI \
                           --station "* -SP -OL -ED" \
                           --dates 20240320 20240620 \
-                          --directory /path/to/waveforms
+                          -W /path/to/waveforms
 
   python ogsdownloader.py --pyrocko \
                           --client INGV ETH \
                           --network OX NI \
                           --station "* -SP -OL -ED" \
                           --dates 20240320 20240620 \
-                          --directory /path/to/waveforms
+                          -W /path/to/waveforms
 
 DEPENDENCIES:
   - Pyrocko (squirrel + fdsn) and/or ObsPy (clients.fdsn): waveform IO
@@ -74,111 +40,47 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
-import argparse
-import calendar
-import io
-import logging
-import os
-import threading
 from abc import ABC, abstractmethod
+from argparse import Namespace
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime
+from datetime import datetime, time
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
-# Local imports
-import ogsconstants as OGS_C
-import ogsutils as OGS_U
-
-
-# Project root (three levels above this file)
-DATA_PATH = Path(__file__).parent.parent.parent
-DEFAULT_WAVE_PATH = Path(
-    os.environ.get("WORK_PATH", DATA_PATH), OGS_C.WAVEFORMS_STR
+from obspy import UTCDateTime
+from obspy.clients.fdsn import Client as ObsPyFDSNClient
+from obspy.clients.fdsn.mass_downloader import (
+    CircularDomain,
+    GlobalDomain,
+    MassDownloader,
+    RectangularDomain,
+    Restrictions,
 )
 
-PYROCKO_CLIENT_ALIASES = {
-    OGS_C.INGV_CLIENT_STR: "ingv",
-    OGS_C.IRIS_CLIENT_STR: "iris",
-    OGS_C.GFZ_CLIENT_STR: "geofon",
-    OGS_C.ETH_CLIENT_STR: "ethz",
-    OGS_C.ORFEUS_CLIENT_STR: "orfeus",
-    OGS_C.GEOFON_CLIENT_STR: "geofon",
-    OGS_C.RESIF_CLIENT_STR: "resif",
-    OGS_C.LMU_CLIENT_STR: "lmu",
-    OGS_C.USGS_CLIENT_STR: "usgs",
-    OGS_C.EMSC_CLIENT_STR: "emsc",
-    OGS_C.ODC_CLIENT_STR: "orfeus",
-    OGS_C.GEONET_CLIENT_STR: "geonet",
-    OGS_C.RASPISHAKE_CLIENT_STR: "raspishake",
-}
-TOKEN_CLIENTS = {
-    OGS_C.INGV_CLIENT_STR,
-    OGS_C.GFZ_CLIENT_STR,
-}
-BAND_CODES = ["HH", "EH", "HN", "HG"]
-# PyRocko component groups: Z, then horizontals (N/1 and E/2 fall back to each other).
-PYROCKO_CHANNEL_PRIORITIES = [
-    [f"{band}{component}" for band in BAND_CODES]
-    for component in ("Z", "N", "E")
-]
-PYROCKO_CHANNEL_PRIORITIES[1] += [f"{band}1" for band in BAND_CODES]
-PYROCKO_CHANNEL_PRIORITIES[2] += [f"{band}2" for band in BAND_CODES]
-PYROCKO_CHANNEL_QUERY = OGS_C.COMMA_STR.join(f"{band}?" for band in BAND_CODES)
-OBSPY_CHANNEL_PRIORITIES = [f"{band}[ZNE]" for band in BAND_CODES]
+import ogsutils as OGS_U
+import ogsconstants as OGS_C
+
+# Each inner list contains the preferred channel codes for one component.
+CHANNEL_PRIORITIES = ["HH[ZNE]", "EH[ZNE]", "HN[ZNE]", "HG[ZNE]"]
+# Empty location codes are preferred over the common numbered alternatives.
+LOCATION_PRIORITIES = ("", "00", "01", "02", "10")
+TimeWindow = tuple[datetime, datetime]
+Selection = tuple[str, str, str, str, *TimeWindow]
 
 
-def _datetime_to_pyrocko_time(value: datetime) -> float:
-  return calendar.timegm(value.utctimetuple()) + value.microsecond / 1_000_000
-
-
-def _pyrocko_site(client: str) -> str:
-  if client.startswith(("http://", "https://")):
-    return client.rstrip("/")
-  return PYROCKO_CLIENT_ALIASES.get(client, client.lower())
-
-
-def _client_label(client: str) -> str:
-  label = "".join(char if char.isalnum() else "-" for char in client)
-  return label.strip("-").lower() or "client"
-
-
-def _split_filter_values(values: list[str]) -> tuple[list[str], set[str]]:
-  includes = []
-  excludes = set()
-  for value in values:
-    for raw_token in value.replace(OGS_C.COMMA_STR, " ").split():
-      token = raw_token.strip()
-      if not token:
-        continue
-      if token.startswith("-") and len(token) > 1:
-        excludes.add(token[1:])
-      else:
-        includes.append(token)
-  return includes or [OGS_C.ALL_WILDCHAR_STR], excludes
-
-
-DIR_FMT = {
-    "year": "{:04}",
-    "month": "{:02}",
-    "day": "{:02}",
-}
-
-
-def day_start(d_: date | datetime) -> datetime:
-  return datetime(d_.year, d_.month, d_.day)
-
-
-def day_window(args: argparse.Namespace, d_: date | datetime) -> tuple[datetime, datetime]:
-  d_ = day_start(d_)
-  if not args.clip:
-    return d_, d_ + OGS_C.ONE_DAY
+def daily_clipper(
+    date: datetime, clip: time | None = None
+) -> TimeWindow:
+  if not clip:
+    return date, date + OGS_C.ONE_DAY
   clip_time = datetime.strptime(
-      d_.strftime(OGS_C.DATE_FMT) + args.clip,
-      OGS_C.DATE_FMT + OGS_C.TIME_FMT
+      date.strftime(OGS_C.YYYYMMDD_FMT) + clip.strftime(OGS_C.TIME_FMT),
+      OGS_C.YYYYMMDD_FMT + OGS_C.TIME_FMT,
   )
   return (
       clip_time - OGS_C.PICK_TRAIN_OFFSET,
@@ -186,441 +88,293 @@ def day_window(args: argparse.Namespace, d_: date | datetime) -> tuple[datetime,
   )
 
 
-def prepare_day_download(
-    args: argparse.Namespace, d_: date | datetime
-) -> tuple[str, datetime, datetime, Path]:
-  d_ = day_start(d_)
-  day_id = d_.strftime(OGS_C.YYYYMMDD_FMT)
-  starttime, endtime = day_window(args, d_)
-  day_path = OGS_U.day_directory(args.directory, d_)
-  day_path.mkdir(parents=True, exist_ok=True)
-  return day_id, starttime, endtime, day_path
-
-
-def domain_kwargs(args: argparse.Namespace) -> dict[str, float]:
-  if args.rectdomain:
-    return {
-        "minlongitude": args.rectdomain[0],
-        "maxlongitude": args.rectdomain[1],
-        "minlatitude": args.rectdomain[2],
-        "maxlatitude": args.rectdomain[3],
-    }
-  return {
-      "longitude": args.circdomain[0],
-      "latitude": args.circdomain[1],
-      "minradius": args.circdomain[2],
-      "maxradius": args.circdomain[3],
-  }
-
-
 class BaseDownloader(ABC):
-  """
-  Abstract base class for all waveform downloaders.
-  """
-
-  def __init__(self, args: argparse.Namespace):
+  def __init__(self, args: Namespace) -> None:
+    """Initialize common downloader state from parsed CLI arguments."""
     self.args = args
     self.logger = OGS_U.setup_logger(__name__, args.verbose, args.quiet)
     self.start, self.end = args.dates
-    self.days = [
-        self.start + index * OGS_C.ONE_DAY for index in range(
-            (self.end - self.start).days + 1
-        )
-    ]
-    self.network_filter = OGS_C.COMMA_STR.join(args.network)
-    self.station_includes, self.station_excludes = _split_filter_values(
-        args.station
+    # A clip selects one event-centered interval; otherwise create one window
+    # for every day in the inclusive requested range.
+    self.ranges: list[TimeWindow] = (
+        [daily_clipper(self.start, args.clip)] if args.clip
+        else [(
+            self.start + index * OGS_C.ONE_DAY,
+            self.start + (index + 1) * OGS_C.ONE_DAY
+        ) for index in range((self.end - self.start).days + 1)]
     )
-    self.station_filter = OGS_C.COMMA_STR.join(self.station_includes)
-    self.station_directory = Path(args.directory, OGS_C.STATION_STR)
-
-  def day_start(self, d_: date | datetime) -> datetime:
-    return day_start(d_)
-
-  def day_window(self, d_: date | datetime) -> tuple[datetime, datetime]:
-    return day_window(self.args, d_)
-
-  def prepare_day_download(
-      self, d_: date | datetime
-  ) -> tuple[str, datetime, datetime, Path]:
-    return prepare_day_download(self.args, d_)
-
-  def domain_kwargs(self) -> dict[str, float]:
-    return domain_kwargs(self.args)
-
-  @abstractmethod
-  def prepare(self) -> bool:
-    """Prepare downloader (e.g., check dependencies, resolve filters)."""
-    pass
-
-  @abstractmethod
-  def download_day(self, d_: date | datetime) -> None:
-    """Download data for a specific day."""
-    pass
-
-  def run(self) -> None:
-    if self.args.review:
-      self.logger.info(
-          "Reviewing the downloaded data in directory: %s", self.args.review
-      )
-      return
-
-    if not self.prepare():
-      return
-
-    if self.args.threads == 1:
-      for d_ in self.days:
-        self.download_day(d_)
-    else:
-      with ThreadPoolExecutor(max_workers=self.args.threads) as executor:
-        futures = {executor.submit(
-            self.download_day, d_
-        ): d_ for d_ in self.days}
-        for future in as_completed(futures):
-          d_ = futures[future]
-          try:
-            future.result()
-          except Exception as e:
-            self.logger.error(
-                "Unexpected error downloading date %s: %s",
-                d_.strftime(OGS_C.YYYYMMDD_FMT),
-                e
-            )
-
-
-class PyrockoDownloader(BaseDownloader):
-  """
-  Pyrocko-based waveform downloader.
-
-  Uses Pyrocko's low-level FDSN web service client to query station metadata
-  and download multiplexed miniSEED waveform byte streams. To avoid
-  intermediate disk serialization overhead, the raw byte streams are
-  deserialized into individual traces in-memory via `_parse_and_save_traces()`,
-  then written to the daily archive following OGS naming conventions.
-  """
-
-  def __init__(self, args: argparse.Namespace):
-    super().__init__(args)
-    self.token = None
-    self._pyrocko_fdsn = None
-    self._read_stream = None
-
-  def prepare(self) -> bool:
-    try:
-      import pyrocko as pr
-      from pyrocko.client import fdsn as pyrocko_fdsn
-      from obspy import read as read_stream
-    except ModuleNotFoundError as exc:
-      self.logger.error("PyRocko download support is unavailable: %s", exc)
-      return False
-
-    self._pyrocko_fdsn = pyrocko_fdsn
-    self._read_stream = read_stream
-    self.logger.info("PyRocko is available: %s", pr.__version__)
-    self.station_directory.mkdir(parents=True, exist_ok=True)
-    if self.args.key:
-      try:
-        self.token = Path(self.args.key).read_bytes().strip()
-      except OSError as exc:
-        self.logger.error(
-            "Error reading token file %s: %s",
-            self.args.key,
-            exc
-        )
-        return False
-    return True
-
-  def download_day(self, d_: date | datetime) -> None:
-    day_id, starttime, endtime, day_path = self.prepare_day_download(d_)
-    start_pyrocko = _datetime_to_pyrocko_time(starttime)
-    end_pyrocko = _datetime_to_pyrocko_time(endtime)
-
-    station_kwargs = {
-        "level": "channel",
-        "format": "xml",
-        "network": self.network_filter,
-        "station": self.station_filter,
-        "channel": PYROCKO_CHANNEL_QUERY,
-        "starttime": start_pyrocko,
-        "endtime": end_pyrocko,
-        **self.domain_kwargs(),
-    }
-    total_traces = 0
-    clients_with_data = 0
-
-    for client in self.args.client:
-      site = _pyrocko_site(client)
-      client_label = _client_label(client)
-      try:
-        station_xml = self._pyrocko_fdsn.station(
-            site=site, check=False, parsed=True, **station_kwargs
-        )
-      except self._pyrocko_fdsn.EmptyResult:
-        self.logger.info(
-            "No PyRocko stations matched %s for date %s", client, day_id
-        )
-        continue
-      except Exception as exc:
-        self.logger.error(
-            "Error downloading station metadata from %s for date %s: %s",
-            client, day_id, exc
-        )
-        continue
-
-      selection = self._pyrocko_fdsn.make_data_selection([
-          station for station in station_xml.get_pyrocko_stations(
-              timespan=(start_pyrocko, end_pyrocko),
-              inconsistencies="warn"
-          ) if station.station not in self.station_excludes
-      ], start_pyrocko, end_pyrocko, channel_prio=PYROCKO_CHANNEL_PRIORITIES)
-      if not selection:
-        self.logger.info(
-            "No PyRocko channels matched %s for date %s", client, day_id
-        )
-        continue
-
-      station_file = self.station_directory / (
-          f"{client_label}__{day_id}__stations{OGS_C.XML_EXT}"
-      )
-      try:
-        station_xml.dump_xml(filename=str(station_file), header=True)
-      except Exception as exc:
-        self.logger.error(
-            "Error writing station metadata from %s for date %s: %s",
-            client, day_id, exc
-        )
-        continue
-
-      waveform_stream = None
-      client_token = (
-          self.token if self.token is not None and client in TOKEN_CLIENTS
-          else None
-      )
-      try:
-        waveform_stream = self._pyrocko_fdsn.dataselect(
-            site=site, check=False, token=client_token, selection=selection
-        )
-        waveform_bytes = waveform_stream.read()
-      except self._pyrocko_fdsn.EmptyResult:
-        self.logger.info(
-            "No PyRocko waveform data matched %s for date %s", client, day_id
-        )
-        continue
-      except Exception as exc:
-        self.logger.error(
-            "Error downloading PyRocko data from %s for date %s: %s",
-            client, day_id, exc
-        )
-        continue
-      finally:
-        if waveform_stream is not None and hasattr(waveform_stream, "close"):
-          waveform_stream.close()
-
-      try:
-        traces = read_stream(
-            io.BytesIO(waveform_bytes), format=OGS_C.MSEED_STR.upper()
-        )
-      except Exception as exc:
-        self.logger.error(
-            "Error parsing PyRocko data from %s for date %s: %s",
-            client, day_id, exc
-        )
-        continue
-
-      client_traces = 0
-      for trace in traces:
-        start_id = trace.stats.starttime.strftime("%Y%m%dT%H%M%SZ")
-        end_id = trace.stats.endtime.strftime("%Y%m%dT%H%M%SZ")
-        location = trace.stats.location or OGS_C.EMPTY_STR
-        trace_file = day_path / (
-            f"{trace.stats.network}.{trace.stats.station}.{location}."
-            f"{trace.stats.channel}__{start_id}__{client_label}-{end_id}"
-            f"{OGS_C.MSEED_EXT}"
-        )
-        trace.write(str(trace_file), format=OGS_C.MSEED_STR.upper())
-        client_traces += 1
-
-      if client_traces == 0:
-        self.logger.info(
-            "PyRocko returned no writable traces from %s for date %s",
-            client, day_id
-        )
-        continue
-
-      total_traces += client_traces
-      clients_with_data += 1
-
-    if total_traces == 0:
-      self.logger.info(
-          "No PyRocko waveform data downloaded for date: %s", day_id
-      )
-      return
+    # Preserve the order in which providers were requested while removing
+    # duplicate names before probing them.
+    self.clients: list[ObsPyFDSNClient] = []
+    self.main_workers = min(4, args.threads)
+    self.sub_workers = args.threads - self.main_workers
+    self.networks, self.exclude_networks = self._filter(args.network)
+    self.stations, self.exclude_stations = self._filter(args.station)
     self.logger.info(
-        "Downloaded %s PyRocko traces for date %s from %s clients",
-        total_traces, day_id, clients_with_data
+        "Prepared %s for %s through %s in %d time window(s), with up to "
+        "%d main worker(s) and %d sub-worker(s).",
+        type(self).__name__, self.start, self.end, len(self.ranges),
+        self.main_workers, self.sub_workers,
     )
+    self.logger.debug(
+        "Network selection include=%s exclude=%s; station selection "
+        "include=%s exclude=%s.",
+        self.networks, self.exclude_networks,
+        self.stations, self.exclude_stations,
+    )
+
+  @property
+  def client_kwargs(self) -> dict[str, Any]:
+    """Return connection options shared by all ObsPy FDSN clients."""
+    return {
+        "timeout": getattr(self.args, "timeout", OGS_C.OGS_TIMEOUT),
+        "eida_token": getattr(self.args, "key", None),
+    }
+
+  def waveform_path(self, selection: Selection) -> Path:
+    """Build the destination path for one channel's waveform interval."""
+    network, station, location, channel, starttime, endtime = selection
+    day_path = Path(
+        OGS_U.day_directory(self.args.waveforms, starttime)
+    )
+    filename = (
+        f"{network}.{station}.{location}.{channel}__"
+        f"{starttime.strftime(f'{OGS_C.YYYYMMDD_FMT}T{OGS_C.TIME_FMT}Z')}__"
+        f"{endtime.strftime(f'{OGS_C.YYYYMMDD_FMT}T{OGS_C.TIME_FMT}Z')}"
+        f"{OGS_C.MSEED_EXT}"
+    )
+    return day_path / filename
+
+  def _waveform_storage(
+      self, network: str, station: str, location: str, channel: str,
+      starttime: UTCDateTime, endtime: UTCDateTime,
+  ) -> str:
+    """Adapt ObsPy's six-argument storage callback to waveform_path."""
+    selection: Selection = (
+        network,
+        station,
+        location,
+        channel,
+        starttime.datetime,
+        endtime.datetime
+    )
+    return str(self.waveform_path(selection))
+
+  @staticmethod
+  def _filter(value: str | list[str] | None) -> tuple[list[str], list[str]]:
+    items = [value] if isinstance(value, str) else value or []
+    include, exclude = [], []
+    for item in items:
+      for s in item.split():
+        (exclude if s.startswith("-") else include).append(
+            s.lstrip("-")
+        )
+    return include or ["*"], exclude
+
+  @property
+  def domain_kwargs(self) -> dict[str, float]:
+    """Translate the selected circular or rectangular domain to FDSN keys."""
+    if self.args.circdomain:
+      return {
+          "longitude": self.args.circdomain[0],
+          "latitude": self.args.circdomain[1],
+          "minradius": self.args.circdomain[2],
+          "maxradius": self.args.circdomain[3],
+      }
+    if self.args.rectdomain:
+      return {
+          "minlongitude": self.args.rectdomain[0],
+          "maxlongitude": self.args.rectdomain[1],
+          "minlatitude": self.args.rectdomain[2],
+          "maxlatitude": self.args.rectdomain[3],
+      }
+    return {}
+
+  def selection_kwargs(self, window: TimeWindow) -> dict[str, Any]:
+    """Build common selection arguments for a time window."""
+    start, end = window
+    return {
+        "starttime": UTCDateTime(start),
+        "endtime": UTCDateTime(end),
+        "network": ",".join(self.networks),
+        "station": ",".join(self.stations),
+    }
+
+  def station_kwargs(
+      self, window: TimeWindow, level: str = "channel"
+  ) -> dict[str, Any]:
+    """Build common station-service query arguments for a time window.
+
+    The domain constraints are appended only when supplied by the CLI. The
+    returned dictionary is also reused by the waveform download options, with
+    the service ``level`` changed from ``station`` to ``channel``.
+    """
+    return {
+        **self.selection_kwargs(window),
+        "level": level,
+        **self.domain_kwargs,
+    }
+
+  @property
+  def _selection_kwargs(self) -> dict[str, Any]:
+    """Return channel and waveform-selection options shared by backends."""
+    return {
+        "channel_priorities": CHANNEL_PRIORITIES,
+        "chunklength_in_sec": 86400,
+        "location_priorities": LOCATION_PRIORITIES,
+        "minimum_length": 0.0,
+        "minimum_interstation_distance_in_m": 100,
+        "reject_channels_with_gaps": False,
+    }
+
+  def download_kwargs(self, window: TimeWindow) -> dict[str, Any]:
+    """Build ObsPy restriction options for one time window."""
+    return {
+        **self.selection_kwargs(window),
+        "exclude_networks": self.exclude_networks,
+        "exclude_stations": self.exclude_stations,
+        **self._selection_kwargs,
+    }
+
+  def _has_selected_channels(self, inventory: Any) -> bool:
+    """
+    Check whether station metadata contains channels selected for download.
+    """
+    for network in inventory:
+      if any(
+          fnmatchcase(network.code, pattern)
+          for pattern in self.exclude_networks
+      ):
+        continue
+      for station in network:
+        if any(
+            fnmatchcase(station.code, pattern)
+            for pattern in self.exclude_stations
+        ):
+          continue
+        for channel in station:
+          if channel.location_code not in LOCATION_PRIORITIES:
+            continue
+          if any(
+              fnmatchcase(channel.code, pattern)
+              for pattern in CHANNEL_PRIORITIES
+          ):
+            return True
+    return False
+
+  def download(self) -> None:
+    """Download waveform and station metadata for the configured domain."""
+    query_window: TimeWindow = (self.ranges[0][0], self.ranges[-1][1])
+    for name in self.args.client:
+      self.logger.info("Initializing FDSN client for provider '%s'.", name)
+      try:
+        client = ObsPyFDSNClient(name, **self.client_kwargs)
+        inventory = client.get_stations(
+            **self.station_kwargs(query_window, level="channel"),
+        )
+      except Exception as error:
+        self.logger.error(
+            "Failed to query station metadata from FDSN client '%s': %s",
+            name, error,
+        )
+        continue
+      if not self._has_selected_channels(inventory):
+        self.logger.info(
+            "FDSN client '%s' has no station channels matching the selection.",
+            name,
+        )
+        continue
+      self.clients.append(client)
+    if not self.clients:
+      self.logger.error("No FDSN clients have matching station channels.")
+      raise ValueError(
+          "At least one FDSN client must have matching station channels.")
+    self.logger.info("Initialized %d FDSN client(s).", len(self.clients))
 
 
 class ObsPyDownloader(BaseDownloader):
-  """
-  ObsPy-based mass waveform downloader.
-  """
-
-  def __init__(self, args: argparse.Namespace):
-    super().__init__(args)
-    self.domain = None
-    self.thread_state = threading.local()
-    self.resolved_station_filter = None
-    self._Client = None
-    self._Restrictions = None
-    self._MassDownloader = None
-    self._configure_obspy_logging()
-
-  def _configure_obspy_logging(self) -> None:
-    md_logger = logging.getLogger("obspy.clients.fdsn.mass_downloader")
-    if self.args.quiet:
-      md_logger.setLevel(logging.ERROR)
-    elif self.args.verbose:
-      md_logger.setLevel(logging.INFO)
-    else:
-      md_logger.setLevel(logging.WARNING)
-
-  def prepare(self) -> bool:
-    self._configure_obspy_logging()
-    try:
-      from obspy.clients.fdsn import Client
-      from obspy.clients.fdsn.mass_downloader import (
-          Restrictions, MassDownloader
-      )
-    except ModuleNotFoundError as exc:
-      self.logger.error("ObsPy download support is unavailable: %s", exc)
-      return False
-
-    self._Client = Client
-    self._Restrictions = Restrictions
-    self._MassDownloader = MassDownloader
-    self.station_directory.mkdir(parents=True, exist_ok=True)
-
-    if self.args.rectdomain:
-      from obspy.clients.fdsn.mass_downloader.domain import RectangularDomain
-      self.domain = RectangularDomain(
-          minlongitude=self.args.rectdomain[0],
-          maxlongitude=self.args.rectdomain[1],
-          minlatitude=self.args.rectdomain[2],
-          maxlatitude=self.args.rectdomain[3]
-      )
-    else:
-      from obspy.clients.fdsn.mass_downloader.domain import CircularDomain
-      self.domain = CircularDomain(
-          latitude=self.args.circdomain[1], longitude=self.args.circdomain[0],
-          minradius=self.args.circdomain[2], maxradius=self.args.circdomain[3]
-      )
-
-    self.resolved_station_filter = self.resolve_station_filter()
-    return bool(self.resolved_station_filter)
-
-  def clients(self) -> dict[str, Any]:
-    cached_clients = getattr(self.thread_state, "clients", None)
-    if cached_clients is not None:
-      return cached_clients
-    # ObsPy clients are cached per worker thread and never shared across them.
-    cached_clients = dict()
-    for client in self.args.client:
-      try:
-        cached_clients[client] = self._Client(client)
-      except Exception as e:
-        self.logger.error("Error creating client %s: %s", client, e)
-        continue
-      if self.args.key and client in TOKEN_CLIENTS:
-        try:
-          cached_clients[client].set_eida_token(self.args.key, validate=True)
-        except Exception as e:
-          self.logger.error("Error setting token for %s: %s", client, e)
-    self.thread_state.clients = cached_clients
-    return cached_clients
-
-  def resolve_station_filter(self) -> str | None:
-    if not self.station_excludes:
-      return self.station_filter
-
-    station_codes = []
-    seen = set()
-    station_query_kwargs = {
-        "network": self.network_filter,
-        "station": self.station_filter,
-        "level": "station",
-        "starttime": self.start,
-        "endtime": self.end,
-        **self.domain_kwargs(),
-    }
-    for client_name, client in self.clients().items():
-      try:
-        inventory = client.get_stations(**station_query_kwargs)
-      except Exception as exc:
-        self.logger.error(
-            "Error resolving stations from %s: %s", client_name, exc
-        )
-        continue
-      if inventory is None:
-        continue
-      for network in inventory:
-        for station in network:
-          if station.code in self.station_excludes or station.code in seen:
-            continue
-          station_codes.append(station.code)
-          seen.add(station.code)
-
-    if not station_codes:
-      self.logger.error("No stations remain after excluding: %s",
-                        OGS_C.COMMA_STR.join(sorted(self.station_excludes)))
-      return None
-    self.logger.info("Resolved %s stations after excluding: %s",
-                     len(station_codes),
-                     OGS_C.COMMA_STR.join(sorted(self.station_excludes)))
-    return OGS_C.COMMA_STR.join(station_codes)
-
-  def download_day(self, d_: date | datetime) -> None:
-    day_id, starttime, endtime, day_path = self.prepare_day_download(d_)
-    self.logger.info("Downloading the data in the directory: %s", day_path)
-    # Apply selection constraints to reduce data volume
-    restrictions = self._Restrictions(
-        starttime=starttime, endtime=endtime,
-        network=self.network_filter,
-        station=self.resolved_station_filter,
-        channel_priorities=OBSPY_CHANNEL_PRIORITIES,
-        reject_channels_with_gaps=False, minimum_length=0.0,
-        minimum_interstation_distance_in_m=100,
-        location_priorities=["", "00", "01", "02", "10"],
-        chunklength_in_sec=86400
+  def _download_window(
+      self,
+      mass_downloader: MassDownloader,
+      domain: CircularDomain | GlobalDomain | RectangularDomain,
+      window: TimeWindow,
+  ) -> None:
+    self.logger.info(
+        "Starting download for window %s to %s.", window[0], window[1]
     )
-    # Execute the mass download for the day
-    mdl = self._MassDownloader(providers=self.clients().values())
-    download_kwargs = dict()
-    if self.args.threads > 1:
-      download_kwargs["threads_per_client"] = 1
-    try:
-      mdl.download(self.domain, restrictions, mseed_storage=str(day_path),
-                   stationxml_storage=str(self.station_directory),
-                   **download_kwargs)
-    except Exception as e:
-      self.logger.error("Error downloading data for date %s: %s",
-                        day_id, e)
+    mass_downloader.download(
+        domain,
+        Restrictions(**self.download_kwargs(window)),
+        mseed_storage=self._waveform_storage,
+        stationxml_storage=str(self.args.stations),
+        threads_per_client=max(1, self.sub_workers),
+    )
+    self.logger.info(
+        "Completed download for window %s to %s.", window[0], window[1]
+    )
+
+  def download(self) -> None:
+    super().download()
+    mass_downloader = MassDownloader(providers=self.clients)
+    if self.args.circdomain:
+      domain = CircularDomain(**self.domain_kwargs)
+    elif self.args.rectdomain:
+      domain = RectangularDomain(**self.domain_kwargs)
     else:
-      # Report completion per-day
-      self.logger.info("Downloaded data for date: %s", day_id)
+      domain = GlobalDomain()
+    self.logger.info(
+        "Using %s domain for waveform and station downloads: %s",
+        type(domain).__name__, self.domain_kwargs or "global",
+    )
+
+    max_workers = max(1, min(self.main_workers, len(self.ranges)))
+    self.logger.info(
+        "Starting %d download window(s) with up to %d main worker(s) and "
+        "%d sub-worker(s) per active window.",
+        len(self.ranges), max_workers, max(1, self.sub_workers),
+    )
+    with ThreadPoolExecutor(
+        max_workers=max_workers
+    ) as executor:
+      futures = {
+          executor.submit(
+              self._download_window, mass_downloader, domain, window
+          ): window
+          for window in self.ranges
+      }
+      for future in as_completed(futures):
+        window = futures[future]
+        try:
+          future.result()
+        except Exception as error:
+          self.logger.error(
+              "Download failed for date window %s to %s: %s",
+              window[0], window[1], error,
+          )
+          raise
+      self.logger.info("All %d download window(s) completed.", len(futures))
 
 
-def get_downloader(args: argparse.Namespace) -> BaseDownloader:
-  return PyrockoDownloader(args) if args.pyrocko else ObsPyDownloader(args)
+class PyrockoDownloader(BaseDownloader):
+  def download(self) -> None:
+    self.logger.error("The Pyrocko download backend is not implemented.")
+    raise NotImplementedError("The Pyrocko backend is not implemented.")
 
 
-def data_downloader(args: argparse.Namespace) -> None:
+def data_downloader(args: Namespace) -> None:
+  """Select a backend and download data described by a parsed CLI namespace.
+
+  Args:
+    args: Namespace returned by ``ogsutils.parse_downloader_args``. The
+      ``pyrocko`` flag selects ``PyrockoDownloader``; otherwise the ObsPy
+      implementation is selected.
   """
-  Download waveform data for the requested date range.
-  """
-  downloader = get_downloader(args)
-  downloader.run()
+  downloader = (
+      PyrockoDownloader(args) if args.pyrocko else ObsPyDownloader(args)
+  )
+  downloader.download()
 
 
 if __name__ == "__main__":
+  # Keep direct script execution equivalent to the installed CLI entry point.
   data_downloader(OGS_U.parse_downloader_args())

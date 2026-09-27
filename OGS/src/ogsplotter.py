@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Plotter Module - Reusable Matplotlib / Cartopy Figure Builders
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 This module provides a family of small plotter classes that wrap common
@@ -81,7 +81,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 # =============================================================================
@@ -116,12 +117,15 @@ import ogsutils as OGS_U
 # These tiny shims keep static type checkers happy without forcing strict
 # dependence on optional cartopy / matplotlib internals at runtime.
 
+
 class _LabelKwargs(TypedDict, total=False):
   label: str
+
 
 class _GridlinerLike(Protocol):
   left_labels: bool
   top_labels: bool
+
 
 class _CartopyAxesLike(Protocol):
   def add_feature(self, feature: object, **kwargs: object) -> object:
@@ -133,15 +137,19 @@ class _CartopyAxesLike(Protocol):
   def gridlines(self) -> _GridlinerLike:
     ...
 
+
 def _label_kwargs(label: str) -> _LabelKwargs:
   return {"label": label} if label else {}
+
 
 def _as_cartopy_axes(ax: Axes) -> _CartopyAxesLike:
   return cast(_CartopyAxesLike, ax)
 
+
 def _plot_vline(ax: Axes, x: datetime, color: str, label: str) -> None:
   ax.axvline(x=float(mdates.date2num(x)), color=color, linestyle='--',
              **_label_kwargs(label))
+
 
 def v_lat_long_to_distance(lng1, lat1, depth1, lng2, lat2, depth2, dim=2):
   """Pairwise great-circle (optionally 3D) distance in km between two point
@@ -162,14 +170,19 @@ def v_lat_long_to_distance(lng1, lat1, depth1, lng2, lat2, depth2, dim=2):
   list[float]
     Distance in kilometers for each input pair.
   """
-  return [np.sqrt((gps2dist_azimuth(lt1, lg1, lt2, lg2)[0] / 1000.0) ** 2 +
-            ((abs(dp2 - dp1) / 1000.0) ** 2 if dim == 3 else 0.))
-          for lg1, lt1, dp1, lg2, lt2, dp2 in zip(
-            lng1, lat1, depth1, lng2, lat2, depth2)]
+  return [
+      np.sqrt(
+          (gps2dist_azimuth(lt1, lg1, lt2, lg2)[0] / 1000.0) ** 2 +
+          ((abs(dp2 - dp1) / 1000.0) ** 2 if dim == 3 else 0.)
+      ) for lg1, lt1, dp1, lg2, lt2, dp2 in zip(
+          lng1, lat1, depth1, lng2, lat2, depth2
+      )
+  ]
 
 # =============================================================================
 # BASE PLOTTER
 # =============================================================================
+
 
 class plotter:
   """Common base for all OGS plotters.
@@ -188,6 +201,7 @@ class plotter:
   verbose : bool, default ``False``
     Toggle DEBUG-level logging on the class-named logger.
   """
+
   def __init__(self, figsize=(20, 10), fig=None, verbose: bool = False,
                **kwargs) -> None:
     plt.rcParams.update({'font.size': 12})
@@ -195,7 +209,7 @@ class plotter:
     self.fig = fig if fig else plt.figure(figsize=figsize,
                                           layout="compressed")
     self.logger = OGS_U.setup_logger(
-      f"{__name__}.{self.__class__.__name__}", verbose
+        f"{__name__}.{self.__class__.__name__}", verbose
     )
 
   def savefig(self, output=None, **kwargs) -> None:
@@ -209,6 +223,7 @@ class plotter:
 # ONE-AXIS TIME-SERIES PLOTTERS
 # =============================================================================
 
+
 class stack_plotter(plotter):
   """Stacked time-series plot of multiple labeled series sharing one x axis.
 
@@ -216,6 +231,7 @@ class stack_plotter(plotter):
   optional vertical reference lines (``vlines``) and horizontal threshold
   markers (``hlines``).
   """
+
   def __init__(self, x, y, labels, colors, xlabel=None, ylabel=None,
                title=None, fig=None, ax=None, gs=111, legend=False,
                output=None, xlim=None, ylim=None, verbose: bool = False,
@@ -223,17 +239,23 @@ class stack_plotter(plotter):
                hlines: list[tuple[float, str, str]] = []) -> None:
     super().__init__(fig=fig, verbose=verbose)
     self.ax: Axes = self.fig.add_subplot(gs)
-    if xlabel: self.ax.set_xlabel(xlabel)
-    if ylabel: self.ax.set_ylabel(ylabel)
-    if title: self.ax.set_title(title)
+    if xlabel:
+      self.ax.set_xlabel(xlabel)
+    if ylabel:
+      self.ax.set_ylabel(ylabel)
+    if title:
+      self.ax.set_title(title)
     self.ax.stackplot(x, y, labels=labels, colors=colors)
     self.ax.set_xlim(x[0], x[-1])
     self.ax.set_ylim(0, OGS_U.decimeter(self.ax.get_ylim()[1]))
     for vline in vlines:
       _plot_vline(self.ax, vline[0], vline[2] or OGS_C.ALN_GREEN, vline[1])
-    if legend: self.ax.legend()
+    if legend:
+      self.ax.legend()
     self.ax.grid()
-    if output is not None: self.savefig(output=output)
+    if output is not None:
+      self.savefig(output=output)
+
 
 class line_plotter(plotter):
   """Single-line plot with optional secondary additions via :meth:`add_plot`.
@@ -241,41 +263,57 @@ class line_plotter(plotter):
   Supports vertical reference lines (``vlines``) and horizontal threshold
   lines (``hlines``) for annotating events of interest on the axis.
   """
+
   def __init__(
       self, x, y, xlabel=None, ylabel=None, title=None, fig=None, ax=None,
       color=OGS_C.OGS_BLUE, gs=111, label=None, legend=False, ylim=(-100, 100),
       output=None, xlim=None, verbose: bool = False,
       vlines: list[tuple[datetime, str, str]] = [],
-      hlines: list[tuple[float, str, str]] = []) -> None:
+      hlines: list[tuple[float, str, str]] = []
+  ) -> None:
     super().__init__(fig=fig, verbose=verbose)
     self.ax: Axes = self.fig.add_subplot(gs)
-    if xlabel: self.ax.set_xlabel(xlabel)
-    if ylabel: self.ax.set_ylabel(ylabel)
-    if title: self.ax.set_title(title)
-    if xlim is not None: self.ax.set(xlim=xlim)
-    if ylim is not None: self.ax.set(ylim=ylim)
+    if xlabel:
+      self.ax.set_xlabel(xlabel)
+    if ylabel:
+      self.ax.set_ylabel(ylabel)
+    if title:
+      self.ax.set_title(title)
+    if xlim is not None:
+      self.ax.set(xlim=xlim)
+    if ylim is not None:
+      self.ax.set(ylim=ylim)
     self.ax.plot(x, y, color=color, label=label)
-    if legend: self.ax.legend()
-    if ylim is not None: self.ax.set(ylim=ylim)
+    if legend:
+      self.ax.legend()
+    if ylim is not None:
+      self.ax.set(ylim=ylim)
     for date, label, color in vlines:
       _plot_vline(self.ax, date, color or OGS_C.ALN_GREEN, label)
     for y, label, color in hlines:
       self.ax.axhline(y=y, label=label or None,
                       color=color or OGS_C.ALN_GREEN, linestyle='--')
-    if output is not None: self.savefig(output=output)
+    if output is not None:
+      self.savefig(output=output)
 
   def add_plot(self, x, y, xlabel=None, ylabel=None, color=OGS_C.MEX_PINK,
                label=None, legend=None, output=None, savefig=False) -> None:
     self.ax.plot(x, y, color=color, label=label)
-    if xlabel: self.ax.set_xlabel(xlabel)
-    if ylabel: self.ax.set_ylabel(ylabel)
-    if legend is not None: self.ax.legend()
-    if output is not None: savefig = True
-    if savefig: self.savefig(output=output)
+    if xlabel:
+      self.ax.set_xlabel(xlabel)
+    if ylabel:
+      self.ax.set_ylabel(ylabel)
+    if legend is not None:
+      self.ax.legend()
+    if output is not None:
+      savefig = True
+    if savefig:
+      self.savefig(output=output)
 
 # =============================================================================
 # CATALOG-EVENT PLOTTERS
 # =============================================================================
+
 
 class event_plotter(plotter):
   """Per-event waveform / pick visualization.
@@ -283,9 +321,10 @@ class event_plotter(plotter):
   Renders the waveform context surrounding a catalog event together with the
   associated picks, suitable for visual QC and BGMA review.
   """
+
   def _resolve_station_plot_data(
-        self, sta: object
-      ) -> tuple[str, Path, pd.Series] | None:
+      self, sta: object
+  ) -> tuple[str, Path, pd.Series] | None:
     if not isinstance(sta, str):
       return None
     station_key = self.sta2sta.get(sta)
@@ -299,16 +338,17 @@ class event_plotter(plotter):
       station_row = station_row.iloc[0]
     return station_key, waveform_paths[0], station_row
 
-  def __init__(self,
-        picks: pd.DataFrame,
-        event: pd.Series,
-        stations: list[str],
-        waveforms: dict[str, list[Path]],
-        inventory: pd.DataFrame,
-        fig=None, ax=None, gs=None, title=None, color=None, xlabel="Time (s)",
-        output=None, ylabel="Epicentral Distance (km)", ylim=150, center=None,
-        verbose: bool = False
-      ) -> None:
+  def __init__(
+      self,
+      picks: pd.DataFrame,
+      event: pd.Series,
+      stations: list[str],
+      waveforms: dict[str, list[Path]],
+      inventory: pd.DataFrame,
+      fig=None, ax=None, gs=None, title=None, color=None, xlabel="Time (s)",
+      output=None, ylabel="Epicentral Distance (km)", ylim=150, center=None,
+      verbose: bool = False
+  ) -> None:
     super().__init__(fig=fig, verbose=verbose)
     self.ax: Axes = self.fig.add_subplot(111)
     self.pick_time = op.UTCDateTime(event[OGS_C.TIME_STR])
@@ -318,82 +358,95 @@ class event_plotter(plotter):
     self.window = td(seconds=30)
     self.inventory = inventory.set_index(OGS_C.INDEX_STR)
     self.sta2sta: dict[str, str] = dict(zip(
-      inventory[OGS_C.STATION_STR], inventory[OGS_C.INDEX_STR]
+        inventory[OGS_C.STATION_STR], inventory[OGS_C.INDEX_STR]
     ))
     self.t = event[OGS_C.TIME_STR]
     self.offset = td(seconds=1)
     self.antis2c = {}
     for sta, df in picks.groupby(OGS_C.STATION_STR):
-      if not isinstance(sta, str) or sta not in stations: continue
+      if not isinstance(sta, str) or sta not in stations:
+        continue
       station_plot_data = self._resolve_station_plot_data(sta)
-      if station_plot_data is None: continue
+      if station_plot_data is None:
+        continue
       station_key, waveform_path, station_row = station_plot_data
       self.stream: op.Stream = op.read(
-        waveform_path,
-        starttime=self.pick_time - self.offset,
-        endtime=self.pick_time + self.window
+          waveform_path,
+          starttime=self.pick_time - self.offset,
+          endtime=self.pick_time + self.window
       )
       self.stream.detrend()
       self.stream.filter("highpass", freq=2)
       trace = self.stream.select(
-        station=station_key.split(OGS_C.PERIOD_STR)[1])
+          station=station_key.split(OGS_C.PERIOD_STR)[1]
+      )
       if len(trace) == 0:
         self.logger.warning("No trace found for station %s. Skipping.", sta)
         continue
       trace = trace[0]
       station_x, station_y, station_z, _, _, color, _ = station_row
       y_ = np.sqrt((gps2dist_azimuth(
-        event[OGS_C.LATITUDE_STR], event[OGS_C.LONGITUDE_STR],
-        station_y, station_x)[0] / 1000.0) ** 2 +
-        (station_z / 1000.0) ** 2)
-      if y_ > self.ylim: continue
+          event[OGS_C.LATITUDE_STR], event[OGS_C.LONGITUDE_STR],
+          station_y, station_x)[0] / 1000.0) ** 2 +
+          (station_z / 1000.0) ** 2)
+      if y_ > self.ylim:
+        continue
       trace_data_max = np.max(np.abs(trace.data))
       trace.data = trace.data / trace_data_max * 5.0 + y_
       self.ax.plot(trace.times(), trace.data, color=color)
       for _, p in df.groupby(OGS_C.PHASE_STR):
         if len(p.index) > 1:
           self.logger.warning(
-            "Multiple picks for %s at %s. Using the first one.",
-            sta, p[OGS_C.TIME_STR].iloc[0]
+              "Multiple picks for %s at %s. Using the first one.",
+              sta, p[OGS_C.TIME_STR].iloc[0]
           )
         p = p.iloc[0]
         x_ = \
-          UTCDateTime(p[OGS_C.TIME_STR]) - (UTCDateTime(self.t) - self.offset)
+            UTCDateTime(p[OGS_C.TIME_STR]) - \
+            (UTCDateTime(self.t) - self.offset)
         if p[OGS_C.PHASE_STR] == "P":
-            ls = '-'
-            lc = "red"
+          ls = '-'
+          lc = "red"
         else:
-            ls = '--'
-            lc = "blue"
+          ls = '--'
+          lc = "blue"
         self.ax.plot(np.array([x_, x_]), [y_ - 3, y_ + 3], ls=ls, color=lc)
-      weights = df[OGS_C.WEIGHT_STR].to_list() \
-        if OGS_C.WEIGHT_STR in df.columns \
+      weights = (
+          df[OGS_C.WEIGHT_STR].to_list() if OGS_C.WEIGHT_STR in df.columns
           else df[OGS_C.PROBABILITY_STR].to_list()
+      )
       weights = [float(f"{w:.3f}") for w in weights]
       self.ax.text(31.3, y_, f"{sta} {weights}", fontsize=8)
-    if xlabel: self.ax.set_xlabel(xlabel)
-    if ylabel: self.ax.set_ylabel(ylabel)
+    if xlabel:
+      self.ax.set_xlabel(xlabel)
+    if ylabel:
+      self.ax.set_ylabel(ylabel)
     self.ax.set(ylim=(0, self.ylim))
     self.ax.set_ylim(0)
     self.ax.set_xlim(0, self.window.seconds + self.offset.seconds,)
     xmin, xmax = self.ax.get_xlim()
-    self.ax.hlines(y=0, xmin=xmin, xmax=xmax, color=OGS_C.MEX_PINK,
-                   linestyles='--')
-    self.ax.hlines(y=[-3, 3], xmin=xmin, xmax=xmax, color=OGS_C.ALN_GREEN,
-                   linestyles='--')
-    if title: self.ax.set_title(title)
-    if output is not None: self.savefig(output=output)
+    self.ax.hlines(
+        y=0, xmin=xmin, xmax=xmax, color=OGS_C.MEX_PINK, linestyles='--'
+    )
+    self.ax.hlines(
+        y=[-3, 3], xmin=xmin, xmax=xmax, color=OGS_C.ALN_GREEN, linestyles='--'
+    )
+    if title:
+      self.ax.set_title(title)
+    if output is not None:
+      self.savefig(output=output)
 
   def add_plot(self, picks, color=None, label=None, output=None, savefig=False,
                alpha=1., flip=False, ylim=(-100, 100)) -> None:
     for sta, df in picks.groupby(OGS_C.STATION_STR):
       station_plot_data = self._resolve_station_plot_data(sta)
-      if station_plot_data is None: continue
+      if station_plot_data is None:
+        continue
       station_key, waveform_path, station_row = station_plot_data
       self.stream: op.Stream = op.read(
-        waveform_path,
-        starttime=self.pick_time - self.offset,
-        endtime=self.pick_time + self.window
+          waveform_path,
+          starttime=self.pick_time - self.offset,
+          endtime=self.pick_time + self.window
       )
       self.stream.detrend()
       self.stream.filter("highpass", freq=2)
@@ -403,17 +456,20 @@ class event_plotter(plotter):
         continue
       trace = trace[0]
       station_x, station_y, station_z, _, _, color, _ = station_row
-      y_ = np.sqrt((gps2dist_azimuth(
-        self.event[OGS_C.LATITUDE_STR], self.event[OGS_C.LONGITUDE_STR],
-        station_y, station_x)[0] / 1000.0) ** 2 +
-        (station_z / 1000.0) ** 2)
+      y_ = np.sqrt((
+          gps2dist_azimuth(
+              self.event[OGS_C.LATITUDE_STR], self.event[OGS_C.LONGITUDE_STR],
+              station_y, station_x
+          )[0] / 1000.0
+      ) ** 2 + (station_z / 1000.0) ** 2)
       if y_ > self.ylim:
         self.logger.warning(
-          "Station %s is too far from the event. Skipping.", sta
+            "Station %s is too far from the event. Skipping.", sta
         )
         continue
       if flip:
-        if y_ < 0: raise ValueError("y_ must be positive for plotting.")
+        if y_ < 0:
+          raise ValueError("y_ must be positive for plotting.")
         y_ = -y_
       trace_data_max = np.max(np.abs(trace.data))
       trace.data = trace.data / trace_data_max * 5.0 + y_
@@ -421,11 +477,12 @@ class event_plotter(plotter):
       for _, p in df.groupby(OGS_C.PHASE_STR):
         if len(p.index) > 1:
           self.logger.warning(
-            "Multiple picks for %s at %s. Using the first one.",
-            sta, p[OGS_C.TIME_STR].iloc[0]
+              "Multiple picks for %s at %s. Using the first one.",
+              sta, p[OGS_C.TIME_STR].iloc[0]
           )
         p = p.iloc[0]
-        x_ = UTCDateTime(p[OGS_C.TIME_STR]) - (UTCDateTime(self.t) - self.offset)
+        x_ = UTCDateTime(p[OGS_C.TIME_STR]) - \
+            (UTCDateTime(self.t) - self.offset)
         if p[OGS_C.PHASE_STR] == OGS_C.PWAVE:
           ls = '-'
           lc = "red"
@@ -438,8 +495,11 @@ class event_plotter(plotter):
       ticks = self.ax.get_yticks()
       self.ax.set_yticklabels([f"{int(abs(tick))}" for tick in ticks])
     plt.tight_layout(pad=0.1)
-    if output is not None: savefig = True
-    if savefig: self.savefig(output=output)
+    if output is not None:
+      savefig = True
+    if savefig:
+      self.savefig(output=output)
+
 
 class day_plotter(plotter):
   """Daily multi-station overview plot.
@@ -447,11 +507,14 @@ class day_plotter(plotter):
   Composes one axis per station for a single calendar day, useful as a quick
   diagnostic summary of catalog activity.
   """
-  def __init__(self, picks, ylabel=None, title=None, ylim=None, label=None,
-               output=None, legend=None, yscale=None, color=OGS_C.OGS_BLUE,
-               grid=False, verbose: bool = False,
-               hlines:list[tuple[float, str, str]]=[],
-               vlines:list[tuple[datetime, str, str]]=[]) -> None:
+
+  def __init__(
+      self, picks, ylabel=None, title=None, ylim=None, label=None, output=None,
+      legend=None, yscale=None, color=OGS_C.OGS_BLUE, grid=False,
+      verbose: bool = False,
+      hlines: list[tuple[float, str, str]] = [],
+      vlines: list[tuple[datetime, str, str]] = []
+  ) -> None:
     from obspy import UTCDateTime
     super().__init__(verbose=verbose)
     x = picks.value_counts().sort_index()
@@ -508,12 +571,15 @@ class day_plotter(plotter):
       else:
         self.ax.legend()
     self.ax.set_ylim(0, OGS_U.decimeter(max(y[-1], self.ax.get_ylim()[1])))
-    if output is not None: savefig = True
-    if savefig: self.savefig(output=output)
+    if output is not None:
+      savefig = True
+    if savefig:
+      self.savefig(output=output)
 
 # =============================================================================
 # MAP, SCATTER, AND HISTOGRAM PLOTTERS
 # =============================================================================
+
 
 class map_plotter(plotter):
   """Geographic map plotter built on cartopy.
@@ -522,6 +588,7 @@ class map_plotter(plotter):
   scale bar, north arrow) on a configurable extent. Used to inspect catalog
   coverage and clustering outputs over the OGS region.
   """
+
   def _add_scale_bar(self, ax, extent):
     """Add a cartographic scale bar using matplotlib-scalebar.
 
@@ -537,18 +604,18 @@ class map_plotter(plotter):
     # Distance in meters for 1 degree of longitude at the center latitude
     dx = 111320 * np.cos(np.radians(lat_mid))
     scale_bar = ScaleBar(
-      dx=dx,
-      units="m",
-      dimension="si-length",
-      location="lower left",
-      scale_loc="bottom",
-      length_fraction=0.2,
-      width_fraction=0.015,
-      font_properties={"size": 10, "weight": "bold"},
-      box_alpha=0.85,
-      pad=0.5,
-      border_pad=0.5,
-      sep=5,
+        dx=dx,
+        units="m",
+        dimension="si-length",
+        location="lower left",
+        scale_loc="bottom",
+        length_fraction=0.2,
+        width_fraction=0.015,
+        font_properties={"size": 10, "weight": "bold"},
+        box_alpha=0.85,
+        pad=0.5,
+        border_pad=0.5,
+        sep=5,
     )
     ax.add_artist(scale_bar)
 
@@ -563,21 +630,25 @@ class map_plotter(plotter):
       The projection of the map.
     """
     north_arrow(
-      ax,
-      location="upper left",
-      scale=0.6,
-      rotation={"crs": proj, "reference": "center"},
-      shadow=False,
-      label={"text": "N", "position": "top", "fontsize": 11, "fontweight": "bold"},
+        ax,
+        location="upper left",
+        scale=0.6,
+        rotation={"crs": proj, "reference": "center"},
+        shadow=False,
+        label={
+            "text": "N", "position": "top", "fontsize": 11,
+            "fontweight": "bold"
+        },
     )
 
-  def __init__(self, domain : list[float], x=None, y=None, text=None,
-               xlabel=None, ylabel=None, title=None, fig=None, ax=None, s=20,
-               proj=ccrs.PlateCarree(), color=OGS_C.OGS_BLUE, gs=111,
-               label=None, legend=False, marker='o', facecolors=OGS_C.OGS_BLUE,
-               edgecolors=OGS_C.OGS_BLUE, output=None, scale: float = 50,
-               verbose: bool = False, magnitude=None) -> None:
-    assert len(domain) == 4, "Domain must be a list of four floats: [min_lon, max_lon, min_lat, max_lat]"
+  def __init__(
+      self, domain: tuple[float, float, float, float], x=None, y=None,
+      text=None, legend=False, xlabel=None, ylabel=None, title=None, fig=None,
+      ax=None, s=20, gs=111, proj=ccrs.PlateCarree(), color=OGS_C.OGS_BLUE,
+      label=None, marker='o', facecolors=OGS_C.OGS_BLUE,
+      edgecolors=OGS_C.OGS_BLUE, output=None, scale: float = 50,
+      verbose: bool = False, magnitude=None
+  ) -> None:
     super().__init__(fig=fig, verbose=verbose)
     self.proj = proj
     self.ax: Axes = self.fig.add_subplot(gs, projection=self.proj)
@@ -593,18 +664,19 @@ class map_plotter(plotter):
     h = domain[3] - domain[2]
     extent = [domain[0] - pm, domain[1] + pm, domain[2] - pm, domain[3] + pm]
     self.ax.add_patch(mpatches.Polygon(
-      OGS_C.OGS_POLY_REGION, closed=True, linewidth=1, color='red', fill=False,
-      label="Bulletin Area"))
+        OGS_C.OGS_POLY_REGION, closed=True, linewidth=1, color='red',
+        fill=False, label="Bulletin Area"
+    ))
     rgAx: Axes = self.fig.add_axes((.74, 0.01, 0.15, 0.27),
                                    projection=self.proj)
     rg_map_ax = _as_cartopy_axes(rgAx)
     rgAx.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
                                       fill=False))
     rg_map_ax.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
-    rg_map_ax.add_feature(cfeature.BORDERS, linewidth=0.5,
-                     edgecolor=OGS_C.MEX_PINK)
-    rg_map_ax.add_feature(cfeature.COASTLINE, linewidth=0.5,
-                     edgecolor='black')
+    rg_map_ax.add_feature(
+        cfeature.BORDERS, linewidth=0.5, edgecolor=OGS_C.MEX_PINK
+    )
+    rg_map_ax.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
     rg_map_ax.set_extent([6, 19, 36, 48], crs=self.proj)
     rgAx.set_aspect('equal', adjustable='box')
     ita = rgAx.annotate("Italy", xy=(0.5, 0.55), xycoords='axes fraction',
@@ -614,10 +686,10 @@ class map_plotter(plotter):
     self.ax.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
                                          fill=False, label="Station Area"))
     map_ax.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
-    map_ax.add_feature(cfeature.BORDERS, linewidth=0.5,
-                        edgecolor=OGS_C.MEX_PINK)
-    map_ax.add_feature(cfeature.COASTLINE, linewidth=0.5,
-                        edgecolor='black')
+    map_ax.add_feature(
+        cfeature.BORDERS, linewidth=0.5, edgecolor=OGS_C.MEX_PINK
+    )
+    map_ax.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
     map_ax.set_extent(extent, crs=proj)
     self.ax.set_aspect('equal', adjustable='box')
     gl = map_ax.gridlines()
@@ -634,12 +706,18 @@ class map_plotter(plotter):
     if magnitude is not None:
       for (m_min, m_max), size in OGS_C.OGS_MAGNITUDE_SIZE.items():
         mask = (m_min <= magnitude) & (magnitude < m_max)
-        self.ax.scatter(x[mask], y[mask], s=size, marker=self.marker,
-                        label=f"{m_min} $\\leq M_L$ < {m_max}",
-                        facecolors=facecolors,
-                        edgecolors=edgecolors,
+        self.ax.scatter(
+            x[mask], y[mask], s=size, marker=self.marker,
+            label=f"{m_min} $\\leq M_L$ < {m_max}",
+            facecolors=facecolors, edgecolors=edgecolors,
         )
       mask = magnitude >= OGS_C.OGS_MAX_MAGNITUDE
+      self.logger.info(
+          f"Events with magnitude >= {OGS_C.OGS_MAX_MAGNITUDE}:\n"
+          f"X coordinates: {list(x[mask])}\n"
+          f"Y coordinates: {list(y[mask])}\n"
+          f"Magnitude: {list(magnitude[mask])}"
+      )
       self.ax.scatter(x[mask], y[mask], s=320, marker="*",
                       label=f"$M_L \\geq$ {OGS_C.OGS_MAX_MAGNITUDE}",
                       facecolors=OGS_C.LIP_ORANGE, edgecolors=OGS_C.LIP_ORANGE)
@@ -654,21 +732,23 @@ class map_plotter(plotter):
       self.ax.legend()
     if title:
       self.ax.set_title(title)
-    if output is not None: self.savefig(output=output)
+    if output is not None:
+      self.savefig(output=output)
 
   def add_plot(self, x, y, xlabel=None, ylabel=None,
                color: str | None = OGS_C.MEX_PINK,
                label=None, facecolors=None, edgecolors=None, legend=None,
                s=None, output=None, savefig=False, marker=None,
                magnitude=None) -> None:
-    if marker is not None: self.marker = marker
+    if marker is not None:
+      self.marker = marker
     if magnitude is not None:
       for (m_min, m_max), size in OGS_C.OGS_MAGNITUDE_SIZE.items():
         mask = (m_min <= magnitude) & (magnitude < m_max)
-        self.ax.scatter(x[mask], y[mask], s=size, marker=self.marker,
-                        label=f"{m_min} ≤ $M_L$ < {m_max}",
-                        facecolors=facecolors,
-                        edgecolors=edgecolors,
+        self.ax.scatter(
+            x[mask], y[mask], s=size, marker=self.marker,
+            label=f"{m_min} ≤ $M_L$ < {m_max}",
+            facecolors=facecolors, edgecolors=edgecolors,
         )
       mask = magnitude >= OGS_C.OGS_MAX_MAGNITUDE
       self.ax.scatter(x[mask], y[mask], s=320, marker="*",
@@ -684,8 +764,10 @@ class map_plotter(plotter):
       self.ax.set_ylabel(ylabel)
     if legend is not None:
       self.ax.legend()
-    if output is not None: savefig = True
-    if savefig: self.savefig(output=output)
+    if output is not None:
+      savefig = True
+    if savefig:
+      self.savefig(output=output)
 
   def add_text(self, text, x, y, color=OGS_C.OGS_BLUE, fontsize=12,
                horizontalalignment='center', verticalalignment='center',
@@ -694,16 +776,21 @@ class map_plotter(plotter):
       self.ax.text(pos_x, pos_y, t, color=color, fontsize=fontsize,
                    horizontalalignment=horizontalalignment,
                    verticalalignment=verticalalignment)
-    if output is not None: savefig = True
-    if savefig: self.savefig(output=output)
+    if output is not None:
+      savefig = True
+    if savefig:
+      self.savefig(output=output)
+
 
 class scatter_plotter(plotter):
   """2D scatter plot of arbitrary catalog features."""
-  def __init__(self, x, y, xlabel=None, ylabel=None, title=None, fig=None,
-               ax=None, color=OGS_C.OGS_BLUE, gs=111, label=None, legend=False,
-               marker='o', aspect=None, edgecolors=OGS_C.OGS_BLUE,
-               facecolors=OGS_C.OGS_BLUE, output=None,
-               verbose: bool = False) -> None:
+
+  def __init__(
+      self, x, y, xlabel=None, ylabel=None, title=None, fig=None, ax=None,
+      color=OGS_C.OGS_BLUE, gs=111, label=None, legend=False, marker='o',
+      aspect=None, edgecolors=OGS_C.OGS_BLUE, facecolors=OGS_C.OGS_BLUE,
+      output=None, verbose: bool = False
+  ) -> None:
     super().__init__(fig=fig, verbose=verbose)
     self.ax: Axes = self.fig.add_subplot(gs)
     if xlabel:
@@ -718,7 +805,8 @@ class scatter_plotter(plotter):
       self.fig.gca().set_aspect(aspect, adjustable='box')
     self.ax.scatter(x, y, color=color, label=label, marker=marker,
                     edgecolors=edgecolors, facecolors=facecolors)
-    if output is not None: self.savefig(output=output)
+    if output is not None:
+      self.savefig(output=output)
 
   def add_plot(self, x, y, xlabel=None, ylabel=None, color=OGS_C.MEX_PINK,
                label=None, legend=None, aspect=None, output=None,
@@ -732,16 +820,21 @@ class scatter_plotter(plotter):
       self.ax.legend()
     if aspect is not None:
       plt.gca().set_aspect(aspect, adjustable='box')
-    if output is not None: savefig = True
-    if savefig: self.savefig(output=output)
+    if output is not None:
+      savefig = True
+    if savefig:
+      self.savefig(output=output)
+
 
 class histogram_plotter(plotter):
   """1D histogram plot for distribution diagnostics over catalog columns."""
-  def __init__(self, data, bins=OGS_C.NUM_BINS, xlabel=None,
-               ylabel="Number of Events", title=None, fig=None, ax=None,
-               color=OGS_C. OGS_BLUE, gs=111, label=None, legend=False,
-               xlim=None, edgecolor=None, facecolor=None, yscale=None,
-               output=None, verbose: bool = False) -> None:
+
+  def __init__(
+      self, data, bins=OGS_C.NUM_BINS, xlabel=None, ylabel="Number of Events",
+      title=None, fig=None, ax=None, color=OGS_C.OGS_BLUE, gs=111, label=None,
+      legend=False, xlim=None, edgecolor=None, facecolor=None, yscale=None,
+      output=None, verbose: bool = False
+  ) -> None:
     super().__init__(fig=fig, figsize=(10, 5), verbose=verbose)
     self.ax = self.fig.add_subplot(gs)
     self.bins: NDArray[np.float64]
@@ -760,22 +853,22 @@ class histogram_plotter(plotter):
       if xlim[0] >= xlim[1]:
         raise ValueError("xlim[0] must be less than xlim[1].")
       self.bins = np.asarray(
-        np.linspace(xlim[0], xlim[1], bins + 1), dtype=np.float64
+          np.linspace(xlim[0], xlim[1], bins + 1), dtype=np.float64
       )
       if len(data) > 0 and (max(data) > xlim[1] or min(data) < xlim[0]):
         self.logger.warning(
-          "Data contains values outside of xlim. These values will be ignored,"
-          f" data range = [{min(data), max(data)}]"
+            "Data contains values outside of xlim. These values will be "
+            f"ignored, data range = [{min(data), max(data)}]"
         )
     else:
       _, histogram_bins = np.histogram(data, bins=bins)
       self.bins = np.asarray(histogram_bins, dtype=np.float64)
     y, _, _ = self.ax.hist(
-      data,
-      bins=self.bins.tolist(),
-      color=color,
-      label=label,
-      align='mid',
+        data,
+        bins=self.bins.tolist(),
+        color=color,
+        label=label,
+        align='mid',
     )
     if legend:
       mean = float(np.mean(data))
@@ -788,11 +881,14 @@ class histogram_plotter(plotter):
       self.ax.legend()
     if yscale is not None:
       self.ax.set_yscale(yscale)
-    if output is not None: self.savefig(output=output)
+    if output is not None:
+      self.savefig(output=output)
 
-  def add_fit(self, func, p0=None, color=OGS_C.MEX_PINK, label=None,
-              output=None, savefig=False, xlabel=None, ylabel=None,
-              title=None, legend=None, alpha=None) -> None:
+  def add_fit(
+      self, func, p0=None, color=OGS_C.MEX_PINK, label=None, output=None,
+      savefig=False, xlabel=None, ylabel=None, title=None, legend=None,
+      alpha=None
+  ) -> None:
     y2 = self.ax.twinx()
     y2.set_ylabel("Probability Density", color=color)
     y2.tick_params(axis='y', labelcolor=color)
@@ -808,32 +904,35 @@ class histogram_plotter(plotter):
       self.ax.legend()
       if legend == False:
         self.ax.get_legend().remove()
-    if output is not None: savefig = True
-    if savefig: self.savefig(output=output)
+    if output is not None:
+      savefig = True
+    if savefig:
+      self.savefig(output=output)
 
   def add_plot(self, data, xlabel=None, ylabel=None, title=None, step=False,
                color=OGS_C.MEX_PINK, label=None, legend=None, alpha=0.5,
                output=None, savefig=False, xscale=None, yscale=None) -> None:
     if max(data) > self.bins[-1] or min(data) < self.bins[0]:
       self.logger.warning(
-        "Data contains values outside of the histogram bins. These values will"
-        f" be ignored, data range = [{min(data), max(data)}], bins range = "
-        f"[{self.bins[0], self.bins[-1]}]"
+          "Data contains values outside of the histogram bins. These values "
+          f"will be ignored, data range = [{min(data), max(data)}], bins "
+          f"range = [{self.bins[0], self.bins[-1]}]"
       )
     if step:
       y, _ = np.histogram(data, bins=self.bins)
       self.ax.step(self.bins[:-1], y, color=color, label=label, where='post')
     else:
       y, _, _ = self.ax.hist(
-        data,
-        bins=self.bins.tolist(),
-        color=color,
-        label=label,
-        align='mid',
-        alpha=alpha
+          data,
+          bins=self.bins.tolist(),
+          color=color,
+          label=label,
+          align='mid',
+          alpha=alpha
       )
-    self.ax.set_ylim(bottom=0.9,
-                     top=OGS_U.decimeter(max(*y, self.ax.get_ylim()[1]), "健"))
+    self.ax.set_ylim(
+        bottom=0.9, top=OGS_U.decimeter(max(*y, self.ax.get_ylim()[1]), "健")
+    )
     if xlabel:
       self.ax.set_xlabel(xlabel)
     if ylabel:
@@ -848,12 +947,15 @@ class histogram_plotter(plotter):
       self.ax.set_xscale(xscale)
     if yscale is not None:
       self.ax.set_yscale(yscale)
-    if output is not None: savefig = True
-    if savefig: self.savefig(output=output)
+    if output is not None:
+      savefig = True
+    if savefig:
+      self.savefig(output=output)
 
 # =============================================================================
 # METRIC PLOTTERS
 # =============================================================================
+
 
 class ConfMtx_plotter(plotter):
   """Confusion-matrix figure built on ``sklearn.metrics.ConfusionMatrixDisplay``.
@@ -861,14 +963,16 @@ class ConfMtx_plotter(plotter):
   Used to summarize BGMA review outcomes (e.g. matched vs missed picks /
   events) in a familiar tabular visualization.
   """
-  def __init__(self, data, title=None, fig=None, ax=None,
-               color=OGS_C.MEX_PINK, gs=111, label=None, legend=False,
-               facecolor=None, edgecolor=None, output=None,
-               basename=None, targetname=None, verbose: bool = False,
-               subtitle=None) -> None:
+
+  def __init__(
+      self, data, title=None, fig=None, ax=None, color=OGS_C.MEX_PINK, gs=111,
+      label=None, legend=False, facecolor=None, edgecolor=None, output=None,
+      basename=None, targetname=None, verbose: bool = False, subtitle=None
+  ) -> None:
     super().__init__(fig=fig, figsize=(10, 5), verbose=verbose)
     self.ax: Axes = self.fig.add_subplot(gs)
-    if title: self.ax.set_title(title)
+    if title:
+      self.ax.set_title(title)
     if subtitle:
       self.ax.text(1.05, 0.5, subtitle, transform=self.ax.transAxes,
                    rotation=-90, ha='left', va='center', fontsize=14)
@@ -885,4 +989,5 @@ class ConfMtx_plotter(plotter):
       disp.ax_.set_ylabel(f"{basename}")
     if targetname:
       disp.ax_.set_xlabel(f"{targetname}")
-    if output is not None: self.savefig(output=output)
+    if output is not None:
+      self.savefig(output=output)

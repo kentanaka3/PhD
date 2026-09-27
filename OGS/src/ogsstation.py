@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Station Waveform Inventory Helper - CLI Entry Point
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 Command-line wrapper around :func:`ogsutils.waveforms` that discovers
@@ -35,7 +35,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 import ogsutils as OGS_U

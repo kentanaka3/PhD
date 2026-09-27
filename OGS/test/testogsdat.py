@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS DAT Parser Test Suite - Unit Tests for Bulletin Phase Pick Extraction
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 Unit test suite for ``ogsdat.py``. Validates command-line argument parsing and
@@ -31,21 +31,20 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 import ogsconstants as OGS_C
-from ogsdat import DataFileDAT
 from ogsutils import parse_dat_args
+from ogsdat import DataFileDAT
+import pandas as pd
 import os
-import sys
+from pathlib import Path
 import unittest.mock
 from datetime import datetime
-from pathlib import Path
-import pandas as pd
 
 THIS_DIR = os.path.dirname(__file__)
-sys.path.append(os.path.abspath(THIS_DIR + "/../src"))
 
 
 DATA_DIR = Path(os.path.abspath(THIS_DIR + "/../data"))

@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Quality-Control Modules - Region-Aware Pick & Event Statistics
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 Extends the ``ml_catalog`` ``PickStatQC`` module with OGS-specific filtering:
@@ -44,7 +44,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 import dask
@@ -56,27 +57,28 @@ from ml_catalog.modules import PickStatQC
 from matplotlib.path import Path as mplPath
 
 OGS_STUDY_REGION = [
-  (9.5, 47.5),
-  (15.0, 47.5),
-  (15.0, 44.3),
-  (9.5, 44.3),
-  (9.5, 47.5)
+    (9.5, 47.5),
+    (15.0, 47.5),
+    (15.0, 44.3),
+    (9.5, 44.3),
+    (9.5, 47.5)
 ]
+
 
 class OGSPickStatQC(PickStatQC):
   def __init__(
-    self,
-    p_picks: Optional[int] = None,
-    s_picks: Optional[int] = None,
-    total_picks: Optional[int] = None,
-    p_and_s_picks: Optional[int] = None,
-    region: Optional[mplPath] = mplPath(OGS_STUDY_REGION, closed=True),
+      self,
+      p_picks: Optional[int] = None,
+      s_picks: Optional[int] = None,
+      total_picks: Optional[int] = None,
+      p_and_s_picks: Optional[int] = None,
+      region: Optional[mplPath] = mplPath(OGS_STUDY_REGION, closed=True),
   ):
     super().__init__(
-      p_picks=p_picks,
-      s_picks=s_picks,
-      total_picks=total_picks,
-      p_and_s_picks=p_and_s_picks,
+        p_picks=p_picks,
+        s_picks=s_picks,
+        total_picks=total_picks,
+        p_and_s_picks=p_and_s_picks,
     )
     self.region = region
 
@@ -85,17 +87,18 @@ class OGSPickStatQC(PickStatQC):
   ) -> tuple[pd.DataFrame, pd.DataFrame]:
     events, assignments = super()._filter_events(events, assignments)
     # Apply region filter
-    events = events[events[
-      ["longitude", "latitude"]].apply(
+    events = events[events[["longitude", "latitude"]].apply(
         lambda x: self.region.contains_point(
-          (x["longitude"], x["latitude"])), axis=1)
-    ]
+            (x["longitude"], x["latitude"])
+        ), axis=1
+    )]
     assignments = assignments[
-      assignments["event_idx"].isin(events.index)
+        assignments["event_idx"].isin(events.index)
     ].copy()
     return events, assignments
 
-class EventStatQC(OGSPickStatQC):
+
+class OGSEventStatQC(OGSPickStatQC):
   """
   A quality control module based on event statistics.
   For each of the parameters evaluated (see below), only events with at least
@@ -125,17 +128,17 @@ class EventStatQC(OGSPickStatQC):
       base: Optional[str] = None,
   ):
     super().__init__(
-      p_picks=p_picks,
-      s_picks=s_picks,
-      total_picks=total_picks,
-      p_and_s_picks=p_and_s_picks,
+        p_picks=p_picks,
+        s_picks=s_picks,
+        total_picks=total_picks,
+        p_and_s_picks=p_and_s_picks,
     )
     self.region = region
     self.base = base
 
   def run(self, status: Status) -> None:
     if status.param_is_cached("events", self.name) and status.param_is_cached(
-      "assignments", self.name
+        "assignments", self.name
     ):
       status.set_cached_param(pd.DataFrame(), "events", self.name)
       status.set_cached_param(pd.DataFrame(), "assignments", self.name)
@@ -160,12 +163,12 @@ class EventStatQC(OGSPickStatQC):
       self, events: pd.DataFrame, assignments: pd.DataFrame
   ) -> tuple[pd.DataFrame, pd.DataFrame]:
     # Apply region filter
-    events = events[events[
-      ["longitude", "latitude"]].apply(
+    events = events[events[["longitude", "latitude"]].apply(
         lambda x: self.region.contains_point(
-          (x["longitude"], x["latitude"])), axis=1)
-    ]
+            (x["longitude"], x["latitude"])
+        ), axis=1
+    )]
     assignments = assignments[
-      assignments["event_idx"].isin(events.index)
+        assignments["event_idx"].isin(events.index)
     ].copy()
     return events, assignments

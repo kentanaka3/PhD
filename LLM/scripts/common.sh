@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 
+# =============================================================================
 # LLM Script Common Functions
-# ===========================
+# =============================================================================
 #
 # Provide shared diagnostic and dependency helpers for the LLM command scripts.
 # This file is source-only and has no command-line interface or side effects.
+#
+# AUTHORS:
+#   - 健
+#
+# =============================================================================
 
 # ---------------------------------------------------------------------------
 # Logging and errors

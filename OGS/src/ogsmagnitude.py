@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS Local Magnitude Module - Calibrated M_L for the OGS Network
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 Provides :class:`OGSLocalMagnitude`, an OGS-specific subclass of
@@ -46,7 +46,8 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 import numpy as np

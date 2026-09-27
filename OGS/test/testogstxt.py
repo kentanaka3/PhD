@@ -1,7 +1,7 @@
 """
-=============================================================================
+===============================================================================
 OGS TXT Parser Test Suite - Unit Tests for Event Summary Bulletin Parsing
-=============================================================================
+===============================================================================
 
 OVERVIEW:
 Unit test suite for ``ogstxt.py``. Validates CLI argument handling and parsing
@@ -30,31 +30,30 @@ AUTHORS:
     Applied Data Science and Artificial Intelligence (ADSAI)
   - Terabit Network for Research and Academic Big Data in Italy (TeRABIT)
     Consorzio Interuniversitario del Nord-Est per il Calcolo Automatico (CINECA)
-=============================================================================
+
+===============================================================================
 """
 
 import ogsconstants as OGS_C
 from ogstxt import DataFileTXT
 from ogsutils import parse_txt_args
 import os
-import sys
 import unittest.mock
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
 
 THIS_DIR = os.path.dirname(__file__)
-sys.path.append(os.path.abspath(THIS_DIR + "/../src"))
-
 
 DATA_DIR = Path(os.path.abspath(THIS_DIR + "/../data"))
 DATA_FILE = "onlyEQ-2024.txt"
+TEST_FILE = Path(__file__).resolve()
 
 
 class TestOGSTXT(unittest.TestCase):
   @unittest.mock.patch("sys.argv", [
       "ogstxt.py", "-D", "20240320", "20240620",
-      "-f", str(DATA_DIR / "manual" / DATA_FILE),
+      "-f", str(TEST_FILE),
       "-v"
   ])
   def test_args(self):
