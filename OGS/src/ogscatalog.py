@@ -160,7 +160,7 @@ IMAGE_EXT = OGS_C.PDF_EXT
 # BGMA output-frame column layouts (hoisted out of bgmaEvents/bgmaPicks; pure
 # `OGS_C.*` constants, so safe to build once at module load).
 _EVENTS_MH_COLUMNS: list[str] = [
-    OGS_C.INDEX_STR, OGS_C.TIME_STR, OGS_C.LATITUDE_STR, OGS_C.LONGITUDE_STR,
+    OGS_C.IDX_EVENTS_STR, OGS_C.TIME_STR, OGS_C.LATITUDE_STR, OGS_C.LONGITUDE_STR,
     OGS_C.DEPTH_STR, OGS_C.ERH_STR, OGS_C.ERZ_STR, OGS_C.GAP_STR,
     OGS_C.MAGNITUDE_L_STR, OGS_C.GROUPS_STR,
 ]
@@ -198,12 +198,34 @@ _PICKS_COLUMNS: list[str] = [
     OGS_C.AMPLITUDE_STR, OGS_C.STATION_ML_STR,
 ]
 _EVENTS_COLUMNS: list[str] = [
-    OGS_C.IDX_EVENTS_STR, OGS_C.TIME_STR, OGS_C.LATITUDE_STR,
-    OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR, OGS_C.GAP_STR, OGS_C.ERZ_STR,
-    OGS_C.ERH_STR, OGS_C.ERT_STR, OGS_C.GROUPS_STR, OGS_C.NO_STR,
-    OGS_C.NUMBER_P_PICKS_STR, OGS_C.NUMBER_S_PICKS_STR,
-    OGS_C.NUMBER_P_AND_S_PICKS_STR, OGS_C.ML_STR, OGS_C.ML_MEDIAN_STR,
-    OGS_C.ML_UNC_STR, OGS_C.ML_STATIONS_STR,
+    OGS_C.IDX_EVENTS_STR,            # 0: idx
+    OGS_C.TIME_STR,                  # 1: time
+    OGS_C.LATITUDE_STR,              # 2: latitude
+    OGS_C.LONGITUDE_STR,             # 3: longitude
+    OGS_C.DEPTH_STR,                 # 4: depth
+    OGS_C.GAP_STR,                   # 5: azimuthal_gap
+    OGS_C.ERZ_STR,                   # 6: max_vertical_uncertainty
+    OGS_C.ERH_STR,                   # 7: max_horizontal_uncertainty
+    OGS_C.ERT_STR,                   # 8: max_time_uncertainty
+    OGS_C.GROUPS_STR,                # 9: group
+    OGS_C.NO_STR,                    # 10: number_picks
+    OGS_C.NUMBER_P_PICKS_STR,        # 11: number_p_picks
+    OGS_C.NUMBER_S_PICKS_STR,        # 12: number_s_picks
+    OGS_C.NUMBER_P_AND_S_PICKS_STR,  # 13: number_p_and_s_picks
+    OGS_C.MAGNITUDE_D_STR,           # 14: MD
+    OGS_C.MAGNITUDE_L_STR,           # 15: ML
+    OGS_C.ML_MEDIAN_STR,             # 16: ML_median
+    OGS_C.ML_UNC_STR,                # 17: ML_unc
+    OGS_C.ML_STATIONS_STR,           # 18: ML_stations
+    OGS_C.DMIN_STR,                  # 19: DMIN
+    OGS_C.RMS_STR,                   # 20: RMS
+    OGS_C.QM_STR,                    # 21: QM
+    OGS_C.LOC_NAME_STR,              # 22: LOC_NAME
+    OGS_C.EVENT_TYPE_STR,            # 23: E_TYPE
+    OGS_C.NOTES_STR,                 # 24: NOTES
+    OGS_C.MD_UNC_STR,                # 25: MD_unc
+    OGS_C.MD_STATIONS_STR,           # 26: MD_stations
+    OGS_C.MD_MEDIAN_STR,             # 27: MD_median
 ]
 
 
@@ -265,7 +287,7 @@ class OGSCatalog:
     Index dated event and pick files for the configured date window.
   load(key: str) -> Dict[date, pd.DataFrame]
     Populate and return the daily cache for ``"events"`` or ``"picks"``.
-  postload(key: str, update: bool = False) -> Dict[date, pd.DataFrame]
+  postload(key: str, update: bool = True) -> Dict[date, pd.DataFrame]
     Rebuild a daily cache from the aggregate in-memory DataFrame.
   get(key: str) -> pd.DataFrame
     Return the aggregate ``EVENTS`` or ``PICKS`` DataFrame.
@@ -745,20 +767,21 @@ class OGSCatalog:
         self._load_day(key, date)
     return cache
 
-  def postload(self, key: str,
-               update: bool = False) -> Dict[datetime, pd.DataFrame]:
+  def postload(
+      self, key: str, update: bool = True
+  ) -> Dict[datetime, pd.DataFrame]:
     """Populate a per-day cache from the aggregate in-memory DataFrame.
 
-    When ``update`` is ``False`` and the aggregate frame is non-empty, rows are
+    When ``update`` is ``True`` and the aggregate frame is non-empty, rows are
     grouped by ``GROUPS_STR`` and stored back into the daily cache. When
-    ``update`` is ``True``, the existing cache is returned unchanged.
+    ``update`` is ``False``, the existing cache is returned unchanged.
 
     Parameters
     ----------
     key : str
       Either "events" or "picks".
     update : bool, optional
-      Whether to skip rebuilding the cache from the aggregate frame.
+      Whether to rebuild the cache from the aggregate frame.
 
     Returns
     -------
@@ -769,7 +792,7 @@ class OGSCatalog:
       raise ValueError(f"Unknown key: {key}")
     cache = getattr(self, key)
     df = getattr(self, key.upper())
-    if not update and not df.empty:
+    if update and not df.empty:
       for date, day_df in df.groupby(OGS_C.GROUPS_STR):
         cache[UTCDateTime(date).date] = day_df
     return cache
@@ -1340,14 +1363,21 @@ class OGSCatalog:
   ):
     """Public wrapper around :meth:`_plot_histogram` for event magnitudes.
 
+    Produces separate histograms for $M_L$ and $M_D$ when valid data exist.
     ``targets`` are overlaid as comparison histograms, ``bins`` is forwarded
-    unchanged, and the default output name is ``<self.input.name>_MagL`` under
-    ``self.output / "img"``.
+    unchanged, and the default output names are ``<self.input.name>_MagL`` and
+    ``<self.input.name>_MagD`` under ``self.output / "img"``.
     """
     self._plot_histogram(
-        OGS_C.MAGNITUDE_L_STR, "Magnitude ($M_L$)", "Magnitude Histogram",
+        OGS_C.MAGNITUDE_L_STR, "Magnitude ($M_L$)", "Magnitude$_L$ Histogram",
         "MagL", targets=targets, bins=bins, output=output, yscale='log',
-        xlim=(-1, 5)
+        xlim=(-1, 7)
+    )
+    # MD histogram (new layer)
+    self._plot_histogram(
+        OGS_C.MAGNITUDE_D_STR, "Magnitude ($M_D$)", "Magnitude$_D$ Histogram",
+        "MagD", targets=targets, bins=bins, output=output, yscale='log',
+        xlim=(-1, 7)
     )
 
   # =========================================================================
@@ -2568,7 +2598,10 @@ class OGSCatalog:
     frame. The loaded per-day caches (``picks`` and ``events``) are not
     rebuilt here.
     """
-    for cache_attr, df_attr in (("picks_", "PICKS"), ("events_", "EVENTS")):
+    for cache_attr, df_attr, id_col in (
+        ("picks_", "PICKS", OGS_C.IDX_PICKS_STR),
+        ("events_", "EVENTS", OGS_C.IDX_EVENTS_STR)
+    ):
       cache = getattr(self, cache_attr)
       tcache = getattr(target, cache_attr)
       df = getattr(self, df_attr)

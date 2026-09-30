@@ -117,7 +117,7 @@ class DataFileHPL(OGSDataFile):
   # unknown fields remain intentionally positional until the format is decoded.
   RECORD_EXTRACTOR_LIST = [
       # Event index: 6-digit sequential event number within the year
-      fr"^(?P<{OGS_C.INDEX_STR}>[\d\s]{{6}})\s",
+      fr"^(?P<{OGS_C.IDX_EVENTS_STR}>[\d\s]{{6}})\s",
       # Station
       fr"(?P<{OGS_C.STATION_STR}>[A-Z0-9\s]{{4}})\s",
       # Unknown fields: 5-digit
@@ -196,37 +196,41 @@ class DataFileHPL(OGSDataFile):
   # EVENT EXTRACTOR: event summary lines with hypocentral metadata
   # -------------------------------------------------------------------------
   EVENT_EXTRACTOR_LIST = [
-      fr"^(?P<{OGS_C.INDEX_STR}>[\d\s]{{6}})1",               # Event
+      fr"^(?P<{OGS_C.IDX_EVENTS_STR}>[\d\s]{{6}})1",          # Event
       # Date [yymmdd hhmm]
       fr"(?P<{OGS_C.DATE_STR}>\d{{6}}\s[\s\d]{{4}})\s",
       fr"(?P<{OGS_C.SECONDS_STR}>[\s\d\.]{{5}})\s",           # Seconds [ss.ss]
       fr"(?P<{OGS_C.LATITUDE_STR}>[\s\d\-\.]{{8}})\s{{2}}",   # Latitude
       fr"(?P<{OGS_C.LONGITUDE_STR}>[\s\d\-\.]{{8}})\s{{2}}",  # Longitude
       fr"(?P<{OGS_C.DEPTH_STR}>[\s\d\.]{{5}})\s",             # Depth
-      fr"(?P<{OGS_C.MAGNITUDE_D_STR}>[\s\-\d\.]{{6}})",       # Magnitude
+      fr"(?P<{OGS_C.MAGNITUDE_D_STR}>[\s\-\d\.]{{6}})",       # Hypo71 mag
       fr"(?P<{OGS_C.NO_STR}>[\s\d]{{3}})",                    # NO
       fr"(?P<{OGS_C.DMIN_STR}>[\s\d]{{3}})\s",                # DMIN
       fr"(?P<{OGS_C.GAP_STR}>[\s\d]{{3}})\s1",                # GAP
-      fr"(?P<{OGS_C.ERT_STR}>[\s\d\.]{{5}})",                 # ERT
+      fr"(?P<{OGS_C.RMS_STR}>[\s\d\.]{{5}})",                 # RMS residual
       fr"(?P<{OGS_C.ERH_STR}>[\s\d\.]{{5}})",                 # ERH
       fr"(?P<{OGS_C.ERZ_STR}>[\s\d\.]{{5}})\s",               # ERZ
       fr"(?P<{OGS_C.QM_STR}>[A-D\s])\s",                      # QM
       fr"(([A-D]/[A-D])|\s{{3}})",                            # Unknown
-      fr"(?P<A>[\s\d\.]{{5}})\s",                             # Unknown
-      fr"(?P<B>[\s\d]{{2}})",                                 # Velocity Model
-      fr"(?P<C>[\s\d]{{3}})",                                 # Num Picks
-      fr"(?P<D>[\-\s\d\.]{{5,6}})",                           # Mean Residual
-      fr"(?P<E>[\s\d\.]{{5}})\s",                             # StDev Residual
-      fr"(?P<F>[\s\d]{{2}})\s",                               # Unknown
-      fr"(?P<G>[\s\d\-\.]{{4}})\s",                           # Unknown
-      fr"(?P<H>[\s\d\.]{{4}})\s",                             # Unknown
-      fr"(?P<I>[\s\d]{{2}})\s",                               # Unknown
-      fr"(?P<J>[\s\d\-\.]{{4}})\s",                           # Unknown
-      fr"(?P<K>[\s\d\.]{{4}})",                               # Unknown
-      fr"(?P<L>[\s\d]{{2}})",                                 # Unknown
-      fr"(?P<M>[\s\d\.]{{5}})\s",                             # Unknown
-      fr"(?P<N>[\s\d\.]{{4}})\s{{9}}",                        # Unknown
-      fr"(?P<{OGS_C.NOTES_STR}>[\s\d]\d)",                    # Notes
+      fr"(?P<{OGS_C.HPL_AUX_FLOAT_STR}>[\s\d\.]{{5}})\s",     # Aux float
+      fr"(?P<{OGS_C.VELOCITY_MODEL_ID_STR}>[\s\d]{{2}})",     # Velocity Model
+      fr"(?P<{OGS_C.PHASES_USED_STR}>[\s\d]{{3}})",           # Num Picks
+      fr"(?P<{OGS_C.MEAN_RESIDUAL_STR}>[\-\s\d\.]{{5,6}})",   # Mean Residual
+      fr"(?P<{OGS_C.STD_RESIDUAL_STR}>[\s\d\.]{{5}})\s",      # StDev Residual
+      fr"(?P<{OGS_C.ML_STATIONS_STR}>[\s\d]{{2}})\s",         # ML stations
+      fr"(?P<{OGS_C.MAGNITUDE_L_STR}>[\s\d\-\.]{{4}})\s",     # ML
+      fr"(?P<{OGS_C.ML_UNC_STR}>[\s\d\.]{{4}})\s",            # ML_unc
+      fr"(?P<{OGS_C.MD_STATIONS_STR}>[\s\d]{{2}})\s",         # MD stations
+      fr"(?P<{OGS_C.HYPO71_MAG_STR}>[\s\d\-\.]{{4}})\s",      # MD
+      fr"(?P<{OGS_C.MD_UNC_STR}>[\s\d\.]{{4}})",              # MD_unc
+      # 3rd magnitude station count
+      fr"(?P<{OGS_C.M3_STATIONS_STR}>[\s\d]{{2}})",
+      # 3rd magnitude value
+      fr"(?P<{OGS_C.M3_MAGNITUDE_STR}>[\s\d\.]{{5}})\s",
+      # 3rd magnitude uncertainty
+      fr"(?P<{OGS_C.M3_UNC_STR}>[\s\d\.]{{4}})\s{{9}}",
+      # Number of pick lines remaining
+      fr"(?P<{OGS_C.NO_STR}_picks>[\s\d]\d)",
   ]
 
   # -------------------------------------------------------------------------
@@ -245,23 +249,6 @@ class DataFileHPL(OGSDataFile):
   NOTES_EXTRACTOR = re.compile(OGS_C.EMPTY_STR.join(
       list(OGSDataFile._flatten(NOTES_EXTRACTOR_LIST))
   ))
-
-  _PICK_COLUMNS = [
-      OGS_C.IDX_PICKS_STR, OGS_C.GROUPS_STR, OGS_C.TIME_STR, OGS_C.STATION_STR,
-      OGS_C.PHASE_STR, OGS_C.WEIGHT_STR, OGS_C.EPICENTRAL_DISTANCE_STR,
-      OGS_C.DEPTH_STR, OGS_C.AMPLITUDE_STR, OGS_C.STATION_ML_STR,
-      OGS_C.PROBABILITY_STR
-  ]
-
-  _EVENT_COLUMNS = [
-      OGS_C.IDX_EVENTS_STR, OGS_C.TIME_STR, OGS_C.LONGITUDE_STR,
-      OGS_C.LATITUDE_STR, OGS_C.DEPTH_STR, OGS_C.GAP_STR, OGS_C.ERZ_STR,
-      OGS_C.ERH_STR, OGS_C.GROUPS_STR, OGS_C.NO_STR,
-      OGS_C.NUMBER_P_PICKS_STR, OGS_C.NUMBER_S_PICKS_STR,
-      OGS_C.NUMBER_P_AND_S_PICKS_STR, OGS_C.MAGNITUDE_D_STR,
-      OGS_C.MAGNITUDE_L_STR, OGS_C.ML_MEDIAN_STR, OGS_C.ML_UNC_STR,
-      OGS_C.ML_STATIONS_STR
-  ]
 
   @staticmethod
   def _parse_clock_time(base_time: datetime, hhmm: str) -> datetime:
@@ -293,124 +280,44 @@ class DataFileHPL(OGSDataFile):
 
     return OGS_C.OGS_EVENT_TYPES.get(event_type) == OGS_C.EVENT_LOCAL_EQ_STR
 
-  @staticmethod
-  def _build_pick_row(event_index, pick_time: datetime, station: str,
-                      phase: str, weight: int):
-    """Create a standardized pick row for the output DataFrame."""
+  def _build_event_row(
+      self, result: dict, event_index: int | None = None
+  ) -> list:
+    event_time = result[OGS_C.TIME_STR]
+    if event_index is None:
+      event_index = self.normalize_index(
+          result[OGS_C.IDX_EVENTS_STR], event_time.year
+      )
     return [
-        event_index,
-        pick_time.strftime(OGS_C.DATE_FMT),
-        pick_time,
-        f".{station}.",
-        phase,
-        weight,
-        None,
-        None,
-        None,
-        None,
-        1.0,
+        event_index,                            # 0: idx
+        event_time,                             # 1: time
+        result[OGS_C.LATITUDE_STR],             # 2: latitude
+        result[OGS_C.LONGITUDE_STR],            # 3: longitude
+        result[OGS_C.DEPTH_STR],                # 4: depth
+        result[OGS_C.GAP_STR],                  # 5: azimuthal_gap
+        result[OGS_C.ERZ_STR],                  # 6: max_vertical_uncertainty
+        result[OGS_C.ERH_STR],                  # 7: max_horizontal_uncertainty
+        None,                                   # 8: max_time_uncertainty
+        event_time.strftime(OGS_C.DATE_FMT),    # 9: group
+        result[OGS_C.NO_STR],                   # 10: number_picks
+        0,                                      # 11: number_p_picks
+        0,                                      # 12: number_s_picks
+        0,                                      # 13: number_p_and_s_picks
+        result[OGS_C.MAGNITUDE_D_STR],          # 14: MD
+        result[OGS_C.MAGNITUDE_L_STR],          # 15: ML
+        None,                                   # 16: ML_median
+        result[OGS_C.ML_UNC_STR],               # 17: ML_unc
+        result[OGS_C.ML_STATIONS_STR],          # 18: ML_stations
+        None,                                   # 19: DMIN
+        result[OGS_C.RMS_STR],                  # 20: RMS
+        None,                                   # 21: QM
+        None,                                   # 22: LOC_NAME
+        None,                                   # 23: E_TYPE
+        None,                                   # 24: NOTES
+        result[OGS_C.MD_UNC_STR],               # 25: MD_unc
+        result[OGS_C.MD_STATIONS_STR],          # 26: MD_stations
+        None,                                   # 27: MD_median
     ]
-
-  def _build_event_context(self, result: dict, event_time: datetime):
-    context_time = datetime(
-        event_time.year,
-        event_time.month,
-        event_time.day,
-        event_time.hour,
-        event_time.minute,
-    ) + self._parse_seconds(result[OGS_C.SECONDS_STR])
-    return (
-        context_time,
-        self._parse_coordinate(result[OGS_C.LONGITUDE_STR], round_decimals=4),
-        self._parse_coordinate(result[OGS_C.LATITUDE_STR], round_decimals=4),
-        self._parse_float(result[OGS_C.DEPTH_STR]),
-    )
-
-  def _build_event_row(self, result: dict, event_context):
-    event_time = event_context[0]
-    return [
-        self._parse_index(result[OGS_C.INDEX_STR], event_time.year),
-        *event_context,
-        self._parse_zero_padded_int(result[OGS_C.GAP_STR]),
-        result[OGS_C.ERZ_STR],
-        result[OGS_C.ERH_STR],
-        event_time.strftime(OGS_C.DATE_FMT),
-        self._parse_zero_padded_int(result[OGS_C.NO_STR]),
-        0,
-        0,
-        None,
-        result[OGS_C.MAGNITUDE_D_STR],
-        None,
-        None,
-        None,
-        None,
-    ]
-
-  def _parse_event_summary(self, result: dict, line: str):
-    event_time = self._parse_event_datetime(result)
-
-    if self._is_before_start(event_time):
-      self.logger.debug("Skipping event before start date")
-      self.logger.debug(line)
-      return False, None
-
-    if self._is_after_end(event_time):
-      self.logger.debug("Stopping read at event after end date")
-      self.logger.debug(line)
-      return True, None
-
-    event_context = self._build_event_context(result, event_time)
-    event_row = self._build_event_row(result, event_context)
-    return False, (event_context, int(result[OGS_C.NOTES_STR]), event_row)
-
-  def _event_index_from_record(self, result: dict, event_context):
-    try:
-      return self._parse_index(result[OGS_C.INDEX_STR], event_context[0].year)
-    except ValueError as exc:
-      self.logger.error(exc)
-      return None
-
-  def _parse_pick_record(self, line: str, event_context):
-    match = self.RECORD_EXTRACTOR.match(line)
-
-    if not match:
-      self.logger.error(f"ERROR: (HPL) Could not parse line: {line}")
-      self.debug(line, self.RECORD_EXTRACTOR_LIST)
-      return False, []
-
-    result: dict = match.groupdict()
-    if not self._is_supported_event_record(result):
-      self.logger.warning(f"WARNING: (HPL) Ignoring line: {line}")
-      return False, []
-
-    p_time = self._parse_clock_time(event_context[0], result[OGS_C.P_TIME_STR])
-    if self._is_before_start(p_time):
-      self.logger.debug(f"Skipping event before start date: {self.start}")
-      self.logger.debug(line)
-      return False, []
-
-    if self._is_after_end(p_time):
-      return True, []
-
-    station = result[OGS_C.STATION_STR].strip(OGS_C.SPACE_STR)
-    event_index = self._event_index_from_record(result, event_context)
-    rows = [self._build_pick_row(
-        event_index,
-        p_time + self._parse_seconds(result[OGS_C.SECONDS_STR]),
-        station,
-        OGS_C.PWAVE,
-        self._parse_weight(result[OGS_C.P_WEIGHT_STR])
-    )]
-
-    if result[OGS_C.S_TIME_STR]:
-      rows.append(self._build_pick_row(
-          event_index,
-          p_time + self._parse_seconds(result[OGS_C.S_TIME_STR]),
-          station,
-          OGS_C.SWAVE,
-          self._parse_weight(result[OGS_C.S_WEIGHT_STR])))
-
-    return False, rows
 
   def _apply_metadata_line(self, line: str, events_data: list) -> bool:
     if self.LOCATION_EXTRACTOR.match(line):
@@ -421,22 +328,16 @@ class DataFileHPL(OGSDataFile):
       return False
 
     if events_data:
-      events_data[-1][-2] = match.groupdict()[OGS_C.NOTES_STR].rstrip(
-          OGS_C.SPACE_STR)
+      events_data[-1][self._EVENT_COLUMNS.index(OGS_C.NOTES_STR)] = (
+          match.groupdict()[OGS_C.NOTES_STR].rstrip(OGS_C.SPACE_STR)
+      )
     return True
-
-  def _build_picks_dataframe(self, picks_data: list) -> pd.DataFrame:
-    return pd.DataFrame(picks_data, columns=self._PICK_COLUMNS).astype({
-        OGS_C.IDX_PICKS_STR: int
-    })
 
   def _build_events_dataframe(self, events_data: list) -> pd.DataFrame:
     dataframe = pd.DataFrame(events_data, columns=self._EVENT_COLUMNS)
-    dataframe[OGS_C.GROUPS_STR] = pd.to_datetime(
-        dataframe[OGS_C.TIME_STR], format=OGS_C.DATE_FMT
-    )
+    dataframe = self.normalize_groups(dataframe)
     dataframe[OGS_C.ERH_STR] = \
-        dataframe[OGS_C.ERH_STR].replace(" " * 4, "NaN").apply(float)
+        dataframe[OGS_C.ERH_STR].replace(" " * 5, "NaN").apply(float)
     dataframe[OGS_C.ERZ_STR] = \
         dataframe[OGS_C.ERZ_STR].replace(" " * 5, "NaN").apply(float)
     for col in [
@@ -475,12 +376,12 @@ class DataFileHPL(OGSDataFile):
 
   def _build_dataframes(self, events_data: list, picks_data: list):
     self.PICKS = self._build_picks_dataframe(picks_data)
-    self._group_pick_dataframes()
+    self.postload("picks", update=True)
 
     self.EVENTS = self._build_events_dataframe(events_data)
     self.logger.info(f"Total events read: {len(self.EVENTS)}")
-    self._apply_pick_counts()
-    self._group_event_dataframes()
+    self.EVENTS = self.normalize_pick_stats(self.EVENTS, self.PICKS)
+    self.postload("events", update=True)
 
   def read(self):
     """
@@ -510,7 +411,7 @@ class DataFileHPL(OGSDataFile):
     events_data = list()
     picks_data = list()
     record_lines_remaining = 0
-    event_context = (datetime.min, 0, 0, 0)
+    event_time = datetime.min
 
     with open(self.input, 'r') as fr:
       lines = fr.readlines()
@@ -521,22 +422,117 @@ class DataFileHPL(OGSDataFile):
 
       if record_lines_remaining > 0:
         record_lines_remaining -= 1
-        stop_reading, pick_rows = self._parse_pick_record(line, event_context)
-        if stop_reading:
-          break
-        picks_data.extend(pick_rows)
+        match = self.RECORD_EXTRACTOR.match(line)
+        if not match:
+          self.logger.error(f"ERROR: (HPL) Could not parse line: {line}")
+          self.debug(line, self.RECORD_EXTRACTOR_LIST)
+          continue
+
+        result = match.groupdict()
+        if not self._is_supported_event_record(result):
+          self.logger.warning(f"WARNING: (HPL) Ignoring line: {line}")
+          continue
+
+        result[OGS_C.P_TIME_STR] = self._parse_clock_time(
+            event_time, result[OGS_C.P_TIME_STR]
+        )
+        if self._is_before_start(result[OGS_C.P_TIME_STR]):
+          self.logger.debug(f"Skipping event before start date: {self.start}")
+          self.logger.debug(line)
+          continue
+
+        if self._is_after_end(result[OGS_C.P_TIME_STR]):
+          continue
+
+        result[OGS_C.STATION_STR] = result[OGS_C.STATION_STR].strip(
+            OGS_C.SPACE_STR
+        )
+        result[OGS_C.SECONDS_STR] = self._parse_seconds(
+            result[OGS_C.SECONDS_STR]
+        )
+        result[OGS_C.P_WEIGHT_STR] = self._parse_weight(
+            result[OGS_C.P_WEIGHT_STR]
+        )
+
+        event_index = self.normalize_index(
+            result[OGS_C.IDX_EVENTS_STR], event_time.year
+        )
+        picks_data.append(self._build_pick_row(
+            event_index,
+            result[OGS_C.P_TIME_STR] + result[OGS_C.SECONDS_STR],
+            result[OGS_C.STATION_STR],
+            OGS_C.PWAVE,
+            result[OGS_C.P_WEIGHT_STR],
+        ))
+
+        if result[OGS_C.S_TIME_STR]:
+          result[OGS_C.S_TIME_STR] = self._parse_seconds(
+              result[OGS_C.S_TIME_STR]
+          )
+          result[OGS_C.S_WEIGHT_STR] = self._parse_weight(
+              result[OGS_C.S_WEIGHT_STR]
+          )
+          picks_data.append(self._build_pick_row(
+              event_index,
+              result[OGS_C.P_TIME_STR] + result[OGS_C.S_TIME_STR],
+              result[OGS_C.STATION_STR],
+              OGS_C.SWAVE,
+              result[OGS_C.S_WEIGHT_STR],
+          ))
+
         continue
 
       match = self.EVENT_EXTRACTOR.match(line)
       if match:
-        stop_reading, event_summary = self._parse_event_summary(
-            match.groupdict(), line)
-        if stop_reading:
-          break
-        if event_summary is None:
+        result: dict = match.groupdict()
+        event_time = self._parse_event_datetime(result)
+
+        if self._is_before_start(event_time):
+          self.logger.debug("Skipping event before start date")
+          self.logger.debug(line)
           continue
-        event_context, record_lines_remaining, event_row = event_summary
-        events_data.append(event_row)
+
+        if self._is_after_end(event_time):
+          self.logger.debug("Stopping read at event after end date")
+          self.logger.debug(line)
+          continue
+
+        result[OGS_C.TIME_STR] = event_time
+        result[OGS_C.DEPTH_STR] = self._parse_float(result[OGS_C.DEPTH_STR])
+        result[OGS_C.GAP_STR] = self._parse_zero_padded_int(
+            result[OGS_C.GAP_STR]
+        )
+        result[OGS_C.NO_STR] = self._parse_zero_padded_int(
+            result[OGS_C.NO_STR]
+        )
+        result[OGS_C.RMS_STR] = self._parse_float(result[OGS_C.RMS_STR])
+        result[OGS_C.ML_STATIONS_STR] = self._parse_zero_padded_int(
+            result[OGS_C.ML_STATIONS_STR]
+        )
+        result[OGS_C.MD_STATIONS_STR] = self._parse_zero_padded_int(
+            result[OGS_C.MD_STATIONS_STR]
+        )
+        result[OGS_C.MD_UNC_STR] = (
+            self._parse_float(result[OGS_C.MD_UNC_STR])
+            if result[OGS_C.MAGNITUDE_D_STR] is not None
+            else None
+        )
+        result[OGS_C.MAGNITUDE_L_STR] = (
+            self._parse_float(result[OGS_C.MAGNITUDE_L_STR])
+            if result[OGS_C.ML_STATIONS_STR]
+            else None
+        )
+        result[OGS_C.ML_UNC_STR] = (
+            self._parse_float(result[OGS_C.ML_UNC_STR])
+            if result[OGS_C.MAGNITUDE_L_STR] is not None
+            else None
+        )
+
+        event_index = self.normalize_index(
+            result[OGS_C.IDX_EVENTS_STR], event_time.year
+        )
+        record_lines_remaining = int(result[f"{OGS_C.NO_STR}_picks"])
+        events_data.append(self._build_event_row(result, event_index))
         continue
 
       if self._apply_metadata_line(line, events_data):

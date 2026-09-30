@@ -767,10 +767,10 @@ def inventory(
   INVENTORY = pd.DataFrame(
       elements,
       columns=[
-          OGS_C.INDEX_STR, OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR,
+          OGS_C.IDX_EVENTS_STR, OGS_C.LONGITUDE_STR, OGS_C.LATITUDE_STR,
           OGS_C.DEPTH_STR, OGS_C.NETWORK_STR, OGS_C.STATION_STR
       ],
-  ).sort_values(by=[OGS_C.INDEX_STR]).reset_index(drop=True)
+  ).sort_values(by=[OGS_C.IDX_EVENTS_STR]).reset_index(drop=True)
 
   # Use labels_to_colormap for consistent network and station coloring
   from sklearn.preprocessing import LabelEncoder

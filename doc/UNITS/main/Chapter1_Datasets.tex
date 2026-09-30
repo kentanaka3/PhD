@@ -125,10 +125,10 @@ study include:
 \subsection{Analyst-Curated \ac{OGS} Reference Catalog}
 \label{subsec:ogs_ground_truth}
 
-To establish a baseline reference for evaluating the \ac{ML} pipeline,
-we used a manually curated \parencite{MagrinEtAl2026RevisedOGSCatalog} subset
-of the revised \ac{OGS} \acf{CRS} seismic bulletin catalog \parencite{BSNEI}.
-The archive is a reviewed operational reference, not an observation of every
+To establish a baseline reference for evaluating the \ac{ML} pipeline, we used
+a manually curated \parencite{MagrinEtAl2026RevisedOGSCatalog} subset of the
+revised \ac{OGS} \acf{CRS} seismic bulletin catalog \parencite{BSNEI}. The
+archive is a reviewed operational reference, not an observation of every
 physical earthquake. In standard operational practice, \ac{OGS} seismic
 analysts, starting from the automatic event detections, manually review pick
 phase arrivals, assign onset quality weights (see \cref{tab:h71_weights}),
@@ -137,7 +137,7 @@ verify event associations, and compute event hypocenters using Hypo71
 \texttt{.hpl}, \texttt{.dat}, \texttt{.txt}, and \texttt{.pun} formats were
 parsed and merged by the \texttt{DataCatalog} implementation in
 \path{OGS/src/ogsparser.py}; its output is a consolidated catalog of
-standardized \texttt{EVENTS} and \texttt{PICKS} tables.
+standardized \texttt{EVENTS} (conforming to the unified 28-column schema detailed in \cref{subsubsec:unified_catalog_schema}) and \texttt{PICKS} tables.
 
 However, comparing \ac{ML} hypocenter locations derived from modern
 probabilistic non-linear search algorithms against legacy Hypo71 locations
@@ -193,8 +193,8 @@ rely on supervised training over massive datasets of three component seismic
 waveforms labeled with expert ground-truth P- and S-wave arrival times. To
 understand how models generalize across varying tectonic regimes and noise
 backgrounds, we selected four benchmark datasets available through the
-SeisBench framework \parencite{SeisBench} that covers local (L) and
-regional (R) records (L: \qtyrange{0}{150}{\kilo\meter}, R:
+SeisBench framework \parencite{SeisBench} that covers local (L) and regional
+(R) records (L: \qtyrange{0}{150}{\kilo\meter}, R:
 \qtyrange{150}{600}{\kilo\meter}). Each dataset represents a distinct
 combination of scale, geographical setting, instrumentation density, and
 labeling curation.
@@ -216,12 +216,12 @@ conditions of active regional monitoring networks:
     encompasses a large proportion of small-magnitude events
     ($M_{\mathrm{L}} < \num{2.5}$) exhibiting emergent onsets, complex
     scattering, and low signal-to-noise ratios.
-  \item \textbf{Volume and Balance}: \ac{INSTANCE} comprises nearly
-    \textbf{\num{1.3} million three component waveform traces}
-    (\num{1291537}), including \num{1159249} labeled P-wave arrivals,
-    \num{713883} labeled S-wave arrivals, across \num{54008} distinct events,
-    and a dedicated negative class of \num{132288} pure noise windows
-    extracted during periods without seismic activity.
+  \item \textbf{Volume and Balance}: \ac{INSTANCE} comprises of
+    \textbf{\num{1291537} three component waveform traces}, including
+    \num{1159249} labeled P-wave arrivals, \num{713883} labeled S-wave
+    arrivals, across \num{54008} distinct events, and a dedicated negative
+    class of \num{132288} pure noise windows extracted during periods without
+    seismic activity.
   \item \textbf{Geographical Proximity}: Because \ac{INSTANCE} waveforms
     originate from Italy, the training wavefields reflect crustal attenuation,
     complex fault structures, and station vault installations physically

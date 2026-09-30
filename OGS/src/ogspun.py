@@ -61,9 +61,6 @@ AUTHORS:
 # IMPORTS
 # -----------------------------------------------------------------------------
 
-# Standard library: filesystem path handling
-from pathlib import Path
-
 # ObsPy: seismological time conversions
 from obspy import UTCDateTime
 
@@ -82,13 +79,6 @@ import ogsutils as OGS_U
 # Local module: base parser for extraction and logging
 from ogsdatafile import OGSDataFile
 
-# -----------------------------------------------------------------------------
-# CONSTANTS
-# -----------------------------------------------------------------------------
-
-# Base path for data files (two levels up from this script's location)
-DATA_PATH = Path(__file__).parent.parent.parent
-
 
 # =============================================================================
 # DataFilePUN Class - PUN Format Parser
@@ -103,13 +93,16 @@ class DataFilePUN(OGSDataFile):
   quality-control metrics used by downstream catalog workflows.
 
   Attributes:
-    RECORD_EXTRACTOR_LIST: Regex patterns for event summary lines
+    EVENT_EXTRACTOR_LIST: Regex patterns for event summary lines
   """
 
+  # Expected file extension for format validation
+  EXTENSION: str = OGS_C.PUN_EXT
+
   # -------------------------------------------------------------------------
-  # RECORD EXTRACTOR: fixed-width event summary line
+  # EVENT EXTRACTOR: fixed-width event summary line
   # -------------------------------------------------------------------------
-  RECORD_EXTRACTOR_LIST = [
+  EVENT_EXTRACTOR_LIST = [
       # Date [YYMMDDHHMM]
       fr"^1(?P<{OGS_C.DATE_STR}>\d{{6}}[\s\d]\d[\s\d]\d)\s",
       # Seconds [SS.ss]
@@ -131,20 +124,62 @@ class DataFilePUN(OGSDataFile):
       # RMS [DD.DD]
       fr"(?P<{OGS_C.RMS_STR}>[\s\d]\d\.\d{{2}})",
       # ERH
-      fr"(?P<{OGS_C.ERH_STR}>([\s\d\.\-]{{5}}))",
+      fr"(?P<{OGS_C.ERH_STR}>([\s\d\.\-\*]{{5}}))",
       # ERZ
-      fr"(?P<{OGS_C.ERZ_STR}>([\s\d\.\-]{{5}}))\s",
+      fr"(?P<{OGS_C.ERZ_STR}>([\s\d\.\-\*]{{5}}))\s",
       # Quality Metric [A-Z][0-9]
       fr"(?P<{OGS_C.QM_STR}>[A-Z][0-9])",
   ]
 
   @staticmethod
-  def _parse_origin_time(date_value: str, seconds: td) -> datetime:
+  def _parse_event_datetime(date_value: str, seconds: td) -> datetime:
     """Convert the origin date and seconds fields into a datetime."""
     return datetime.strptime(
         date_value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR),
         OGS_C.DATETIME_FMT[:-2]
     ) + seconds
+
+  def _build_event_row(
+      self,
+      result: dict,
+      event_index: int | None = None,
+  ) -> list:
+    """Create a standardized event row for the output DataFrame."""
+    event_time = result[OGS_C.DATE_STR]
+    if event_index is None:
+      event_index = self.normalize_index(
+          result.get(OGS_C.IDX_EVENTS_STR), event_time.year
+      )
+    return [
+        event_index,                          # 0: idx
+        event_time,                           # 1: time
+        result[OGS_C.LATITUDE_STR],           # 2: latitude
+        result[OGS_C.LONGITUDE_STR],          # 3: longitude
+        result[OGS_C.DEPTH_STR],              # 4: depth
+        result[OGS_C.GAP_STR],                # 5: azimuthal_gap
+        result[OGS_C.ERZ_STR],                # 6: max_vertical_uncertainty
+        result[OGS_C.ERH_STR],                # 7: max_horizontal_uncertainty
+        None,                                 # 8: max_time_uncertainty
+        event_time.strftime(OGS_C.DATE_FMT),  # 9: group
+        result[OGS_C.NO_STR],                 # 10: number_picks
+        0,                                    # 11: number_p_picks
+        0,                                    # 12: number_s_picks
+        0,                                    # 13: number_p_and_s_picks
+        result[OGS_C.MAGNITUDE_D_STR],        # 14: MD
+        None,                                 # 15: ML
+        None,                                 # 16: ML_median
+        None,                                 # 17: ML_unc
+        None,                                 # 18: ML_stations
+        result[OGS_C.DMIN_STR],               # 19: DMIN
+        result[OGS_C.RMS_STR],                # 20: RMS
+        result[OGS_C.QM_STR],                 # 21: QM
+        None,                                 # 22: LOC_NAME
+        None,                                 # 23: E_TYPE
+        result.get(OGS_C.NOTES_STR),          # 24: NOTES
+        None,                                 # 25: MD_unc
+        None,                                 # 26: MD_stations
+        None,                                 # 27: MD_median
+    ]
 
   def read(self):
     """
@@ -161,11 +196,7 @@ class DataFilePUN(OGSDataFile):
     # -----------------------------------------------------------------------
     # INPUT VALIDATION
     # -----------------------------------------------------------------------
-    if not self.input.exists():
-      raise FileNotFoundError(f"File {self.input} does not exist")
-
-    if self.input.suffix != OGS_C.PUN_EXT:
-      raise ValueError(f"File extension must be {OGS_C.PUN_EXT}")
+    self.validate_input()
 
     # -----------------------------------------------------------------------
     # FILE READING
@@ -173,115 +204,89 @@ class DataFilePUN(OGSDataFile):
     events_data = list()
     event_counter = 0
 
-    # The first line is a header banner and does not contain event data.
-    with open(self.input, 'r') as fr:
-      lines = fr.readlines()[1:]
     self.logger.info(f"Reading PUN file: {self.input}")
 
     # -----------------------------------------------------------------------
     # LINE-BY-LINE PARSING
     # -----------------------------------------------------------------------
-    for line in [raw_line.strip() for raw_line in lines]:
-      match = self.RECORD_EXTRACTOR.match(line)
+    with open(self.input, 'r', encoding='utf-8') as fr:
+      next(fr, None)  # Skip header banner line lazily
+      for raw_line in fr:
+        line = raw_line.strip()
+        if not line:
+          continue
 
-      if not match:
-        self.logger.error(f"(PUN) Could not parse line: {line}")
-        self.debug(line, self.RECORD_EXTRACTOR_LIST)
-        continue
+        match = self.EVENT_EXTRACTOR.match(line)
+        if not match:
+          self.logger.error(f"(PUN) Could not parse line: {line}")
+          self.debug(line, self.EVENT_EXTRACTOR_LIST)
+          continue
 
-      result: dict = match.groupdict()
+        result: dict = match.groupdict()
 
-      # ---------------------------------------------------------------------
-      # DATE PROCESSING AND RANGE FILTERING
-      # ---------------------------------------------------------------------
-      result[OGS_C.SECONDS_STR] = self._parse_seconds(
-          result[OGS_C.SECONDS_STR]
-      )
-      result[OGS_C.DATE_STR] = self._parse_origin_time(
-          result[OGS_C.DATE_STR], result[OGS_C.SECONDS_STR]
-      )
-
-      if self._is_before_start(result[OGS_C.DATE_STR]):
-        self.logger.debug(f"Skipping event before start date: {self.start}")
-        self.logger.debug(line)
-        continue
-
-      if self._is_after_end(result[OGS_C.DATE_STR]):
-        self.logger.debug(
-            f"Stopping read at event after end date: {self.end}"
+        # ---------------------------------------------------------------------
+        # DATE PROCESSING AND RANGE FILTERING
+        # ---------------------------------------------------------------------
+        result[OGS_C.SECONDS_STR] = self._parse_seconds(
+            result[OGS_C.SECONDS_STR]
         )
-        self.logger.debug(line)
-        break
+        result[OGS_C.DATE_STR] = self._parse_event_datetime(
+            result[OGS_C.DATE_STR], result[OGS_C.SECONDS_STR]
+        )
 
-      # ---------------------------------------------------------------------
-      # FIELD PROCESSING
-      # ---------------------------------------------------------------------
-      result[OGS_C.LATITUDE_STR] = self._parse_coordinate(
-          result[OGS_C.LATITUDE_STR], round_decimals=4
-      )
-      result[OGS_C.LONGITUDE_STR] = self._parse_coordinate(
-          result[OGS_C.LONGITUDE_STR], round_decimals=4
-      )
-      result[OGS_C.DEPTH_STR] = self._parse_float(result[OGS_C.DEPTH_STR])
+        if self._is_before_start(result[OGS_C.DATE_STR]):
+          self.logger.debug(f"Skipping event before start date: {self.start}")
+          self.logger.debug(line)
+          continue
 
-      result[OGS_C.NO_STR] = self._parse_optional_int(result[OGS_C.NO_STR])
-      result[OGS_C.GAP_STR] = int(result[OGS_C.GAP_STR].replace(
-          OGS_C.SPACE_STR, OGS_C.ZERO_STR
-      ))
-      result[OGS_C.DMIN_STR] = self._parse_zero_padded_float(
-          result[OGS_C.DMIN_STR]
-      )
-      result[OGS_C.RMS_STR] = self._parse_zero_padded_float(
-          result[OGS_C.RMS_STR]
-      )
-      result[OGS_C.ERH_STR] = self._parse_zero_padded_float(
-          result[OGS_C.ERH_STR]
-      )
-      result[OGS_C.ERZ_STR] = self._parse_zero_padded_float(
-          result[OGS_C.ERZ_STR]
-      )
+        if self._is_after_end(result[OGS_C.DATE_STR]):
+          self.logger.debug(
+              f"Stopping read at event after end date: {self.end}"
+          )
+          self.logger.debug(line)
+          break
 
-      # ---------------------------------------------------------------------
-      # APPEND EVENT SUMMARY TO RESULTS
-      # ---------------------------------------------------------------------
-      events_data.append([
-          event_counter + result[OGS_C.DATE_STR].year * OGS_C.MAX_PICKS_YEAR,
-          result[OGS_C.DATE_STR],
-          result[OGS_C.LATITUDE_STR],
-          result[OGS_C.LONGITUDE_STR],
-          result[OGS_C.DEPTH_STR],
-          result[OGS_C.MAGNITUDE_D_STR],
-          result[OGS_C.NO_STR],
-          result[OGS_C.GAP_STR],
-          result[OGS_C.DMIN_STR],
-          result[OGS_C.RMS_STR],
-          result[OGS_C.ERH_STR],
-          result[OGS_C.ERZ_STR],
-          result[OGS_C.QM_STR],
-          None,
-          result[OGS_C.DATE_STR].strftime(OGS_C.DATE_FMT),
-      ])
-      event_counter += 1
+        # ---------------------------------------------------------------------
+        # FIELD PROCESSING
+        # ---------------------------------------------------------------------
+        result[OGS_C.DEPTH_STR] = self._parse_float(result[OGS_C.DEPTH_STR])
+        result[OGS_C.MAGNITUDE_D_STR] = self._parse_float(
+            result[OGS_C.MAGNITUDE_D_STR]
+        )
+
+        result[OGS_C.NO_STR] = self._parse_zero_padded_int(
+            result[OGS_C.NO_STR]
+        )
+        result[OGS_C.GAP_STR] = self._parse_zero_padded_int(
+            result[OGS_C.GAP_STR]
+        )
+        result[OGS_C.DMIN_STR] = self._parse_zero_padded_float(
+            result[OGS_C.DMIN_STR]
+        )
+        result[OGS_C.RMS_STR] = self._parse_zero_padded_float(
+            result[OGS_C.RMS_STR]
+        )
+        result[OGS_C.ERH_STR] = self._parse_zero_padded_float(
+            result[OGS_C.ERH_STR]
+        )
+        result[OGS_C.ERZ_STR] = self._parse_zero_padded_float(
+            result[OGS_C.ERZ_STR]
+        )
+
+        event_index = self.normalize_index(
+            event_counter, result[OGS_C.DATE_STR].year
+        )
+        events_data.append(
+            self._build_event_row(result, event_index=event_index)
+        )
+        event_counter += 1
 
     # -----------------------------------------------------------------------
     # BUILD OUTPUT DATAFRAME
     # -----------------------------------------------------------------------
-    self.EVENTS = pd.DataFrame(events_data, columns=[
-        OGS_C.INDEX_STR, OGS_C.TIME_STR, OGS_C.LATITUDE_STR,
-        OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR, OGS_C.MAGNITUDE_D_STR,
-        OGS_C.NO_STR, OGS_C.GAP_STR, OGS_C.DMIN_STR, OGS_C.RMS_STR,
-        OGS_C.ERH_STR, OGS_C.ERZ_STR, OGS_C.QM_STR, OGS_C.NOTES_STR,
-        OGS_C.GROUPS_STR
-    ]).astype({OGS_C.INDEX_STR: int})
-
-    self.EVENTS[OGS_C.MAGNITUDE_D_STR] = self.EVENTS[
-        OGS_C.MAGNITUDE_D_STR
-    ].replace(OGS_C.SPACE_STR * 5, "NaN").apply(float)
-
+    self.EVENTS = self._build_events_dataframe(events_data)
     self.logger.info(f"Total events read: {len(self.EVENTS)}")
-
-    for date, dataframe in self.EVENTS.groupby(OGS_C.GROUPS_STR):
-      self.events[UTCDateTime(date).date] = dataframe
+    self.postload("events", update=True)
 
 
 # =============================================================================

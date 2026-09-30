@@ -136,7 +136,7 @@ The primary configuration domains governed by \texttt{ogsconstants} include:
     Predefined column tuples ensuring schema congruence across parquet storage:
     \begin{itemize}
       \item \texttt{HEADER\_EVENTS = [idx, time, latitude,
-        longitude, depth, ERH, ERZ, GAP]}
+        longitude, depth, ERH, ERZ, GAP]}: Historical 8-column event header used in minimal exports, superseded in \texttt{OGSDataFile} by the unified 28-column catalog schema (\cref{subsubsec:unified_catalog_schema}).
       \item \texttt{HEADER\_PICKS = [idx, time, phase, station,
         onset, polarity, weight]}
       \item \texttt{HEADER\_MODL = [MODEL, WEIGHT, THRESHOLD]}
@@ -386,9 +386,9 @@ provides core infrastructure common to all text-based formats:
     \node[parser, below=12mm of df] (dat)
     {\textbf{DataFileDAT}\\\scriptsize .dat (P/S picks)};
     \node[parser, below right=12mm and -8mm of df] (txt)
-    {\textbf{DataFileTXT}\\\scriptsize .txt ($M_{\mathrm{L}}$ magnitudes)};
+    {\textbf{DataFileTXT}\\\scriptsize .txt ($M_{\mathrm{L}}, M_{\mathrm{D}}, \mathrm{RMS}$)};
     \node[parser, right=6mm of txt] (pun)
-    {\textbf{DataFilePUN}\\\scriptsize .pun (Punch card)};
+    {\textbf{DataFilePUN}\\\scriptsize .pun ($M_{\mathrm{D}}$ punch cards)};
 
     \node[parquet, below=12mm of dc] (out) {\textbf{Parquet
       Persistence}\\\scriptsize \texttt{.all/events/},
@@ -442,8 +442,13 @@ introspection (\verb|GROUP_PATTERN = re.compile(r"\(\?P<(\w+)>...")|),
   \subsection{Supported Legacy File Formats}
   \label{subsec:supported_formats}
 
-  Table~\ref{tab:file_formats} summarizes the four primary legacy
-  catalog formats supported by dedicated subclass implementations.
+  Over the operational lifespan of the \ac{OGS} \acf{CRS}, earthquake
+  catalogs, phase arrival observations, and analyst bulletins were archived
+  across four principal fixed-width and tabular ASCII formats. To ingest
+  these heterogeneous archives into modern data-analytic workflows without
+  data corruption or informational loss, the parsing engine specializes
+  \texttt{OGSDataFile} into four dedicated parser classes
+  (Table~\ref{tab:file_formats}).
 
   \begin{table}[htbp]
     \centering
@@ -451,11 +456,12 @@ introspection (\verb|GROUP_PATTERN = re.compile(r"\(\?P<(\w+)>...")|),
     \caption{Supported \ac{OGS} catalog and phase pick file formats and
       their corresponding parser implementations. The reader should
       notice the complementary nature of the files: HPL provides
-      comprehensive hypocenters and picks, DAT provides dense arrival
-      times, TXT contributes revised local magnitudes, and PUN
-      preserves historical punch card records. Formats anchored in
-      \texttt{ogshpl.py}, \texttt{ogsdat.py}, \texttt{ogstxt.py}, and
-    \texttt{ogspun.py}.}
+      comprehensive hypocenters, picks, and continuous solution magnitudes;
+      DAT provides dense arrival times; TXT contributes revised local and
+      duration magnitudes with legacy event identifiers; and PUN preserves
+      historical punch card records with continuous duration magnitudes.
+      Formats anchored in \texttt{ogshpl.py}, \texttt{ogsdat.py},
+      \texttt{ogstxt.py}, and \texttt{ogspun.py}.}
     \label{tab:file_formats}
     \begin{threeparttable}
       \begin{tabularx}{\linewidth}{l l X}
@@ -464,26 +470,122 @@ introspection (\verb|GROUP_PATTERN = re.compile(r"\(\?P<(\w+)>...")|),
         \textbf{Extracted Attributes and Operational Semantics} \\
         \midrule
         \texttt{.hpl} & \texttt{DataFileHPL} & Hypocenter locations, origin
-        times, focal depths, local magnitude ($M_{\mathrm{L}}$), station P/S
-        arrival times, onset polarities, weights (0--4), $ERH$, $ERZ$, $RMS$,
-        azimuthal gap ($GAP$), analyst free-text notes, and geographic locality
-        descriptions. \\
-        \texttt{.dat} & \texttt{DataFileDAT} & Fixed-width station phase
-        arrival records: 4-character station code, P/S onset quality (I/E),
-        first-motion polarity ($+/-/c/d$), weight code, timestamp down to
-        centiseconds, and event type. \\
-        \texttt{.txt} & \texttt{DataFileTXT} & Tabular event summary records:
-        origin times, revised local magnitude ($M_{\mathrm{L}}$), duration
-        magnitude ($M_{\mathrm{D}}$), horizontal/vertical uncertainties, and
-        event identification tags. \\
-        \texttt{.pun} & \texttt{DataFilePUN} & Legacy punch card fixed-column
-        format: hypocentral coordinates in degrees-minutes format
-        (automatically converted to decimal degrees), depths, $DMIN$, $RMS$,
-        and quality classes. \\
+        times, focal depths, continuous Hypo71 solution magnitude from Column~6 (\texttt{hypo71\_mag}) alongside tail duration magnitude ($M_{\mathrm{D}}$) and local magnitude ($M_{\mathrm{L}}$), station P/S arrival times, onset polarities, weights (0--4), horizontal uncertainty ($ER_{\mathrm{H}}$), vertical uncertainty ($ER_{\mathrm{Z}}$), root-mean-square residual ($\mathrm{RMS}$), azimuthal gap ($GAP$), analyst free-text notes, and geographic locality descriptions. \\
+        \texttt{.dat} & \texttt{DataFileDAT} & Fixed-width station phase arrival records: 4-character station code, P/S onset quality (I/E/?), first-motion polarity ($+/-/c/d$), weight code (0--4), arrival timestamp down to centiseconds, and seismic event classification code. \\
+        \texttt{.txt} & \texttt{DataFileTXT} & Tabular event summary records: origin times, travel-time root-mean-square residual ($\mathrm{RMS}$, mapped from bulletin column \texttt{t\_err} rather than origin time uncertainty $ER_{\mathrm{T}}$, aligning with Hypo71 output semantics), horizontal uncertainty ($ER_{\mathrm{H}}$), vertical uncertainty ($ER_{\mathrm{Z}}$), focal depth, azimuthal gap ($GAP$), revised local magnitude ($M_{\mathrm{L}}$), duration magnitude ($M_{\mathrm{D}}$), geographic locality name, bracketed event type, and legacy catalog event identifier (\texttt{legacy\_id}). \\
+        \texttt{.pun} & \texttt{DataFilePUN} & Legacy 80-column punch-card records: hypocentral coordinates in degrees-minutes format (automatically converted to decimal degrees), origin times, focal depths, continuous Hypo71 duration magnitude ($M_{\mathrm{D}}$), observation count ($NO$), azimuthal gap ($GAP$), epicentral distance to closest station ($DMIN$), $\mathrm{RMS}$ residual, quality metric ($QM$), and spatial uncertainties ($ER_{\mathrm{H}}$, $ER_{\mathrm{Z}}$) with robust handling of divergent error asterisks (\texttt{*****}) as $\mathrm{NaN}$ values. \\
         \bottomrule
       \end{tabularx}
+      \begin{tablenotes}[flushleft]
+        \footnotesize
+        \item \textbf{Notation:} $M_{\mathrm{L}}$ denotes local magnitude; $M_{\mathrm{D}}$ denotes duration magnitude; $ER_{\mathrm{H}}$ and $ER_{\mathrm{Z}}$ denote maximum horizontal and vertical hypocentral uncertainties in \unit{\kilo\meter}; $ER_{\mathrm{T}}$ denotes origin time uncertainty in \unit{\second}; $\mathrm{RMS}$ denotes travel-time root-mean-square residual in \unit{\second}; $GAP$ denotes azimuthal gap in degrees; $DMIN$ denotes epicentral distance to the nearest station in \unit{\kilo\meter}; $QM$ denotes the two-character Hypo71 quality classification.
+      \end{tablenotes}
     \end{threeparttable}
   \end{table}
+
+  \subsubsection{Detailed Operational Semantics of Legacy Parsers}
+  \label{subsubsec:parser_semantics}
+
+  Each parser class encapsulates specific decoding logic tailored to the
+  underlying file structure and historical conventions of \ac{OGS} seismic operations:
+  \begin{enumerate}
+    \item \textbf{Hypo71 Detailed Printouts (\texttt{.hpl}, \texttt{DataFileHPL})}:
+      Files using the \texttt{.hpl} extension store line-printer output generated
+      by the Hypo71 location program (\cite{Hypo71}). Each event is delimited
+      by an event summary header, followed by individual station pick records
+      declaring P and S phase arrivals, and terminated by optional locality labels
+      (prefixed with \verb|^|) and analyst remarks (prefixed with \verb|*|).
+      Crucially, \texttt{DataFileHPL} extracts the continuous Hypo71 solution
+      magnitude from Column~6 (\texttt{hypo71\_mag}) alongside the trailing
+      tail duration magnitude ($M_{\mathrm{D}}$) and local magnitude ($M_{\mathrm{L}}$).
+      When supported by non-zero station observation counts, the continuous
+      solution magnitude is prioritized for $M_{\mathrm{D}}$, reconciling discrepancies
+      caused by truncated integer printouts in legacy tables while preserving
+      reported standard errors ($\sigma_{M_{\mathrm{D}}}$, $\sigma_{M_{\mathrm{L}}}$)
+      and station counts ($N_{\mathrm{sta}, M_{\mathrm{D}}}$, $N_{\mathrm{sta}, M_{\mathrm{L}}}$).
+    \item \textbf{Phase Arrival Pick Bulletins (\texttt{.dat}, \texttt{DataFileDAT})}:
+      The \texttt{.dat} format provides high-density, fixed-width phase arrivals
+      uncoupled from hypocentral solutions. For each record, \texttt{DataFileDAT}
+      extracts the 4-character station code, phase onset character (impulsive \texttt{'i'},
+      emergent \texttt{'e'}, or uncertain \texttt{'?'}), phase type (\texttt{'P'} or \texttt{'S'}),
+      first-motion polarity (\texttt{'+'}, \texttt{'-'}, \texttt{'c'}, or \texttt{'d'}),
+      analyst quality weight $w \in \{0, 1, 2, 3, 4\}$, and timestamps resolved to centiseconds.
+    \item \textbf{Tabular Catalog Summaries (\texttt{.txt}, \texttt{DataFileTXT})}:
+      Text bulletins export event-level hypocenters and magnitudes in fixed-column
+      tabular form. In legacy \ac{OGS} text exports, the header column labeled
+      \texttt{t\_err} has historically introduced interpretability challenges.
+      Detailed reconciliation against the source Hypo71 execution demonstrates that
+      this column encodes the travel-time root-mean-square residual ($\mathrm{RMS}$)
+      rather than origin time uncertainty ($ER_{\mathrm{T}}$). \texttt{DataFileTXT}
+      strictly maps \texttt{t\_err} to the canonical $\mathrm{RMS}$ attribute,
+      aligning with Hypo71 output semantics and preventing erroneous assignment of
+      travel-time residuals to origin time variance ($ER_{\mathrm{T}}$). In addition,
+      \texttt{DataFileTXT} preserves the unique legacy event identifier (\texttt{legacy\_id},
+      formatted as \texttt{YYYY\_XXXXX}), providing an immutable reference anchor
+      for cross-referencing published bulletins.
+    \item \textbf{Historical Punch-Card Records (\texttt{.pun}, \texttt{DataFilePUN})}:
+      The \texttt{.pun} format archives 80-column punch-card records representing
+      one-card-per-event hypocenters. Coordinates encoded in degree-minute format
+      ($DD\text{--}MM.mm$) are automatically converted to decimal degrees.
+      \texttt{DataFilePUN} extracts the continuous Hypo71 duration magnitude
+      ($M_{\mathrm{D}}$), observation count ($NO$), azimuthal gap ($GAP$),
+      epicentral distance to the closest station ($DMIN$), $\mathrm{RMS}$ residual,
+      and quality metric ($QM$). Crucially, in ill-conditioned inversions where
+      the Hypo71 iterative least-squares solver diverges or produces unconstrained
+      uncertainties, the legacy program outputs five asterisks (\texttt{*****}) in
+      the error columns. The custom parsing helper \texttt{\_parse\_zero\_padded\_float}
+      detects non-numeric asterisk tokens and robustly coerces them into standard
+      IEEE $\mathrm{NaN}$ values for vertical uncertainty ($ER_{\mathrm{Z}}$) and
+      horizontal uncertainty ($ER_{\mathrm{H}}$), eliminating catastrophic parsing
+      crashes and preventing corrupted numeric values from entering downstream dataframes.
+  \end{enumerate}
+
+  \subsubsection{Unified 28-Column Event Catalog Schema}
+  \label{subsubsec:unified_catalog_schema}
+
+  To prevent schema fragmentation across heterogeneous legacy inputs,
+  \texttt{OGSDataFile} and \texttt{OGSCatalog} enforce a standardized,
+  unified 28-column event table schema (\texttt{\_EVENT\_COLUMNS} /
+  \texttt{\_EVENTS\_COLUMNS}). Regardless of the originating file format
+  or parsing subclass, every event record is normalized into this common
+  representation prior to Parquet serialization:
+  \begin{enumerate}
+    \item \textbf{Spatiotemporal Origin and Indexing} (Columns 0--5):
+      \texttt{idx} (unique normalized integer identifier \texttt{YYYYXXXXXX}),
+      \texttt{time} (UTC origin time),
+      \texttt{latitude} (decimal degrees North),
+      \texttt{longitude} (decimal degrees East),
+      \texttt{depth} (focal depth in \unit{\kilo\meter}), and
+      \texttt{azimuthal\_gap} ($GAP$ in degrees).
+    \item \textbf{Hypocenter Inversion Uncertainties} (Columns 6--8):
+      \texttt{max\_vertical\_uncertainty} ($ER_{\mathrm{Z}}$ in \unit{\kilo\meter}),
+      \texttt{max\_horizontal\_uncertainty} ($ER_{\mathrm{H}}$ in \unit{\kilo\meter}), and
+      \texttt{max\_time\_uncertainty} ($ER_{\mathrm{T}}$ in \unit{\second}).
+    \item \textbf{Partitioning and Phase Pick Statistics} (Columns 9--13):
+      \texttt{group} (calendar date partition key \texttt{YYYY-MM-DD}),
+      \texttt{number\_picks} ($NO$, total arrival count),
+      \texttt{number\_p\_picks} ($N_{\mathrm{P}}$, P-phase count),
+      \texttt{number\_s\_picks} ($N_{\mathrm{S}}$, S-phase count), and
+      \texttt{number\_p\_and\_s\_picks} ($N_{\mathrm{P\&S}}$, stations with both P and S arrivals).
+    \item \textbf{Primary Magnitude Estimations} (Columns 14--18):
+      \texttt{MD} (duration magnitude $M_{\mathrm{D}}$),
+      \texttt{ML} (local magnitude $M_{\mathrm{L}}$),
+      \texttt{ML\_median} (network median local magnitude $\widetilde{M}_{\mathrm{L}}$),
+      \texttt{ML\_unc} (local magnitude uncertainty $\sigma_{M_{\mathrm{L}}}$), and
+      \texttt{ML\_stations} (local magnitude reporting station count $N_{\mathrm{sta}, M_{\mathrm{L}}}$).
+    \item \textbf{Inversion Diagnostics and Station Geometry} (Columns 19--21):
+      \texttt{DMIN} (epicentral distance to nearest station in \unit{\kilo\meter}),
+      \texttt{RMS} (travel-time residual root-mean-square in \unit{\second}), and
+      \texttt{QM} (Hypo71 solution quality rating class A--D).
+    \item \textbf{Geographic Annotations and Source Classification} (Columns 22--24):
+      \texttt{LOC\_NAME} (standardized geographic locality name),
+      \texttt{E\_TYPE} (seismic source classification code), and
+      \texttt{NOTES} (analyst remarks and macroseismic observations).
+    \item \textbf{Auxiliary Duration Magnitude Diagnostics} (Columns 25--27):
+      \texttt{MD\_unc} (duration magnitude uncertainty $\sigma_{M_{\mathrm{D}}}$),
+      \texttt{MD\_stations} (duration magnitude reporting station count $N_{\mathrm{sta}, M_{\mathrm{D}}}$), and
+      \texttt{MD\_median} (network median duration magnitude $\widetilde{M}_{\mathrm{D}}$).
+  \end{enumerate}
 
   \section{Catalog Aggregation, Merging Logic, and Columnar Storage}
   \label{sec:catalog_aggregation}
@@ -504,7 +606,7 @@ introspection (\verb|GROUP_PATTERN = re.compile(r"\(\?P<(\w+)>...")|),
   DATAFILE_TYPES = {
       '.hpl': DataFileHPL,  # Primary hypocenter and pick data
       '.dat': DataFileDAT,  # Phase pick data
-      '.txt': DataFileTXT,  # Magnitude and error data
+      '.txt': DataFileTXT,  # Magnitude, RMS, and legacy ID data
       '.pun': DataFilePUN,  # Punch card event summaries
   }
 \end{verbatim}
@@ -524,20 +626,32 @@ introspection (\verb|GROUP_PATTERN = re.compile(r"\(\?P<(\w+)>...")|),
       are mapped to standardized schema identifiers
       (\texttt{HEADER\_PICKS}), timestamps are parsed to
       UTCDateTime, and calendar dates are coerced using
-      \texttt{normalize\_event\_groups()} to ensure consistent join
+      \texttt{normalize\_groups()} to ensure consistent join
       keys across HPL, DAT, and PUN files.
-    \item \textbf{Event Attribute Outer Joins}: Merging events from
-      distinct files requires joining complementary fields:
+    \item \textbf{Event Attribute Outer Joins}: Merging events across
+      heterogeneous legacy files consolidates attributes into the unified
+      28-column catalog schema (\cref{subsubsec:unified_catalog_schema}):
       \begin{itemize}
-        \item Primary hypocenters, origin times, depths, and spatial
-          uncertainties are seeded from HPL files.
-        \item TXT files contribute revised local magnitude
-          ($M_{\mathrm{L}}$), duration magnitude ($M_{\mathrm{D}}$),
-          and station count metrics, joined via an outer merge on
-          event index \texttt{idx}.
-        \item PUN files contribute legacy coordinates for events
-          missing HPL records, joined via spatiotemporal matching on
-          $[time, lat, lon, depth]$.
+        \item Primary hypocentral coordinates, origin times, focal depths,
+          spatial uncertainties ($ER_{\mathrm{H}}$, $ER_{\mathrm{Z}}$),
+          and travel-time root-mean-square residuals ($\mathrm{RMS}$) are
+          seeded from HPL files. Crucially, \texttt{DataFileHPL} extracts the
+          continuous Hypo71 solution magnitude from Column~6 (\texttt{hypo71\_mag})
+          alongside tail duration magnitude ($M_{\mathrm{D}}$) and local magnitude ($M_{\mathrm{L}}$).
+        \item TXT files contribute revised local magnitude ($M_{\mathrm{L}}$),
+          duration magnitude ($M_{\mathrm{D}}$), travel-time root-mean-square
+          residuals ($\mathrm{RMS}$, correctly mapped from bulletin column
+          \texttt{t\_err} rather than origin time uncertainty $ER_{\mathrm{T}}$),
+          geographic localities, and unique legacy catalog event identifiers
+          (\texttt{legacy\_id}), joined via an outer merge on event index \texttt{idx}.
+        \item PUN files supply legacy 80-column punch-card coordinates, continuous
+          Hypo71 duration magnitude ($M_{\mathrm{D}}$), observation counts ($NO$),
+          azimuthal gap ($GAP$), nearest station distance ($DMIN$), and quality
+          metrics ($QM$) for historical events lacking HPL records, joined via
+          spatiotemporal matching on $[time, latitude, longitude, depth]$. Divergent
+          inversion error asterisks (\texttt{*****}) are robustly coerced to
+          $\mathrm{NaN}$ values for vertical uncertainty ($ER_{\mathrm{Z}}$) and
+          horizontal uncertainty ($ER_{\mathrm{H}}$).
       \end{itemize}
     \item \textbf{Vectorized Event Pick Statistics Aggregation}:
       Following hypocenter merging, the aggregator computes pick

@@ -75,11 +75,6 @@ AUTHORS:
 # Standard library: Regular expressions for pattern matching
 import re
 
-# Pandas: DataFrame operations and data manipulation
-import pandas as pd
-
-# Standard library: Filesystem path handling
-from pathlib import Path
 
 # ObsPy: Seismological library - precise time handling
 from obspy import UTCDateTime
@@ -95,13 +90,6 @@ import ogsutils as OGS_U
 
 # Local module: Base class providing regex extraction and logging
 from ogsdatafile import OGSDataFile
-
-# -----------------------------------------------------------------------------
-# CONSTANTS
-# -----------------------------------------------------------------------------
-
-# Base path for data files (two levels up from this script's location)
-DATA_PATH = Path(__file__).parent.parent.parent
 
 
 # =============================================================================
@@ -122,6 +110,9 @@ class DataFileDAT(OGSDataFile):
     EVENT_EXTRACTOR_LIST: Regex patterns for event summary lines
   """
 
+  # Expected file extension for format validation
+  EXTENSION: str = OGS_C.DAT_EXT
+
   # -------------------------------------------------------------------------
   # RECORD EXTRACTOR: Regex fragments for station pick records
   # -------------------------------------------------------------------------
@@ -132,13 +123,13 @@ class DataFileDAT(OGSDataFile):
       # Station
       fr"^(?P<{OGS_C.STATION_STR}>[A-Z0-9\s]{{4}})",
       # P-wave onset quality: e=emergent, i=impulsive, ?=uncertain, space=unknown
-      fr"(?P<{OGS_C.P_ONSET_STR}>[ei\s\?]){OGS_C.PWAVE}",
+      fr"(?P<{OGS_C.P_ONSET_STR}>[ei\s\?])[{OGS_C.PWAVE}\s]",
       # P-wave polarity: c/C/+=compression(up), d/D/-=dilatation(down), space=unknown
       fr"(?P<{OGS_C.P_POLARITY_STR}>[cC\+dD\-\s])",
       # P-wave weight: 0=best, 4=worst quality, space=unweighted
       fr"(?P<{OGS_C.P_WEIGHT_STR}>[0-4\s])",
-      # Fixed marker "1" (format identifier)
-      fr"1",
+      # Fixed marker "1" (format identifier) or space for legacy pre-2000 files
+      fr"[1\s]",
       # Date-time: YYMMDDHHMM format (10 digits) followed by space or zero
       fr"(?P<{OGS_C.DATE_STR}>\d{{10}})[\s0]",
       # P-wave arrival time: SSCC (seconds.centiseconds, 4 digits)
@@ -173,7 +164,7 @@ class DataFileDAT(OGSDataFile):
       # Signal duration: 5 digits (in samples or deciseconds)
       fr"(?P<{OGS_C.DURATION_STR}>[\s\d]{{5}})",
       # Event index: 4-digit sequential event number within the year
-      fr"(?P<{OGS_C.INDEX_STR}>[\s\d]{{4}})",
+      fr"(?P<{OGS_C.IDX_EVENTS_STR}>[\s\d]{{4}})",
       fr""
   ]
 
@@ -192,7 +183,7 @@ class DataFileDAT(OGSDataFile):
       # Signal duration: 5 digits (in samples or deciseconds)
       fr"(?P<{OGS_C.DURATION_STR}>[\s\d]{{5}})",
       # Event index: 4-digit sequential event number within the year
-      fr"(?P<{OGS_C.INDEX_STR}>[\s\d]{{4}})",
+      fr"(?P<{OGS_C.IDX_EVENTS_STR}>[\s\d]{{4}})",
   ]
 
   @staticmethod
@@ -210,24 +201,6 @@ class DataFileDAT(OGSDataFile):
     offset = float(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR)) / 100.
     return base_time + td(seconds=offset)
 
-  @staticmethod
-  def _build_pick_row(event_index: int, pick_time: datetime, station: str,
-                      phase: str, weight: int):
-    """Create a standardized pick row for the output DataFrame."""
-    return [
-        event_index,
-        pick_time.strftime(OGS_C.DATE_FMT),
-        pick_time,
-        f".{station}.",
-        phase,
-        weight,
-        None,
-        None,
-        None,
-        None,
-        1.0,
-    ]
-
   def read(self):
     """
     Read and parse a .dat format file into P and S wave picks.
@@ -243,11 +216,7 @@ class DataFileDAT(OGSDataFile):
     # -----------------------------------------------------------------------
     # INPUT VALIDATION
     # -----------------------------------------------------------------------
-    if not self.input.exists():
-      raise FileNotFoundError(f"File {self.input} does not exist")
-
-    if self.input.suffix != OGS_C.DAT_EXT:
-      raise ValueError(f"File extension must be {OGS_C.DAT_EXT}")
+    self.validate_input()
 
     # -----------------------------------------------------------------------
     # FILE READING
@@ -324,7 +293,7 @@ class DataFileDAT(OGSDataFile):
             f"Stopping read at pick after end date: {self.end}"
         )
         self.logger.debug(line)
-        break
+        continue
 
       # ---------------------------------------------------------------------
       # FIELD PROCESSING
@@ -332,8 +301,8 @@ class DataFileDAT(OGSDataFile):
       station = result[OGS_C.STATION_STR].strip(OGS_C.SPACE_STR)
 
       try:
-        event_index = self._parse_index(
-            result[OGS_C.INDEX_STR], event_time.year
+        event_index = self.normalize_index(
+            result[OGS_C.IDX_EVENTS_STR], event_time.year
         )
       except ValueError as exc:
         event_index = None
@@ -397,20 +366,8 @@ class DataFileDAT(OGSDataFile):
     # -----------------------------------------------------------------------
     # BUILD OUTPUT DATAFRAME
     # -----------------------------------------------------------------------
-    self.PICKS = pd.DataFrame(pick_records, columns=[
-        OGS_C.IDX_PICKS_STR, OGS_C.GROUPS_STR, OGS_C.TIME_STR,
-        OGS_C.STATION_STR, OGS_C.PHASE_STR, OGS_C.WEIGHT_STR,
-        OGS_C.EPICENTRAL_DISTANCE_STR, OGS_C.DEPTH_STR, OGS_C.AMPLITUDE_STR,
-        OGS_C.STATION_ML_STR, OGS_C.PROBABILITY_STR
-    ]).astype({OGS_C.IDX_PICKS_STR: int})
-
-    # Extract the Gregorian date from the timestamp for downstream grouping.
-    self.PICKS[OGS_C.GROUPS_STR] = self.PICKS[OGS_C.TIME_STR].apply(
-        lambda value: value.date()
-    )
-
-    for date, dataframe in self.PICKS.groupby(OGS_C.GROUPS_STR):
-      self.picks[UTCDateTime(date).date] = dataframe
+    self.PICKS = self._build_picks_dataframe(pick_records)
+    self.postload("picks", update=True)
 
 
 # =============================================================================

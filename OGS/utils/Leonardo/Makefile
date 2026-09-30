@@ -217,6 +217,7 @@ download: #
 			$(PYTHON_BIN) $(OGS_PATH)/src/ogsdownloader.py \
 				-D $$start $$end \
 				-W $(WAVEFORM_PATH) \
+				-S $(STATION_PATH) \
 				--threads $(CORES) \
 				--station "* -SP -OL -ED -VNZE"; \
 		start=$$(date -d "$$end + 1 day" +%Y%m%d); \
@@ -476,8 +477,7 @@ parse: # 5
 		-D $(START_DATE) $(END_DATE) \
 		-f $(DATASET_PATH)/$(TARGET)/* \
 		--merge \
-		-o $(WORK_PATH)/catalogs/$(TARGET) \
-		-v
+		-o $(WORK_PATH)/catalogs/$(TARGET)
 
 test: # 2
 	$(SBC_RUN_BIN) output_path=$(base)/$(YEAR)

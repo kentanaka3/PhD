@@ -227,7 +227,7 @@ When modeling system architectures, data provenance pipelines, mathematical DAGs
 - Maintain strict layering: declare `\pgfdeclarelayer{background}` and `\pgfsetlayers{background,main}` for grouping enclosures and bounding boxes (`fit` library).
 - Limit TikZ packages to stable, core libraries: `arrows.meta`, `positioning`, `calc`, `fit`, `backgrounds`, `shapes.geometric`, `matrix`.
 
-### 2. Visual evidence boundaries (Demonstrated vs. Planned)
+### 2. Visual Evidence Boundaries in System Architectures
 
 Every architectural and pipeline diagram must visually encode component implementation status:
 

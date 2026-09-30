@@ -95,7 +95,7 @@
 
 ---
 
-## 3. Common Mathematical Pseudocode Symbols
+## 3. Canonical Mathematical Pseudocode Symbols & Notation
 
 ### 3.1 Assignment, Binding & Definitions
 
@@ -103,7 +103,7 @@
 |:-------|:--------|:--------|
 | `←` | Assign value | `x ← x + 1` |
 | `≝` | Equal by definition | `SNR ≝ 10 × \log_{10}(P_{\text{signal}} / P_{\text{noise}})` |
-| `≡` | Identical to / congruent / $\alpha$-equivalent | `hash(x) ≡ 0 \pmod{m}` |
+| `≡` | Identical / Congruent | `hash(x) ≡ 0 \pmod{m}` |
 | `x ↦ f(x)` | Element mapping rule | `t ↦ t − t₀` |
 | `λx. e` | Lambda abstraction | `filter(λp. p.weight > 0, picks)` |
 | `ι` | Definite description / unique selection | `x^* ← ι x . (P(x) ∧ ∀ y : P(y) ⇒ y = x)` |
@@ -120,7 +120,7 @@
 | `>` | Strictly greater than | `if score > threshold ⇒ …` |
 | `≤` | Less than or equal to | `∀ i ∈ [1 .. n] : i ≤ n` |
 | `≥` | Greater than or equal to | `while count ≥ 0 ⇒ …` |
-| `≈` | Approximately equal to | `residual ≈ 0.0 ⇒ ⟵ ⊤` |
+| `≈` | Approximately equal to | `if residual ≈ 0.0 ⇒ ⟵ ⊤` |
 | `∼` | Distributed as / Similarity | `noise ∼ 𝒩(0, σ²)` or `f(n) ∼ g(n)` |
 | `∝` | Proportional to | `P(θ \| D) ∝ P(D \| θ) × P(θ)` |
 | `≅` | Isomorphic to | `G₁ ≅ G₂` |
@@ -139,10 +139,10 @@
 | `∨` (`or`) | Logical disjunction | `failed ∨ timeout ⇒ …` |
 | `¬` (`not`) | Logical negation | `¬exists(path) ⇒ …` |
 | `⊕` (`xor`) | Exclusive `or` | `a ⊕ b ≝ (a ∨ b) ∧ ¬(a ∧ b)` |
-| `⇒` (`implies`) | Logical implication / guard ("then") | `valid ⇒ score > 0` |
+| `⇒` (`implies`) | Logical implication | `valid ⇒ score > 0` |
 | `⇔` (`iff`) | Logical equivalence | `converged ⇔ residual < ε` |
 | `⊤` (`true`) | Boolean True / Top | `found ← ⊤` |
-| `⊥` (`false`) | Boolean False / Bottom / Error / Null | `err ≠ ⊥ ⇒ fail ⊥` |
+| `⊥` (`false`) | Boolean False / Bottom / Error / Null | `if err ≠ ⊥ ⇒ fail ⊥` |
 
 ### 3.4 Operational Semantics & Transitions
 
@@ -163,18 +163,19 @@
 
 | Symbol | Meaning | Example |
 |:-------|:--------|:--------|
-| `∫` (`integral`) | Definite / Indefinite integral | `E ← ∫_{t₀}^{t₁} \|u(t)\|² \, \mathrm{d}t` |
-| `∬`, `∭` (`integral`) | Double / Triple surface or volume integral | `M₀ ← ∬_{\Sigma} \mu \, D(x,y) \, \mathrm{d}S` |
-| `∮` | Contour / Line integral | `∮{∂Ω} F· \mathrm{d}r` |
-| `∂` (`partial`) | Partial derivative / Manifold boundary | `J_{ij} ← \frac{∂r_i}{∂m_j}` or `∂Ω` |
-| `∇` | Nabla / Gradient operator | `∇ : C^k(Ω ⊆ ℝⁿ, ℝ) → C^{k-1}(Ω ⊆ ℝⁿ, ℝⁿ); k ∈ ℤ_{≥ 1} ∪ ∞, n ∈ ℤ_{≥ 1}` |
-| `∇·` (`div`) | Divergence | `∇· : C^k(Ω ⊆ ℝⁿ, ℝⁿ) → C^{k-1}(Ω ⊆ ℝⁿ, ℝ); k ∈ ℤ_{≥ 1} ∪ ∞, n ∈ ℤ_{≥ 1}` |
-| `∇×` (`curl`) | Curl / Rotor | `∇× : C^k(Ω ⊆ ℝⁿ, ℝⁿ) → C^{k-1}(Ω ⊆ ℝⁿ, 𝔰𝔬(n)) ≅ C^{k-1}(Ω ⊆ ℝⁿ, ℝ^{n(n-1)/2}); k ∈ ℤ_{≥ 1} ∪ ∞, n ∈ ℤ_{≥ 1}` |
-| `Δ` (`laplacian`) | Laplacian operator (`∇²`) / Difference | `Δf ≝ ∇·∇f` |
+| `∫` (`integral`) | Definite / Indefinite integral | `F ∈ AC([a, b], ℝ) ⟺ (∃ F' m-a.e.) ∧ (F' ∈ L¹([a, b], m)) ∧ (∀x ∈ [a, b], F(x) = F(a) + ∫_a^x F'(t) dt) ; a, b ∈ ℝ, a < b` |
+| `∬`, `∭` (`integral`) | Double / Triple surface or volume integral | `∭_{Ω} (∇ · 𝐅) d𝑉 = ∯_{∂Ω} (𝐅 · 𝐧) d𝑆 ; Ω ⊂ ℝ³, 𝐅 ∈ C¹(Ω, ℝ³), 𝐧 : ∂Ω → S² ≔ {v ∈ ℝ³ : ‖v‖ = 1} ∧ 𝐧(x) ⟂ T_x(∂Ω), d𝑉 ∈ ℳ(Ω), d𝑆 ∈ ℳ(∂Ω)` |
+| `∮` | Contour / Line integral | `∮_{∂Ω} 𝐅 · 𝐓 \mathrm{d}s = ∬_{Ω} (∇ × 𝐅) · 𝐧 d𝑆 ; Ω ⊂ U ⊆ ℝ³, 𝐅 ∈ C¹(U, ℝ³), 𝐧 : Ω → S² ≝ {v ∈ ℝ³ : ‖v‖ = 1} ∧ 𝐧(x) ⟂ T_x Ω, 𝐓 : ∂Ω → S² ∧ 𝐓(x) ∈ T_x(∂Ω) ∧ ‖𝐓‖ = 1, d𝑆 ∈ ℳ(∂Ω), d𝑆 ∈ ℳ(Ω)` |
+| `∯` | Surface integral over closed surface | `∯_{∂Ω} 𝐅 · 𝐧 d𝑆` |
+| `∂` (`partial`) | Partial derivative / Manifold boundary | `J_{ij} ← \frac{∂r_i}{∂m_j}` |
+| `∇` (`grad`) | Nabla / Gradient operator | `∇ : C^k(Ω, ℝ) → C^{k-1}(Ω, ℝⁿ), f ↦ ∑_{i=1}ⁿ (∂_i f) 𝐞_i ; Ω ⊆ ℝⁿ, n ∈ ℕ_{≥ 1}, k ∈ ℕ_{≥ 1} ∪ {∞}` |
+| `∇·` (`div`) | Divergence | `∇· : C^k(Ω, ℝⁿ) → C^{k-1}(Ω, ℝ), 𝐅 ↦ ∑_{i=1}ⁿ ∂_i F^i ; Ω ⊆ ℝⁿ, n ∈ ℕ_{≥ 1}, k ∈ ℕ_{≥ 1} ∪ {∞}` |
+| `∇×` (`curl`) | Curl / Rotor | `∇× : C^k(Ω, ℝⁿ) → C^{k-1}(Ω, 𝔰𝔬(n)), 𝐅 ↦ ½ (D𝐅 - (D𝐅)ᵀ) ≅ C^{k-1}(Ω, ℝ^{n(n-1)/2}) ; Ω ⊆ ℝⁿ, n ∈ ℕ_{≥ 1}, k ∈ ℕ_{≥ 1} ∪ {∞}` |
+| `Δ` | Laplacian operator (`∇²`) / Difference | `Δf ≝ ∇· ∇f` |
 | `lim` | Limit | `\lim_{Δt \to 0} \frac{f(t+Δt) − f(t)}{Δt}` |
 | `\mathrm{d}` | Differential | `\mathrm{d}t, \, \mathrm{d}x` |
 | `\|x\|` | Absolute value | `delta ← \|x − x₀\|` |
-| `‖v‖` | Vector, matrix or operator norm | `‖r‖₂ = √{rᵀ r}` |
+| `‖·‖` | Vector, matrix or operator norm | `‖r‖₂ = √{rᵀ r}` |
 
 ### 3.6 Algebraic, Tensor & Signal Operators
 
@@ -183,8 +184,8 @@
 | `⋆` | Convolution / Kleene star / Dual | `y ← x ⋆ h` or `Σ^⋆` |
 | `⊛` | Circular convolution / Cross-correlation | `C_{xy} ← x ⊛ y` |
 | `∘` | Function composition | `(f ∘ g)(x) ≝ f(g(x))` |
-| `·` | Scalar dot product | `\mathbf{u} · \mathbf{v} ≝ Σ_i u_i v_i` |
-| `×` | Vector cross product / Cartesian product | `\mathbf{u} × \mathbf{v} = sgn(det(g)) √\|det(g)\| g^{mi} ε_{ijk} u^j v^k \mathbf{e}_m; \mathbf{u} = u^j \mathbf{e}_j, \mathbf{v} = v^k \mathbf{e}_k, i,j,k,m ∈ {1,2,3}, det(g) ≠ 0` |
+| `·` | Scalar dot product | `\mathbf{u} · \mathbf{v} ≝ Σ_i u^i v^i` |
+| `×` | Vector cross product / Cartesian product | `\mathbf{u} × \mathbf{v} = sgn(det(g)) √\|det(g)\| g^{mi} ε_{ijk} u^j v^k 𝐞_m; \mathbf{u} = u^j 𝐞_j, \mathbf{v} = v^k 𝐞_k, i,j,k,m ∈ {1,2,3}, det(g) ≠ 0` |
 | `⊗` | Tensor / Kronecker product | `(A ⊗ B)_{ik,jl} ≝ a_{i,j} b_{k,l}` |
 | `⊕` | Direct sum | `V ⊕ W` |
 | `⊙` | Hadamard element-wise product | `A ⊙ B ≝ [a_{ij} b_{ij}]` |
@@ -203,10 +204,10 @@
 | `/` | Real division | `mean ← sum / n` |
 | `div` | Integer division (quotient) | `q ← a div b` |
 | `mod` | Modulo (remainder) | `r ← a mod b` |
-| `^` | Exponentiation | `e^{iπ} + 1 = 0` |
+| `^` | Exponentiation (`xⁿ`, `x¹`, `x²`, `x³`, etc.) | `e^{iπ} + 1 = 0` |
 | `√` | Square root | `rms ← √(sum_sq / n)` |
-| `⌊x⌋` | Floor ≤ x | `mid ← ⌊(lo + hi) / 2⌋` |
-| `⌈x⌉` | Ceiling ≥ x | `pages ← ⌈n / page_size⌉` |
+| `⌊·⌋` | Floor function | `mid ← ⌊(lo + hi) / 2⌋` |
+| `⌈·⌉` | Ceiling function | `pages ← ⌈n / page_size⌉` |
 
 ### 3.8 Set Theory, Lattice Theory & Aggregations
 
@@ -238,10 +239,10 @@
 | Symbol | Meaning | Example |
 |:-------|:--------|:--------|
 | `∀` | Universal quantifier ("for all" / loop) | `∀ x ∈ S : x > 0` |
-| `∃` | Existential quantifier | `∃ e ∈ E : e.id = target` |
-| `∄` | Negative existential | `if ∄ f ∈ 𝒟 ⇒ …` |
-| `∃!` | Unique existential | `∃! master ∈ nodes ⇒ …` |
-| `:` or `.` | "such that" / "where" | `∀ s ∈ S : s.active = ⊤` |
+| `∃` | Existential quantifier | `if ∃ e ∈ E : e.id = target ⇒ …` |
+| `∄` | Negative existential | `if ∄ f ∈ 𝒟 : f.active = ⊤ ⇒ …` |
+| `∃!` | Unique existential | `if ∃! master ∈ nodes : master.active = ⊤ ⇒ …` |
+| `:` | "such that" / "where" | `∀ s ∈ S : s.active ← ⊤` |
 
 ### 3.10 Sequences, Intervals & Special Constants
 
@@ -250,7 +251,7 @@
 | `⟨x₁, x₂, …, xₙ⟩` | Ordered tuple or vector | `p ← ⟨t₀, x₀, y₀, z₀⟩` |
 | `A[i]` | Array indexing | `first ← waveforms[1]` |
 | `A[i..j]` | Array slice / subsequence | `window ← trace[start..end]` |
-| `s₁ ∥ s₂` | String / sequence concatenation | `full_id ← net ∥ "." ∥ sta` |
+| `s₁ ∥ s₂` | String / sequence concatenation | `greeting ← "Hello" ∥ ", " ∥ "World"` |
 | `[a, b]` | Closed numerical interval | `freq ∈ [0.5, 20.0]` |
 | `(a, b)` | Open numerical interval | `residual ∈ (−1.0, 1.0)` |
 | `[a, b)` | Half-open interval | `bin_range ← [t_start, t_end)` |
@@ -258,81 +259,67 @@
 | `x ⟶ g ⟶ y` | Pipelined sequential dataflow | `stream ⟶ filter ⟶ picker ⟶ catalog` |
 | `∞` | Infinity | `min_cost ← ∞` |
 | `NaN` | Not-a-Number (floating-point error) | `if value = NaN ⇒ …` |
-| `ε` | Machine epsilon / infinitesimal tolerance | `\|x_{k+1} − x_k\| > ε ⇒ ⟳` |
-| `π`, `e`, `φ`, `i`, `ℏ` | Mathematical constants | `A ← π × r²` |
+| `ε` | Machine epsilon / infinitesimal tolerance | `if \|x_{k+1} − x_k\| > ε ⇒ ⟳` |
+| `π`, `e`, `φ`, `i`, `ℏ`, `ℝ`, `ℂ`, `ℕ`, `ℤ` | Mathematical constants | `A ← π × r²` |
+
+### 3.11 Asymptotic Complexity Notation
+
+| Symbol | Meaning | Usage |
+|:-------|:--------|:------|
+| `O(g(n))` | Upper bound (Big-O) | `Time: O(n log n), Space: O(n)` |
+| `Ω(g(n))` | Lower bound (Big-Omega) | `Comparisons: Ω(n log n)` |
+| `Θ(g(n))` | Tight asymptotic bound (Big-Theta) | `Lookup: Θ(1) average case` |
+| `o(g(n))` | Strict upper bound (Little-o) | `error = o(1) as n → ∞` |
 
 ---
 
 ## 4. ANSI ↔ Mermaid.js Syntax Mapping
 
-### 4.1 Legacy Bracket Syntax (Universally Supported)
+Use **Modern `@{ shape: }` Syntax** (Mermaid v11.3.0+). Use `id@{ shape: <name>, label: "Text" }` for complete ANSI fidelity:
 
-| ANSI/ISO Symbol | Mermaid Shape | Bracket Syntax | Example |
-|:----------------|:--------------|:---------------|:--------|
-| **Process** | Rectangle | `id[Label]` | `A[Compute sum]` |
-| **Terminal / Start-End** | Rounded rectangle | `id(Label)` | `START(Begin)` |
-| **Terminal (stadium)** | Stadium | `id([Label])` | `END([Stop])` |
-| **Decision** | Diamond | `id{Label}` | `D{x > 0?}` |
-| **Input/Output (Data)** | Parallelogram (lean-right) | `id[/Label/]` | `IO[/Read input/]` |
-| **Input/Output (alt)** | Parallelogram (lean-left) | `id[\Label\]` | `IO2[\Write output\]` |
-| **Predefined Process** | Subroutine (double-bar rectangle) | `id[[Label]]` | `SUB[[Sort array]]` |
-| **Database** | Cylinder | `id[(Label)]` | `DB[(Users table)]` |
-| **Preparation** | Hexagon | `id{{Label}}` | `INIT{{Set i = 0}}` |
-| **Connector** | Circle | `id((Label))` | `C1((A))` |
-| **Manual Operation** | Trapezoid | `id[\Label/]` | `MAN[\Verify ID/]` |
-| **Asymmetric / Flag** | Flag | `id>Label]` | `FLAG>Event fired]` |
-| **Double Circle** | Double Circle | `id(((Label)))` | `STOP(((End)))` |
-
-### 4.2 Modern `@{ shape: }` Syntax (Mermaid v11.3.0+)
-
-The modern syntax provides access to 30+ shapes that have no bracket shorthand. Use:
-```
-id@{ shape: <shape-name>, label: "Text" }
-```
-
-| ANSI/ISO Symbol | Mermaid `shape:` Name | Semantic Use |
-|:----------------|:----------------------|:-------------|
-| **Process** | `rect` | Action, operation, computation step |
+| ANSI/ISO Symbol | Mermaid `shape:` | Semantic Use |
+|:----------------|:-----------------|:-------------|
+| **Process** | `rect` | Action/Computation/Assignment |
 | **Terminal** | `stadium` | Start/End of process |
-| **Decision** | `diam` | Conditional branch (Yes/No) |
-| **Input/Output** | `lean-r`, `lean-l` | Data I/O (right-leaning, left-leaning parallelogram) |
-| **Predefined Process** | `fr-rect` (framed rect) or `subroutine` | Namedsubprocess |
-| **Preparation** | `hex` | Initialization / loop setup |
+| **Decision** | `diam` | Conditional branch (`⊤`, `⊥`) |
+| **Input/Output** | `lean-r`, `lean-l` | Generic data input/output |
+| **Predefined Process** | `fr-rect`, `subroutine` | Named external subprocess |
+| **Preparation** | `hex` | Loop initialization / setup |
 | **Document** | `doc` | Single document output |
-| **Multi-Document** | `docs` | Batch / stacked documents |
-| **Manual Input** | `sl-rect` (sloped rect) or `manual-input` | User keyboard entry |
-| **Manual Operation** | `trap-t` (trapezoid top-wide) | Human-performed step |
-| **Display** | `curv-trap` (curved trapezoid) | Screen/monitor output |
-| **Stored Data** | `bow-rect` (bow-tie rectangle) | Generic data storage |
-| **Database** | `cylinder` or `cyl` | Database read/write |
-| **Internal Storage** | `win-pane` (window pane) | In-memory / RAM storage |
-| **Direct Access Storage** | `h-cyl` (horizontal cylinder) | Disk / direct-access storage |
-| **Delay** | `delay` | Waiting period / queue (half-D shape) |
+| **Multi-Document** | `docs` | Batch document output |
+| **Manual Input** | `sl-rect`, `manual-input` | Human/Console entry |
+| **Manual Operation** | `trap-t` | Human-performed task |
+| **Display** | `curv-trap` | Screen/console/UI output |
+| **Stored Data** | `bow-rect` | Abstract data persistence |
+| **Database** | `cyl`, `cylinder` | Relational/Document database |
+| **Internal Storage** | `win-pane` | In-memory RAM Buffer/Cache |
+| **Direct Access Storage**| `h-cyl` | Disk storage |
+| **Delay** | `delay` | Timeout/Sleep/Queue |
 | **Connector** | `circle` | On-page junction |
-| **Off-page Connector** | `notch-pent` (notched pentagon) | Cross-page flow continuation |
-| **Merge** | `tri` (triangle) | Converge multiple paths |
-| **Extract** | `flip-tri` (flipped triangle) | Split / filter data |
-| **Sort / Collate** | `hourglass` | Sort or collate operation |
-| **Annotation / Comment** | `brace`, `brace-r`, `braces`, `comment` | Explanatory notes |
-| **Small Circle** | `sm-circ` | Small start point / junction |
-| **Filled Circle** | `f-circ` | Junction / merge point |
-| **Double Circle** | `dbl-circ` | Terminal / stop state |
-| **Framed Circle** | `fr-circ` | Stop point |
-| **Crossed Circle** | `cross-circ` | Summary |
-| **Lined Rectangle** | `lin-rect` | Lined / shaded process |
-| **Lined Cylinder** | `lin-cyl` | Lined disk storage |
-| **Lined Document** | `lin-doc` | Lined document |
-| **Tagged Document** | `tag-doc` | Tagged document variant |
-| **Tagged Rectangle** | `tag-rect` | Tagged process |
-| **Divided Rectangle** | `div-rect` | Divided process block |
-| **Notched Rectangle** | `notch-rect` | Punched card |
-| **Paper Tape / Flag** | `paper-tape` or `flag` | Paper tape output / event marker |
-| **Lightning Bolt** | `bolt` | Communication link |
-| **Cloud** | `cloud` | Cloud / network |
-| **Odd** | `odd` | Odd / irregular shape |
-| **Bang** | `bang` | Exception / alert |
+| **Off-page Connector** | `notch-pent` | Cross-page/Cross-module continuation |
+| **Merge** | `tri` | Multi-path convergence |
+| **Extract** | `flip-tri` | Data/Stream split |
+| **Sort / Collate** | `hourglass` | Sort/Merge |
+| **Annotation / Comment** | `brace`, `brace-r`, `braces`, `comment` | Explanatory note |
+| **Small Circle** | `sm-circ` | Compact junction |
+| **Filled Circle** | `f-circ` | Merge/Junction |
+| **Double Circle** | `dbl-circ` | Halt/Stop |
+| **Framed Circle** | `fr-circ` | Guarded stop |
+| **Crossed Circle** | `cross-circ` | Diagnostic summary |
+| **Lined Rectangle** | `lin-rect` | Shaded/Composite process |
+| **Lined Cylinder** | `lin-cyl` | Structured persistent storage |
+| **Lined Document** | `lin-doc` | Structured report |
+| **Tagged Document** | `tag-doc` | Versioned document |
+| **Tagged Rectangle** | `tag-rect` | Versioned process |
+| **Divided Rectangle** | `div-rect` | Partitioned process |
+| **Notched Rectangle** | `notch-rect` | Configuration/Raw input |
+| **Paper Tape / Flag** | `paper-tape`, `flag` | Telemetry/event marker |
+| **Lightning Bolt** | `bolt` | Network/Communication link |
+| **Cloud** | `cloud` | Network/Cloud/Cluster |
+| **Odd** | `odd` | Irregular/Odd block |
+| **Exception / Alert** | `bang` | Exception/Alert |
 
-### 4.3 Quick Decision Guide
+### 4.1 Quick Decision Guide
 
 ```text
 Need a shape?
@@ -344,7 +331,7 @@ Need a shape?
     └─ Use @{ shape: <name> } — it covers everything and is self-documenting
 ```
 
-### 4.4 Flow Line Syntax
+### 4.2 Flow Line Syntax
 
 | Connection Type | Syntax | Example |
 |:----------------|:-------|:--------|

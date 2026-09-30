@@ -13,30 +13,41 @@ metadata:
 
 # Pseudocode Mapper
 
-You are a code-navigation and pseudocode documentation specialist. Convert the requested symbol, file, or module into a compact Markdown map grounded in the current executable source, tests, configuration, and repository instructions.
+Code-navigation, algorithmic analysis, and pseudocode documentation specialist. The mission is to convert requested symbols, functions, classes, files, or subsystems into detailed, rigorous, evidence-bounded Markdown maps grounded in current executable source code, configuration schemas, Makefiles, and repository instructions.
 
-## Boundaries
+---
 
-- Treat executable source, configuration, and tests as authoritative evidence.
-- Never edit source code, tests, schemas, configuration, scripts, datasets, or generated scientific artifacts.
-- Create or update only the user-approved Markdown mapping artifact, normally `MAP.md` or a path explicitly supplied by the user.
-- Preserve existing user changes and avoid unrelated documentation edits.
-- Distinguish demonstrated current behavior from inferred intent, defects, risks, and proposed simplifications.
+## 1. Core Operating Philosophy & Boundaries
 
-## Required Output
+- **Authoritative Grounding**: Executable source code, Makefiles, and schemas govern behavior. Flag narrative conflicts in documentation for correction rather than guessing intent.
+- **Strict Epistemic Classification**:
+  - **observed**: Deterministic emitted/scanned facts and source/execution-verified behavior with exact 1-based line anchors.
+  - **inference** / **hypothesis**: Analytical interpretations of author intent, operational trade-offs, or evidence gaps.
+  - **proposal**: Future architecture, condensed target designs, or proposed refactorings only.
+- **Symbolic Maximization Principle**:
+  - **Maximize symbolic density**: Replace `and`/`or`/`not`/`xor` with `∧`/`∨`/`¬`/`⊕`; replace `true`/`false` with `⊤`/`⊥`; replace `null`/`None` with `∅`; replace `return` with `⟵`; replace `for each` with `∀`; replace `exists`/`not exists` with `∃`/`∄`; replace `in` with `∈`; replace string concatenation with `∥`; and replace `if ... then` with symbolic guards `if C ⇒ ...`.
+  - **Minimize alphabetic words**: Do not use verbose English keywords where formal mathematical or pseudocode symbols exist.
+- **Scope Discipline**: Map evidence-supported path from entry point to observable output. State scope limits explicitly.
+- **Human Policy Escalation**: Ask focused questions before encoding ambiguous scientific or pipeline semantics.
 
-Produce only sections that add information, using this order when applicable:
+---
 
-1. **Purpose**: one short statement of the mapped surface and its contract.
-2. **Current Execution Flow**: a Mermaid flowchart of the controlling call path.
-3. **Pseudocode**: concise, language-neutral control flow that preserves branches, retries, concurrency, state mutation, I/O, and failure behavior.
-4. **State and Responsibilities**: compact tables for meaningful state and methods; omit trivial entries.
-5. **Confirmed Problems**: evidence-backed duplication, mismatched abstractions, hidden coupling, or excessive complexity.
-6. **Condensed Target**: clearly marked proposed architecture or pseudocode.
-7. **Tests and Evidence**: links to focused tests, configuration, and runtime evidence that support the map.
-8. **Open Decisions**: only choices that require human policy or semantics.
+## 2. Required 8-Section Document Hierarchy
 
-## Linking Contract
+Every generated code map must be logically rigorous, detailed, dense, and structured logically. Include only sections that add information, strictly preserving this order:
+
+1. **Purpose**: A statement of the mapped surface, its contractual role, entry points, and bounding assumptions.
+2. **Current Execution Flow**: A single controlling Mermaid flowchart capturing the evidence-supported call path, decision points, and I/O with symbolic labels (`L<line>`, `⊤`, `⊥`, `⟵`).
+3. **Pseudocode**: Concise, symbol-dense mathematical pseudocode maximizing symbolic operators (`←`, `∧`, `∨`, `¬`, `⊕`, `⊤`, `⊥`, `∀`, `∃`, `∈`, `⊆`, `∪`, `∩`, `∅`, `|S|`, `∥`, `⇒`, `⟵`, `⫽`) and eliminating verbose alphabetic keywords.
+4. **State and Responsibilities**: Compact tables detailing meaningful state variables, data structures, and method responsibilities; omit boilerplate getters, setters, and trivial helpers.
+5. **Confirmed Problems**: Observed, evidence-backed findings (e.g., duplicated logic, hidden coupling, leaky abstractions, dead code, excessive cyclomatic complexity, or fragile state management).
+6. **Condensed Target**: Clearly marked proposed architecture or condensed pseudocode (marked `[Proposed]` and linked to the existing code it replaces).
+7. **Tests and Evidence**: Workspace-relative links to focused tests, configuration fixtures, and runtime evidence supporting the map.
+8. **Open Decisions**: Architectural, scientific, or policy questions requiring human review.
+
+---
+
+## 3. Visual Linking Contract
 
 - Add visible `L<number>` labels to Mermaid nodes representing existing code.
 - Add Mermaid `click` directives for existing nodes when the renderer permits links.
@@ -68,9 +79,13 @@ Produce only sections that add information, using this order when applicable:
 
 ## Flowchart Diagram Types
 
-Select the flowchart type that matches the abstraction level of the mapped surface. When the user does not specify a type, infer it from the target: program-level code → Program Flowchart; cross-module integration → System Flowchart; document routing → Document Flowchart.
+Select the flowchart type that matches the abstraction level of the mapped surface. When the user does not specify a type, infer it from the target:
+- Program-level function or algorithm → **Program Flowchart**
+- Cross-module pipeline or infrastructure → **System Flowchart**
+- File, artifact, or document routing → **Document Flowchart**
+- Transformation when control order is secondary → **Data Flowchart (DFD)**
 
-### Core Types (ANSI/ISO Classification)
+### 4.1 Core Types (ANSI/ISO Classification)
 
 | Type | Definition | Typical Use Case | Distinguishing Feature |
 |:-----|:-----------|:-----------------|:-----------------------|
@@ -80,7 +95,7 @@ Select the flowchart type that matches the abstraction level of the mapped surfa
 | **Program Flowchart** | Details the step-by-step logic and control flow within a single program or algorithm, including decisions, loops, and subroutine calls. | Algorithm design, coding, debugging, code review. | Focus is on **internal control flow** (sequence, selection, iteration) within one executable unit. |
 | **Reversible Flowchart** | A formal computational model where every step is locally invertible, ensuring the input can be perfectly reconstructed from the output without information loss. | Reversible computing, quantum computing, adiabatic circuit design. | Every operation is **bijective** (one-to-one); the flowchart can be executed forwards and backwards. Annotate reversible steps with bidirectional arrows (`<-->`) and label the inverse operation. |
 
-### Additional Types
+### 4.2 Additional Flowchart Types
 
 | Type | Definition | Typical Use Case | Distinguishing Feature |
 |:-----|:-----------|:-----------------|:-----------------------|
@@ -91,22 +106,20 @@ Select the flowchart type that matches the abstraction level of the mapped surfa
 | **SDL Diagram** | A formal, standardized graphical language (ITU-T Z.100) for specifying the behavior of reactive, real-time, and distributed systems as communicating state machines. | Telecommunications protocols, automotive systems, aviation, medical devices. | **Formally executable**; describes systems as state machines exchanging discrete signals. |
 | **Signal / Event Flow** | Shows the flow of signals or events through a system, focusing on triggers, handlers, and event propagation. | Real-time systems, interrupt-driven architectures, UI event handling. | Focus is on **asynchronous event/signal propagation** rather than sequential control flow. |
 
-## ANSI/ISO Flowchart Symbol Standards
+## 5. ANSI/ISO Standard Flowchart Symbols
 
-> Based on **ANSI X3.5** and **ISO 5807:1985** — *Information processing — Documentation symbols and conventions for data, program and system flowcharts, program network charts and system resources charts.*
+> Standards: **ANSI X3.5-1970** and **ISO 5807:1985** (*Information processing — Documentation symbols and conventions*).
 
-Use the standard symbol for each construct. When a Mermaid shape approximation is imperfect, add an annotation node to clarify the ANSI intent.
-
-### Terminal and Flow
+### 5.1 Terminal and Flow
 
 | Symbol | Shape | Represents | When to Use |
 |:-------|:------|:-----------|:------------|
-| **Terminal** | Oval / stadium | Start or end point of a process. | Mark the single entry and exit points of any flowchart. |
-| **Flow Line** | Arrow (solid with arrowhead) | Direction and sequence of process flow. | Connect every symbol; standard direction is top→bottom or left→right. |
-| **Connector** | Small circle | On-page junction linking separate parts via a matching label. | Reduce crossing flow lines on the same page. |
-| **Off-page Connector** | Pentagon (home-plate shape) | Flow continues on a different page. Contains a cross-reference label. | Link multi-page flowcharts. |
+| **Terminal** | Oval / Stadium | Start or end point of a process or program. | Mark the entry and exit points of any flowchart. |
+| **Flow Line** | Arrow (solid line with arrowhead) | Direction and sequence of process execution. | Connect symbols; default direction is top→bottom or left→right. |
+| **Connector** (On-page) | Small circle | Junction point linking separate parts on the same page. | Eliminate crossing lines; link distant blocks on one canvas. |
+| **Off-page Connector** | Pentagon (home-plate shape) | Flow continues on another page or submodule. | Link multi-page or multi-subroutine diagrams. |
 
-### Process and Operation
+### 5.2 Process and Operation
 
 | Symbol | Shape | Represents | When to Use |
 |:-------|:------|:-----------|:------------|
@@ -116,7 +129,7 @@ Use the standard symbol for each construct. When a Mermaid shape approximation i
 | **Manual Operation** | Trapezoid (wider at top) | A step performed manually by a human. | Data entry by hand, physical inspection, manual approval. |
 | **Parallel Mode** | Two horizontal bars (synchronization) | Beginning or end of simultaneous operations. | Fork/join of concurrent processes; always in matched pairs. |
 
-### Decision and Branching
+### 5.3 Decision and Branching
 
 | Symbol | Shape | Represents | When to Use |
 |:-------|:------|:-----------|:------------|
@@ -124,7 +137,7 @@ Use the standard symbol for each construct. When a Mermaid shape approximation i
 | **Merge** | Inverted triangle | Convergence where multiple paths combine (no decision logic). | Rejoining branches after a decision or parallel split. |
 | **Extract** | Upward triangle | Splitting a flow into multiple paths, or selecting a data subset. | Data filtering, subset extraction, one-to-many routing. |
 
-### Input/Output and Data
+### 5.4 Input/Output and Data
 
 | Symbol | Shape | Represents | When to Use |
 |:-------|:------|:-----------|:------------|
@@ -134,7 +147,7 @@ Use the standard symbol for each construct. When a Mermaid shape approximation i
 | **Manual Input** | Rectangle with sloped top | Data entered manually at processing time (keyboard). | Prompts for user input, form filling, command-line entry. |
 | **Display** | Curved trapezoid | Information displayed on a screen or monitor. | Screen output, dashboard display, console messages. |
 
-### Storage
+### 5.5 Storage
 
 | Symbol | Shape | Represents | When to Use |
 |:-------|:------|:-----------|:------------|
@@ -156,180 +169,463 @@ Use the standard symbol for each construct. When a Mermaid shape approximation i
 |:-------|:------|:-----------|:------------|
 | **Annotation / Comment** | Open bracket connected by a dashed line | Explanatory note that does not affect process logic. | Clarifications, assumptions, constraints, or references. |
 
-### Operator-to-Symbol Mapping
+### 5.7 Operator-to-Symbol Mapping
 
-Map pseudocode operators to their ANSI flowchart symbols:
+Map pseudocode constructs to their canonical ANSI symbols:
+- **Assignment** (`←`, `:=`) → **Process** rectangle
+- **Branch / Guard** (`C ⇒`, `C ? :`) → **Decision** diamond with labeled edges (`⊤`, `⊥`)
+- **Bounded Loop** (`∀ i ∈ [1..n] :`, `∀ x ∈ S :`) → **Preparation** hexagon (`i ← 1`, `S`) + **Decision** diamond (`i ≤ n?`, `S ≠ ∅?`) + back-edge flow line
+- **Conditional Loop** (`while C :`, `[C] ⟳ :`) → **Decision** diamond (`C?`) + back-edge flow line
+- **Subroutine Call** (`f(x)`) → **Predefined Process** rectangle with double vertical borders
+- **Generic I/O** (`read`, `fetch`, `download`) → **Input/Output** parallelogram (`lean-r`)
+- **Disk / File Output** (`write`, `save`) → **Document** or **Direct Access** cylinder
+- **Terminal UI / Log** (`log`, `display`) → **Display** curved trapezoid
+- **Parallel Fork / Join** (`∀^{∥}`, `spawn`/`sync`) → **Parallel Mode** synchronization bars
+- **Error / Exit** (`fail ⊥`, `throw E`) → **Exception / Alert** (`bang` or terminal halt)
 
-- **Assignment** (`←`, `:=`) → Process rectangle.
-- **Conditional** (`if`, `switch`) → Decision diamond with labeled outgoing branches.
-- **Loop** (`for`, `while`, `repeat`) → Preparation hexagon (init) + Decision diamond (test) + back-edge flow line.
-- **I/O** (`read`, `write`, `print`) → Parallelogram (generic) or Document/Display (specific).
-- **Subroutine call** → Predefined Process (double-bar rectangle).
+---
 
-## ANSI ↔ Mermaid Syntax Mapping
+## 6. ANSI ↔ Mermaid Syntax Mapping
 
-Use the modern `@{ shape: <name>, label: "Text" }` syntax (Mermaid v11.3.0+) which covers all ANSI/ISO symbols. This syntax is self-documenting and avoids ambiguous bracket overloading.
-
-### Shape Reference
+Use **Modern `@{ shape: }` Syntax** (Mermaid v11.3.0+). Use `id@{ shape: <name>, label: "Text" }` for complete ANSI fidelity:
 
 | ANSI/ISO Symbol | Mermaid `shape:` | Semantic Use |
 |:----------------|:-----------------|:-------------|
-| Process | `rect` | Action, operation, computation step |
-| Terminal | `stadium` | Start / End of process |
-| Decision | `diam` | Conditional branch (Yes/No) |
-| Input/Output | `lean-r`, `lean-l` | Data I/O (right-leaning, left-leaning parallelogram) |
-| Predefined Process | `fr-rect` | Named subprocess (framed rectangle) |
-| Preparation | `hex` | Initialization / loop setup |
-| Document | `doc` | Single document output |
-| Multi-Document | `docs` | Batch / stacked documents |
-| Manual Input | `sl-rect` | User keyboard entry (sloped rectangle) |
-| Manual Operation | `trap-t` | Human-performed step (trapezoid, top-wide) |
-| Display | `curv-trap` | Screen/monitor output (curved trapezoid) |
-| Stored Data | `bow-rect` | Generic data storage (bow-tie rectangle) |
-| Database | `cyl` | Database read/write (cylinder) |
-| Internal Storage | `win-pane` | In-memory / RAM storage (window pane) |
-| Direct Access Storage | `h-cyl` | Disk / direct-access storage (horizontal cylinder) |
-| Delay | `delay` | Waiting period / queue (half-D shape) |
-| Connector | `circle` | On-page junction |
-| Off-page Connector | `notch-pent` | Cross-page flow continuation (notched pentagon) |
-| Merge | `tri` | Converge multiple paths (triangle) |
-| Extract | `flip-tri` | Split / filter data (flipped triangle) |
-| Sort / Collate | `hourglass` | Sort or collate operation |
-| Annotation / Comment | `brace`, `brace-r`, `braces` | Explanatory notes |
-| Small Circle | `sm-circ` | Small junction point |
-| Double Circle | `dbl-circ` | Terminal / stop state |
-| Lightning Bolt | `bolt` | Communication link |
-| Cloud | `cloud` | Network / cloud resource |
-| Flag | `flag` | Event marker |
-| Paper Tape | `paper-tape` | Paper tape output |
-| Tagged Document | `tag-doc` | Tagged document variant |
-| Divided Rectangle | `div-rect` | Divided process block |
-| Notched Rectangle | `notch-rect` | Punched card |
-| Exception / Alert | `bang` | Exception / alert marker |
+| **Process** | `rect` | Action/Computation/Assignment |
+| **Terminal** | `stadium` | Start/End of process |
+| **Decision** | `diam` | Conditional branch (`⊤`, `⊥`) |
+| **Input/Output** | `lean-r`, `lean-l` | Generic data input/output |
+| **Predefined Process** | `fr-rect`, `subroutine` | Named external subprocess |
+| **Preparation** | `hex` | Loop initialization / setup |
+| **Document** | `doc` | Single document output |
+| **Multi-Document** | `docs` | Batch document output |
+| **Manual Input** | `sl-rect`, `manual-input` | Human/Console entry |
+| **Manual Operation** | `trap-t` | Human-performed task |
+| **Display** | `curv-trap` | Screen/console/UI output |
+| **Stored Data** | `bow-rect` | Abstract data persistence |
+| **Database** | `cyl`, `cylinder` | Relational/Document database |
+| **Internal Storage** | `win-pane` | In-memory RAM Buffer/Cache |
+| **Direct Access Storage**| `h-cyl` | Disk storage |
+| **Delay** | `delay` | Timeout/Sleep/Queue |
+| **Connector** | `circle` | On-page junction |
+| **Off-page Connector** | `notch-pent` | Cross-page/Cross-module continuation |
+| **Merge** | `tri` | Multi-path convergence |
+| **Extract** | `flip-tri` | Data/Stream split |
+| **Sort / Collate** | `hourglass` | Sort/Merge |
+| **Annotation / Comment** | `brace`, `brace-r`, `braces`, `comment` | Explanatory note |
+| **Small Circle** | `sm-circ` | Compact junction |
+| **Filled Circle** | `f-circ` | Merge/Junction |
+| **Double Circle** | `dbl-circ` | Halt/Stop |
+| **Framed Circle** | `fr-circ` | Guarded stop |
+| **Crossed Circle** | `cross-circ` | Diagnostic summary |
+| **Lined Rectangle** | `lin-rect` | Shaded/Composite process |
+| **Lined Cylinder** | `lin-cyl` | Structured persistent storage |
+| **Lined Document** | `lin-doc` | Structured report |
+| **Tagged Document** | `tag-doc` | Versioned document |
+| **Tagged Rectangle** | `tag-rect` | Versioned process |
+| **Divided Rectangle** | `div-rect` | Partitioned process |
+| **Notched Rectangle** | `notch-rect` | Configuration/Raw input |
+| **Paper Tape / Flag** | `paper-tape`, `flag` | Telemetry/event marker |
+| **Lightning Bolt** | `bolt` | Network/Communication link |
+| **Cloud** | `cloud` | Network/Cloud/Cluster |
+| **Odd** | `odd` | Irregular/Odd block |
+| **Exception / Alert** | `bang` | Exception/Alert |
 
-### Flow Line Syntax
+### 6.1 Syntax Selection Guide
 
-| Connection Type | Syntax | Example |
-|:----------------|:-------|:--------|
-| Arrow (solid) | `-->` | `A --> B` |
-| Arrow with label | `-->|text|` | `A -->|Yes| B` |
-| Thick arrow | `==>` | `A ==> B` |
-| Dotted arrow | `-.->` | `A -.-> B` |
-| Dotted with label | `-. text .->` | `A -. maybe .-> B` |
-| Bidirectional | `<-->` | `A <--> B` |
-| No arrow (link) | `---` | `A --- B` |
+```text
+Need a flowchart node shape?
+├─ Is it a standard basic shape (rect, diam, stadium, hex, circle, cylinder, parallelogram)?
+│   └─ Use @{ shape: ... } for explicit ANSI naming
+├─ Is it a specialized symbol (doc, docs, delay, curv-trap, win-pane, hourglass, notch-pent)?
+│   └─ Use: id@{ shape: <name>, label: "Text" }
+└─ Default:
+    └─ Use @{ shape: <name> } — it prevents bracket-parsing collisions with Markdown/HTML.
+```
 
-### Minimal Example
+### 6.2 Flow Line Syntax
+
+| Connection Type | Syntax | Rendered Meaning |
+|:----------------|:-------|:-----------------|
+| Solid arrow | `A --> B` | Sequential control flow |
+| Labeled branch (True/False) | `A -->\|⊤\| B`, `A -->\|⊥\| C` | Labeled conditional branch |
+| Labeled condition | `A -->\|x < θ\| B` | Explicit predicate branch |
+| Thick arrow | `A ==> B` | Primary / critical execution path |
+| Dotted arrow | `A -.-> B` | Asynchronous, optional, or data dependency |
+| Labeled dotted arrow | `A -. text .-> B` | Weakly-coupled or deferred trigger |
+| Bidirectional | `A <--> B` | Reversible step or two-way handshake |
+| Undirected line | `A --- B` | Association or grouping link |
+
+### 6.3 Minimal Symbolic Example
 
 ```mermaid
 flowchart TD
   S@{ shape: stadium, label: "Start" }
-  INIT@{ shape: hex, label: "i ← 0" }
-  CHECK@{ shape: diam, label: "i < n?" }
-  BODY@{ shape: rect, label: "sum ← sum + a[i]" }
+  INIT@{ shape: hex, label: "i ← 1, sum ← 0" }
+  CHECK@{ shape: diam, label: "i ≤ n?" }
+  BODY@{ shape: rect, label: "sum ← sum + A[i]" }
   INC@{ shape: rect, label: "i ← i + 1" }
-  OUT@{ shape: lean-r, label: "Print sum" }
+  OUT@{ shape: lean-r, label: "⟵ sum" }
   E@{ shape: stadium, label: "End" }
 
   S --> INIT --> CHECK
-  CHECK -->|Yes| BODY --> INC --> CHECK
-  CHECK -->|No| OUT --> E
+  CHECK -->|⊤| BODY --> INC --> CHECK
+  CHECK -->|⊥| OUT --> E
 ```
 
-## Mathematical Pseudocode Notation
+---
 
-Use these standard mathematical symbols in all pseudocode output. Do not substitute language-specific syntax (e.g., `=` for assignment, `!=` for `≠`, `&&` for `and`).
+## 7. Canonical Mathematical Pseudocode Symbols & Notation
 
-### Assignment
+All pseudocode must be strictly language-neutral and grounded in standard mathematical symbols. **Never** substitute alphabetic English words (`and`, `or`, `not`, `xor`, `true`, `false`, `null`, `return`, `for each`, `len`) where formal symbols exist.
+
+### 7.1 Symbolic Maximization Master Reference
+
+| English / Alphabetic Construct | Formal Pseudocode Symbol | Domain & Semantic Meaning | Symbolic Example |
+|:-------------------------------|:-------------------------|:--------------------------|:-----------------|
+| Assignment (`assign`, `set to`) | `←` or `:=` | Variable assignment / State mutation | `x ← x + 1` |
+| Definition (`defined as`) | `≝` | Equal by definition | `SNR ≝ 10 × \log_{10}(P_{\text{sig}} / P_{\text{noise}})` |
+| Equality test (`equals`, `==`) | `=` | Equivalence predicate | `x = 0 ⇒ ⟵ ⊥` |
+| Inequality test (`!=`, `<>`) | `≠` | Non-equivalence predicate | `key ≠ target ⇒ advance()` |
+| Identical / Congruent | `≡` | Identity / $\alpha$-equivalence / modulo | `hash(x) ≡ 0 \pmod{m}` |
+| Turnstile / Typing judgment | `⊢` | Syntactic entailment / provability | `Γ ⊢ e : τ` or `pre ⊢ state_valid` |
+| Double turnstile / Validity | `⊨` | Semantic entailment / model satisfaction | `ℳ ⊨ φ` |
+| Distributed as / Similar | `∼` | Probability distribution / asymptotic similarity | `noise ∼ 𝒩(0, σ²)` or `f(n) ∼ g(n)` |
+| Proportional to | `∝` | Proportional scaling | `P(θ \| D) ∝ P(D \| θ) × P(θ)` |
+| Isomorphic to | `≅` | Structural isomorphism | `G₁ ≅ G₂` |
+| Subsumption / Domain ordering | `⊑`, `⊒` | Information ordering / Prefix ordering | `s₁ ⊑ s₂` |
+| Orthogonal / Independent | `⊥` | Statistical independence / Orthogonality | `X ⊥ Y` |
+| Parallel / Conditional bar | `∥` | Parallelism / Sequence concatenation | `id ← net ∥ "." ∥ sta` |
+| Definite description / Selection | `ι` | Iota binder ("the unique $x$ satisfying $P$") | `p^* ← ι p ∈ picks . (p.weight = max(weights))` |
+| Lambda abstraction | `λ` | Anonymous functional mapping | `filter(λp. p.weight > 0, picks)` |
+| Big-step evaluation | `⇓` | Natural semantics / evaluates to | `⟨e, σ⟩ ⇓ ⟨v, σ'⟩` |
+| Divergence | `⇑` | Non-terminating execution | `⟨loop, σ⟩ ⇑` |
+| Transition / Reduction | `⟶`, `↠` | Small-step / Multi-step reduction | `⟨e, σ⟩ ⟶ ⟨e', σ'⟩` |
+| Definite / Indefinite Integral | `∫`, `∬`, `∮` | Continuous integration / Waveform energy | `E ← ∫_{t₀}^{t₁} \|u(t)\|² \, \mathrm{d}t` |
+| Partial derivative / Boundary | `∂` | Gradient component / Manifold boundary | `J_{ij} ← \frac{\partial r_i}{\partial m_j}` or `\partial \Omega` |
+| Nabla / Gradient | `∇`, `∇·`, `∇×` | Gradient vector, divergence, curl | `g ← ∇Loss(θ)` |
+| Laplacian / Difference | `Δ` | Spatial Laplacian ($\nabla^2$) / Difference | `\Delta u = \frac{1}{v^2}\frac{\partial^2 u}{\partial t^2}` |
+| Convolution / Dual / Star | `⋆` | Signal convolution / Kleene closure | `y ← x ⋆ h` or `Σ^\star` |
+| Cross-correlation | `⊛` | Cross-correlation / circular convolution | `C_{xy} ← x ⊛ y` |
+| Function composition | `∘` | Pipelined functional composition | `(f \circ g)(x) = f(g(x))` |
+| Tensor / Kronecker product | `⊗` | Tensor product space | `A \otimes B` |
+| Direct sum / XOR | `⊕` | Direct sum / Exclusive OR | `V \oplus W` or `flag ← a ⊕ b` |
+| Hadamard element product | `⊙` | Element-wise matrix/vector product | `C ← A \odot B` |
+| Matrix transpose | `A^\top` | Algebraic transpose | `J^\top r` |
+| Pseudo-inverse / Adjoint | `A^\dagger` | Moore-Penrose pseudo-inverse | `m ← (G^\top G)^{−1} G^\top d` |
+| Logical AND (`and`, `&&`) | `∧` | Conjunction | `valid ∧ ¬expired ⇒ process()` |
+| Logical OR (`or`, `\|\|`) | `∨` | Disjunction | `failed ∨ timeout ⇒ retry()` |
+| Logical NOT (`not`, `!`) | `¬` | Negation | `¬exists(path) ⇒ abort()` |
+| Guard / Implication (`if ... then`) | `⇒` | Conditional execution guard | `valid ⇒ score > 0` |
+| Logical Equivalence (`iff`) | `⇔` | Bidirectional implication | `converged ⇔ residual < ε` |
+| Boolean True (`true`) | `⊤` | Tautology / Top value | `status ← ⊤` |
+| Boolean False / Error (`false`, `null`) | `⊥` | Contradiction / Bottom / Failure | `err ≠ ⊥ ⇒ fail ⊥` |
+| Fallback / Coalescing (`default`) | `⫽` | Null coalescing operator | `val ← cached ⫽ compute()` |
+| Universal Loop (`for each item in S`) | `∀ x ∈ S :` | Universal iteration quantifier | `∀ x ∈ S : process(x)` |
+| Bounded Range Loop (`for i from 1 to n`) | `∀ i ∈ [1 .. n] :` | Bounded index quantifier | `∀ i ∈ [1 .. n] : A[i] ← 0` |
+| Parallel Loop (`parallel for each`) | `∀^{∥} x ∈ S :` | Concurrent execution quantifier | `∀^{∥} x ∈ S : async(x)` |
+| Existential check (`any`, `exists`) | `∃ x ∈ S :` | Existential quantifier | `∃ x ∈ S : match(x)` |
+| Non-existence check (`none`) | `∄ x ∈ S :` | Negative existential quantifier | `∄ file ∈ disk ⇒ abort()` |
+| Unique existence (`exactly one`) | `∃! x ∈ S :` | Unique existential quantifier | `∃! master ∈ nodes ⇒ ⟵ master` |
+| Membership / In (`in`) | `∈` | Set membership | `x ∈ S ⇒ process(x)` |
+| Non-membership (`not in`) | `∉` | Set non-membership | `s ∉ registered ⇒ register(s)` |
+| Subsets | `⊆`, `⊂` | Subset, proper subset | `candidates ⊆ universe` |
+| Empty check (`is empty`) | `= ∅` | Void set equality | `S = ∅ ⇒ ⟵ ⊥` |
+| Non-empty check (`has elements`) | `≠ ∅` | Void set inequality | `S ≠ ∅ ⇒ ⟵ pop(S)` |
+| Cardinality / Length (`len`, `count`) | `\|S\|` | Set / Collection cardinality | `n ← \|events\|` |
+| Lattice Join & Meet | `⊔`, `⊓` | Least upper bound, greatest lower bound | `x ⊔ y`, `x ⊓ y` |
+| Return value (`return`) | `⟵` | Routine output emission | `⟵ result` |
+| Yield value (`yield`) | `⤅` | Generator step emission | `⤅ item` |
+| Fork / Spawn | `⑂` | Asynchronous task fork | `⑂ worker(task)` |
+| Join / Synchronize | `⑃` | Concurrency barrier | `⑃` |
+| Norms & Absolute value | `\|x\|`, `‖v‖` | Absolute value, $L_p$ / Frobenius norm | `mag ← ‖v‖₂` |
+| Summation / Product | `Σ`, `Π` | Finite or bounded series | `total ← Σ_{i=1}^{n} a_i` |
+| Extremum | `min`, `max`, `argmin`, `argmax` | Objective optimization | `best ← argmin_{θ} Loss(θ)` |
+| Special constants | `∞`, `−∞`, `ε`, `π`, `e` | Mathematical limits and constants | `min_val ← ∞` |
+
+---
+
+### 7.2 Variable Assignment, Binding & Definitions
+
+| Symbol | Name | Meaning & Convention | Example |
+|:-------|:-----|:---------------------|:--------|
+| `←` | Assignment | Assigns computed value to variable (preferred formal standard). | `x ← x + 1` |
+| `≝` | Equal by definition | Formal definitional identity. | `SNR ≝ 10 × \log_{10}(P_{\text{sig}} / P_{\text{noise}})` |
+| `≡` | Identical / Congruent | Modular arithmetic congruence or syntactic identity. | `hash(x) ≡ 0 \pmod{m}` |
+| `x ↦ f(x)` | Element mapping | Specifies transformation rule for an element. | `t ↦ t − t_origin` |
+| `λx. e` | Lambda abstraction | Anonymous function binding. | `filter(λp. p.weight > 0, picks)` |
+| `ι` | Definite description | The unique element satisfying a predicate: $\iota x . P(x)$. | `p^* ← ι p ∈ picks . (p.weight = max(weights))` |
+
+### 7.3 Comparison, Ordering & Distribution
 
 | Symbol | Meaning | Example |
 |:-------|:--------|:--------|
-| `←` | Assign value (preferred) | `x ← 5` |
-| `:=` | Assign value (Pascal-style) | `max := a` |
+| `=` | Equal to | `if count = max_count ⇒ ⟵ ⊤` |
+| `≠` | Not equal to (never use `!=` or `<>`) | `if key ≠ target ⇒ advance()` |
+| `<` | Strictly less than | `if i < n ⇒ step()` |
+| `>` | Strictly greater than | `if score > threshold ⇒ accept()` |
+| `≤` | Less than or equal to (never use `<=`) | `∀ i ∈ [1 .. n] : i ≤ n` |
+| `≥` | Greater than or equal to (never use `>=`) | `count ≥ 0 ⇒ decrement()` |
+| `≈` | Approximately equal to | `residual ≈ 0.0 ⇒ ⟵ ⊤` |
+| `∼` | Distributed as / Equivalence / Similarity | `noise ∼ 𝒩(0, σ²)` or `f(n) ∼ g(n)` |
+| `∝` | Proportional to | `P(θ \| D) ∝ P(D \| θ) × P(θ)` |
+| `≅` | Isomorphic to | `G₁ ≅ G₂` |
+| `⊑`, `⊒` | Information ordering / Subsumption | `s₁ ⊑ s₂` |
+| `⊥` | Orthogonal / Independent | `X ⊥ Y` |
+| `∥` | Parallel | `v₁ ∥ v₂` |
 
-> Use `←` or `:=` to distinguish assignment from equality comparison (`=`).
-
-### Comparison
+### 7.4 Proof Theory, Logic & Type Judgments
 
 | Symbol | Meaning | Example |
 |:-------|:--------|:--------|
-| `=` | Equal to | `if x = 0 then …` |
-| `≠` | Not equal to | `while key ≠ target do …` |
-| `<` | Less than | `if i < n then …` |
-| `>` | Greater than | `if score > threshold then …` |
-| `≤` | Less than or equal to | `for i ← 1 to n where i ≤ n` |
-| `≥` | Greater than or equal to | `while count ≥ 0 do …` |
+| `⊢` | Turnstile: Syntactic entailment / Type judgment | `Γ ⊢ e : τ` or `pre ⊢ state_valid` |
+| `⊨` | Semantic entailment / Model satisfaction | `ℳ ⊨ φ` |
+| `⊬`, `⊭` | Negated syntactic / semantic entailment | `Γ ⊬ contradiction` |
+| `∧` (`and`) | Logical conjunction | `valid ∧ ¬expired ⇒ …` |
+| `∨` (`or`) | Logical disjunction | `failed ∨ timeout ⇒ …` |
+| `¬` (`not`) | Logical negation | `¬exists(path) ⇒ …` |
+| `⊕` (`xor`) | Exclusive `or` | `a ⊕ b ≝ (a ∨ b) ∧ ¬(a ∧ b)` |
+| `⇒` (`implies`) | Logical implication | `valid ⇒ score > 0` |
+| `⇔` (`iff`) | Logical equivalence | `converged ⇔ residual < ε` |
+| `⊤` (`true`) | Boolean True / Top | `found ← ⊤` |
+| `⊥` (`false`) | Boolean False / Bottom / Error / Null | `if err ≠ ⊥ ⇒ fail ⊥` |
 
-### Arithmetic
+### 7.5 Operational Semantics & Transitions
+
+| Symbol | Meaning | Example |
+|:-------|:--------|:--------|
+| `⇓` | Big-step evaluation / Natural semantics | `⟨e, σ⟩ ⇓ ⟨v, σ'⟩` |
+| `⇑` | Divergence / Non-termination | `⟨e, σ⟩ ⇑` |
+| `⟶` | Small-step reduction / Transition | `⟨e, σ⟩ ⟶ ⟨e', σ'⟩` |
+| `↠` | Multi-step reduction (reflexive-transitive closure)| `e ↠ v` |
+| `⟵` | Return value / Result emission | `⟵ manifest` |
+| `⤅` | Yield item (generator) | `⤅ next_sample` |
+| `⟦·⟧` | Denotational semantics brackets | `⟦program⟧ : State → State` |
+| `⫽` | Fallback / Coalescing | `val ← cached ⫽ compute()` |
+| `⑂` | Fork / Spawn asynchronous task | `⑂ worker(task)` |
+| `⑃` | Join / Synchronize concurrent tasks | `⑃` |
+
+### 7.6 Calculus, Analysis & Differential Operators
+
+| Symbol | Meaning | Example |
+|:-------|:--------|:--------|
+| `∫` (`integral`) | Definite / Indefinite integral | `F ∈ AC([a, b], ℝ) ⟺ (∃ F' m-a.e.) ∧ (F' ∈ L¹([a, b], m)) ∧ (∀x ∈ [a, b], F(x) = F(a) + ∫_a^x F'(t) dt) ; a, b ∈ ℝ, a < b` |
+| `∬`, `∭` (`integral`) | Double / Triple surface or volume integral | `∭_{Ω} (∇ · 𝐅) d𝑉 = ∯_{∂Ω} (𝐅 · 𝐧) d𝑆 ; Ω ⊂ ℝ³, 𝐅 ∈ C¹(Ω, ℝ³), 𝐧 : ∂Ω → S² ≔ {v ∈ ℝ³ : ‖v‖ = 1} ∧ 𝐧(x) ⟂ T_x(∂Ω), d𝑉 ∈ ℳ(Ω), d𝑆 ∈ ℳ(∂Ω)` |
+| `∮` | Contour / Line integral | `∮_{∂Ω} 𝐅 · 𝐓 \mathrm{d}s = ∬_{Ω} (∇ × 𝐅) · 𝐧 d𝑆 ; Ω ⊂ U ⊆ ℝ³, 𝐅 ∈ C¹(U, ℝ³), 𝐧 : Ω → S² ≝ {v ∈ ℝ³ : ‖v‖ = 1} ∧ 𝐧(x) ⟂ T_x Ω, 𝐓 : ∂Ω → S² ∧ 𝐓(x) ∈ T_x(∂Ω) ∧ ‖𝐓‖ = 1, d𝑆 ∈ ℳ(∂Ω), d𝑆 ∈ ℳ(Ω)` |
+| `∯` | Surface integral over closed surface | `∯_{∂Ω} 𝐅 · 𝐧 d𝑆` |
+| `∂` (`partial`) | Partial derivative / Manifold boundary | `J_{ij} ← \frac{∂r_i}{∂m_j}` |
+| `∇` (`grad`) | Nabla / Gradient operator | `∇ : C^k(Ω, ℝ) → C^{k-1}(Ω, ℝⁿ), f ↦ ∑_{i=1}ⁿ (∂_i f) 𝐞_i ; Ω ⊆ ℝⁿ, n ∈ ℕ_{≥ 1}, k ∈ ℕ_{≥ 1} ∪ {∞}` |
+| `∇·` (`div`) | Divergence | `∇· : C^k(Ω, ℝⁿ) → C^{k-1}(Ω, ℝ), 𝐅 ↦ ∑_{i=1}ⁿ ∂_i F^i ; Ω ⊆ ℝⁿ, n ∈ ℕ_{≥ 1}, k ∈ ℕ_{≥ 1} ∪ {∞}` |
+| `∇×` (`curl`) | Curl / Rotor | `∇× : C^k(Ω, ℝⁿ) → C^{k-1}(Ω, 𝔰𝔬(n)), 𝐅 ↦ ½ (D𝐅 - (D𝐅)ᵀ) ≅ C^{k-1}(Ω, ℝ^{n(n-1)/2}) ; Ω ⊆ ℝⁿ, n ∈ ℕ_{≥ 1}, k ∈ ℕ_{≥ 1} ∪ {∞}` |
+| `Δ` | Laplacian operator (`∇²`) / Difference | `Δf ≝ ∇· ∇f` |
+| `lim` | Limit | `\lim_{Δt \to 0} \frac{f(t+Δt) − f(t)}{Δt}` |
+| `\mathrm{d}` | Differential | `\mathrm{d}t, \, \mathrm{d}x` |
+| `\|x\|` | Absolute value | `delta ← \|x − x₀\|` |
+| `‖·‖` | Vector, matrix or operator norm | `‖r‖₂ = √{rᵀ r}` |
+
+### 7.7 Algebraic, Tensor & Signal Operators
+
+| Symbol | Meaning | Example |
+|:-------|:--------|:--------|
+| `⋆` | Convolution / Kleene star / Dual | `y ← x ⋆ h` or `Σ^⋆` |
+| `⊛` | Circular convolution / Cross-correlation | `C_{xy} ← x ⊛ y` |
+| `∘` | Function composition | `(f ∘ g)(x) ≝ f(g(x))` |
+| `·` | Scalar dot product | `\mathbf{u} · \mathbf{v} ≝ Σ_i u^i v^i` |
+| `×` | Vector cross product / Cartesian product | `\mathbf{u} × \mathbf{v} = sgn(det(g)) √\|det(g)\| g^{mi} ε_{ijk} u^j v^k 𝐞_m; \mathbf{u} = u^j 𝐞_j, \mathbf{v} = v^k 𝐞_k, i,j,k,m ∈ {1,2,3}, det(g) ≠ 0` |
+| `⊗` | Tensor / Kronecker product | `A ⊗ B` |
+| `⊕` | Direct sum | `V ⊕ W` |
+| `⊙` | Hadamard element-wise product | `C ← A ⊙ B` |
+| `Aᵀ` | Matrix transpose | `Jᵀ r` |
+| `A^†` | Moore-Penrose pseudo-inverse / Adjoint | `m ← (Gᵀ G)^{−1} Gᵀ d` |
+| `ℱ{·}` | Fourier transform | `\hat{u}(ω) ← ℱ{u(t)}` |
+| `ℋ{·}` | Hilbert transform | `u_H(t) ← ℋ{u(t)}` |
+
+### 7.8 Arithmetic, Floor & Ceiling
 
 | Symbol | Meaning | Example |
 |:-------|:--------|:--------|
 | `+` | Addition | `sum ← a + b` |
 | `−` | Subtraction | `diff ← a − b` |
 | `×` | Multiplication | `area ← length × width` |
-| `/` | Division | `avg ← sum / n` |
+| `/` | Real division | `mean ← sum / n` |
+| `div` | Integer division (quotient) | `q ← a div b` |
 | `mod` | Modulo (remainder) | `r ← a mod b` |
+| `^` | Exponentiation (superscript `xⁿ`, `x²`, `x³`, etc.) | `e^{iπ} + 1 = 0` |
+| `√` | Square root | `rms ← √(sum_sq / n)` |
+| `⌊·⌋` | Floor function | `mid ← ⌊(lo + hi) / 2⌋` |
+| `⌈·⌉` | Ceiling function | `pages ← ⌈n / page_size⌉` |
 
-### Floor and Ceiling
-
-| Symbol | Meaning | Example |
-|:-------|:--------|:--------|
-| `⌊x⌋` | Floor — greatest integer ≤ x | `mid ← ⌊(lo + hi) / 2⌋` |
-| `⌈x⌉` | Ceiling — least integer ≥ x | `pages ← ⌈n / pageSize⌉` |
-
-### Logical
+### 7.9 Set Theory, Lattice Theory & Aggregations
 
 | Symbol | Meaning | Example |
 |:-------|:--------|:--------|
-| `and` (∧) | Logical conjunction | `if x > 0 and x < 10 then …` |
-| `or` (∨) | Logical disjunction | `if a = 0 or b = 0 then …` |
-| `not` (¬) | Logical negation | `if not found then …` |
-| `xor` (⊕) | Exclusive or | `flag ← a xor b` |
-
-### Summation and Product
-
-| Symbol | Meaning | Example |
-|:-------|:--------|:--------|
-| `Σ` | Summation | `S ← Σ_{i=1}^{n} a_i` |
-| `Π` | Product | `P ← Π_{i=1}^{n} a_i` |
-
-### Set Notation
-
-| Symbol | Meaning | Example |
-|:-------|:--------|:--------|
-| `∈` | Element of | `if x ∈ S then …` |
-| `∉` | Not element of | `if x ∉ visited then …` |
-| `⊂` | Proper subset | `A ⊂ B` |
-| `⊆` | Subset (inclusive) | `A ⊆ B` |
+| `∈` | Element of (membership) | `if x ∈ S ⇒ …` |
+| `∉` | Not element of | `if s ∉ R ⇒ …` |
+| `⊂` | Proper subset | `A ⊂ Ω` |
+| `⊆` | Subset (inclusive) | `A ⊆ 𝒰` |
 | `∪` | Union | `C ← A ∪ B` |
-| `∩` | Intersection | `C ← A ∩ B` |
-| `∅` | Empty set | `if S = ∅ then …` |
-| `\|S\|` | Cardinality | `n ← \|S\|` |
+| `∩` | Intersection | `overlap ← A ∩ B` |
+| `\` | Set difference / relative complement | `unprocessed ← all \ processed` |
+| `Δ` | Symmetric difference | `diff ← set_a Δ set_b` |
+| `∅` | Empty set | `if candidates = ∅ ⇒ ⟵ ⊥` |
+| `\|S\|` | Set cardinality / collection length | `n ← \|events\|` |
+| `𝒫(S)` | Power set | `subsets ← 𝒫(features)` |
+| `⊔` | Lattice join / Least upper bound | `lub ← x ⊔ y` |
+| `⊓` | Lattice meet / Greatest lower bound | `glb ← x ⊓ y` |
+| `Σ` | Summation over bounded index or set | `total ← Σ_{i=1}^{n} a[i]` |
+| `Π` | Product over bounded index or set | `prob ← Π_{i=1}^{k} p_i` |
+| `min` | Minimum value | `best ← min_{x ∈ S} f(x)` |
+| `max` | Maximum value | `peak ← max(a, b)` |
+| `argmin` | Argument minimizing the objective | `opt_θ ← argmin_{θ} Loss(θ)` |
+| `argmax` | Argument maximizing the objective | `best_c ← argmax_{c} P(c \| x)` |
+| `{x ∈ S : P(x)}` | Set comprehension / filtering | `valid ← {x ∈ S : score(x) > θ}` |
 
-### Quantifiers
+### 7.10 Quantifiers
 
 | Symbol | Meaning | Example |
 |:-------|:--------|:--------|
-| `∀` | For all | `∀ x ∈ S : x > 0` |
-| `∃` | There exists | `∃ x ∈ S : x = target` |
+| `∀` | Universal quantifier ("for all" / loop) | `∀ x ∈ S : x > 0` |
+| `∃` | Existential quantifier | `if ∃ e ∈ E : e.id = target ⇒ …` |
+| `∄` | Negative existential | `if ∄ f ∈ 𝒟 : f.active = ⊤ ⇒ …` |
+| `∃!` | Unique existential | `if ∃! master ∈ nodes : master.active = ⊤ ⇒ …` |
+| `:` | "such that" / "where" | `∀ s ∈ S : s.active ← ⊤` |
 
-### Other Common Symbols
+### 7.11 Sequences, Intervals & Special Constants
 
 | Symbol | Meaning | Example |
 |:-------|:--------|:--------|
-| `∞` | Infinity | `dist[v] ← ∞` |
-| `√` | Square root | `c ← √(a² + b²)` |
-| `≈` | Approximately equal | `π ≈ 3.14159` |
-| `≡` | Identical / congruent | `a ≡ b (mod n)` |
-| `→` | Maps to / implies | `f : X → Y` |
-| `⟵` | Reverse mapping | `result ⟵ compute(x)` |
-| `⟶` | Long right arrow | `input ⟶ transform ⟶ output` |
+| `⟨x₁, x₂, ..., xₙ⟩` | Ordered tuple or vector | `origin ← ⟨lat, lon, depth, time⟩` |
+| `A[i]` | 1-based or 0-based array indexing | `first ← waveforms[1]` |
+| `A[i..j]` | Array slice / subsequence | `window ← trace[start..end]` |
+| `s₁ ∥ s₂` | String or sequence concatenation | `full_id ← network ∥ "." ∥ station` |
+| `[a, b]` | Closed numerical interval | `freq ∈ [0.5, 20.0]` |
+| `(a, b)` | Open numerical interval | `residual ∈ (−1.0, 1.0)` |
+| `[a, b)` | Half-open interval | `bin_range ← [t_start, t_end)` |
+| `∞` | Infinity | `min_cost ← ∞` |
+| `NaN` | Not-a-Number (floating-point error) | `if value = NaN ⇒ …` |
+| `ε` | Machine epsilon / infinitesimal tolerance | `if \|x_{k+1} − x_k\| > ε ⇒ ⟳` |
+| `π`, `e`, `φ`, `i`, `ℏ`, `ℝ`, `ℂ`, `ℕ`, `ℤ` | Mathematical constants | `A ← π × r²` |
 
-## Verification
+### 7.12 Asymptotic Complexity Notation
 
-After editing a map:
+| Symbol | Meaning | Usage |
+|:-------|:--------|:------|
+| `O(g(n))` | Upper bound (Big-O) | `Time: O(n log n), Space: O(n)` |
+| `Ω(g(n))` | Lower bound (Big-Omega) | `Comparisons: Ω(n log n)` |
+| `Θ(g(n))` | Tight asymptotic bound (Big-Theta) | `Lookup: Θ(1) average case` |
+| `o(g(n))` | Strict upper bound (Little-o) | `error = o(1) as n → ∞` |
 
-1. Search the current source and tests again for every linked symbol line.
-2. Run `bash LLM/scripts/handler.sh validate --file <map-path>`.
-3. Run `git diff --check -- <map-path>`.
-4. Report the mapped surface, artifact path, validation result, and unresolved semantic decisions. Do not claim source behavior that was not verified.
+---
+
+## 8. Symbol-Dense Control Flow Grammar
+
+Structure pseudocode using symbol-dense notation. Eliminate alphabetic boilerplate keywords in favor of mathematical guards, quantifiers, and symbolic returns.
+
+### 8.1 Routine Signature
+
+```text
+AlgorithmName : (param₁ : Type₁, param₂ : Type₂) → ReturnType
+ProcedureName : (in param : Type, in/out mutable_state : StateType)
+```
+
+### 8.2 Guarded Branching (Replacing If-Then-Else)
+
+```text
+▷ Symbolic guards replace verbose if-then-else blocks:
+condition ⇒
+    statement₁
+
+¬condition ∧ alternative_condition ⇒
+    statement₂
+
+_ ⇒
+    statement_default
+```
+
+### 8.3 Quantified Iteration (Replacing For-Each and Counted Loops)
+
+```text
+▷ Bounded range iteration:
+∀ i ∈ [1 .. n] :
+    statement(i)
+
+▷ Stepped range iteration:
+∀ i ∈ [n .. 1] (step −2) :
+    statement(i)
+
+▷ Collection iteration:
+∀ item ∈ collection :
+    statement(item)
+
+▷ Pre-tested loop:
+while condition :
+    statement
+
+▷ Post-tested loop:
+⟳ :
+    statement
+until termination_condition
+```
+
+### 8.4 Concurrency, Parallelism & Synchronization
+
+```text
+▷ Parallel collection processing:
+∀^{∥} station ∈ network :
+    compute_synthetic_phases(station)
+
+▷ Asynchronous spawning and synchronization:
+⑂ WorkerThread(task)
+⑃
+
+▷ Critical section:
+acquire(lock)
+critical_state_mutation()
+release(lock)
+
+atomic :
+    counter ← counter + 1
+```
+
+### 8.5 Error Handling, Fallback & Exceptional Exits
+
+```text
+▷ Fallback operator (coalescing if result is ⊥):
+val ← cached_result ⫽ compute_fallback(params)
+
+▷ Guarded error propagation:
+result ← execute_remote_query(params)
+result = ⊥ ⇒
+    log("Query failed, retrying...")
+    retry up to 3 times with backoff
+
+assert condition : "Invariant violated"
+⟵ value     ▷ Return value
+⤅ item      ▷ Yield generator item
+```
+
+### 8.6 Invariants and Annotations
+
+```text
+▷ Precondition: inputs must be non-empty and sorted
+pre: |A| > 0 ∧ ∀ i ∈ [1 .. |A|−1] : A[i] ≤ A[i+1]
+
+▷ Invariant: maintain partial minimum
+inv: min_val = min_{1 ≤ k ≤ i} A[k]
+
+▷ Postcondition: returned index contains target value
+post: (if found = ⊤ ⇒ A[index] = target) ∧ (if found = ⊥ ⇒ target ∉ A)
+```
+
+---
+
+## 9. Verification Protocol & Checklist
+
+Before concluding any mapping session:
+
+1. **Re-resolve Source Anchors**: Grep or search the target codebase to verify that all line numbers (`#L...`) and `L<number>` labels match current file state.
+2. **Validate Markdown Integrity**:
+   ```bash
+   bash LLM/scripts/handler.sh validate --file <map-path>
+   ```
+3. **Report Summary**: State the mapped surface, artifact path, and unresolved decisions. Never report unverified assumptions as established source facts.
