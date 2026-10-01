@@ -85,6 +85,9 @@ from matplotlib.path import Path as mplPath
 # Pandas: DataFrame operations, merging, and Parquet I/O
 import pandas as pd
 
+# NumPy: Numerical arrays and NaN representation
+import numpy as np
+
 
 # =============================================================================
 # OGSDataFile Class
@@ -109,6 +112,51 @@ class OGSDataFile(OGSCatalog):
   # -------------------------------------------------------------------------
   # CLASS ATTRIBUTES (to be overridden by subclasses)
   # -------------------------------------------------------------------------
+
+  # Expected file extension for format validation
+  # (e.g. ".dat", ".hpl", ".pun", ".txt")
+  EXTENSION: str = ""
+
+  # Default pick table schema columns
+  _PICK_COLUMNS = [
+      OGS_C.IDX_PICKS_STR, OGS_C.GROUPS_STR, OGS_C.TIME_STR, OGS_C.STATION_STR,
+      OGS_C.PHASE_STR, OGS_C.WEIGHT_STR, OGS_C.EPICENTRAL_DISTANCE_STR,
+      OGS_C.DEPTH_STR, OGS_C.AMPLITUDE_STR, OGS_C.STATION_ML_STR,
+      OGS_C.PROBABILITY_STR
+  ]
+
+  # Default event table schema columns
+  # (unified 28-column superset across all catalog formats)
+  _EVENT_COLUMNS = [
+      OGS_C.IDX_EVENTS_STR,            # 0: idx
+      OGS_C.TIME_STR,                  # 1: time
+      OGS_C.LATITUDE_STR,              # 2: latitude
+      OGS_C.LONGITUDE_STR,             # 3: longitude
+      OGS_C.DEPTH_STR,                 # 4: depth
+      OGS_C.GAP_STR,                   # 5: azimuthal_gap
+      OGS_C.ERZ_STR,                   # 6: max_vertical_uncertainty
+      OGS_C.ERH_STR,                   # 7: max_horizontal_uncertainty
+      OGS_C.ERT_STR,                   # 8: max_time_uncertainty
+      OGS_C.GROUPS_STR,                # 9: group
+      OGS_C.NO_STR,                    # 10: number_picks
+      OGS_C.NUMBER_P_PICKS_STR,        # 11: number_p_picks
+      OGS_C.NUMBER_S_PICKS_STR,        # 12: number_s_picks
+      OGS_C.NUMBER_P_AND_S_PICKS_STR,  # 13: number_p_and_s_picks
+      OGS_C.MAGNITUDE_D_STR,           # 14: MD
+      OGS_C.MAGNITUDE_L_STR,           # 15: ML
+      OGS_C.ML_MEDIAN_STR,             # 16: ML_median
+      OGS_C.ML_UNC_STR,                # 17: ML_unc
+      OGS_C.ML_STATIONS_STR,           # 18: ML_stations
+      OGS_C.DMIN_STR,                  # 19: DMIN
+      OGS_C.RMS_STR,                   # 20: RMS
+      OGS_C.QM_STR,                    # 21: QM
+      OGS_C.LOC_NAME_STR,              # 22: LOC_NAME
+      OGS_C.EVENT_TYPE_STR,            # 23: E_TYPE
+      OGS_C.NOTES_STR,                 # 24: NOTES
+      OGS_C.MD_UNC_STR,                # 25: MD_unc
+      OGS_C.MD_STATIONS_STR,           # 26: MD_stations
+      OGS_C.MD_MEDIAN_STR,             # 27: MD_median
+  ]
 
   # List of regex pattern fragments for parsing individual pick/phase records
   # Subclasses populate this with format-specific patterns
@@ -238,7 +286,7 @@ class OGSDataFile(OGSCatalog):
     tasks = [
         (key, date, df)
         for key in ("picks", "events")
-        for date, df in self.postload(key).items()
+        for date, df in self.postload(key, update=True).items()
     ]
     if not tasks:
       return
@@ -323,8 +371,61 @@ class OGSDataFile(OGSCatalog):
     return bug
 
   # -------------------------------------------------------------------------
+  # GROUP, TIMESTAMP, AND INDEX NORMALIZATION HELPERS
+  # -------------------------------------------------------------------------
+
+  @staticmethod
+  def normalize_time(
+      dataframe: pd.DataFrame, time_col: str = OGS_C.TIME_STR
+  ) -> pd.DataFrame:
+    """
+    Normalize timestamp column to uniform pandas datetime64[ns] Series.
+
+    Coerces the timestamp column (default: ``time``) to pandas ``datetime64[ns]``,
+    handling string representations, Python datetime objects, and NaT.
+    """
+    if dataframe.empty or time_col not in dataframe.columns:
+      return dataframe
+    dataframe[time_col] = pd.to_datetime(dataframe[time_col], errors='coerce')
+    return dataframe
+  # -------------------------------------------------------------------------
   # SHARED PARSING UTILITIES
   # -------------------------------------------------------------------------
+
+  def validate_input(self) -> None:
+    """
+    Validate that the input file exists and matches the expected format
+    extension.
+    """
+    if not self.input.exists():
+      raise FileNotFoundError(f"File {self.input} does not exist")
+    if hasattr(self, "EXTENSION") and self.EXTENSION:
+      if self.input.suffix != self.EXTENSION:
+        raise ValueError(f"File extension must be {self.EXTENSION}")
+
+  def _build_picks_dataframe(self, picks_data: list) -> pd.DataFrame:
+    return pd.DataFrame(picks_data, columns=self._PICK_COLUMNS).astype({
+        OGS_C.IDX_PICKS_STR: int
+    })
+
+  @staticmethod
+  def _build_pick_row(
+      event_index, pick_time: datetime, station: str, phase: str, weight: int
+  ) -> list:
+    """Create a standardized pick row for the output DataFrame."""
+    return [
+        event_index,                          # OGS_C.IDX_PICKS_STR
+        pick_time.strftime(OGS_C.DATE_FMT),   # OGS_C.GROUPS_STR
+        pick_time,                            # OGS_C.TIME_STR
+        f".{station}.",                       # OGS_C.STATION_STR
+        phase,                                # OGS_C.PHASE_STR
+        weight,                               # OGS_C.WEIGHT_STR
+        None,                                 # OGS_C.EPICENTER_DISTANCE_STR
+        None,                                 # OGS_C.DEPTH_STR
+        None,                                 # OGS_C.AMPLITUDE_STR
+        None,                                 # OGS_C.STATION_ML_STR
+        1.0,                                  # OGS_C.PROBABILITY_STR
+    ]
 
   def _is_before_start(self, value: datetime) -> bool:
     """Check if the given datetime is before the configured start date."""
@@ -345,7 +446,7 @@ class OGSDataFile(OGSCatalog):
     return td(seconds=float(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR)))
 
   @staticmethod
-  def _parse_float(value: str, default_value=OGS_C.NONE_STR):
+  def _parse_float(value: str, default_value: float | None = None):
     """Convert a fixed-width float field, allowing fully blank values."""
     if not value or value.strip(OGS_C.SPACE_STR) == OGS_C.EMPTY_STR:
       return default_value
@@ -360,14 +461,7 @@ class OGSDataFile(OGSCatalog):
     return float(normalized.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR))
 
   @staticmethod
-  def _parse_optional_int(value: str, default_value=OGS_C.NONE_STR):
-    """Convert an optional integer field, preserving empty values as default."""
-    if not value or value.strip(OGS_C.SPACE_STR) == OGS_C.EMPTY_STR:
-      return default_value
-    return int(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR))
-
-  @staticmethod
-  def _parse_zero_padded_int(value: str, default_value=OGS_C.NONE_STR):
+  def _parse_zero_padded_int(value: str, default_value: int | None = None):
     """Convert a fixed-width integer field, preserving blank values as default."""
     if not value or value.strip(OGS_C.SPACE_STR) == OGS_C.EMPTY_STR:
       return default_value
@@ -397,11 +491,15 @@ class OGSDataFile(OGSCatalog):
     return int(value)
 
   @staticmethod
-  def _parse_index(value: str, year: int):
-    """Build a globally unique event index from the yearly counter."""
+  def _parse_index(
+      value: str,
+      year: int,
+      year_stride: int | float = OGS_C.MAX_PICKS_YEAR,
+  ):
+    """Build a globally unique index using the configured yearly stride."""
     if not value:
       return None
     return (
-        int(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR))
-        + year * OGS_C.MAX_PICKS_YEAR
+        int(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR)) +
+        year * year_stride
     )

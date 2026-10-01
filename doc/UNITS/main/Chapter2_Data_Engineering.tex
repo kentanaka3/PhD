@@ -196,7 +196,10 @@ The primary configuration domains governed by \texttt{ogsconstants} include:
     Predefined column tuples ensuring schema congruence across parquet storage:
     \begin{itemize}
       \item \texttt{HEADER\_EVENTS = [idx, time, latitude,
-        longitude, depth, ERH, ERZ, GAP]}
+        longitude, depth, ERH, ERZ, GAP]}: Historical 8-column event
+        header used in minimal exports, superseded in
+        \texttt{OGSDataFile} by the unified 28-column catalog schema
+        (\cref{subsubsec:unified_catalog_schema}).
       \item \texttt{HEADER\_PICKS = [idx, time, phase, station,
         onset, polarity, weight]}
       \item \texttt{HEADER\_MODL = [MODEL, WEIGHT, THRESHOLD]}
@@ -451,9 +454,10 @@ provides core infrastructure common to all text-based formats:
     \node[parser, below=12mm of df] (dat)
     {\textbf{DataFileDAT}\\\scriptsize .dat (P/S picks)};
     \node[parser, below right=12mm and -8mm of df] (txt)
-    {\textbf{DataFileTXT}\\\scriptsize .txt ($M_{\mathrm{L}}$ magnitudes)};
+    {\textbf{DataFileTXT}\\\scriptsize .txt ($M_{\mathrm{L}},
+    M_{\mathrm{D}}, \mathrm{RMS}$)};
     \node[parser, right=6mm of txt] (pun)
-    {\textbf{DataFilePUN}\\\scriptsize .pun (Punch card)};
+    {\textbf{DataFilePUN}\\\scriptsize .pun ($M_{\mathrm{D}}$ punch cards)};
 
     \node[parquet, below=12mm of dc] (out) {\textbf{Parquet
       Persistence}\\\scriptsize \texttt{.all/events/},
@@ -505,28 +509,30 @@ failure line number and corrupted substring.
 \subsection{Supported Legacy File Formats}
 \label{subsec:supported_formats}
 
-\Cref{tab:file_formats} summarizes the four primary legacy
+Table~\ref{tab:file_formats} summarizes the four primary legacy
 catalog formats supported by dedicated subclass implementations.
 
 \begin{table}[htbp]
   \centering
   \small
   \caption{Supported \ac{OGS} catalog and phase pick file formats and
-    their corresponding parser implementations. Formats anchored in
+    their corresponding parser implementations. The reader should
+    notice the complementary nature of the files: HPL provides
+    comprehensive hypocenters and picks, DAT provides dense arrival
+    times, TXT contributes revised local magnitudes, and PUN
+    preserves historical punch card records. Formats anchored in
     \texttt{ogshpl.py}, \texttt{ogsdat.py}, \texttt{ogstxt.py}, and
-    \texttt{ogspun.py}.
-  }
+  \texttt{ogspun.py}.}
   \label{tab:file_formats}
   \begin{threeparttable}
-    \begin{tabularx}{\linewidth}{l l >{\raggedright\arraybackslash}X}
+    \begin{tabularx}{\linewidth}{l l X}
       \toprule
       \textbf{Extension} & \textbf{Parser Class} &
       \textbf{Extracted Attributes and Operational Semantics} \\
       \midrule
       \texttt{.hpl} & \texttt{DataFileHPL} & Hypocenter locations, origin
       times, focal depths, local magnitude ($M_{\mathrm{L}}$), station P/S
-      arrival times, onset polarities, weights (\numrange{0}{4}),
-      $ERH$, $ERZ$, $RMS$,
+      arrival times, onset polarities, weights (0--4), $ERH$, $ERZ$, $RMS$,
       azimuthal gap ($GAP$), analyst free-text notes, and geographic locality
       descriptions. \\
       \texttt{.dat} & \texttt{DataFileDAT} & Fixed-width station phase
@@ -565,7 +571,7 @@ and dispatches parsing via an internal registry mapping
   DATAFILE_TYPES = {
       '.hpl': DataFileHPL,  # Primary hypocenter and pick data
       '.dat': DataFileDAT,  # Phase pick data
-      '.txt': DataFileTXT,  # Magnitude and error data
+      '.txt': DataFileTXT,  # Magnitude, RMS, and legacy ID data
       '.pun': DataFilePUN,  # Punch card event summaries
   }
 \end{verbatim}
@@ -585,20 +591,38 @@ heterogeneous file types into unified \texttt{EVENTS} and
     are mapped to standardized schema identifiers
     (\texttt{HEADER\_PICKS}), timestamps are parsed to
     UTCDateTime, and calendar dates are coerced using
-    \texttt{normalize\_event\_groups()} to ensure consistent join
+    \texttt{normalize\_groups()} to ensure consistent join
     keys across HPL, DAT, and PUN files.
-  \item \textbf{Event Attribute Outer Joins}: Merging events from
-    distinct files requires joining complementary fields:
+  \item \textbf{Event Attribute Outer Joins}: Merging events across
+    heterogeneous legacy files consolidates attributes into the unified
+    28-column catalog schema (\cref{subsubsec:unified_catalog_schema}):
     \begin{itemize}
-      \item Primary hypocenters, origin times, depths, and spatial
-        uncertainties are seeded from HPL files.
-      \item TXT files contribute revised local magnitude
-        ($M_{\mathrm{L}}$), duration magnitude ($M_{\mathrm{D}}$),
-        and station count metrics, joined via an outer merge on
-        event index \texttt{idx}.
-      \item PUN files contribute legacy coordinates for events
-        missing HPL records, joined via spatiotemporal matching on
-        $[time, lat, lon, depth]$.
+      \item Primary hypocentral coordinates, origin times, focal depths,
+        spatial uncertainties ($ER_{\mathrm{H}}$, $ER_{\mathrm{Z}}$),
+        and travel-time root-mean-square residuals ($\mathrm{RMS}$) are
+        seeded from HPL files. Crucially, \texttt{DataFileHPL} extracts the
+        continuous Hypo71 solution magnitude from Column~6
+        (\texttt{hypo71\_mag})
+        alongside tail duration magnitude ($M_{\mathrm{D}}$) and
+        local magnitude ($M_{\mathrm{L}}$).
+      \item TXT files contribute revised local magnitude ($M_{\mathrm{L}}$),
+        duration magnitude ($M_{\mathrm{D}}$), travel-time root-mean-square
+        residuals ($\mathrm{RMS}$, correctly mapped from bulletin column
+        \texttt{t\_err} rather than origin time uncertainty $ER_{\mathrm{T}}$),
+        geographic localities, and unique legacy catalog event identifiers
+        (\texttt{legacy\_id}), joined via an outer merge on event
+        index \texttt{idx}.
+      \item PUN files supply legacy 80-column punch-card
+        coordinates, continuous
+        Hypo71 duration magnitude ($M_{\mathrm{D}}$), observation
+        counts ($NO$),
+        azimuthal gap ($GAP$), nearest station distance ($DMIN$), and quality
+        metrics ($QM$) for historical events lacking HPL records, joined via
+        spatiotemporal matching on $[time, latitude, longitude,
+        depth]$. Divergent
+        inversion error asterisks (\texttt{*****}) are robustly coerced to
+        $\mathrm{NaN}$ values for vertical uncertainty ($ER_{\mathrm{Z}}$) and
+        horizontal uncertainty ($ER_{\mathrm{H}}$).
     \end{itemize}
   \item \textbf{Vectorized Event Pick Statistics Aggregation}:
     Following hypocenter merging, the aggregator computes pick

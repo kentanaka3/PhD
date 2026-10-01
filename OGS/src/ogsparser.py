@@ -99,9 +99,6 @@ import pandas as pd
 # Standard library: Filesystem path handling
 from pathlib import Path
 
-# Matplotlib: Path object for polygon-based geographic containment tests
-from matplotlib.path import Path as mplPath
-
 # Local module: OGS-specific constants (extensions, column names, formats)
 import ogsconstants as OGS_C
 
@@ -250,25 +247,6 @@ class DataCatalog(OGSDataFile):
       # Write parsed data to Parquet format
       f.log()
 
-  def normalize_event_groups(self, events: pd.DataFrame) -> pd.DataFrame:
-    """
-    Normalize event group identifiers to calendar dates before merging.
-
-    Legacy parsers emit the ``group`` column as a mix of ISO strings,
-    pandas timestamps, and Python ``date`` objects. Coercing everything to an
-    ISO date string ('YYYY-MM-DD') keeps merge keys and Parquet schemas stable.
-    """
-    if events.empty or OGS_C.GROUPS_STR not in events.columns:
-      return events
-
-    group_series = pd.to_datetime(events[OGS_C.GROUPS_STR], errors='coerce')
-    if OGS_C.TIME_STR in events.columns:
-      time_series = pd.to_datetime(events[OGS_C.TIME_STR], errors='coerce')
-      group_series = group_series.where(group_series.notna(), time_series)
-
-    events[OGS_C.GROUPS_STR] = group_series.dt.strftime(OGS_C.DATE_FMT)
-    return events
-
   # -------------------------------------------------------------------------
   # METHOD: merge_events() - Consolidate events from all files
   # -------------------------------------------------------------------------
@@ -290,15 +268,17 @@ class DataCatalog(OGSDataFile):
     Returns:
       pd.DataFrame: Consolidated events with all available metadata
     """
+    self.logger.info("Merging events from files...")
     # -------------------------------------------------------------------------
     # MERGE EVENTS FROM ALL FILES
     # -------------------------------------------------------------------------
     for f in self.files:
-      if f.get("EVENTS").empty:
+      events = f.get("EVENTS").copy()
+      if events.empty:
         continue
       self.logger.info(f"Processing EVENTS from file: {f.input}")
-      f.EVENTS = self.normalize_event_groups(f.EVENTS.copy())
-      self.EVENTS = self.normalize_event_groups(self.EVENTS)
+      f.EVENTS = self.normalize_groups(f.EVENTS.copy())
+      self.EVENTS = self.normalize_groups(self.EVENTS)
 
       # First file: Initialize with copy of its events
       f.EVENTS[OGS_C.IDX_EVENTS_STR] = f.EVENTS[OGS_C.IDX_EVENTS_STR].apply(
@@ -424,7 +404,7 @@ class DataCatalog(OGSDataFile):
         raise TypeError(
             f"Expected {OGS_C.TIME_STR!r} to resolve to a pandas Series"
         )
-      self.EVENTS[OGS_C.GROUPS_STR] = time_series.dt.date
+      self.EVENTS[OGS_C.GROUPS_STR] = time_series.dt.strftime(OGS_C.DATE_FMT)
 
     return self.EVENTS
 
@@ -452,6 +432,7 @@ class DataCatalog(OGSDataFile):
       else:
         self.PICKS = pd.concat([self.PICKS, picks], ignore_index=True)
 
+    self.PICKS = self.normalize_time(self.PICKS)
     return self.PICKS
 
   # -------------------------------------------------------------------------

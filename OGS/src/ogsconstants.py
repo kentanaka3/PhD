@@ -502,9 +502,26 @@ ML_MEDIAN_STR = "ML_median"             # Median local magnitude
 ML_UNC_STR = "ML_unc"                   # Magnitude uncertainty
 ML_STATIONS_STR = "ML_stations"         # Number of stations for ML
 
+# Duration magnitude quality columns
+MD_STR = "MD"                           # Duration magnitude
+MD_MEDIAN_STR = "MD_median"             # Median duration magnitude
+MD_UNC_STR = "MD_unc"                   # Duration magnitude uncertainty
+MD_STATIONS_STR = "MD_stations"         # Number of stations for MD
+
+# Continuous Hypo71 solution magnitude (Column 6)
+HYPO71_MAG_STR = "hypo71_mag"
+HPL_AUX_FLOAT_STR = "hpl_aux_float"     # auxiliary float 0.00
+VELOCITY_MODEL_ID_STR = "vel_model_id"  # velocity model ID
+PHASES_USED_STR = "num_phases"          # number of phases used in solution
+MEAN_RESIDUAL_STR = "mean_residual"     # mean travel-time residual
+STD_RESIDUAL_STR = "std_residual"       # standard deviation of residuals
+M3_STATIONS_STR = "m3_stations"         # 3rd magnitude station count
+M3_MAGNITUDE_STR = "m3_magnitude"       # 3rd magnitude value
+M3_UNC_STR = "m3_unc"                   # 3rd magnitude uncertainty
+
 # Event identification columns
 IDX_EVENTS_STR = "idx"                  # Event index identifier
-INDEX_STR = "idx"                       # Generic index column
+LEGACY_ID_STR = "legacy_id"             # Legacy catalog event identifier
 METADATA_STR = "metadata"               # Metadata container column
 TYPE_STR = "type"                       # Type classification column
 
@@ -695,20 +712,19 @@ HEADER_FSYS = [FILENAME_STR, MODEL_STR, WEIGHT_STR, TIME_STR, NETWORK_STR,
                STATION_STR]
 
 # Manual pick data header (5 columns)
-HEADER_MANL = [INDEX_STR, TIME_STR, PHASE_STR, STATION_STR, GROUPS_STR]
+HEADER_MANL = [IDX_EVENTS_STR, TIME_STR, PHASE_STR, STATION_STR, GROUPS_STR]
 
 # Predicted pick header (model info + pick info)
 HEADER_PRED = HEADER_MODL + HEADER_MANL
 
 # Station metadata header (5 columns)
-HEADER_SNSR = [STATION_STR, LATITUDE_STR, LONGITUDE_STR, DEPTH_STR,
-               TIME_STR]
+HEADER_SNSR = [STATION_STR, LATITUDE_STR, LONGITUDE_STR, DEPTH_STR, TIME_STR]
 
 # Statistics header (model info + thresholds)
 HEADER_STAT = [MODEL_STR, WEIGHT_STR, STAT_STR] + THRESHOLDS
 
 # Sorting priority for prediction DataFrames
-SORT_HIERARCHY_PRED = [MODEL_STR, WEIGHT_STR, INDEX_STR, TIME_STR]
+SORT_HIERARCHY_PRED = [MODEL_STR, WEIGHT_STR, IDX_EVENTS_STR, TIME_STR]
 
 # =============================================================================
 # SPECULATIVE/EXPERIMENTAL CONSTANTS
@@ -716,7 +732,8 @@ SORT_HIERARCHY_PRED = [MODEL_STR, WEIGHT_STR, INDEX_STR, TIME_STR]
 # Values used for capacity estimation and histogram binning
 
 MAX_PICKS_YEAR = 1e6                    # Maximum expected picks per year
-NUM_BINS = 41                           # Default histogram bin count
+MAX_EVENTS_YEAR = 1e4                   # Maximum expected events per year
+NUM_BINS: int = 41                      # Default histogram bin count
 
 # =============================================================================
 # OGS STUDY REGION DEFINITIONS
@@ -750,7 +767,7 @@ Polygon vertices defining the OGS operational region in NE Italy:
 # Bounding box for the extended study region
 # [lon_min, lon_max, lat_min, lat_max]
 # Slightly larger than the polygon to include border areas
-OGS_STUDY_REGION = [9.5, 15.0, 44.3, 47.5]
+OGS_STUDY_REGION = (9.5, 15.0, 44.3, 47.5)
 """
 Bounding box for OGS study region: [lon_min, lon_max, lat_min, lat_max]
 - lon_min: 9.5 (western boundary)
@@ -842,7 +859,7 @@ Single-letter codes used in OGS catalog to classify event types:
 # Standard column order for event and pick output files
 
 # Event catalog header (8 columns: ID, time, location, uncertainties, gap)
-HEADER_EVENTS = [INDEX_STR, TIME_STR, LATITUDE_STR, LONGITUDE_STR,
+HEADER_EVENTS = [IDX_EVENTS_STR, TIME_STR, LATITUDE_STR, LONGITUDE_STR,
                  DEPTH_STR, ERH_STR, ERZ_STR, GAP_STR]
 """
 EVENT CATALOG HEADER DEFINITIONS\n
@@ -858,7 +875,7 @@ Standard column order for event output files:
 """
 
 # Pick catalog header (7 columns: ID, time, phase info, quality)
-HEADER_PICKS = [INDEX_STR, TIME_STR, PHASE_STR, STATION_STR, ONSET_STR,
+HEADER_PICKS = [IDX_EVENTS_STR, TIME_STR, PHASE_STR, STATION_STR, ONSET_STR,
                 POLARITY_STR, WEIGHT_STR]
 """
 PICK CATALOG HEADER DEFINITIONS\n

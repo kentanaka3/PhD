@@ -356,9 +356,9 @@ class event_plotter(plotter):
     self.event = event
     self.waveforms = waveforms
     self.window = td(seconds=30)
-    self.inventory = inventory.set_index(OGS_C.INDEX_STR)
+    self.inventory = inventory.set_index(OGS_C.IDX_EVENTS_STR)
     self.sta2sta: dict[str, str] = dict(zip(
-        inventory[OGS_C.STATION_STR], inventory[OGS_C.INDEX_STR]
+        inventory[OGS_C.STATION_STR], inventory[OGS_C.IDX_EVENTS_STR]
     ))
     self.t = event[OGS_C.TIME_STR]
     self.offset = td(seconds=1)
