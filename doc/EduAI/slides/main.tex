@@ -1,0 +1,916 @@
+% Purpose: Master Beamer presentation on AI in Education,
+% Epistemology, and Conatus ad Novandum.
+% Status: Complete Draft; ready for lecture/seminar delivery and review.
+% Source-of-truth: doc/EduAI/abstract/main.tex
+\documentclass[aspectratio=169,11pt]{beamer}
+
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,calc,fit,decorations.pathreplacing}
+
+% -----------------------------------------------------------------------------
+% Color Palette & Visual Theme Configuration (Modern Minimalist 16:9)
+% -----------------------------------------------------------------------------
+\definecolor{primaryDark}{HTML}{1A2B4C}      % Deep Navy
+\definecolor{secondarySlate}{HTML}{2E4057}   % Slate Blue
+\definecolor{accentGold}{HTML}{C59B27}       % Warm Gold / Ochre
+\definecolor{accentTeal}{HTML}{0E7C86}       % Deep Teal
+\definecolor{bgSoft}{HTML}{F8F9FA}           % Off-white soft background
+\definecolor{cardBg}{HTML}{FFFFFF}           % Clean white for cards
+\definecolor{textDark}{HTML}{1E252B}         % Primary reading text
+\definecolor{textMuted}{HTML}{5A6570}        % Muted caption/subtitle text
+\definecolor{borderSubtle}{HTML}{E2E8F0}     % Subtle card boundary
+
+\setbeamercolor{background canvas}{bg=bgSoft}
+\setbeamercolor{normal text}{fg=textDark}
+\setbeamercolor{frametitle}{fg=primaryDark,bg=bgSoft}
+\setbeamercolor{title}{fg=primaryDark}
+\setbeamercolor{subtitle}{fg=secondarySlate}
+\setbeamercolor{author}{fg=textDark}
+\setbeamercolor{date}{fg=textMuted}
+\setbeamercolor{item}{fg=accentTeal}
+\setbeamercolor{subitem}{fg=accentGold}
+
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{itemize
+item}{\raisebox{0.1ex}{\footnotesize$\blacktriangleright$}}
+\setbeamertemplate{itemize subitem}{\raisebox{0.15ex}{\tiny$\blacksquare$}}
+
+% Frametitle layout
+\setbeamertemplate{frametitle}{
+  \vspace{0.25cm}
+  \begin{beamercolorbox}[wd=\paperwidth,leftskip=0.8cm,rightskip=0.8cm]{frametitle}
+    {\usebeamerfont{frametitle}\textbf{\color{primaryDark}\insertframetitle}}\par
+    \ifx\insertframesubtitle\@empty\else
+    \vspace{0.05cm}
+    {\usebeamerfont{framesubtitle}\color{accentTeal}\insertframesubtitle}\par
+    \fi
+  \end{beamercolorbox}
+  \vspace{-0.15cm}
+}
+
+% Footline layout
+\setbeamertemplate{footline}{
+  \leavevmode%
+  \hbox{%
+    \begin{beamercolorbox}[wd=0.7\paperwidth,ht=2.2ex,dp=1.0ex,leftskip=0.8cm]{
+        author in head/foot
+      }
+      \usebeamerfont{footline}\color{textMuted}\textbf{
+        Educación en la Era de la IA
+      } \textbar\ Ken Tanaka Hernandez
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=0.3\paperwidth,ht=2.2ex,dp=1.0ex,rightskip=0.8cm]{
+        date in head/foot
+      }
+      \hfill\usebeamerfont{footline}\color{textMuted}\insertframenumber\ /
+      \inserttotalframenumber
+    \end{beamercolorbox}%
+  }%
+  \vspace{0.15cm}
+}
+
+% Semantic Card Block
+\newcommand{\conceptbox}[3]{%
+  \begin{tikzpicture}
+    \node[
+      fill=#1!6,
+      draw=#1!40,
+      line width=0.7pt,
+      rounded corners=3pt,
+      inner sep=5.5pt,
+      text width=\dimexpr\linewidth-13pt\relax,
+      align=left
+    ] {
+      {\bfseries\footnotesize\color{#1}#2}\\[0.2em]
+      \scriptsize\color{textDark}#3
+    };
+  \end{tikzpicture}%
+}
+
+% -----------------------------------------------------------------------------
+% Presentation Metadata
+% -----------------------------------------------------------------------------
+\title{\huge\textbf{Educación en la era de la
+IA:}\\[0.2em]\LARGE¿Cultivando a los futuros pensadores?}
+\author{\textbf{Ken Tanaka Hernandez}}
+\institute{Universit\`{a} degli Studi di Trieste \textbar\ OGS}
+\date{\today}
+
+% -----------------------------------------------------------------------------
+% Document Body
+% -----------------------------------------------------------------------------
+\begin{document}
+
+% -----------------------------------------------------------------------------
+% SLIDE 1: Portada
+% -----------------------------------------------------------------------------
+\begin{frame}[plain]
+  \vspace{1.0cm}
+  \begin{beamercolorbox}[sep=8pt,left,wd=\textwidth]{title}
+    \usebeamerfont{title}\inserttitle\par
+  \end{beamercolorbox}
+  \vspace{0.6cm}
+  \begin{beamercolorbox}[sep=8pt,left,wd=\textwidth]{author}
+    \usebeamerfont{author}\insertauthor\par
+    \vspace{0.15cm}
+    \small\color{textMuted}\insertinstitute\par
+    \vspace{0.15cm}
+    \footnotesize\color{textMuted}\insertdate
+  \end{beamercolorbox}
+\end{frame}
+
+% =============================================================================
+% SECCIÓN 1: Problemática Y PERSPECTIVA HISTÓRICA
+% =============================================================================
+\section{Problemática y Perspectiva Histórica}
+
+% -----------------------------------------------------------------------------
+% SLIDE 2: Problemática Central
+% -----------------------------------------------------------------------------
+\begin{frame}{Problemática Central}{La irrupción de la destreza
+  pseudo-cognitiva dual}
+  \conceptbox{accentTeal}{La pregunta fundamental}{%
+    ¿De qué se compone el intelecto humano cuando los artefactos técnicos
+    conjugan simultáneamente el \textbf{diálogo fluido probabilístico} y
+    \textbf{cómputo exacto y determinista}?%
+  }
+
+  \vspace{0.4cm}
+\begin{itemize}\setlength{\itemsep}{0.6em}
+    \item La Inteligencia Artificial contemporánea (LLMs) exhibe una
+      \textbf{capacidad pseudo-cognitiva dual}:
+    \begin{itemize}\setlength{\itemsep}{0.3em}
+        \item \textbf{Eficacia}: Síntesis probabilística masiva,
+          articulación estilística impecable y automatización de la
+          mediación simbólica.
+        \item \textbf{Límite}: Carencia total de intencionalidad,
+          afectividad, juicio ético encarnado y comprensión fenoménica.
+      \end{itemize}
+    \item El desafío pedagógico urgente: \textbf{no} prohibir ni
+      venerar la herramienta, sino clarificar qué facultades humanas
+      delegamos y cuáles debemos fortalecer con mayor rigor.
+  \end{itemize}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 3: Cronología de la Mediación Externa del Conocimiento
+% -----------------------------------------------------------------------------
+\begin{frame}{La Fricción Técnica en Perspectiva Histórica}{De la
+  pintura rupestre a las redes neuronales}
+  \centering
+  \resizebox{0.95\textwidth}{!}{
+    \begin{tikzpicture}[
+        node distance=1.8cm,
+        stepnode/.style={rectangle, rounded corners=3pt,
+          draw=primaryDark!60, fill=cardBg, line width=0.8pt, inner
+        sep=6pt, align=center, font=\footnotesize},
+        yearnode/.style={font=\scriptsize\bfseries\color{accentTeal}},
+        arrowline/.style={-{Latex[scale=0.8]}, line width=1pt, primaryDark!50}
+      ]
+      \node[stepnode] (cave) {\textbf{Pinturas Rupestres}\\Memoria
+      pictórica externa};
+      \node[stepnode, right=0.6cm of cave] (plato)
+      {\textbf{Escritura Fonética}\\Advertencia del \textit{Fedro}};
+      \node[stepnode, right=0.6cm of plato] (press)
+      {\textbf{Imprenta Gutenberg}\\Reproducción mecánica};
+      \node[stepnode, right=0.6cm of press] (prussia)
+      {\textbf{Escuela Prusiana}\\Estandarización masiva};
+
+      \node[stepnode, below=1.2cm of cave] (calc)
+      {\textbf{Calculadora}\\Disputa en matemáticas};
+      \node[stepnode, right=0.6cm of calc] (net) {\textbf{Internet /
+      Web}\\Memoria hiperdistribuida};
+      \node[stepnode, right=0.6cm of net, fill=accentTeal!10,
+      draw=accentTeal, line width=1.2pt] (ai) {\textbf{Inteligencia
+      Artificial}\\Pseudo-cognición generativa};
+
+      \draw[arrowline] (cave) -- (plato);
+      \draw[arrowline] (plato) -- (press);
+      \draw[arrowline] (press) -- (prussia);
+      \draw[arrowline] (prussia.south) -- ++(0,-0.6) -| (calc.north);
+      \draw[arrowline] (calc) -- (net);
+      \draw[arrowline] (net) -- (ai);
+    \end{tikzpicture}
+  }
+
+  \vspace{0.4cm}
+  \conceptbox{secondarySlate}{Lección de la Epistemología Histórica}{
+    Cada salto técnico genera una crisis pedagógica idéntica: el
+    temor a la pérdida de una facultad interna frente a la mediación
+    de un dispositivo externo.
+  }
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 4: La Advertencia de Platón en el Fedro
+% -----------------------------------------------------------------------------
+\begin{frame}{La Memoria Viva frente a la Letra Impresa}{El mito de
+  Theuth y Thamus en el \textit{Fedro} de Platón}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \conceptbox{primaryDark}{El Diagnóstico Platónico}{
+        \textit{<<Este invento provocará el olvido en las almas de
+          quienes lo aprendan, al descuidar la memoria, ya que
+        confiando en lo escrito recordarán desde fuera...>>}
+        \par\raggedleft\footnotesize--- Platón, \textit{Fedro} (274e--275b)
+      }
+    \end{column}
+    \begin{column}{0.48\textwidth}
+    \begin{itemize}\setlength{\itemsep}{0.6em}
+        \item \textbf{El concepto de \textit{Pharmakon}}: La técnica
+          es simultáneamente veneno (atrofia de la memoria viva) y
+          remedio (preservación archival).
+        \item \textbf{\textit{Doxa} vs. \textit{Episteme}}: La
+          apariencia de saber (acceso a textos o respuestas
+          prefabricadas) versus la apropiación dialéctica del juicio.
+        \item \textbf{Paralelismo contemporáneo}: El usuario de LLMs
+          que confunde la fluidez de un resumen generado con la
+          comprensión real del fenómeno.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 5: De Gutenberg al Modelo Prusiano
+% -----------------------------------------------------------------------------
+\begin{frame}{La Industrialización de la Instrucción}{Imprenta,
+  fábrica y escolarización masiva}
+\begin{itemize}\setlength{\itemsep}{0.6em}
+    \item \textbf{La imprenta de Gutenberg (1440)}: Desacopla la
+      replicación del conocimiento del copista manual; democratiza
+      el acceso, pero exige alfabetización universal.
+    \item \textbf{El modelo industrial prusiano (s. XVIII--XIX)}:
+    \begin{itemize}\setlength{\itemsep}{0.3em}
+        \item Diseñado para la era industrial: sincronización
+          horaria, currículo fragmentado, disciplina y
+          estandarización de cohortes.
+        \item Premisa subyacente: el ser humano como ejecutor
+          confiable de cómputos mecánicos, retención memorística y
+          protocolos fijos.
+      \end{itemize}
+    \item \textbf{La paradoja actual}:
+    \begin{itemize}\setlength{\itemsep}{0.3em}
+        \item Seguimos evaluando a los estudiantes con métricas
+          mecánicas concebidas para la fábrica prusiana.
+        \item La IA ejecuta precisamente esas tareas mecánicas de
+          manera casi instantánea y a costo marginal cero.
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 6: Las Controversias Modernas
+% -----------------------------------------------------------------------------
+\begin{frame}{Calculadoras y Memoria Distribuida}{Precedentes
+  directos del debate actual}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \conceptbox{accentTeal}{La Calculadora Electrónica (1970--1980)}{
+        \textbf{El temor}: Atrofia del cálculo mental y la
+        aritmética básica.\\[0.4em]
+        \textbf{El desenlace}: Liberación de fricción aritmética
+        manual para habilitar razonamiento algebraico y modelado de
+        sistemas complejos.
+      }
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \conceptbox{accentGold}{La Memoria Web y Google (2000--2010)}{
+        \textbf{El temor}: Pérdida de la retención factual (``efecto
+        Google'').\\[0.4em]
+        \textbf{El desenlace}: Traslado de la competencia: de
+        memorizar datos enciclopédicos a evaluar fuentes, indexar y
+        sintetizar redes de información.
+      }
+    \end{column}
+  \end{columns}
+
+  \vspace{0.4cm}
+  \conceptbox{secondarySlate}{El Salto Cualitativo de la IA Generativa}{
+    La calculadora operaba sobre números sintácticos; Internet sobre
+    documentos estáticos. La IA procesa y genera \textbf{lenguaje
+    natural}, simulando la deliberación y el razonamiento conceptual.
+  }
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 7: La Condición de la IA
+% -----------------------------------------------------------------------------
+\begin{frame}{La Condición de la Inteligencia Artificial}{Estructura
+  y límites de los Modelos de Lenguaje}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{primaryDark}Destreza Pseudo-Cognitiva:}
+    \begin{itemize}\setlength{\itemsep}{0.4em}
+        \item Predicción autoregresiva de tokens condicionada por
+          distribución estadística:
+          \[
+            P(w_t \mid w_1, w_2, \dots, w_{t-1}; \theta)
+          \]
+        \item Coherencia estilística y fluidez sintáctica sin precedentes.
+        \item Capacidad de recombinación intertextual veloz entre
+          dominios dispares.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{accentGold}Ausencias Fundamentales:}
+    \begin{itemize}\setlength{\itemsep}{0.4em}
+        \item \textbf{Cero Anclaje Semántico}: Los símbolos no
+          remiten a un mundo fenoménico ni a vivencias somáticas.
+        \item \textbf{Cero Intencionalidad}: No hay voluntad,
+          compromiso epistémico ni conciencia del error.
+        \item \textbf{Inercia hacia la Mediana}: Propensión a
+          generar respuestas verosímiles pero conceptualmente
+          banales o alucinadas.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 8: ¿Qué Compone el Intelecto Humano?
+% -----------------------------------------------------------------------------
+\begin{frame}{¿Qué Compone el Intelecto Humano?}{Más allá de la
+  correlación probabilística}
+\begin{itemize}\setlength{\itemsep}{0.6em}
+    \item \textbf{Intencionalidad y Sentido}: La capacidad de
+      dirigir el pensamiento hacia algo, asumiendo responsabilidad
+      por la veracidad de la afirmación.
+    \item \textbf{Juicio Crítico y Duda Radical}: La facultad de
+      desconfiar de lo autoevidente, cuestionar axiomas establecidos
+      y formular contra-hipótesis.
+    \item \textbf{Afectividad y Vulnerabilidad}: Comprender las
+      consecuencias de una decisión porque se experimenta el
+      sufrimiento, el riesgo y el tiempo finito.
+    \item \textbf{Imaginación Dialéctica}: Producir saltos
+      abductivos que contradicen el patrón histórico previo (ruptura
+      de la distribución de entrenamiento).
+  \end{itemize}
+
+  \vspace{0.4cm}
+  \conceptbox{accentTeal}{Distinción Crucial}{
+    Un modelo de lenguaje predice la continuación \textit{más
+    probable}. El intelecto innovador busca la verdad o la creación
+    \textit{improbable pero fecunda}.
+  }
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 9: Cartografía de la Fricción Epistémica
+% -----------------------------------------------------------------------------
+\begin{frame}{Cartografía de la Fricción Epistémica}{Fricción
+  Mecánica vs. Fricción Reflexiva}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \conceptbox{accentTeal}{Fricción Mecánica (Delegable)}{
+      \begin{itemize}\setlength{\itemsep}{0.3em}
+          \item Búsqueda rutinaria de referencias bibliográficas.
+          \item Reescritura sintáctica y traducción de formatos.
+          \item Depuración de errores tipográficos y sintaxis de código.
+          \item Resumen inicial de extensos corpus documentales.
+        \end{itemize}
+        \vspace{0.2em}
+        \textit{Resultado}: Ahorro de tiempo sin pérdida de
+        profundidad conceptual.
+      }
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \conceptbox{primaryDark}{Fricción Reflexiva (Intransferible)}{
+      \begin{itemize}\setlength{\itemsep}{0.3em}
+          \item Formulación de la pregunta de investigación genuina.
+          \item Detección de sesgos metodológicos y éticos.
+          \item Resolución de paradojas y contradicciones teóricas.
+          \item Toma de decisiones bajo incertidumbre radical.
+        \end{itemize}
+        \vspace{0.2em}
+        \textit{Resultado}: La zona donde ocurre la verdadera
+        maduración intelectual.
+      }
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 10: Neutralidad de Doctrinas Pedagógicas
+% -----------------------------------------------------------------------------
+\begin{frame}{Neutralidad de Doctrinas Pedagógicas}{Superando falsas
+  dicotomías metodológicas}
+  \conceptbox{secondarySlate}{Postura de la Conferencia}{
+    No se defiende un dogma pedagógico excluyente (conductismo vs.
+    constructivismo vs. conectivismo), sino un \textbf{análisis
+    epistémico riguroso} de las condiciones del aprendizaje.
+  }
+
+  \vspace{0.4cm}
+\begin{itemize}\setlength{\itemsep}{0.6em}
+    \item \textbf{Contra el rechazo tecnofóbico}: Ignorar la IA
+      produce una educación anacrónica y desconectada de los medios
+      reales de producción de conocimiento.
+    \item \textbf{Contra el optimismo acrítico}: Someter la
+      pedagogía a interfaces algorítmicas comerciales conduce a la
+      atrofia del pensamiento independiente.
+    \item \textbf{El criterio de arbitraje}: La pedagogía debe
+      medirse por el grado de \textbf{agencia, discernimiento y
+      capacidad innovadora} que despierta en el aprendiz.
+  \end{itemize}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 11: La IA como Arnés Metodológico
+% -----------------------------------------------------------------------------
+\begin{frame}{La IA como Arnés Metodológico}{Soporte de tracción sin
+  sustitución de agencia}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \conceptbox{accentTeal}{¿Por qué un ``Arnés''?}{
+        Un arnés no camina por el montañista; le confiere seguridad,
+        absorbe la tensión mecánica del impacto y le permite
+        alcanzar cumbres que de otro modo serían inaccesibles.
+      }
+      \vspace{0.3cm}
+    \begin{itemize}\setlength{\itemsep}{0.3em}
+        \item \textbf{Exploración rápida}: Mapear paisajes
+          conceptuales en minutos.
+        \item \textbf{Contra-argumentador}: Usar el modelo como
+          interlocutor socrático imperfecto.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+    \begin{itemize}\setlength{\itemsep}{0.5em}
+        \item \textbf{Retroalimentación inmediata}: Iteración
+          temprana sobre borradores e hipótesis de trabajo.
+        \item \textbf{Exigencia al estudiante}: El estudiante debe
+          justificar por qué acepta o rechaza cada output emitido
+          por la máquina.
+        \item \textbf{Desacoplamiento}: El valor no reside en la
+          respuesta rápida del LLM, sino en la \textit{crítica
+          sistemática} de esa respuesta.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 12: Descarga Cognitiva (Cognitive Offloading)
+% -----------------------------------------------------------------------------
+\begin{frame}{Descarga Cognitiva (\textit{Cognitive Offloading})}{El
+  filo de la navaja: entre la liberación y la atrofia}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \conceptbox{accentTeal}{El Beneficio Prometido}{
+        Descargar operaciones de memoria a corto plazo y cálculo
+        procedimental para reinvertir el ancho de banda biológico en
+        tareas meta-cognitivas de orden superior.
+      }
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \conceptbox{accentGold}{El Riesgo Sistémico}{
+        Cuando se descarga el esfuerzo de interpretación, el cerebro
+        no reasigna automáticamente los recursos a la creatividad:
+        puede caer en la \textbf{inercia cognitiva} y la complacencia pasiva.
+      }
+    \end{column}
+  \end{columns}
+
+  \vspace{0.4cm}
+\begin{itemize}\setlength{\itemsep}{0.4em}
+    \item \textbf{La paradoja de la facilidad}: El aprendizaje
+      profundo requiere cierto nivel de dificultad deseable
+      (\textit{desirable difficulties}). Si se elimina toda
+      fricción, el aprendizaje se vuelve superficial y volátil.
+  \end{itemize}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 16: Diagrama Conceptual TikZ: El Ciclo Pedagógico con Arnés
+% -----------------------------------------------------------------------------
+\begin{frame}{El Ciclo Pedagógico con Arnés}{Reconfiguración del
+  proceso de aprendizaje}
+  \centering
+  \begin{tikzpicture}[
+      scale=0.9, every node/.style={transform shape},
+      boxnode/.style={rectangle, rounded corners=4pt,
+        draw=primaryDark, fill=cardBg, line width=1pt, inner sep=8pt,
+      align=center, text width=3.0cm},
+      arnesnode/.style={rectangle, rounded corners=4pt,
+        draw=accentGold, fill=accentGold!10, line width=1.2pt, inner
+      sep=8pt, align=center, text width=3.2cm},
+      conatusnode/.style={rectangle, rounded corners=4pt,
+        draw=accentTeal, fill=accentTeal!12, line width=1.4pt, inner
+      sep=8pt, align=center, text width=3.4cm},
+      flowarrow/.style={-{Latex[scale=0.9]}, line width=1.2pt, primaryDark!70}
+    ]
+    \node[boxnode] (q) at (0, 2.2) {\textbf{1.
+    Formulación}\\Pregunta epistémica y contextualización};
+    \node[arnesnode] (explore) at (4.5, 2.2) {\textbf{2. Arnés
+    IA}\\Fricción mecánica:\\resumen, código, borrador};
+    \node[boxnode] (audit) at (4.5, -1.2) {\textbf{3. Auditoría
+    Crítica}\\Detección de sesgos, falsedades y límites};
+    \node[conatusnode] (conatus) at (0, -1.2) {\textbf{4.
+    \textit{Conatus ad Novandum}}\\Innovación reflexiva y síntesis humana};
+
+    \draw[flowarrow] (q) -- node[above,
+    font=\scriptsize\color{textMuted}] {disparo} (explore);
+    \draw[flowarrow] (explore) -- node[right,
+    font=\scriptsize\color{textMuted}] {evaluación} (audit);
+    \draw[flowarrow] (audit) -- node[below,
+    font=\scriptsize\color{textMuted}] {subsunción} (conatus);
+    \draw[flowarrow] (conatus) -- node[left,
+    font=\scriptsize\color{textMuted}] {nueva pregunta} (q);
+  \end{tikzpicture}
+
+  \vspace{0.2cm}
+  \footnotesize\color{textMuted}
+  \textit{El ciclo cierra en la re-problematización continua: la
+    máquina amortigua el paso mecánico (2), pero la apertura (1), la
+  duda (3) y la creación (4) corresponden al agente humano.}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 14: Reasignación Consciente de Recursos Cognitivos
+% -----------------------------------------------------------------------------
+\begin{frame}{Reasignación Consciente de Recursos}{De la ejecución
+  repetitiva a la contemplación activa}
+\begin{itemize}\setlength{\itemsep}{0.6em}
+    \item \textbf{Agotamiento procedimental tradicional}:
+      Históricamente, hasta el $80\%$ del esfuerzo estudiantil se
+      consumía en tareas instrumentales (formateo, búsqueda
+      bibliográfica elemental, resolución algebraica estándar).
+    \item \textbf{La oportunidad de la reasignación}:
+    \begin{itemize}\setlength{\itemsep}{0.3em}
+        \item \textbf{Validez metodológica}: ¿por qué esta premisa y no otra?
+        \item \textbf{Visión transdisciplinaria}: conectar física, ética,
+          biología y computación.
+        \item \textbf{Imaginación contrafáctica}: ¿qué sucedería si el
+          supuesto fundamental fuera falso?
+      \end{itemize}
+    \item \textbf{La condición indispensable}: La reasignación no
+      ocurre por defecto; requiere un diseño curricular explícito
+      que premie la originalidad y penalice la mera agregación sintáctica.
+  \end{itemize}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 15: Concepto Filosófico: Conatus ad Novandum
+% -----------------------------------------------------------------------------
+\begin{frame}{El Concepto de \textit{Conatus ad Novandum}}{El núcleo
+  del impulso humano}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \conceptbox{accentTeal}{La Raíz Spinoziana (\textit{Conatus})}{
+        En Spinoza, el \textit{conatus} es la fuerza o conato
+        inherente a cada ser para perseverar en su existencia y
+        potenciar su capacidad de obrar (\textit{potentia agendi}).
+      }
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \conceptbox{primaryDark}{El Giro: \textit{ad Novandum}}{
+        No se trata únicamente de perseverar en el estado presente,
+        sino del \textbf{impulso deliberado por renovar, crear,
+        desestabilizar lo dado y fundar nuevas perspectivas}.
+      }
+    \end{column}
+  \end{columns}
+
+  \vspace{0.4cm}
+\begin{itemize}\setlength{\itemsep}{0.4em}
+    \item La máquina persevera en su distribución estadística
+      (inercia a la media del corpus).
+    \item El ser humano manifiesta su vitalidad cuando se atreve a
+      quebrar la regla para alumbrar un sentido inédito:
+      \textbf{\textit{Conatus ad Novandum}}.
+  \end{itemize}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 16: Formación de Líderes Visionarios
+% -----------------------------------------------------------------------------
+\begin{frame}{Formación de Líderes Visionarios}{De operadores de
+  respuestas a arquitectos de preguntas}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{textMuted}El Operador de Algoritmos:}
+    \begin{itemize}\setlength{\itemsep}{0.3em}
+        \item Acepta las opciones presentadas por el sistema.
+        \item Optimiza métricas predefinidas de eficiencia.
+        \item Delega el criterio de verdad en la máquina.
+        \item Reproduce los sesgos del pasado con mayor celeridad.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{primaryDark}El Líder Visionario Humano:}
+    \begin{itemize}\setlength{\itemsep}{0.3em}
+        \item Define \textit{qué} problemas merecen ser resueltos y por qué.
+        \item Juzga el impacto ético y social sobre personas concretas.
+        \item Tolera la ambigüedad y la contradicción fecunda.
+        \item Inspira a través del testimonio, la empatía y la convicción.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+
+  \vspace{0.4cm}
+  \conceptbox{secondarySlate}{Máxima para el Liderazgo Educativo}{
+    Si la IA abarata las respuestas, el valor supremo reside en la
+    formulación de las \textbf{preguntas decisivas}.
+  }
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 17: Transformación del Rol Docente
+% -----------------------------------------------------------------------------
+\begin{frame}{Transformación del Rol Docente}{De transmisor de
+  información a maestro del juicio}
+\begin{itemize}\setlength{\itemsep}{0.6em}
+    \item \textbf{La muerte definitiva de la cátedra magistral
+      transmisiva}: El docente como mero dispensador enciclopédico
+      de datos ha sido superado por la indexación algorítmica.
+    \item \textbf{La emergencia del tutor dialéctico y socrático}:
+    \begin{itemize}\setlength{\itemsep}{0.3em}
+        \item Desafiar las respuestas generadas por los estudiantes
+          y sus herramientas de IA.
+        \item Modelar el arte del escepticismo metodológico y la
+          honestidad intelectual.
+        \item Guiar la atención en un ecosistema saturado de
+          estímulos hiper-estimulantes.
+      \end{itemize}
+    \item \textbf{Evaluación basada en el proceso}: No evaluar el
+      artefacto final estático (el ensayo o el código que un LLM
+      genera en segundos), sino la \textbf{cadena de decisiones,
+      correcciones y argumentaciones} sostenidas por el estudiante.
+  \end{itemize}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 18: El Dilema Epistemológico: A priori vs. A posteriori
+% -----------------------------------------------------------------------------
+\begin{frame}{El Dilema Epistemológico}{Estructura formal abstracta
+  (\textit{a priori}) vs. Afectación somática (\textit{a posteriori})}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \conceptbox{primaryDark}{El Polo \textit{A Priori} / Formal}{
+      \begin{itemize}\setlength{\itemsep}{0.3em}
+          \item Estructuras matemáticas, relaciones lógicas puras y
+            pesos relacionales en grafos de alta dimensión.
+          \item Cómputo incorpóreo: invariante frente a la biología
+            o la temperatura emocional.
+          \item Donde la IA opera con soberbia velocidad combinatoria.
+        \end{itemize}
+      }
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \conceptbox{accentTeal}{El Polo \textit{A Posteriori} / Somático}{
+      \begin{itemize}\setlength{\itemsep}{0.3em}
+          \item La experiencia fenoménica del mundo a través de
+            receptores sensoriales y dolor/placer somático.
+          \item El aprendizaje biológico condicionado por la finitud
+            y la vulnerabilidad física.
+          \item La fuente primaria del significado existencial humano.
+        \end{itemize}
+      }
+    \end{column}
+  \end{columns}
+
+  \vspace{0.4cm}
+  \conceptbox{secondarySlate}{El Vacío de la Inteligencia Incorpórea}{
+    Un sistema que solo manipula relaciones sintácticas carece de
+    acceso directo al mundo fenoménico: habita exclusivamente el
+    reino de la correlación formal desincorporada.
+  }
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 19: La Dialéctica: Cogito vs. Sentio
+% -----------------------------------------------------------------------------
+\begin{frame}{La Dialéctica: \textit{Cogito} vs. \textit{Sentio}}{La
+  mente abstracta frente a la corporalidad encarnada}
+  \centering
+  \begin{tikzpicture}[
+      scale=0.9, every node/.style={transform shape},
+      boxA/.style={rectangle, rounded corners=5pt, draw=primaryDark,
+        fill=primaryDark!8, line width=1.2pt, inner sep=10pt, text
+      width=4.5cm, align=center},
+      boxB/.style={rectangle, rounded corners=5pt, draw=accentGold,
+        fill=accentGold!10, line width=1.2pt, inner sep=10pt, text
+      width=4.5cm, align=center},
+      bridge/.style={rectangle, rounded corners=3pt,
+        draw=accentTeal, fill=cardBg, line width=1pt, inner sep=6pt,
+      text width=3.0cm, align=center, font=\footnotesize}
+    ]
+    \node[boxA] (cogito) at (0, 0) {
+      \Large\textbf{\color{primaryDark}\textit{COGITO}}\\[0.4em]
+      \small
+      Manipulación simbólica\\
+      Abstracción algorítmica\\
+      Cálculo formal incorpóreo\\
+      Optimización de funciones
+    };
+
+    \node[boxB] (sentio) at (8, 0) {
+      \Large\textbf{\color{accentGold}\textit{SENTIO}}\\[0.4em]
+      \small
+      Experiencia sensorial directa\\
+      Afectividad y vulnerabilidad\\
+      Cognición encarnada (\textit{embodied})\\
+      Conciencia fenomenológica
+    };
+
+    \draw[<->, line width=1.5pt, primaryDark!60] (cogito) --
+    node[above=0.2cm, bridge] {Tensión Irreductible\\de la
+    Existencia} (sentio);
+  \end{tikzpicture}
+
+  \vspace{0.4cm}
+  \conceptbox{secondarySlate}{Implicación Pedagógica}{
+    La educación tradicional privilegia el \textit{cogito} formal
+    desvinculado; la IA nos fuerza a recordar que la inteligencia
+    genuina está irreductiblemente enraizada en el \textit{sentio} vivo.
+  }
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 20: ¿Puede existir un ``Animal Cognitivo'' Incorpóreo?
+% -----------------------------------------------------------------------------
+\begin{frame}{El Mito del Intelecto Desencarnado}{¿Existe un
+  ``animal cognitivo'' o es solo un artefacto matemático?}
+\begin{itemize}\setlength{\itemsep}{0.6em}
+    \item \textbf{La falacia cartesiana reeditada}: La idea de que
+      la mente puede desacoplarse del organismo biológico sin perder
+      su esencia constitutiva.
+    \item \textbf{La perspectiva de la cognición encarnada
+      (\textit{Embodied Cognition})}:
+    \begin{itemize}\setlength{\itemsep}{0.3em}
+        \item No pensamos \textit{a pesar} de tener cuerpo, sino
+          \textit{a través} del cuerpo: los conceptos abstractos son
+          metáforas somatosensoriales (Varela, Thompson, Lakoff).
+        \item La cognición biológica emergió para regular la acción
+          y la supervivencia en un entorno termodinámico adverso, no
+          para resolver acertijos lógicos aislados.
+      \end{itemize}
+    \item \textbf{El veredicto sobre la IA pura}:
+    \begin{itemize}\setlength{\itemsep}{0.3em}
+        \item La máquina no es un ``animal cognitivo''; es un
+          \textbf{espejo estadístico} de los registros dejados por
+          seres que sí poseían cuerpos y vivencias.
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 21: Abstracciones Simbólicas y Manipulación Ambiental
+% -----------------------------------------------------------------------------
+\begin{frame}{Abstracciones Simbólicas y Manipulación Ambiental}{La
+  instrumentalización al servicio de la conveniencia y la codicia}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \conceptbox{primaryDark}{El Origen de la Abstracción}{
+        La abstracción simbólica ha sido la herramienta adaptativa
+        suprema del \textit{Homo sapiens}: permitió codificar
+        recursos, anticipar estaciones y coordinar tribus a gran escala.
+      }
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \conceptbox{accentGold}{La Deriva Instrumental}{
+        Al independizarse del límite ecológico y somático, la
+        abstracción se convirtió en motor de dominación y extracción
+        desmedida en beneficio de la codicia y la conveniencia inmediata.
+      }
+    \end{column}
+  \end{columns}
+
+  \vspace{0.4cm}
+\begin{itemize}\setlength{\itemsep}{0.4em}
+    \item La IA representa la culminación técnica de esta
+      abstracción instrumental: procesar datos del mundo real a
+      espaldas de la fragilidad del ecosistema y de los sujetos.
+    \item La educación no puede ser mero entrenamiento para servir a
+      esta maquinaria de conveniencia.
+  \end{itemize}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 22: Evolución No-Teleológica y Bifurcación
+% -----------------------------------------------------------------------------
+\begin{frame}{Evolución No-Teleológica y Bifurcación}{¿Hacia una
+  escisión entre la biología y la técnica algorítmica?}
+\begin{itemize}\setlength{\itemsep}{0.6em}
+    \item \textbf{Evolución sin diseño previo}:
+    \begin{itemize}\setlength{\itemsep}{0.3em}
+        \item La evolución biológica no posee meta prefijada
+          (\textit{telos}); opera por deriva genética, presiones
+          ambientales y contingencia histórica.
+        \item La cultura y la técnica son extensiones epigenéticas
+          que retroalimentan las presiones de selección.
+      \end{itemize}
+    \item \textbf{La hipótesis de la bifurcación evolutiva}:
+    \begin{itemize}\setlength{\itemsep}{0.3em}
+        \item ¿Estamos presenciando una bifurcación entre la estirpe
+          somática biológica y un ecosistema exógeno de agentes
+          algorítmicos auto-perfeccionados?
+        \item O bien, ¿una absorción en la cual el ser humano adapta
+          su cognición a los formatos digestibles por los algoritmos
+          (empobrecimiento lingüístico y cognitivo)?
+      \end{itemize}
+    \item \textbf{El papel de la educación}: Actuar como salvaguarda
+      evolutiva que preserve la riqueza fenoménica y la autonomía
+      crítica del organismo humano.
+  \end{itemize}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 23: La Pregunta Límite: ¿Qué es la Vida?
+% -----------------------------------------------------------------------------
+\begin{frame}{La Pregunta Límite: ¿Qué es la
+  \textit{Vida}?}{Frontera ontológica entre el ser autopoiético y el
+  artefacto técnico}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \conceptbox{accentTeal}{El Organismo Vivo (\textit{Autopoiesis})}{
+      \begin{itemize}\setlength{\itemsep}{0.3em}
+          \item Regeneración celular continua contra el gradiente entrópico.
+          \item Sensibilidad al dolor, a la muerte y al tiempo irreversible.
+          \item Significado como necesidad vital y supervivencia situada.
+        \end{itemize}
+      }
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \conceptbox{primaryDark}{El Artefacto Sintético (Algoritmo)}{
+      \begin{itemize}\setlength{\itemsep}{0.3em}
+          \item Reversible en sus operaciones de memoria y parámetros.
+          \item Indiferente a su apagado o reconfiguración física.
+          \item Sintaxis sin semántica, computación sin dolor ni regocijo.
+        \end{itemize}
+      }
+    \end{column}
+  \end{columns}
+
+  \vspace{0.4cm}
+  \conceptbox{secondarySlate}{El Destino del Pensador}{
+    Cultivar futuros pensadores significa educar seres que
+    reconozcan el valor irreemplazable de la \textbf{vida viva}
+    frente a cualquier simulación sintética deslumbrante.
+  }
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 24: Matriz Comparativa de Tensiones Epistémicas
+% -----------------------------------------------------------------------------
+\begin{frame}{Matriz de Tensiones Epistémicas}{Síntesis del marco conceptual}
+  \centering
+  \scriptsize
+  \renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{p{3.0cm} p{4.5cm} p{5.0cm}}
+    \toprule
+    \textbf{Dimensión} & \textbf{Lógica Algorítmica (IA)} &
+    \textbf{Formación Humana (\textit{Conatus})} \\
+    \midrule
+    \textbf{Operación Nuclear} & Optimización probabilística y
+    predicción de la media & Desvío crítico, asombro y salto
+    abductivo (\textit{novandum}) \\
+    \textbf{Fricción Tratada} & Absorción y supresión de la fricción
+    mecánica & Cultivo pedagógico de la fricción reflexiva \\
+    \textbf{Eje Epistémico} & \textit{Cogito} abstracto
+    desincorporado y simbólico & Dialéctica encarnada:
+    \textit{Cogito} arraigado en el \textit{Sentio} \\
+    \textbf{Relación con el Saber} & Agregación intertextual y
+    paráfrasis probabilística & Juicio fundado en la experiencia, la
+    ética y la finitud \\
+    \textbf{Horizonte de Acción} & Eficiencia instrumental y
+    automatización & Liderazgo con sentido, justicia y creatividad genuina \\
+    \bottomrule
+  \end{tabular}
+\end{frame}
+
+% -----------------------------------------------------------------------------
+% SLIDE 25: Preguntas Abiertas para el Diálogo
+% -----------------------------------------------------------------------------
+\begin{frame}{Preguntas Abiertas para el Diálogo}{¿Hacia dónde
+  cultivamos a los futuros pensadores?}
+\begin{enumerate}\setlength{\itemsep}{0.8em}
+    \item Si la máquina asume la articulación del discurso formal,
+      \textbf{¿cómo rediseñamos las aulas para que los estudiantes
+        no pierdan la capacidad de articular pensamientos propios sin
+      mediación algorítmica?}
+    \item ¿Podemos construir un sistema educativo que aproveche el
+      \textbf{arnés técnico} de la IA para liberar tiempo sin que
+      ello derive en la atrofia del esfuerzo reflexivo?
+    \item Frente a la tentación de reducir la educación a
+      competencias instrumentales para el mercado tecnológico,
+      \textbf{¿cómo recuperamos el \textit{Conatus ad Novandum} como
+      fin en sí mismo?}
+    \item En la era de la inteligencia incorpórea: \textbf{¿qué
+      significa salvaguardar lo humano?}
+  \end{enumerate}
+
+  \vspace{0.4cm}
+  \centering
+  \small\textbf{\color{primaryDark}¡Muchas gracias por su atención y diálogo!}
+\end{frame}
+
+\end{document}

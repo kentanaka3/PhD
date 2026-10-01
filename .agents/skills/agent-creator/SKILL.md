@@ -71,6 +71,7 @@ Every agent, skill, or rule created or modified must adhere to the following pri
 3. **Progressive Disclosure**: Keep primary agent instructions (`SKILL.md` or `<agent>.md`) lean, focused, and procedural. Offload deep reference material, schemas, and extensive guidelines into `references/` or `resources/`.
 4. **Deterministic Validation Gate**: Every newly created or modified agent definition MUST be verified with the local validator (`.agents/skills/agent-creator/scripts/validate-agent.sh`) before deployment.
 5. **Portability & Clean Pathing**: Use repository-relative paths (`...`) and avoid host-specific or hardcoded user paths. Ensure Unix line endings (LF).
+6. **Cognitive & Attention Alignment**: Author instructions that actively cooperate with autoregressive transformer attention mechanics and pretraining weight distributions. Replace negative prohibitions with positive canonical templates, deterministic dispatch tables, and pre-calculated invariant skeletons to prevent attention priming and token competition.
 
 ---
 
@@ -262,7 +263,7 @@ Before using a profile:
 
 ---
 
-## 4. Step-by-Step Creation Workflow
+## 5. Step-by-Step Creation Workflow
 
 When a user asks to create, modify, or architect a new agent, skill, or rule:
 
@@ -309,7 +310,7 @@ When a user asks to create, modify, or architect a new agent, skill, or rule:
 
 ---
 
-## 5. Agent Validation Harness Reference
+## 6. Agent Validation Harness Reference
 
 The repository provides a deterministic, zero-dependency validation suite under `.agents/skills/agent-creator/scripts/`:
 

@@ -211,13 +211,14 @@ The strongest seismic event recorded in this region is the catastrophic
 \textbf{1976 Friuli earthquake sequence}. On May 6, 1976, at 20:00:12 UTC, a
 major earthquake of moment magnitude $M_{\mathrm{w}} = \num{6.5}$ nucleated
 near Gemona del Friuli, producing epicentral intensities of $I_0 =
-\mathrm{IX}\text{--}\mathrm{X}$ on the \ac{MCS} scale. The mainshock ruptured
-blind thrust faults along the Southalpine front \parencite{Aoudia2000}. The
-sequence was compounded in September 1976 by two devastating aftershocks on
-September 15 ($M_{\mathrm{w}} = 5.6$ and $M_{\mathrm{w}} = \num{6.0}$). In
-total, the 1976 Friuli seismic crisis claimed \num{989} lives, injured over
-\num{2800} people, left over \num{100000} homeless, and destroyed entire
-medieval villages across the Tagliamento and Fella river basins.
+\mathrm{IX}\text{--}\mathrm{X}$ on the \ac{MCS} scale \parencite{Locati2022}.
+The mainshock ruptured blind thrust faults along the Southalpine front
+\parencite{Aoudia2000}. The sequence was compounded in September 1976 by two
+devastating aftershocks on September 15 ($M_{\mathrm{w}} = 5.6$ and
+$M_{\mathrm{w}} = \num{6.0}$). In total, the 1976 Friuli seismic crisis claimed
+\num{989} lives, injured over \num{2800} people, left over \num{100000}
+homeless, and destroyed entire medieval villages across the Tagliamento and
+Fella river basins.
 
 The tragedy of the 1976 disaster catalyzed a profound transformation in
 European seismology, earthquake engineering, civil protection organization, and
@@ -400,37 +401,25 @@ infrastructures.
 
 The key research questions addressed in this thesis are:
 \begin{enumerate}
-  \item \textbf{Domain Adaptation and Generalization}:
-    \begin{itemize}
-      \item How effectively do \ac{DL} phase pickers (\ac{PhaseNet} and
-        \ac{EQT}) trained on large external datasets (\ac{INSTANCE} in
-        Italy, \ac{STEAD} globally, \ac{SCEDC} in California) generalize to the
-        complex geological and noise environment of Northeastern Italy?
-      \item Does regional training data (\ac{INSTANCE}) outperform massive but
-        geographically foreign datasets (\ac{SCEDC}, \ac{STEAD})?
-    \end{itemize}
-  \item \textbf{Associator Scaling and Performance}:
-    \begin{itemize}
-      \item How do advanced phase association algorithms (specifically the
-        Bayesian \acf{GaMMA} and the \acf{PyOcto}) compare in association
-        recall, computational efficiency, and robustness against \ac{FP} pick
-        contamination?
-    \end{itemize}
-  \item \textbf{Physically Bounded Performance Validation}:
-    \begin{itemize}
-      \item How can model-generated earthquake catalogs be compared against
-        manual analyst reference catalogs without introducing spatiotemporal
-        bias or duplicate assignment artifacts?
-    \end{itemize}
-  \item \textbf{HPC Scalability and Operational Viability}:
-    \begin{itemize}
-      \item Can the entire processing workflow \ie{from continuous multi-client
-          \ac{FDSN} waveform ingestion to deep inference, association, and
-        relocation} be parallelized across modern \ac{GPU}-accelerated
-        supercomputing architectures (such as the \ac{CINECA} Leonardo Tier-0
-        system) to support near-real-time operational monitoring and rapid
-        historical archive reprocessing?
-    \end{itemize}
+  \item \textbf{Domain Adaptation and Generalization}: How effectively do
+    \ac{DL} phase pickers (\ac{PhaseNet} and \ac{EQT}) trained on large
+    external datasets (\ac{INSTANCE} in Italy, \ac{STEAD} globally, \ac{SCEDC}
+    in California) generalize to the complex geological and noise environment
+    of Northeastern Italy?
+  \item \textbf{Associator Scaling and Performance}: How do advanced phase
+    association algorithms (specifically the Bayesian \acf{GaMMA} and the
+    \acf{PyOcto}) compare in association recall, computational efficiency, and
+    robustness against \ac{FP} pick contamination?
+  \item \textbf{Physically Bounded Performance Validation}: How can
+    model-generated earthquake catalogs be compared against manual analyst
+    reference catalogs without introducing spatiotemporal bias or duplicate
+    assignment artifacts?
+  \item \textbf{HPC Scalability and Operational Viability}: Can the entire
+    processing workflow \ie{from continuous multi-client \ac{FDSN} waveform
+    ingestion to deep inference, association, and relocation} be parallelized
+    across modern \ac{GPU}-accelerated supercomputing architectures (such as
+    the \ac{CINECA} Leonardo Tier-0 system) to support near-real-time
+    operational monitoring and rapid historical archive reprocessing?
 \end{enumerate}
 
 \section{Dissertation Structure and Chapter Roadmap}
@@ -451,9 +440,9 @@ appendices:
     software architecture of the pipeline, detailing the central
     \texttt{ogsconstants} configuration, weight-to-uncertainty mappings,
     automated \ac{FDSN} multi-client waveform downloading, multi-format legacy
-    catalog parsing (\placeholder{TODO} HPL, DAT, TXT, PUN), catalog
-    aggregation, geodetic math,
-    and visualization frameworks.
+    catalog parsing (\texttt{.hpl}, \texttt{.dat}, \texttt{.txt}, and
+    \texttt{.pun}), catalog aggregation, geodetic math, and visualization
+    frameworks.
   \item \textbf{\Cref{chap:computational_pipeline} (Computational Pipeline)}:
     Formulates the complete procedural workflow, detailing continuous waveform
     preprocessing, \ac{DL} phase picking inference, Bayesian (\ac{GaMMA})

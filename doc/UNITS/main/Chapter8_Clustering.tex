@@ -2,11 +2,22 @@
 % self-exciting Hawkes/ETAS triggering, point-adaptive density estimation,
 % vectorized ADP++ clustering, and topological cluster validity (PAk-DS Score)
 % for seismic sequences and complex non-convex manifolds.
-% Status: Under Review
+% Status: Under Review; mathematical audit incorporated, scientific
+% review pending.
+% Source-of-truth: OGS/src/ogsclustering.py, OGS/test/testogsclustering.py,
+% doc/UNITS/supplementary/Clustering.tex, doc/UNITS/lib.bib
 
 \providecommand{\bm}[1]{\mathbf{#1}}
 \providecommand{\coloneqq}{\mathrel{\mathop:}=}
 \providecommand{\mathds}[1]{\mathbb{#1}}
+\providecommand{\pak}{\textsc{PAk}}
+\providecommand{\kstar}{k^{*}}
+\providecommand{\xvec}{\bm{x}}
+\providecommand{\mdl}{\mathrm{MDL}}
+\providecommand{\Zscore}{Z}
+\providecommand{\etas}{\textsc{etas}}
+\providecommand{\Var}{\operatorname{Var}}
+\providecommand{\Cov}{\operatorname{Cov}}
 
 \label{chap:clustering}
 
@@ -26,101 +37,103 @@ heuristic window-based declustering and Euclidean distance metrics.
 This chapter
 develops a unified, mathematically consistent framework that synthesises
 measure-theoretic stochastic point processes, self-exciting marked Hawkes and
-Epidemic-Type Aftershock Sequence (\ac{ETAS}) mechanics, non-parametric
+\ac{ETAS} mechanics, non-parametric
 Point-Adaptive $k$-Nearest Neighbour (\pak{}) density estimation, vectorized
 Advanced Density Peaks (\textsc{ADP++}) clustering, and topological cluster
 validity via the \pak{} Density Separation Score (DS-Score).
+
+The inspected executable evidence concerns density estimation, ADP/ADP++
+clustering, and PAk-DS scoring. The temporal unified model and its EM/MDL
+workflow are proposals, not verified implementations. Exact distributional
+identities refer to explicitly stated ideal sampling experiments; adaptive
+selection and physical attribution do not inherit them automatically.
 
 \paragraph{Epistemic Governance and Document Blueprint.}
 To maintain strict evidentiary boundaries, every mathematical derivation,
 computational algorithm, and empirical evaluation in this chapter is classified
 according to the six-tier epistemic taxonomy established in
-Table~\ref{tab:clustering_epistemic_matrix}.
+\Cref{tab:clustering_epistemic_matrix}.
 
 \begin{table}[htbp]
   \centering
   \small
   \begin{threeparttable}
-    \caption{\textbf{Epistemic Classification and Provenance Matrix
-      for Chapter~\ref{chap:clustering}}. Target/Scope: Epistemic
-      categorization of all mathematical formulations, models, and
-      empirical fixtures in the seismic clustering framework. Key
-      Phenomenon: Strict demarcation between raw catalog telemetry,
-      physical continuum equations, deterministic algorithms, and
-      model inferences. Conditions: OGS regional monitoring networks
-    and synthetic benchmark manifolds.}
+    \caption{Evidence classes used in \cref{chap:clustering}.
+      Inputs, constitutive models, source operations, and proposed
+      interpretations carry different verification requirements.
+      This audit inspected clustering code and tests, not catalogue
+    measurements or benchmark run records.}
     \label{tab:clustering_epistemic_matrix}
-    \begin{tabularx}{\textwidth}{l X X l}
+    \begin{tabularx}{\linewidth}{l >{\raggedright\arraybackslash}X
+      >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
       \toprule
       \textbf{Tier} & \textbf{Epistemic Scope} & \textbf{Artifact /
       Formulation} & \textbf{Verification Anchor} \\
       \midrule
-      \textbf{Level 1} & Empirical Observations & Event arrival
-      times $\{t_i\}$, hypocentres $\{\mathbf{x}_i\}$, magnitudes
-      $\{m_i\}$ & SMINO / INGV Bulletins \\
-      \textbf{Level 2} & Ground-Truth Physics & Coulomb failure
-      stress $\Delta\mathrm{CFF}$, hydraulic pore-diffusion
-      $\partial p/\partial t = D\nabla^2 p$ & Elastodynamics /
-      Poroelasticity \\
-      \textbf{Level 3} & Deterministic Computation & Counting
-      measure $N(A)$, shell volumes $w_{i,j}$, pointer-jumping
-      $\mathbf{r}^{(t+1)} = \mathbf{r}^{(t)}[\mathbf{r}^{(t)}]$ &
-      Automated unit tests ($100\%$ pass) \\
-      \textbf{Level 4} & Model Estimates & TWO-NN intrinsic
-      dimension $\hat{d}$, adaptive neighborhood $\kstar(i)$, PAk
-      density $\hat{\rho}_i$, ETAS rates & Maximum likelihood / EM
-      estimators \\
-      \textbf{Level 5} & Theoretical Baselines & Inhomogeneous
-      Poisson null model, Wilks' $\chi^2_1$ limit, Fisher
-      information CRLB, 0-homology persistence & Analytical proofs /
-      Theorems \\
-      \textbf{Level 6} & Qualitative Interpretations & Swarm
-      vs.\ aftershock attribution, thermodynamic free-energy
-      landscapes, hazard implications & Peer-reviewed literature \\
+      \textbf{Level 1} & Empirical inputs & Arrival times,
+      locations, magnitudes & Not reanalysed here \\
+      \textbf{Level 2} & Constitutive models & Stress change,
+      pressure diffusion & Stated physical assumptions \\
+      \textbf{Level 3} & Deterministic computation & Counts,
+      volumes, pointer updates & Source and test inspection \\
+      \textbf{Level 4} & Model estimates & Dimension, adaptive
+      density, temporal rates & Estimation assumptions;
+      unified EM is proposed \\
+      \textbf{Level 5} & Theoretical baselines & Poisson laws,
+      information, persistence & Explicit sampling and
+      regularity conditions \\
+      \textbf{Level 6} & Interpretations & Triggering causes,
+      thermodynamic analogies & Require independent evidence \\
       \bottomrule
     \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+    \item [Analyst Classification] These levels organize evidence,
+      not degrees of truth. EM denotes expectation--maximization.
+      No test pass rate, empirical result, or physical attribution
+      is established by this table.
+    \end{tablenotes}
   \end{threeparttable}
 \end{table}
 
 This chapter is organised into nine logically integrated sections:
 \begin{itemize}[noitemsep,topsep=3pt]
-  \item Section~\ref{sec:seismic_clustering_problem} examines the
+  \item \Cref{sec:seismic_clustering_problem} examines the
     physical phenomenology of seismic sequences and details the
     mathematical failure modes of classical declustering and
     heuristic clustering metrics.
-  \item Section~\ref{sec:point_process_foundations} derives the
+  \item \Cref{sec:point_process_foundations} derives the
     measure-theoretic foundations of stochastic point processes,
     \ac{IPP}, their grand canonical ensemble isomorphism, and optimal
     piecewise-constant changepoint segmentation via \ac{PELT}.
-  \item Section~\ref{sec:pak_theory} establishes the differential
+  \item \Cref{sec:pak_theory} establishes the differential
     geometry and non-parametric statistics of the \pak{} framework,
     including \ac{TWO-NN} intrinsic dimension estimation, adaptive
     neighborhood selection $\kstar$ via sequential likelihood-ratio
     tests, and closed-form variance stabilization.
-  \item Section~\ref{sec:clustering_hawkes_etas} derives marked
+  \item \Cref{sec:clustering_hawkes_etas} derives marked
     self-exciting Hawkes and \ac{ETAS} processes, proves the
     analytical branching ratio stability theorem, and formulates the
     constitutive mechanics of Coulomb stress transfer and
     pore-pressure diffusion.
-  \item Section~\ref{sec:info_thermo_unified} formalises the
+  \item \Cref{sec:info_thermo_unified} formalises the
     thermodynamic free-energy landscape, establishes the
     information-geometric Euclidean flatness in log-density
     coordinates, and formulates the multi-scale Unified Generative
     Model with joint \ac{MDL}--\pak{} model selection.
-  \item Section~\ref{sec:adppp_optimizations} presents the
-    vectorized \textsc{ADP++} clustering engine, providing complete
-    equivalence proofs and complexity reductions for fused
+  \item \Cref{sec:adppp_optimizations} presents the
+    vectorized \textsc{ADP++} clustering engine, providing fixed-forest
+    convergence proofs and scoped complexity bounds for fused
     union-find, saddle-point detection, $k$-peaks, and multimodality merging.
-  \item Section~\ref{sec:ds_score_persistence} formalises the \pak{}
-    Density Separation Score, proves its connection to 0-homology
-    topological persistence diagrams and Arrhenius/Kramers barrier
-    escape times, and establishes theoretical superiority over
-    classical validity indices.
-  \item Section~\ref{sec:clustering_benchmarks} evaluates the
+  \item \Cref{sec:ds_score_persistence} formalises the \pak{}
+    Density Separation Score, relates its contrasts to ideal 0-homology
+    persistence, and identifies the limits of the Kramers analogy and
+    comparisons with classical validity indices.
+  \item \Cref{sec:clustering_benchmarks} evaluates the
     complete unified framework across canonical synthetic 2D tests,
     a 21-manifold non-convex benchmark suite, and realistic
     synthetic seismic sequence scenarios.
-  \item Section~\ref{sec:clustering_discussion} discusses boundary
+  \item \Cref{sec:clustering_discussion} discusses boundary
     conditions, spatial extensions to $(x,y,z,t)$, and operational
     streaming deployment.
 \end{itemize}
@@ -149,7 +162,7 @@ tectonic seismicity organizes into three dominant phenomenological regimes:
     with constant or slowly varying rate $\mu_0 > 0$.
   \item \textbf{Mainshock--Aftershock Cascades:} Triggered by the
     abrupt elastostatic and dynamic stress drop of a major rupture
-    ($\Delta\boldsymbol{\sigma} \sim \qty{1}{\mega\pascal}$ to
+    ($\Delta\bm{\sigma} \sim \qty{1}{\mega\pascal}$ to
     $\qty{10}{\mega\pascal}$). The sequence initiates with an
     exceptional event that dominates the seismic moment budget of
     the sequence ($M_0^{(\mathrm{main})} \ge \sum_j M_0^{(j)}$),
@@ -159,28 +172,30 @@ tectonic seismicity organizes into three dominant phenomenological regimes:
     \parencite{shcherbakov2004,helmstetter2003bath,console2003}:
     \begin{equation}
       \Delta m \coloneqq m_{\mathrm{main}} -
-      m_{\mathrm{after}}^{\max} \approx 1.2 \pm 0.2.
+      m_{\mathrm{after}}^{\max} \approx \num{1.2}.
       \label{eq:baths_law}
     \end{equation}
     The subsequent relaxation rate decays monotonically following
     the modified Omori--Utsu law $\lambda(t) \propto (t + c)^{-p}$
     \parencite{omori1894,utsu1961,utsu1995} with exponent
-    $p \approx 1.0\text{--}1.3$, while magnitude frequencies conform
+    $p \approx \numrange{1.0}{1.3}$, while magnitude frequencies conform
     to the baseline Gutenberg--Richter distribution
-    \parencite{ishimoto1939,gutenberg1944} with $b \approx 0.8\text{--}1.1$.
+    \parencite{ishimoto1939,gutenberg1944} with $b \approx
+    \numrange{0.8}{1.1}$.
   \item \textbf{Earthquake Swarms:} Characterized by a protracted
     sequence of events of comparable magnitudes without an
-    identifiable initial mainshock ($\Delta m \le 0.5$)
+    identifiable initial mainshock ($\Delta m \le \num{0.5}$)
     \parencite{mogi1963,sykes1970,vidale2006}. Swarms
     exhibit emergent or accelerating initiation, irregular
     multi-peak burst rates, and strong spatiotemporal hypocenter
     migration. Swarms are physically driven by non-seismic forcing
     mechanisms: pore-fluid overpressure diffusion along permeable
-    fault damage zones ($\partial p/\partial t = D\nabla^2 p$)
+    fault damage zones ($\partial p/\partial t = D\nabla^2 p \equiv
+    D\operatorname{div}(\operatorname{grad} p)$)
     \parencite{nur1972,shapiro1997,shapiro2002}, magmatic intrusions,
     or aseismic slow fault slip transients \parencite{hainzl2005}.
     Their frequency-magnitude distribution frequently exhibits
-    anomalously high $b$-values ($b \in [1.3, 2.5]$), reflecting
+    anomalously high $b$-values ($b \in [\num{1.3}, \num{2.5}]$), reflecting
     localized shear stress reduction under elevated pore-fluid pressures
     \parencite{scholz1968,wiemer2002}.
 \end{enumerate}
@@ -188,9 +203,8 @@ tectonic seismicity organizes into three dominant phenomenological regimes:
 \subsection{Pathologies of Classical Declustering Algorithms}
 \label{subsec:declustering_limitations}
 
-Historically, probabilistic seismic hazard analyses (\ac{PSHA})
-require isolating independent background events by removing
-clustered aftershocks—a procedure termed \emph{catalogue
+Historically, \ac{PSHA} require isolating independent background
+events by removing clustered aftershocks—a procedure termed \emph{catalogue
 declustering}. Classical windowing methods, most notably the
 algorithms of \citet{gardner1974} and \citet{reasenberg1985}, impose
 deterministic spatial and temporal interaction envelopes around
@@ -216,7 +230,7 @@ operational deficiencies:
     single, distorted macro-clusters.
   \item \textbf{Erasure of Swarm Dynamics:} Because window sizes
     scale strictly with magnitude, swarm sequences containing
-    hundreds of low-to-moderate magnitude events ($m \le 3.5$) are
+    hundreds of low-to-moderate magnitude events ($m \le \num{3.5}$) are
     either fragmented into dozens of spurious micro-sequences or
     entirely filtered out as background noise, destroying the
     continuous rate and migration signatures vital for tracking
@@ -226,32 +240,39 @@ operational deficiencies:
     fail catastrophically when applied to complex collisional thrust
     belts, subduction zones, or volcanic hydrothermal systems.
 \end{itemize}
+Modern stochastic and topological frameworks address these failure modes
+by replacing rigid windows with continuous probabilistic triggering models
+\parencite{zhuang2002,marsan2008} or rescaled nearest-neighbour distances
+in space--time--magnitude manifolds
+\parencite{baiesi2004,zaliapin2008,zaliapin2013}.
 
 \subsection{Failure of Classical Clustering Metrics on Complex Manifolds}
 \label{subsec:classical_metrics_failure}
 
 When unsupervised machine learning algorithms are tasked with
 partitioning earthquake catalogs or spatial hypocentral clouds,
-evaluating the resulting partitions requires cluster validity
-indices (\acp{CVI}). The most widely adopted validation metrics—the
-Silhouette Coefficient \parencite{rousseeuw1987}, the
-Calinski--Harabasz Index \parencite{calinski1974}, and the
-Davies--Bouldin Index \parencite{davies1979}—are constructed under
-the implicit geometric assumption that clusters form convex,
-isotropic, hyperspherical distributions in Euclidean space:
+evaluating the resulting partitions requires \acp{CVI}. The most widely adopted
+validation metrics \eg{the \ac{SC}, the \ac{CH}, and the \ac{DB}}
+are constructed under the implicit geometric assumption that
+clusters form convex, isotropic, hyperspherical distributions in
+Euclidean space:
 
 \begin{equation}
-  S_{\mathrm{Sil}} = \frac{1}{N}\sum_{i=1}^N \frac{b(i) -
+  S_{\mathrm{Sil}} \coloneqq \frac{1}{N}\sum_{i=1}^N \frac{b(i) -
   a(i)}{\max(a(i), b(i))}, \qquad
-  \mathrm{CH} = \frac{\mathrm{Tr}(\mathbf{B})/(K -
+  \mathrm{CH} \coloneqq \frac{\mathrm{Tr}(\mathbf{B})/(K -
   1)}{\mathrm{Tr}(\mathbf{W})/(N - K)}, \qquad
-  \mathrm{DB} = \frac{1}{K}\sum_{k=1}^K \max_{l \ne k} \left(
+  \mathrm{DB} \coloneqq \frac{1}{K}\sum_{k=1}^K \max_{l \ne k} \left(
   \frac{s_k + s_l}{d(\mathbf{c}_k, \mathbf{c}_l)} \right),
   \label{eq:classical_cvis}
 \end{equation}
 where $\mathbf{B}$ and $\mathbf{W}$ are the between-cluster and
 within-cluster scatter matrices, $\mathbf{c}_k$ are cluster
-centroids, and $s_k$ are intra-cluster centroid dispersions.
+centroids, and $s_k=|C_k|^{-1}\sum_{i\in C_k}\|\mathbf{x}_i-\mathbf{c}_k\|$
+are mean centroid distances, matching scikit-learn. Here $a(i)$ is the
+mean distance to other members of the assigned cluster and $b(i)$ the
+smallest mean distance to another cluster. Assume $2\le K<N$;
+zero denominators and singleton clusters require library-specific conventions.
 
 In geophysical point processes, physical structures concentrate
 along non-convex, lower-dimensional fault surfaces, curved slip
@@ -260,11 +281,10 @@ with Euclidean centroid metrics leads to three distinct mathematical
 pathologies:
 \begin{enumerate}[noitemsep,topsep=2pt]
   \item \textbf{Non-Convex Fracture Penalisation:} Centroids
-    $\mathbf{c}_k$ of curved or planar fault structures fall outside
-    the support of the actual data manifold $\mathcal{M}$. The
-    within-cluster scatter $\mathrm{Tr}(\mathbf{W})$ artificially
-    explodes, causing $\mathrm{CH}$ and $\mathrm{DB}$ to severely
-    penalise true geological fault structures.
+    $\mathbf{c}_k$ of some curved structures can fall outside
+    the support $\mathcal{M}$. Centroid scatter may then be a poor
+    proxy for density connectivity. Neither off-support centroids
+    nor divergence of scatter follows from non-convexity alone.
   \item \textbf{Spurious Fragment Merging:} If two non-convex
     clusters interleave or wrap around each other, their Euclidean
     centroid distance $d(\mathbf{c}_k, \mathbf{c}_l)$ can approach
@@ -299,7 +319,7 @@ equipped with an internal filtration $\mathbb{F} =
 (\mathcal{F}_t)_{t \in [0, T_{\mathrm{obs}}]}$, where $\mathcal{F}_t
 = \sigma(\{N(A) : A \in \mathcal{B}([0, t])\})$ encodes the
 historical trajectory of event arrivals up to time $t$
-(\textbf{Level~2: Ground Truth Physics}).
+(\textbf{Level~2: Constitutive and Statistical Models}).
 
 \begin{definition}[Counting Measure and Trajectory Process]
   \label{def:counting_measure}
@@ -324,37 +344,43 @@ historical trajectory of event arrivals up to time $t$
 To ensure physical realism, we assume orderly point processes:
 \begin{assumption}[Simple and Orderly Point Process]
   \label{ass:orderly}
-  The process $N_t$ is orderly, satisfying the Korolyuk condition:
+  Assume simplicity (distinct event times almost surely) and orderliness,
+  satisfying the Korolyuk condition:
   \begin{equation}
     \lim_{\Delta t \to 0^+} \frac{\mathbb{P}\bigl(N([t, t+\Delta t))
     \ge 2\bigr)}{\Delta t} = 0, \qquad \forall t \in [0, T_{\mathrm{obs}}].
     \label{eq:korolyuk_condition}
   \end{equation}
-  Consequently, multiple concurrent events have probability zero:
+  By the separate simplicity assumption, concurrent events have
+  probability zero:
   $\mathbb{P}(t_i = t_j) = 0$ for all $i \ne j$.
 \end{assumption}
 
 \begin{theorem}[Doob--Meyer Decomposition and Predictable Intensity]
   \label{thm:doob_meyer}
-  Let $N_t$ be an orderly counting process adapted to filtration
-  $\mathbb{F}$ with $\mathbb{E}[N_{T_{\mathrm{obs}}}] < \infty$.
-  There exists a unique, non-decreasing, continuous
-  $\mathbb{F}$-predictable process $\Lambda_t$ (the compensator) such that:
+  Let $N_t$ be a right-continuous integrable counting process, with $N_0=0$,
+  adapted to a filtration satisfying the usual completeness and
+  right-continuity conditions \parencite{meyer1962}. There exists a unique
+  non-decreasing predictable compensator $\Lambda_t$, with
+  $\Lambda_0=0$, such that:
   \begin{equation}
     M_t \coloneqq N_t - \Lambda_t, \qquad t \in [0, T_{\mathrm{obs}}],
     \label{eq:doob_meyer}
   \end{equation}
   is a uniformly integrable $(\mathbb{F}, \mathbb{P})$-martingale.
-  If $\Lambda_t$ is absolutely continuous with respect to the
+  Orderliness alone does not imply continuity of the compensator.
+  Assume here that $\Lambda_t$ is absolutely continuous with respect to the
   Lebesgue measure, there exists an $\mathbb{F}$-predictable
   non-negative process $\lambda^*(t)$ such that:
   \begin{equation}
     \Lambda_t = \int_0^t \lambda^*(s) \, \mathrm{d}s, \qquad
-    \lambda^*(t) \coloneqq \lim_{\Delta t \to 0^+}
+    \lambda^*(t) = \lim_{\Delta t \to 0^+}
     \frac{\mathbb{E}\bigl[N([t, t+\Delta t)) \mid
     \mathcal{F}_{t^-}\bigr]}{\Delta t}.
     \label{eq:compensator_intensity}
   \end{equation}
+  The infinitesimal limit requires differentiation and conditional-expectation
+  regularity; it is not asserted at every time point.
 \end{theorem}
 
 \subsection{The Inhomogeneous Poisson Process (IPP)}
@@ -368,7 +394,7 @@ Inhomogeneous Poisson Process.
   \label{def:ipp}
   A point process $N(\cdot)$ is an Inhomogeneous Poisson Process
   with deterministic intensity function $\lambda: [0,
-  T_{\mathrm{obs}}] \to \mathbb{R}_{>0}$ if:
+  T_{\mathrm{obs}}] \to \mathbb{R}_{\ge0}$, with finite total intensity, if:
   \begin{enumerate}[label=(\roman*),noitemsep]
     \item For any Borel set $A \in \mathcal{B}([0,
       T_{\mathrm{obs}}])$, the random count $N(A)$ follows a Poisson
@@ -389,7 +415,7 @@ Inhomogeneous Poisson Process.
   \label{thm:campbell}
   Let $N(\cdot)$ be an \ac{IPP} with intensity $\lambda(t)$ and let
   $g: [0, T_{\mathrm{obs}}] \to \mathbb{R}$ be a bounded measurable
-  function. The linear functional $S_g \coloneqq
+  function \parencite{kingman1993}. The linear functional $S_g \coloneqq
   \sum_{i=1}^{N(T_{\mathrm{obs}})} g(t_i) =
   \int_0^{T_{\mathrm{obs}}} g(t) \, N(\mathrm{d}t)$ has exact
   expectation and variance given by:
@@ -413,7 +439,8 @@ Inhomogeneous Poisson Process.
   Let $\mathcal{C} = \{t_1, t_2, \dots, t_N\}$ be an observed
   realization of ordered event arrival times on $[0,
   T_{\mathrm{obs}}]$. The likelihood functional
-  $\mathcal{L}(\lambda)$ with respect to a standard unit Poisson measure is:
+  $\mathcal{L}(\lambda)$ below is an ordered-event density using a fixed
+  time unit, or a likelihood up to a parameter-independent reference factor:
   \begin{equation}
     \mathcal{L}(\lambda) = \left( \prod_{i=1}^N \lambda(t_i) \right)
     \exp\left( -\int_0^{T_{\mathrm{obs}}} \lambda(s) \, \mathrm{d}s \right),
@@ -425,9 +452,14 @@ Inhomogeneous Poisson Process.
     \lambda(t_i) - \int_0^{T_{\mathrm{obs}}} \lambda(s) \, \mathrm{d}s.
     \label{eq:ipp_log_likelihood}
   \end{equation}
+  Relative to a Poisson reference law of positive rate $q(t)$, the exact
+  log derivative is $\int\ln(\lambda/q)\,\mathrm{d}N
+  -\int(\lambda-q)\,\mathrm{d}t$.
 \end{proposition}
 
 \begin{proof}
+  For this bin-limit argument, assume intensity continuous and positive
+  at the event times of a fixed simple finite realization.
   Partition the observation window $[0, T_{\mathrm{obs}}]$ into $M$
   disjoint subintervals $I_m = [s_{m-1}, s_m)$ of equal duration
   $\Delta = T_{\mathrm{obs}}/M$. By independent increments, the
@@ -437,14 +469,14 @@ Inhomogeneous Poisson Process.
     \prod_{m=1}^M \frac{\Lambda(I_m)^{k_m}}{k_m!}
     \exp\bigl(-\Lambda(I_m)\bigr).
   \end{equation}
-  As $M \to \infty$, $\Delta \to 0$. For orderly processes,
-  intervals contain at most one event ($k_m \in \{0, 1\}$). For
+  As $M\to\infty$, a sufficiently fine partition of this fixed
+  simple realization contains at most one event per bin. For
   intervals containing an event at $t_i \in I_m$, $\Lambda(I_m) =
   \lambda(t_i)\Delta + o(\Delta)$, contributing $\lambda(t_i)\Delta
   \exp(-\lambda(t_i)\Delta)$. For empty intervals, the factor is
   $\exp(-\Lambda(I_m))$. Factoring the product and taking the
   continuous limit as $\Delta \to 0$ cancels the Lebesgue
-  discretization measure $\Delta^N$, yielding Eq.~\eqref{eq:ipp_likelihood}.
+  discretization measure $\Delta^N$, yielding \cref{eq:ipp_likelihood}.
 \end{proof}
 
 \begin{theorem}[Maximum Entropy Characterisation of the \ac{IPP}]
@@ -452,15 +484,19 @@ Inhomogeneous Poisson Process.
   Let $\mathcal{P}$ be the class of all point processes on $[0,
   T_{\mathrm{obs}}]$ having fixed expected intensity measure
   $\mathbb{E}[N(A)] = \int_A \lambda(t) \, \mathrm{d}t$. Under the
-  Jaynes maximum entropy principle, the Inhomogeneous Poisson
-  Process is the unique probability measure that maximizes the
-  relative Shannon differential entropy rate:
+  Jaynes maximum entropy principle \parencite{jaynes1957}, restrict to
+  laws absolutely continuous with respect to a Poisson reference law
+  $Q$ of positive rate $q(t)$, with finite relative entropies and
+  integrable $\lambda|\ln(\lambda/q)|$. The \ac{IPP} maximizes
+  negative relative entropy:
   \begin{equation}
-    h(P) \le \int_0^{T_{\mathrm{obs}}} \bigl[\lambda(t) -
-    \lambda(t)\ln \lambda(t)\bigr] \, \mathrm{d}t + \mathrm{const},
+    -D(P\parallel Q)\le-D(P_\lambda\parallel Q)
+    =-\int_0^{T_{\mathrm{obs}}}
+    [\lambda\ln(\lambda/q)-\lambda+q]\,\mathrm{d}t,
     \label{eq:max_entropy_bound}
   \end{equation}
-  with equality holding if and only if $P$ is an Inhomogeneous Poisson Process.
+  with equality if and only if $P=P_\lambda$. This is a
+  reference-dependent entropy characterization.
 \end{theorem}
 
 \subsection{Statistical Physics and Grand Canonical Ensemble Isomorphism}
@@ -480,14 +516,14 @@ Theoretical Baselines}).
   $\mu_{\mathrm{chem}}(t)$ (in thermal units
   $k_{\mathrm{B}}\mathcal{T}_{\mathrm{therm}} = 1$) as:
   \begin{equation}
-    z(t) \equiv \lambda(t), \qquad \mu_{\mathrm{chem}}(t) \equiv
-    -\ln z(t) = -\ln \lambda(t).
+    z(t)=\lambda(t)/\lambda_0,\qquad
+    \mu_{\mathrm{chem}}(t)=\ln z(t),\qquad\lambda_0>0.
     \label{eq:fugacity_def}
   \end{equation}
   The grand partition function $\Xi$ of the system evaluates to:
   \begin{equation}
     \Xi = \sum_{N=0}^\infty \frac{1}{N!} \left(
-    \int_0^{T_{\mathrm{obs}}} z(t) \, \mathrm{d}t \right)^N =
+    \int_0^{T_{\mathrm{obs}}} \lambda_0z(t) \, \mathrm{d}t \right)^N =
     \exp\left( \int_0^{T_{\mathrm{obs}}} \lambda(t) \, \mathrm{d}t
     \right) = e^{\Lambda([0, T_{\mathrm{obs}}])}.
     \label{eq:grand_partition_function}
@@ -498,16 +534,16 @@ Theoretical Baselines}).
     -\int_0^{T_{\mathrm{obs}}} \lambda(t) \, \mathrm{d}t.
     \label{eq:grand_potential}
   \end{equation}
-  Substituting Eq.~\eqref{eq:fugacity_def} and
-  Eq.~\eqref{eq:grand_potential} into the point-process
-  log-likelihood \eqref{eq:ipp_log_likelihood} establishes exact equivalence:
+  Substituting \cref{eq:fugacity_def,eq:grand_potential} into the point-process
+  log-likelihood in \cref{eq:ipp_log_likelihood} establishes exact equivalence:
   \begin{equation}
-    \ell(\lambda) = -\sum_{i=1}^N \mu_{\mathrm{chem}}(t_i) +
+    \ell(\lambda)-N\ln\lambda_0 = \sum_{i=1}^N \mu_{\mathrm{chem}}(t_i) +
     \Omega_{\mathrm{grand}} \equiv -\mathcal{F}_{\mathrm{stat}}[\lambda].
     \label{eq:stat_mech_likelihood_equiv}
   \end{equation}
-  Maximising point-process log-likelihood is strictly isomorphic to
-  minimising the statistical mechanics grand thermodynamic potential.
+  Here $\lambda_0$ is a reference rate with the same units as $\lambda$.
+  Maximizing likelihood minimizes the full negative log-likelihood,
+  not the grand potential alone.
 \end{proposition}
 
 \subsection{Piecewise-Constant Rate Models and Optimal PELT Segmentation}
@@ -523,7 +559,7 @@ partitioned by $K$ changepoints into $K+1$ intervals:
   \label{eq:changepoint_partition}
 \end{equation}
 Within each interval $I_j$, the rate is constant: $\lambda(t) \equiv
-\lambda_j > 0$. Let $n_j = N(I_j) = \sum_{i=1}^N \mathbf{1}_{\{t_i
+\lambda_j \ge 0$. Let $n_j = N(I_j) = \sum_{i=1}^N \mathbf{1}_{\{t_i
 \in I_j\}}$ denote the event count and $\Delta_j = \tau_{j+1} -
 \tau_j$ the interval duration.
 
@@ -536,14 +572,16 @@ Within each interval $I_j$, the rate is constant: $\lambda(t) \equiv
     \label{eq:piecewise_loglik}
   \end{equation}
   For fixed changepoints $\{\tau_j\}$, the maximum likelihood rate
-  estimators are decoupled and strictly concave:
+  estimators are decoupled; for $n_j>0$ the log-likelihood is strictly concave:
   \begin{equation}
     \frac{\partial \ell}{\partial \lambda_j} = \frac{n_j}{\lambda_j}
     - \Delta_j = 0 \implies \hat{\lambda}_j = \frac{n_j}{\Delta_j}.
     \label{eq:mle_lambda_j}
   \end{equation}
+  For $n_j=0$, the maximizing rate is zero if allowed; with strictly
+  positive rates there is only a boundary supremum. Use $0\ln0=0$.
   Substituting $\hat{\lambda}_j$ back into
-  Eq.~\eqref{eq:piecewise_loglik} yields the exact profile log-likelihood:
+  \cref{eq:piecewise_loglik} yields the exact profile log-likelihood:
   \begin{equation}
     \ell_{\mathrm{profile}}(\{\tau_j\}) = \sum_{j=0}^K \left[ n_j
     \ln\left(\frac{n_j}{\Delta_j}\right) - n_j \right].
@@ -552,14 +590,17 @@ Within each interval $I_j$, the rate is constant: $\lambda(t) \equiv
 \end{theorem}
 
 To prevent over-segmentation, the optimal partition minimizes the
-penalized cost function:
+penalized cost function based on the \ac{BIC}:
 \begin{equation}
   \mathcal{C}_{\mathrm{BIC}}(\{\tau_j\}) = -2
   \ell_{\mathrm{profile}}(\{\tau_j\}) + (2K + 1)\ln N,
   \label{eq:bic_segmentation}
 \end{equation}
-where $2K + 1$ represents the degrees of freedom ($K$ changepoint
-positions and $K+1$ segment rates).
+where $2K+1$ counts changepoint positions and rates in this proposed
+penalty convention. Changepoints are nonregular parameters, so classical
+BIC guarantees do not follow from this count. A fixed candidate grid
+or minimum segment duration excludes arbitrarily narrow
+event-containing intervals.
 
 \begin{definition}[Pruned Exact Linear Time (PELT) Recursion]
   \label{def:pelt}
@@ -586,8 +627,11 @@ positions and $K+1$ segment rates).
     K_{\mathrm{prune}} \ge F(s),
     \label{eq:pelt_pruning_rule}
   \end{equation}
-  preserves the exact global minimum while reducing computational
-  complexity from $\mathcal{O}(N^2)$ to $\mathcal{O}(N)$ in expectation.
+  preserves the optimum value, though tied partitions can be discarded.
+  Expected $\mathcal O(N)$ requires additional stochastic and cost
+  conditions \parencite{killick2012}; worst-case time is quadratic.
+  Any minimum-length constraints must preserve feasibility of the
+  dominating alternative used in the proof.
 \end{definition}
 
 % ==============================================================================
@@ -612,12 +656,14 @@ estimators, asymptotic optimality bounds, and rigorous uncertainty propagation.
 \subsection{TWO-NN Intrinsic Dimension Estimation}
 \label{subsec:two_nn_dimension}
 
+The non-parametric estimation of intrinsic topological dimension $d$
+builds upon $k$-NN dimensional scaling \parencite{levina2004,facco2017}.
 Let $\mathcal{X} = \{\xvec_1, \xvec_2, \dots, \xvec_N\} \subset
 \mathbb{R}^D$ be a set of $N$ independent, identically distributed
 observations sampled from an underlying probability density
 $\rho(\xvec)$ supported on a smooth Riemannian manifold
 $\mathcal{M}$ of intrinsic topological dimension $d \le D$
-(\textbf{Level~2: Ground Truth Manifold}).
+(\textbf{Level~2: Idealized Manifold Geometry}).
 
 \begin{assumption}[Local Poisson Homogeneity]
   \label{ass:local_poisson}
@@ -627,9 +673,13 @@ $\mathcal{M}$ of intrinsic topological dimension $d \le D$
   constant: $\rho(\xvec) \equiv \rho_i > 0$. The generation of
   neighbouring observations within $B(\xvec_i, r)$ is modeled as a
   homogeneous spatial Poisson process with intensity $\lambda_i = N \rho_i$.
+  Exact distance laws below further use boundary-free Euclidean ball
+  geometry and homogeneity across the relevant neighbour distances.
+  For a finite sample on a curved or truncated support these are local
+  approximations, not automatic exact distributional identities.
 \end{assumption}
 
-Under Assumption~\ref{ass:local_poisson}, the expected number of
+Under \cref{ass:local_poisson}, the expected number of
 observations in a $d$-dimensional ball of radius $r$ centered at
 $\xvec_i$ is given by $\Lambda_i(r) = N \rho_i \omega_d r^d$, where
 $\omega_d$ denotes the Lebesgue measure of the unit $d$-ball:
@@ -646,7 +696,7 @@ $\xvec_i$ to its first and second nearest neighbours in $\mathcal{X}
   \label{thm:pareto_ratio}
   Let $\mu_i \coloneqq r_{i,2} / r_{i,1} \in [1, \infty)$ denote the
   distance ratio to the first two nearest neighbours. Under
-  Assumption~\ref{ass:local_poisson}, the transformed variable
+  \cref{ass:local_poisson}, the transformed variable
   $\eta_i \coloneqq \mu_i^d$ follows a standard Pareto distribution
   with scale parameter $x_m = 1$ and shape parameter $\alpha = 1$:
   \begin{equation}
@@ -727,11 +777,16 @@ $\xvec_i$ to its first and second nearest neighbours in $\mathcal{X}
     \mathcal{O}\bigl(N^{-2}\bigr).
     \label{eq:2nn_asymptotic_var}
   \end{equation}
+  These limits concern independent ideal ratios. At finite $N>1$,
+  $\mathbb{E}[\hat d_{\mathrm{MLE}}]=Nd/(N-1)$; an unbiased version
+  is $(N-1)/\sum_i\ln\mu_i$. Shared sample neighbourhoods generate
+  dependent ratios, requiring a separate variance analysis. The source
+  uses trimmed empirical-CDF regression, not this independent-ratio MLE.
 \end{proposition}
 
-\begin{theorem}[Excess Shannon Entropy and Geometric Invariance]
+\begin{theorem}[Excess Shannon Entropy and Scale Invariance]
   \label{thm:excess_entropy}
-  The Shannon differential entropy of the $k$-NN distance $R_k$
+  Under the ideal fixed-rank experiment, the differential entropy of $R_k$
   contains an explicit dependence on the local density $\rho_i$:
   \begin{equation}
     H(R_k) = k + \ln \Gamma(k) - (k - 1)\psi(k) - \ln d - \frac{d -
@@ -746,6 +801,8 @@ $\xvec_i$ to its first and second nearest neighbours in $\mathcal{X}
     \mathrm{d}x = 1 + \frac{1}{d} - \ln d.
     \label{eq:excess_entropy}
   \end{equation}
+  Distance units are fixed. This ratio law is invariant to uniform
+  rescaling, not arbitrary anisotropic or nonlinear geometric transforms.
 \end{theorem}
 
 \subsection{Adaptive Neighbourhood Selection via Sequential
@@ -753,8 +810,8 @@ Likelihood-Ratio Testing}
 \label{subsec:adaptive_kstar}
 
 Having estimated intrinsic dimension $d$, we determine for each
-point $\xvec_i$ the maximal metric neighborhood within which local
-homogeneity (Assumption~\ref{ass:local_poisson}) remains valid.
+point $\xvec_i$ a neighbourhood selected by an operational stopping
+statistic. It does not certify local homogeneity (\cref{ass:local_poisson}).
 
 Let $r_{i,1} < r_{i,2} < \dots < r_{i,k}$ denote ordered
 nearest-neighbour Euclidean distances. Concentric shell volumes are defined as:
@@ -784,37 +841,44 @@ remaining $k - j$ neighbours.
     \label{eq:deviance_statistic}
   \end{equation}
   where $\hat{\rho}_0 = k/v_{i,k}$, $\hat{\rho}_1 = j/v_{i,j}$, and
-  $\hat{\rho}_2 = (k-j)/(v_{i,k} - v_{i,j})$. By Wilks' theorem
-  \parencite{wilks1938}, under $H_0$:
+  $\hat{\rho}_2 = (k-j)/(v_{i,k} - v_{i,j})$. A Wilks reference
+  \parencite{wilks1938} requires a prespecified regular two-rate
+  experiment with positive rates and both sample sizes increasing:
   \begin{equation}
     \Lambda_{k,j} \xrightarrow{\mathcal{D}} \chi^2_1, \qquad
     \text{as } k \to \infty.
     \label{eq:wilks_convergence}
   \end{equation}
+  Searching over splits or ranks does not preserve this reference law
+  without additional calibration. This two-region deviance is a
+  theoretical baseline, not the operational stopping statistic below.
 \end{theorem}
 
 \begin{definition}[Sequential Halting Rule for Adaptive $\kstar(i)$]
   \label{def:kstar_stopping}
-  For each point $\xvec_i$, testing starts at $k_{\min} = 4$ and
-  increments sequentially up to $k_{\max}$. At each rank $k$, the
-  deviance is maximized over split indices: $\Lambda_k^{(i)}
-  \coloneqq \max_{j} \Lambda_{k,j}^{(i)}$. The optimal neighborhood
-  $\kstar(i)$ is defined as:
+  In the inspected scoring implementation, testing starts at
+  $k_{\min}=4$ and considers ranks $k<k_{\max}$ using
   \begin{equation}
-    \kstar(i) \coloneqq \min \left\{ k \in [k_{\min}, k_{\max}] :
-    \Lambda_k^{(i)} > D_{\mathrm{thr}} \right\} - 1,
+    D_{i,k}=2(k\hat d+1)\ln(r_{i,k+1}/r_{i,k})
+    -2\ln\hat d-2\ln k.
+  \end{equation}
+  It does not maximize \cref{eq:deviance_statistic} over split indices.
+  The selected neighbourhood is:
+  \begin{equation}
+    \kstar(i)=\min\{k_{\min}\le k<k_{\max}:D_{i,k}>D_{\mathrm{thr}}\},
     \label{eq:kstar_stopping_rule}
   \end{equation}
   with $\kstar(i) = k_{\max}$ if no statistic exceeds threshold. The
-  critical threshold is set to $D_{\mathrm{thr}} = \num{23.93}$,
+  critical threshold is set to $D_{\mathrm{thr}} \coloneqq \num{23.93}$,
   corresponding to:
   \begin{equation}
-    \mathbb{P}\bigl(\chi^2_1 > 23.928\bigr) = 1.0 \times 10^{-6}.
+    \mathbb{P}\bigl(\chi^2_1 > \num{23.928}\bigr) = \num{1.0e-6}.
     \label{eq:dthr_pvalue}
   \end{equation}
-  This stringent threshold provides a rigorous Bonferroni
-  Family-Wise Error Rate (\ac{FWER}) correction preventing premature
-  neighborhood truncation across sequential tests spanning $k \in [4, 100]$.
+  The $\chi^2_1$ tail is only a reference probability, not demonstrated
+  calibration of $D_{i,k}$ or its sequential search. A Bonferroni
+  \ac{FWER} guarantee requires valid individual tests and a specified
+  comparison family; it is not established here.
 \end{definition}
 
 \subsection{Point-Adaptive Maximum Likelihood Density Estimation}
@@ -825,20 +889,20 @@ configuration of all $\kstar(i)$ nearest neighbours \parencite{derrico2021}.
 
 \begin{theorem}[Poisson Shell Likelihood and Closed-Form MLE]
   \label{thm:shell_mle}
-  Let $S_i \coloneqq \omega_d r_{i, \kstar(i)}^d$ denote the total
-  volume of the adaptive metric ball. Under the Poisson process with
-  spatial intensity $\lambda_i = N \rho_i$, the joint likelihood of
-  observing exactly one observation in each concentric shell is:
+  Fix $k=\kstar(i)$ independently of the observations, with known
+  dimension and homogeneous boundary-free geometry. Let
+  $S_i=\omega_dr_{i,k}^d$ be the rank-$k$ stopping volume.
+  The joint density of ordered arrival volumes
+  $0<v_{i,1}<\cdots<v_{i,k}=S_i$, relative to their Lebesgue volume
+  elements, is:
   \begin{equation}
-    \mathcal{L}(\rho_i) = (N \rho_i)^{\kstar(i)} \left(
-    \prod_{j=0}^{\kstar(i)-1} v_{i,j} \right) \exp\bigl(-N \rho_i S_i\bigr).
+    \mathcal{L}(\rho_i)=(N\rho_i)^k\exp(-N\rho_iS_i).
     \label{eq:joint_shell_likelihood}
   \end{equation}
   Reparameterizing in log-intensity $u_i \coloneqq \ln(N \rho_i)$
   yields the log-likelihood:
   \begin{equation}
-    \ell(u_i) = \kstar(i) u_i - e^{u_i} S_i +
-    \sum_{j=0}^{\kstar(i)-1} \ln v_{i,j}.
+    \ell(u_i)=ku_i-e^{u_i}S_i.
     \label{eq:log_lik_ui}
   \end{equation}
   The score and Hessian are:
@@ -850,20 +914,23 @@ configuration of all $\kstar(i)$ nearest neighbours \parencite{derrico2021}.
   The unique maximum likelihood estimators in intensity and
   probability density space are:
   \begin{equation}
-    e^{\hat{u}_i} = \frac{\kstar(i)}{S_i} \iff \hat{\rho}_{i,
-    \mathrm{MLE}} = \frac{\kstar(i)}{N \omega_d r_{i, \kstar(i)}^d}.
+    e^{\hat{u}_i} \coloneqq \frac{\kstar(i)}{S_i} \iff \hat{\rho}_{i,
+    \mathrm{MLE}} \coloneqq \frac{\kstar(i)}{N \omega_d r_{i, \kstar(i)}^d}.
     \label{eq:mle_densities}
   \end{equation}
+  The source's nominal root is log intensity $\ln(k/S_i)$, without
+  probability-density normalization by $N$. Its use of adaptive $k^*$
+  does not by itself justify the fixed-rank sampling guarantees below.
 \end{theorem}
 
 \begin{proposition}[Bias Correction and UMVUE Density Estimator]
   \label{prop:umvue_density}
-  Because $N \rho_i S_i \sim \mathrm{Gamma}(\kstar(i), 1)$, the raw
+  Under this fixed-rank experiment, $N \rho_i S_i \sim
+  \mathrm{Gamma}(\kstar(i), 1)$, so the raw
   MLE has positive bias: $\mathbb{E}[\hat{\rho}_{i, \mathrm{MLE}}] =
-  \frac{\kstar(i)}{\kstar(i) - 1} \rho_i$. The unique Uniformly
-  Minimum-Variance Unbiased Estimator (\ac{UMVUE}) is:
+  \frac{\kstar(i)}{\kstar(i) - 1} \rho_i$. The unique \ac{UMVUE} is:
   \begin{equation}
-    \hat{\rho}_{i, \mathrm{UB}} = \frac{\kstar(i) - 1}{N \omega_d
+    \hat{\rho}_{i, \mathrm{UB}} \coloneqq \frac{\kstar(i) - 1}{N \omega_d
     r_{i, \kstar(i)}^d}, \qquad \Var\bigl(\hat{\rho}_{i,
     \mathrm{UB}}\bigr) = \frac{\rho_i^2}{\kstar(i) - 2}, \quad
     \text{for } \kstar(i) \ge 3.
@@ -878,12 +945,17 @@ configuration of all $\kstar(i)$ nearest neighbours \parencite{derrico2021}.
     \frac{\kstar(i) - 2}{\kstar(i)} \xrightarrow{\kstar \to \infty} 1.
     \label{eq:asymp_efficiency}
   \end{equation}
+  Completeness and sufficiency of the fixed-rank Gamma stopping volume
+  justify the UMVUE statement. It does not automatically survive
+  data-dependent $k^*$ or estimated dimension; the source does not
+  implement this bias correction.
 \end{proposition}
 
 \subsection{Uncertainty Propagation and the Conservative Error Model}
 \label{subsec:uncertainty_propagation}
 
-Because $\Var(\hat{\rho}_i) = \rho_i^2/(\kstar(i) - 2)$ scales
+For the ideal fixed-rank unbiased estimator,
+$\Var(\hat{\rho}_i) = \rho_i^2/(\kstar(i) - 2)$ scales
 quadratically with unknown density $\rho_i$, raw density contrasts
 are severely heteroscedastic.
 
@@ -891,7 +963,8 @@ are severely heteroscedastic.
   via Delta Method]
   \label{prop:delta_method_log}
   Let $\phi_i \coloneqq \ln \hat{\rho}_{i, \mathrm{UB}}$ denote the
-  log-density. Applying the Delta method with $g(\rho) = \ln \rho$:
+  log-density. Applying the Delta method \parencite{cramer1946} with
+  $g(\rho) = \ln \rho$:
   \begin{equation}
     \Var\bigl(\ln \hat{\rho}_{i, \mathrm{UB}}\bigr) \approx \bigl[
     g'(\rho_i) \bigr]^2 \Var\bigl(\hat{\rho}_{i, \mathrm{UB}}\bigr)
@@ -899,15 +972,15 @@ are severely heteroscedastic.
     \frac{\rho_i^2}{\kstar(i) - 2} = \frac{1}{\kstar(i) - 2}.
     \label{eq:delta_method_result}
   \end{equation}
-  In log-density space, variance is completely independent of true
-  density $\rho_i$, governed solely by $\kstar(i)$.
+  This is a first-order fixed-rank approximation, not an exact adaptive
+  uncertainty identity. The exact fixed-rank log variance is given next.
 \end{proposition}
 
 \begin{theorem}[Exact Gamma Variance via Trigamma Function]
   \label{thm:trigamma_variance}
   From $\hat{u}_i = \ln \kstar(i) - \ln S_i$ with $S_i = \Lambda_i /
   (N \rho_i)$ and $\Lambda_i \sim \mathrm{Gamma}(\kstar(i), 1)$, the
-  exact conditional variance is:
+  exact variance for a fixed rank is:
   \begin{equation}
     \Var[\hat{u}_i] = \Var[\ln \Lambda_i] =
     \psi_1\bigl(\kstar(i)\bigr) = \frac{1}{\kstar(i)} +
@@ -932,55 +1005,66 @@ are severely heteroscedastic.
   \end{equation}
 \end{definition}
 
-\begin{remark}[Epistemic Justification of the $4\times$ Variance Margin]
+\begin{remark}[Epistemic Justification of the \num{4}$\times$ Variance Margin]
   \label{rem:conservative_justification}
-  As demonstrated in Table~\ref{tab:variance_comparison}, the
-  operational error model~\eqref{eq:pak_conservative_error} exceeds
-  the nominal CRLB ($1/\kstar$) by a factor of $\approx 4$ in
-  variance (factor of $\approx 2$ in standard error). This margin is
-  bounded by four distinct physical and statistical factors:
+  As demonstrated in \Cref{tab:variance_comparison}, the
+  operational error model in \cref{eq:pak_conservative_error} exceeds
+  the nominal CRLB ($1/\kstar$) by a factor of $\approx \num{4}$ in
+  variance (factor of $\approx \num{2}$ in standard error). Relevant
+  departures from the ideal fixed-rank model include:
   (i) random fluctuations of empirical shell volumes $S_i$;
   (ii) propagation of intrinsic dimension uncertainty $\Var(\hat{d})
   \approx \hat{d}^2/N$ through volume exponentiation;
   (iii) adaptive selection bias from sequential LRT search; and
   (iv) residual continuous density gradients violating strict local
   homogeneity.
-  Overestimating uncertainty enforces strict Type~I error control
-  during topological saddle detection, preventing statistical
-  sampling noise from being misinterpreted as genuine cluster boundaries.
+  The formula alone does not bound these departures or prove coverage,
+  Type~I error control, or calibration of selected density saddles.
 \end{remark}
 
 \begin{table}[htbp]
   \centering
   \small
-  \caption{\textbf{Comparison of Log-Density Variance Estimators
-    Across Neighbourhood Sizes}. Target/Scope: Evaluation of
-    theoretical and empirical variance models for log-density
-    estimator $\ln \hat{\rho}_i$ across characteristic sizes $\kstar
-    \in \{4, 10, 50, 100\}$. Key Phenomenon: The conservative \pak{}
-    formulation converges asymptotically to $4\times$ the
-    Cram\'er--Rao lower bound, providing an exact factor-of-two
-    uncertainty margin on standard errors. Conditions: Homogeneous
-    Poisson process on a manifold of intrinsic dimension $d$, with
-  minimum statistical neighbourhood $k_{\min} = 4$.}
-  \label{tab:variance_comparison}
-  \begin{tabular}{@{}lccccc@{}}
-    \toprule
-    Neighbourhood Size & CRLB & Trigamma Law & Delta Method &
-    Conservative \pak{} & Variance Ratio \\
-    $\kstar$ & $1/\kstar$ & $\psi_1(\kstar)$ & $1/(\kstar - 2)$ &
-    $(4\kstar + 2)/[\kstar(\kstar - 1)]$ & $\hat{\sigma}^2 / \mathrm{CRLB}$ \\
-    \midrule
-    \num{4}   & \num{0.2500} & \num{0.2838} & \num{0.5000} &
-    \num{1.5000} & \num{6.00} \\
-    \num{10}  & \num{0.1000} & \num{0.1052} & \num{0.1250} &
-    \num{0.4667} & \num{4.67} \\
-    \num{50}  & \num{0.0200} & \num{0.0202} & \num{0.0208} &
-    \num{0.0824} & \num{4.12} \\
-    \num{100} & \num{0.0100} & \num{0.0101} & \num{0.0102} &
-    \num{0.0406} & \num{4.06} \\
-    \bottomrule
-  \end{tabular}
+  \begin{threeparttable}
+    \caption{\textbf{Comparison of Log-Density Variance Estimators
+      Across Neighbourhood Sizes}. Target/Scope: Evaluation of
+      analytical variance formulas for log-density
+      estimator $\ln \hat{\rho}_i$ across characteristic sizes $\kstar
+      \in \{4, 10, 50, 100\}$. Key Phenomenon: The conservative \pak{}
+      formulation converges asymptotically to $4\times$ the
+      Cram\'er--Rao lower bound; the standard-error ratio tends to two,
+      but is not exactly two at finite rank. These are formula
+    evaluations for a fixed-rank Poisson baseline, not coverage results.}
+    \label{tab:variance_comparison}
+    \begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}l
+        S[table-format=1.4] S[table-format=1.4] S[table-format=1.4]
+      S[table-format=1.4] S[table-format=1.2]@{}}
+      \toprule
+      {Rank} & {CRLB} & {Trigamma} & {Delta} &
+      {\pak{}} & {Ratio} \\
+      {$k$} & {$1/k$} & {$\psi_1(k)$} & {$1/(k-2)$} &
+      {$(4k+2)/[k(k-1)]$} & {$\hat\sigma^2/\mathrm{CRLB}$} \\
+      \midrule
+      \num{4}   & 0.2500 & 0.2838 & 0.5000 & 1.5000 & 6.00 \\
+      \num{10}  & 0.1000 & 0.1052 & 0.1250 & 0.4667 & 4.67 \\
+      \num{50}  & 0.0200 & 0.0202 & 0.0208 & 0.0824 & 4.12 \\
+      \num{100} & 0.0100 & 0.0101 & 0.0102 & 0.0406 & 4.06 \\
+      \bottomrule
+    \end{tabular*}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+    \item Target \& Scope: [Derived Metric] Formula evaluations at
+      $k\in\{4,10,50,100\}$, with fixed $k$ for the theoretical laws;
+      the operational formula is evaluated at $k=k^*$.
+    \item Notice: As $\kstar \to \infty$, the conservative PAk error
+      model converges asymptotically to four times the Cram\'er--Rao
+      lower bound ($4/\kstar$). This algebraic comparison is not a
+      guaranteed uncertainty margin for empirical sampling fluctuations.
+    \item Evidence Anchor: Values are evaluations of the displayed
+      fixed-rank formulas, not empirical variance estimates. No Poisson
+      simulation coverage was verified in this review.
+    \end{tablenotes}
+  \end{threeparttable}
 \end{table}
 
 % ==============================================================================
@@ -1041,7 +1125,10 @@ marked events:
   $f(\mathbf{r} \mid m)$ is spatial redistribution normalized such
   that $\int_{\mathbb{R}^2} f(\mathbf{r} \mid m) \,
   \mathrm{d}\mathbf{r} = 1$. Integrating spatial dimensions over
-  $\mathcal{S}$ recovers purely temporal marked \ac{ETAS}:
+  all space recovers purely temporal marked \ac{ETAS}; for bounded
+  $\mathcal S$, each parent contribution also carries its kernel
+  retention factor $\int_{\mathcal S}f(\mathbf x-\mathbf x_j\mid m_j)
+  \,\mathrm{d}\mathbf x$:
   \begin{equation}
     \lambda(t \mid \mathcal{H}_t) = \mu_0(t) + \sum_{j:\, t_j < t}
     g(t - t_j, m_j), \qquad t \in \mathcal{T}.
@@ -1073,11 +1160,15 @@ efficiency parameter.
 \subsection{Analytical Derivation of the Branching Ratio and Stability}
 \label{subsec:clustering_branching_ratio}
 
+In marked self-exciting point processes \parencite{helmstetter2002}, the
+branching ratio controls whether cascades remain contained or trigger
+runaway supercritical seismicity.
+
 \begin{theorem}[Branching Ratio Formulation]
   \label{thm:clustering_branching_ratio}
   Let temporal kernel $g(\tau, m)$ follow
-  Eq.~\eqref{eq:clustering_omori_kernel} with $p > 1$, and
-  magnitudes follow Eq.~\eqref{eq:clustering_gr_pdf} with $\beta >
+  \cref{eq:clustering_omori_kernel} with $p > 1$, and
+  magnitudes follow \cref{eq:clustering_gr_pdf} with $\beta >
   \alpha$. The branching ratio $n_{\mathrm{b}} \in \mathbb{R}_{>0}$
   (expected first-generation offspring per event) is:
   \begin{equation}
@@ -1103,7 +1194,7 @@ efficiency parameter.
     e^{-(\beta - \alpha)v} \, \mathrm{d}v = \frac{K c^{1-p}\beta}{(p
     - 1)(\beta - \alpha)}, \quad (\beta > \alpha),
   \end{equation}
-  which establishes Eq.~\eqref{eq:clustering_branching_ratio}.
+  which establishes \cref{eq:clustering_branching_ratio}.
 \end{proof}
 
 \begin{corollary}[Critical Stability Boundaries]
@@ -1111,20 +1202,22 @@ efficiency parameter.
   The parameter space partitions into three asymptotic regimes:
   \begin{enumerate}[label=(\roman*),noitemsep]
     \item \textbf{Subcritical ($n_{\mathrm{b}} < 1$):} Cascades
-      extinguish almost surely. The process is stationary and
-      ergodic. Expected total progeny seeded by an immigrant event
+      extinguish almost surely. A stationary construction with constant
+      immigration on the whole time axis has finite mean rate.
+      Expected total progeny seeded by an immigrant event
       is $\mathbb{E}[Z] = \sum_{k=0}^\infty n_{\mathrm{b}}^k = (1 -
       n_{\mathrm{b}})^{-1}$. The mean stationary seismicity rate is
       $\bar{\lambda} = \mu_0 / (1 - n_{\mathrm{b}})$.
     \item \textbf{Critical ($n_{\mathrm{b}} = 1$):} Critical
       productivity $K_{\mathrm{crit}} = \frac{(p - 1)(\beta -
-      \alpha)}{\beta c^{1-p}}$. Extinction is almost sure, but
-      expected cluster duration and size diverge ($\mathbb{E}[Z] =
-      \infty$), exhibiting power-law cluster sizes $\mathbb{P}(Z >
-      z) \sim z^{-1/2}$ and long-range rate memory $\sim t^{-(2-p)}$.
-    \item \textbf{Supercritical ($n_{\mathrm{b}} > 1$):} Explosive
-      regime with non-zero probability of infinite cascades
-      ($\mathbb{E}[N_t] = \infty$).
+      \alpha)}{\beta c^{1-p}}$. Extinction is almost sure for the
+      nondegenerate offspring law, while $\mathbb E[Z]=\infty$.
+      A $z^{-1/2}$ size tail additionally requires finite offspring
+      variance; for these unbounded marks, $\beta>2\alpha$.
+    \item \textbf{Supercritical ($n_{\mathrm{b}}>1$):} Infinite
+      genealogical cascades have positive probability. This alone
+      does not imply infinite counts at every finite time or
+      establish finite-time explosion.
   \end{enumerate}
 \end{corollary}
 
@@ -1134,27 +1227,28 @@ and Diffusion}
 
 \paragraph{Coulomb Failure Stress Transfer ($\Delta\mathrm{CFF}$).}
 Coseismic slip creates an instantaneous elastostatic stress
-perturbation $\Delta\boldsymbol{\sigma}$ in the surrounding crust
-\parencite{okada1992,king1994}. On a receiver fault patch defined by
+perturbation $\Delta\bm{\sigma}$ in the surrounding crust
+\parencite{okada1992,king1994,stein1999,harris1998}. On a receiver
+fault patch defined by
 unit normal $\mathbf{n}$ and slip vector $\mathbf{s}$:
 \begin{equation}
-  \Delta\mathrm{CFF} = \Delta\tau_{\mathrm{s}} + \mu_{\mathrm{f}}
-  (\Delta\sigma_{\mathrm{n}} + \Delta p) = \Delta\tau_{\mathrm{s}} +
+  \Delta\mathrm{CFF} \coloneqq \Delta\tau_{\mathrm{s}} + \mu_{\mathrm{f}}
+  (\Delta\sigma_{\mathrm{n}} + \Delta p) \equiv \Delta\tau_{\mathrm{s}} +
   \mu_{\mathrm{eff}} \, \Delta\sigma_{\mathrm{n}},
   \label{eq:clustering_coulomb_cff}
 \end{equation}
 where $\Delta\tau_{\mathrm{s}}$ is shear stress change along slip
 direction, $\Delta\sigma_{\mathrm{n}}$ normal stress change (tensile
 positive), $\Delta p$ pore pressure change, $\mu_{\mathrm{f}} \in
-[0.4, 0.85]$ coefficient of internal friction, and
-$\mu_{\mathrm{eff}} = \mu_{\mathrm{f}}(1 - B)$ apparent friction
-with Skempton coefficient $B \in [0, 1]$. Nucleation is promoted
+[\num{0.4}, \num{0.85}]$ coefficient of internal friction, and
+$\mu_{\mathrm{eff}} \coloneqq \mu_{\mathrm{f}}(1 - B)$ apparent friction
+with Skempton coefficient $B \in [\num{0}, \num{1}]$. Nucleation is promoted
 when $\Delta\mathrm{CFF} > 0$ and suppressed in stress shadows
 ($\Delta\mathrm{CFF} < 0$).
 
 \paragraph{Rate-and-State Friction Derivation of Omori Decay.}
-Under Dieterich's rate-and-state friction model
-\parencite{dieterich1994}, seismicity rate $R(t)$ under steady
+Under the rate-and-state friction formulation
+\parencite{dieterich1994,ruina1983}, seismicity rate $R(t)$ under steady
 stressing rate $\dot{\tau}_{\mathrm{r}}$ following stress step
 $\Delta\tau = \Delta\mathrm{CFF}$ satisfies:
 \begin{equation}
@@ -1165,10 +1259,12 @@ $\Delta\tau = \Delta\mathrm{CFF}$ satisfies:
   \right] \exp\left(-\frac{t}{t_{\mathrm{a}}}\right) + 1},
   \label{eq:clustering_dieterich_exact}
 \end{equation}
-where $t_{\mathrm{a}} =
+where $t_{\mathrm{a}} \coloneqq
 A\sigma_{\mathrm{n}}/\dot{\tau}_{\mathrm{r}}$ is aftershock
-relaxation duration. For $t \ll t_{\mathrm{a}}$, this recovers
-Omori's law with $p = 1$:
+relaxation duration, with $A\sigma_{\mathrm n}>0$ the effective frictional
+stress scale. For $t\ll t_{\mathrm a}$ and
+$\Delta\tau\gg A\sigma_{\mathrm n}$, this approximates
+Omori's law with $p = \num{1}$:
 \begin{equation}
   R(t) \approx \frac{r \,
   \exp\left(\frac{\Delta\tau}{A\sigma_{\mathrm{n}}}\right)}{1 +
@@ -1176,34 +1272,41 @@ Omori's law with $p = 1$:
   t_{\mathrm{a}} \exp\left(-\frac{\Delta\tau}{A\sigma_{\mathrm{n}}}\right).
   \label{eq:clustering_dieterich_omori}
 \end{equation}
-Initial aftershock productivity scales exponentially with stress
-($\propto \exp(\Delta\tau / A\sigma_{\mathrm{n}})$), providing the
-direct mechanical basis for the \ac{ETAS} term $e^{\alpha(m - m_0)}$.
+The initial rate is exponential in stress, not necessarily the integrated
+count. A magnitude-productivity law additionally requires a stress--magnitude
+relation and an affected-volume model.
 
 \paragraph{Pore-Pressure Diffusion in Fluid-Driven Swarms.}
-In fluid-saturated porous elastic media, pore pressure
-$p(\mathbf{x}, t)$ evolves via the parabolic diffusion equation
+In fluid-saturated porous elastic media, Darcy flux $\mathbf{q}
+\coloneqq -\frac{k}{\eta}\nabla p \equiv -\frac{k}{\eta}\operatorname{grad} p$
+and fluid mass conservation $\nabla \cdot \mathbf{q} +
+S_{\mathrm{s}}\frac{\partial p}{\partial t} \equiv \operatorname{div}\mathbf{q}
++ S_{\mathrm{s}}\frac{\partial p}{\partial t} = Q(\mathbf{x}, t)$ yield the
+parabolic diffusion equation for pore pressure $p(\mathbf{x}, t)$
 \parencite{rice1976}:
 \begin{equation}
   \frac{\partial p}{\partial t} = D \, \nabla^2 p +
-  \frac{Q(\mathbf{x}, t)}{S_{\mathrm{s}}}, \qquad D \coloneqq
+  \frac{Q(\mathbf{x}, t)}{S_{\mathrm{s}}} \equiv D
+  \operatorname{div}(\operatorname{grad} p)
+  + \frac{Q(\mathbf{x}, t)}{S_{\mathrm{s}}}, \qquad D \coloneqq
   \frac{k}{\eta S_{\mathrm{s}}} \in \mathbb{R}_{>0},
   \label{eq:clustering_diffusion_pde}
 \end{equation}
 where $D$ is hydraulic diffusivity, $k$ permeability, $\eta$ dynamic
-viscosity, and $S_{\mathrm{s}}$ specific storage. For an impulsive
-point injection $Q = Q_0 \delta(\mathbf{x})\delta(t)$, the expanding
-locus of criticality ($\Delta\mathrm{CFF} = \mu_{\mathrm{f}}\Delta p
-\ge \Delta\sigma_{\mathrm{crit}}$) defines the parabolic Shapiro
-triggering front \parencite{shapiro1997}:
+viscosity, and $S_{\mathrm{s}}$ pressure storage in inverse pressure
+units; hydraulic-head specific storage requires a density/gravity
+conversion. A three-dimensional impulse gives a peak-time locus
+$r=\sqrt{6Dt}$ and a distinct logarithmically modified pressure contour.
+The separately motivated Shapiro envelope convention
+\parencite{shapiro1997} is:
 \begin{equation}
-  r(t) = \sqrt{4\pi D t}.
+  r(t) \coloneqq \sqrt{4\pi D t}.
   \label{eq:clustering_shapiro_front}
 \end{equation}
-A linear envelope in distance--$\sqrt{t}$ space constitutes the
-definitive diagnostic signature of fluid-mediated swarms,
-contrasting with static aftershock footprints
-(Table~\ref{tab:clustering_aftershock_vs_swarm}).
+A linear envelope in distance--$\sqrt t$ space is compatible with diffusion,
+not unique evidence of fluid causation. The three constructions are shown
+in \cref{fig:supp_diffusion_constructions}; physical interpretations appear in
+(\cref{tab:clustering_aftershock_vs_swarm}).
 
 \begin{table}[htbp]
   \centering
@@ -1216,37 +1319,50 @@ contrasting with static aftershock footprints
         Classification; Key Phenomenon: Mechanics vs Point-Process
     Signatures; Conditions: Completeness $m \ge m_0$, Tectonic Fault Systems].}
     \label{tab:clustering_aftershock_vs_swarm}
-    \begin{tabularx}{\textwidth}{l X X}
+    \begin{tabularx}{\textwidth}{l >{\raggedright\arraybackslash}X
+      >{\raggedright\arraybackslash}X}
       \toprule
       \textbf{Diagnostic Criterion} & \textbf{Stress-Triggered
       Aftershocks} & \textbf{Fluid-Driven Seismic Swarms} \\
       \midrule
       \textbf{Primary Driver} & Co-seismic elastostatic stress step
       ($\Delta\mathrm{CFF}$) & Pore-pressure diffusion ($\partial p
-      / \partial t = D \nabla^2 p$) or aseismic slip \\
+        / \partial t = D \nabla^2 p \equiv D
+      \operatorname{div}(\operatorname{grad} p)$) or aseismic slip \\
       \textbf{Energy Partitioning} & Dominant mainshock; conforms to
-      B\r{a}th's law ($\Delta m \approx 1.2$) & No dominant
+      B\r{a}th's law ($\Delta m \approx \num{1.2}$) & No dominant
       mainshock; multiple events of comparable magnitude \\
       \textbf{Temporal Rate Decay} & Monotonic power-law Omori
-      relaxation: $\sim (\tau + c)^{-p}$ ($p \approx
-      1.0\text{--}1.3$) & Transient asymmetric envelope (log-normal
+      relaxation: $\sim (\tau + c)^{-p}$ ($p \in
+      \numrange{1.0}{1.3}$) & Transient asymmetric envelope (log-normal
       pulse); gradual onset \\
-      \textbf{Branching Ratio ($n_{\mathrm{b}}$)} & Subcritical:
-      $n_{\mathrm{b}} \in [0.50, 0.75]$ & Near-critical to critical:
-      $n_{\mathrm{b}} \in [0.85, 1.00]$ \\
+      \textbf{Branching Ratio ($n_{\mathrm{b}}$)} & Must be estimated
+      under a specified kernel & Not determined by a swarm label alone \\
       \textbf{Gutenberg--Richter $b$-value} & Standard crustal
-      baseline: $b \approx 0.8\text{--}1.1$ & Elevated: $b \ge
-      1.3\text{--}2.5$ due to high pore-fluid pressure \\
+      baseline: $b \in \numrange{0.8}{1.1}$ & Elevated: $b \in
+      \numrange{1.3}{2.5}$ due to high pore-fluid pressure \\
       \textbf{Spatial Kinematics} & Static spatial footprint bounded
       by mainshock fault rupture & Diffusive parabolic migration
       front: $r(t) \propto \sqrt{4\pi D t}$ \\
       \textbf{Optimal Model Representation} & Pure parametric
-      \ac{ETAS} ($d=5$: $K, c, p, \alpha, \mu$) & Multi-scale
+      \ac{ETAS} ($d = \num{5}$: $K, c, p, \alpha, \mu$) & Multi-scale
       Unified Model: log-normal envelope $\phi_k(t)$ + \ac{ETAS} aftershocks \\
       \textbf{Epistemic Class} & Level~5: Elastostatic
       rate-and-state mechanics & Level~5: Poroelastic diffusion mechanics \\
       \bottomrule
     \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+    \item Target \& Scope: Seismotectonic and statistical criteria
+      distinguishing elastostatic aftershock cascades from
+      fluid-driven earthquake swarms.
+    \item Notice: These are schematic literature interpretations, not
+      deterministic causal classification rules. Branching ratio,
+      magnitude distribution, and migration need separate estimation.
+    \item Evidence Anchor: Grounded in rate-and-state friction
+      mechanics and diffusion models. No regional catalogue benchmark
+      was verified in this review.
+    \end{tablenotes}
   \end{threeparttable}
 \end{table}
 
@@ -1261,8 +1377,8 @@ Formulation}
 \subsection{Free Energy Landscape and Statistical Thermodynamics of Seismicity}
 \label{subsec:free_energy_landscape}
 
-We formalise the temporal clustering of seismic events through an
-exact mapping to statistical mechanics. Let $\mathcal{C} = \{(t_i,
+We distinguish ideal-gas algebra from phenomenological physical analogies.
+Neither specifies a physical earthquake temperature. Let $\mathcal{C} = \{(t_i,
 m_i)\}_{i=1}^N \subset [0, T_{\mathrm{obs}}] \times [m_0, \infty)$
 denote an earthquake catalogue recorded over observation horizon
 $[0, T_{\mathrm{obs}}]$ with completeness magnitude $m_0 \in
@@ -1276,12 +1392,12 @@ $[0, T_{\mathrm{obs}}]$ with completeness magnitude $m_0 \in
   Model Estimate}), the \emph{effective Hamiltonian} at time $t \in
   [0, T_{\mathrm{obs}}]$ is the pointwise surprisal:
   \begin{equation}
-    \mathcal{H}_{\mathrm{eff}}(t) \;\equiv\;
+    \mathcal{H}_{\mathrm{eff}}(t) \coloneqq
     -\ln\!\left(\frac{\hat{\lambda}(t)}{\lambda_0}\right).
     \label{eq:effective_hamiltonian}
   \end{equation}
   At discrete event times $t_i$, the microscopic event Hamiltonian
-  is $\mathcal{H}_i \equiv \mathcal{H}_{\mathrm{eff}}(t_i) =
+  is $\mathcal{H}_i \equiv \mathcal{H}_{\mathrm{eff}}(t_i) \coloneqq
   -\ln(\hat{\lambda}_i/\lambda_0)$.
 \end{definition}
 
@@ -1292,40 +1408,36 @@ Qualitative Interpretation}). Quiescent background regimes and
 inter-cluster boundaries define potential barriers
 ($\mathcal{H}_{\mathrm{eff}} \gg 0$).
 
-\begin{proposition}[Effective Temperature from Finite-Sample Fisher
-  Information]
+\begin{definition}[Uncertainty Proxy, Not a Physical Temperature]
   \label{prop:effective_temperature}
   Let $\kstar(t) \in \{3, \dots, k_{\max}\}$ denote the adaptive
   neighbourhood size selected by the $\pak$ estimator at time $t$.
-  Under finite-sample point-process fluctuations, the variance of
-  the log-rate estimator satisfies $\Var(\ln \hat{\lambda}(t)) =
-  (\kstar(t) - 2)^{-1}$. The fluctuation of the effective
-  Hamiltonian corresponds to a local \emph{effective temperature}
-  $T_{\mathrm{eff}}(t) \in \mathbb{R}_{>0}$:
+  A fixed-rank delta-method benchmark motivates the dimensionless
+  uncertainty proxy $T_{\mathrm{proxy}}(t)>0$:
   \begin{equation}
-    T_{\mathrm{eff}}(t) \;\equiv\; \frac{1}{\beta(t)} \;=\;
-    \frac{1}{\kstar(t) - 2}\,, \qquad \kstar(t) \ge 3.
+    T_{\mathrm{proxy}}(t) \coloneqq
+    \frac{1}{\kstar(t) - 2}\,, \qquad \kstar(t) \ge \num{3}.
     \label{eq:effective_temperature}
   \end{equation}
-  In the dense-data limit ($N \to \infty$, $\kstar \to \infty$),
-  $T_{\mathrm{eff}} \to 0$, recovering a frozen, deterministic
-  potential landscape. In sparse regimes ($\kstar \sim
-  \mathcal{O}(1)$), thermal fluctuations dominate, smearing shallow barriers.
-\end{proposition}
+  This is neither the exact fixed-rank variance $\psi_1(k)$ nor
+  calibrated adaptive variance or thermal energy. Increasing $N$
+  does not force $k^*\to\infty$ when ranks are capped.
+\end{definition}
 
 \begin{theorem}[Canonical and Grand Canonical Partition Functions]
   \label{thm:partition_functions}
-  Conditioned on total expected seismicity $\Lambda =
+  For deterministic Poisson intensity, conditional on a positive event
+  count, unordered event locations have density $\lambda/\Lambda$,
+  where $\Lambda =
   \int_0^{T_{\mathrm{obs}}} \lambda(s)\,\mathrm{d}s \in
   \mathbb{R}_{>0}$, the probability density of an event arriving at
   $t \in [0, T_{\mathrm{obs}}]$ matches the canonical
   Gibbs--Boltzmann distribution:
   \begin{equation}
-    p(t) \;=\; \frac{\lambda(t)}{\Lambda} \;=\;
-    \frac{1}{\mathcal{Z}}\,e^{-\mathcal{H}_{\mathrm{eff}}(t)},
-    \qquad \mathcal{Z} \;\equiv\; \int_0^{T_{\mathrm{obs}}}
-    e^{-\mathcal{H}_{\mathrm{eff}}(s)}\,\mathrm{d}s =
-    \frac{\Lambda}{\lambda_0}\,.
+    p(t)=\frac{\lambda(t)}{\Lambda}
+    =\frac{\lambda_0e^{-\mathcal H_{\mathrm{eff}}(t)}}{\mathcal Z},
+    \qquad \mathcal Z=\int_0^{T_{\mathrm{obs}}}
+    e^{-\mathcal H_{\mathrm{eff}}(s)}\lambda_0\,\mathrm{d}s=\Lambda.
     \label{eq:canonical_boltzmann}
   \end{equation}
   In the grand canonical ensemble where total event count $n \in
@@ -1334,28 +1446,31 @@ inter-cluster boundaries define potential barriers
   $\mu_{\mathrm{chem}}(t) \equiv \ln(\lambda(t)/\lambda_0) =
   -\mathcal{H}_{\mathrm{eff}}(t)$ is:
   \begin{equation}
-    \Xi \;=\; \sum_{n=0}^{\infty} \frac{1}{n!} \left(
+    \Xi = \sum_{n=0}^{\infty} \frac{1}{n!} \left(
     \int_0^{T_{\mathrm{obs}}} \lambda(t)\,\mathrm{d}t \right)^n
-    \;=\; \exp\!\left( \int_0^{T_{\mathrm{obs}}}
-    \lambda(t)\,\mathrm{d}t \right) \;=\; e^{\Lambda}\,.
+    = \exp\!\left( \int_0^{T_{\mathrm{obs}}}
+    \lambda(t)\,\mathrm{d}t \right) = e^{\Lambda}\,.
     \label{eq:grand_partition}
   \end{equation}
-  The Helmholtz free energy of the temporal seismicity field is
-  $\mathcal{F} \equiv -\ln \mathcal{Z} = -\ln(\Lambda/\lambda_0)$ in
-  natural thermodynamic units ($k_{\mathrm{B}} T_{\mathrm{eff}} = 1$).
+  The formal dimensionless free energy is $-\ln\mathcal Z=-\ln\Lambda$,
+  with reference measure $\lambda_0\,\mathrm{d}t$. This location identity
+  does not generally apply to history-dependent Hawkes intensities.
 \end{theorem}
 
 \begin{proposition}[Landau Field Theory of Swarm Onset]
   \label{prop:landau_field_theory}
-  Let $\mu_0 > 0$ denote the secular background rate. Define the
-  scalar order parameter $\phi(t) \in [-\mu_0, \infty)$ by $\phi(t)
-  \equiv \lambda(t) - \mu_0$. The free energy functional governing
-  temporal cluster formation up to quartic order is:
+  Following Landau's phenomenological theory of phase transitions
+  \parencite{landau1937}, let $\mu_0 > 0$ denote the secular
+  background rate. Define the scalar order parameter $\phi(t) \in
+  [-\mu_0, \infty)$ by $\phi(t) \coloneqq \lambda(t) - \mu_0$. The free
+  energy functional governing temporal cluster formation up to
+  quartic order is:
   \begin{equation}
-    \mathcal{F}[\phi] \;=\; \int_0^{T_{\mathrm{obs}}} \left[
-      \frac{\kappa}{2}\left(\frac{\mathrm{d}\phi}{\mathrm{d}t}\right)^2
+    \mathcal{F}[\phi] \coloneqq \int_0^{T_{\mathrm{obs}}} \left[
+      \frac{\kappa}{2}\,\dot{\phi}(t)^2
       + \frac{a(t)}{2}\,\phi(t)^2 + \frac{c}{3}\,\phi(t)^3 +
-    \frac{b}{4}\,\phi(t)^4 \right] \mathrm{d}t\,,
+    \frac{b}{4}\,\phi(t)^4 \right] \,\mathrm{d}t\,, \qquad
+    \dot{\phi}(t) \equiv \frac{\mathrm{d}\phi}{\mathrm{d}t}\,,
     \label{eq:landau_functional}
   \end{equation}
   where $\kappa > 0$ is temporal gradient stiffness, $b > 0$ ensures
@@ -1367,57 +1482,68 @@ inter-cluster boundaries define potential barriers
       = 0$ (quiescent background). At $t > t_c$, $a(t) < 0$ induces
       spontaneous symmetry breaking with continuous order parameter growth:
       \begin{equation}
-        \phi^*(t) = \sqrt{\frac{-a(t)}{b}} = \sqrt{\frac{a_0(t -
+        \phi^*(t) \coloneqq \sqrt{\frac{-a(t)}{b}} = \sqrt{\frac{a_0(t -
         t_c)}{b}} \propto (t - t_c)^{1/2}, \qquad t \ge t_c.
         \label{eq:critical_exponent}
       \end{equation}
     \item \textbf{Discontinuous (First-Order) Mainshock Cascades:}
-      For $c < 0$, a discontinuous jump occurs from $\phi = 0$ to a
-      metastable high-rate state $\phi^* > 0$, characteristic of
-      stress drops from mainshocks.
-    \item \textbf{Ginzburg Criterion:} The mean-field approximation
-      \eqref{eq:landau_functional} is strictly valid when local
-      event count satisfies $N_{\mathrm{local}} \equiv \kstar \gg 1$.
+      For $c<0$, the unconstrained polynomial has coexistence at
+      $a=2c^2/(9b)$ and $\phi=-2c/(3b)>0$. This is a phenomenological
+      analogy, not a derived mainshock mechanism.
+    \item \textbf{Mean-Field Limitation:} Neglecting gradients needs
+      independent justification. Large $k^*$ is not a Ginzburg criterion.
+      The negative branch for $c=0$ is admissible only while
+      $\phi\ge-\mu_0$; the displayed positive branch does not
+      demonstrate a seismic critical exponent.
   \end{enumerate}
 \end{proposition}
 
 \begin{table}[htbp]
   \centering
   \small
-  \caption{\textbf{Correspondence Between Seismic Swarm
-    Phenomenology and Statistical Thermodynamics}. Target/Scope:
-    Mapping macroscopic earthquake dynamics to field-theoretic
-    variables under finite-sample resolution ($N_{\mathrm{local}} \ge
-    3$). Key Phenomenon: Thermodynamic equivalence between order
-    parameter, partition functions, and point-process intensity.
-    Conditions: Inhomogeneous Poisson and self-exciting processes on
-  $[0, T_{\mathrm{obs}}]$.}
-  \label{tab:thermo_correspondence}
-  \begin{tabular}{lll}
-    \toprule
-    \textbf{Seismological Observable} & \textbf{Thermodynamic
-    Counterpart} & \textbf{Mathematical Definition} \\
-    \midrule
-    Background seismicity ($\lambda \approx \mu_0$) & Disordered
-    (paramagnetic) phase & $\phi(t) = 0$ \\
-    Swarm excursion ($\lambda \gg \mu_0$) & Ordered (ferromagnetic)
-    phase & $\phi(t) = \sqrt{-a/b} > 0$ \\
-    Mainshock-aftershock cascade & First-order phase transition &
-    Discontinuous jump via $c\,\phi^3$ \\
-    Aseismic / fluid-driven onset & Second-order continuous
-    transition & Power-law onset $\phi \sim (t - t_c)^{1/2}$ \\
-    Inter-cluster quiescence / saddle & Domain wall / phase boundary
-    & Local minimum of $\lambda(t)$, saddle $\hat{\lambda}_s$ \\
-    Finite-sample precision $\kstar$ & Inverse effective temperature
-    $\beta$ & $\beta = \kstar - 2$ \\
-    Local surprisal $-\ln(\lambda/\lambda_0)$ & Effective
-    Hamiltonian $\mathcal{H}_{\mathrm{eff}}$ &
-    $\mathcal{H}_{\mathrm{eff}}(t) = -\ln(\lambda(t)/\lambda_0)$ \\
-    Total integrated intensity $\Lambda$ & Canonical partition
-    function $\mathcal{Z}$ & $\mathcal{Z} = \Lambda / \lambda_0 =
-    \int_0^{T_{\mathrm{obs}}} e^{-\mathcal{H}_{\mathrm{eff}}}\,\mathrm{d}t$ \\
-    \bottomrule
-  \end{tabular}
+  \begin{threeparttable}
+    \caption{Formal statistical-mechanics identities and proposed seismic
+      analogies. The Poisson partition identity is distinct from the
+      phenomenological phase labels and uncertainty proxy. No physical
+    temperature, seismic phase transition, or empirical exponent is verified.}
+    \label{tab:thermo_correspondence}
+    \begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}X
+      >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+      \toprule
+      \textbf{Seismological Observable} & \textbf{Thermodynamic
+      Counterpart} & \textbf{Mathematical Definition} \\
+      \midrule
+      Background seismicity ($\lambda \approx \mu_0$) & Disordered
+      (paramagnetic) phase & $\phi(t) = 0$ \\
+      Swarm excursion ($\lambda \gg \mu_0$) & Ordered (ferromagnetic)
+      phase & $\phi(t) = \sqrt{-a/b} > 0$ \\
+      Mainshock-aftershock cascade & First-order phase transition &
+      Discontinuous jump via $c\,\phi^3$ \\
+      Aseismic / fluid-driven onset & Second-order continuous
+      transition & Power-law onset $\phi \sim (t - t_c)^{1/2}$ \\
+      Inter-cluster quiescence / saddle & Domain wall / phase boundary
+      & Local minimum of $\lambda(t)$, saddle $\hat{\lambda}_s$ \\
+      Finite-sample precision $\kstar$ & Dimensionless uncertainty
+      proxy & $T_{\mathrm{proxy}} = 1/(\kstar - 2)$ \\
+      Local surprisal $-\ln(\lambda/\lambda_0)$ & Effective
+      Hamiltonian $\mathcal{H}_{\mathrm{eff}}$ &
+      $-\ln(\lambda/\lambda_0)$ \\
+      Total integrated intensity $\Lambda$ & Canonical partition
+      function $\mathcal{Z}$ & $\mathcal{Z}=\Lambda$ \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+    \item [Model / Hypothesis] Phase labels, $\phi=\lambda-\mu_0$,
+      polynomial coefficients $a,b,c$, and critical time $t_c$ are
+      phenomenological. $\sqrt{-a/b}$ requires $a<0$, $b>0$, $c=0$.
+    \item [Derived Identity] $\Lambda=\int\lambda\,\mathrm{d}t$ is
+      dimensionless and $\lambda_0>0$ is a same-unit reference rate.
+      The partition identity uses deterministic Poisson intensity;
+      $T_{\mathrm{proxy}}$ is not thermal energy or calibrated
+      adaptive variance.
+    \end{tablenotes}
+  \end{threeparttable}
 \end{table}
 
 \subsection{Information Geometry of Point Processes and Divergence Measures}
@@ -1425,7 +1551,7 @@ inter-cluster boundaries define potential barriers
 
 Let $\mathcal{M}_S$ denote the statistical manifold of point-process
 conditional intensity models parameterised by vector
-$\boldsymbol{\theta} \in \Theta \subset \mathbb{R}^d$.
+$\bm{\theta} \in \Theta \subset \mathbb{R}^d$.
 
 \begin{theorem}[Point-Process Kullback--Leibler Divergence]
   \label{thm:pp_kl_divergence}
@@ -1433,15 +1559,14 @@ $\boldsymbol{\theta} \in \Theta \subset \mathbb{R}^d$.
   the path space of marked point configurations on $[0,
   T_{\mathrm{obs}}]$, induced by intensities $\lambda_A(t \mid
   \mathcal{H}_t)$ and $\lambda_B(t \mid \mathcal{H}_t)$
-  respectively. The Kullback--Leibler divergence is:
+  respectively. Assume compatible initial histories, identical mark
+  laws, absolute continuity, and finite log-integrals. Writing
+  $\lambda_A=\lambda_A(t\mid\mathcal H_t)$ and similarly for $B$:
   \begin{equation}
-    \mathrm{D}_{\mathrm{KL}}(\mathbb{P}_A \parallel \mathbb{P}_B) =
-    \mathbb{E}_A\!\left[ \int_0^{T_{\mathrm{obs}}} \lambda_A(t \mid
-      \mathcal{H}_t) \ln\!\left(\frac{\lambda_A(t \mid
-        \mathcal{H}_t)}{\lambda_B(t \mid
-      \mathcal{H}_t)}\right)\mathrm{d}t - \int_0^{T_{\mathrm{obs}}}
-      \bigl[\lambda_A(t \mid \mathcal{H}_t) - \lambda_B(t \mid
-    \mathcal{H}_t)\bigr]\,\mathrm{d}t \right].
+    \mathrm D_{\mathrm{KL}}(\mathbb P_A\parallel\mathbb P_B)
+    =\mathbb E_A\!\int_0^{T_{\mathrm{obs}}}
+    \left[\lambda_A\ln\!\left(\frac{\lambda_A}{\lambda_B}\right)
+    -\lambda_A+\lambda_B\right]\,\mathrm{d}t.
     \label{eq:pp_kl_divergence}
   \end{equation}
   For inhomogeneous Poisson processes with deterministic rates
@@ -1449,39 +1574,42 @@ $\boldsymbol{\theta} \in \Theta \subset \mathbb{R}^d$.
   \begin{equation}
     \mathrm{D}_{\mathrm{KL}}(\lambda_A \parallel \lambda_B) =
     \int_0^{T_{\mathrm{obs}}} \lambda_A(t)
-    \ln\!\left(\frac{\lambda_A(t)}{\lambda_B(t)}\right)\mathrm{d}t -
+    \ln\!\left(\frac{\lambda_A(t)}{\lambda_B(t)}\right)\,\mathrm{d}t -
     \int_0^{T_{\mathrm{obs}}} \bigl[\lambda_A(t) -
     \lambda_B(t)\bigr]\,\mathrm{d}t \;\ge\; 0.
     \label{eq:poisson_kl_explicit}
   \end{equation}
 \end{theorem}
 
-\begin{definition}[Jeffrey's Divergence as Boundary Entropy Production]
+\begin{definition}[Jeffreys Divergence for Deterministic Rates]
   \label{def:jeffreys_divergence}
   The symmetrised Kullback--Leibler divergence across boundary
   window $\Delta t \in \mathbb{R}_{>0}$ is:
   \begin{equation}
-    J(\lambda_A, \lambda_B) \;\equiv\;
+    J(\lambda_A, \lambda_B) \coloneqq
     \mathrm{D}_{\mathrm{KL}}(\lambda_A \parallel \lambda_B) +
     \mathrm{D}_{\mathrm{KL}}(\lambda_B \parallel \lambda_A) =
     \int_{\Delta t} \bigl[\lambda_A(t) - \lambda_B(t)\bigr]
-    \ln\!\left(\frac{\lambda_A(t)}{\lambda_B(t)}\right)\mathrm{d}t.
+    \ln\!\left(\frac{\lambda_A(t)}{\lambda_B(t)}\right)\,\mathrm{d}t.
     \label{eq:jeffreys_divergence}
   \end{equation}
   For piecewise-constant rate segments $\lambda_A, \lambda_B \in
   \mathbb{R}_{>0}$, $J_{AB} = (\lambda_A - \lambda_B)(\ln \lambda_A
-  - \ln \lambda_B)\,\Delta t \ge 0$. Physically, $J_{AB}$ represents
-  the thermodynamic entropy production rate associated with breaking
-  time-reversal symmetry across the domain wall separating clusters
-  $A$ and $B$.
+  - \ln \lambda_B)\,\Delta t \ge 0$. Statistically, $J_{AB}$ is
+  a statistical discrepancy across a boundary window. Its nonnegativity
+  does not establish physical entropy production or time-reversal breaking.
 \end{definition}
 
 \begin{theorem}[Flatness of the Fisher--Rao Metric in Log-Density Coordinates]
   \label{thm:fisher_rao_flatness}
-  Let $\rho \in \mathbb{R}_{>0}$ denote local point density. The
-  Fisher information metric on the one-dimensional density manifold
-  is $g_{\rho\rho} = k/\rho^2$. Under the diffeomorphism $\phi =
-  \ln(\rho/\lambda_0)$, the Fisher--Rao line element transforms to:
+  Within the differential-geometric framework of information geometry
+  \parencite{amari1985}, let $\rho \in \mathbb{R}_{>0}$ denote local
+  Poisson intensity. In the fixed-rank experiment
+  $V_k\sim\mathrm{Gamma}(k,\text{rate }\rho)$, with the same known
+  $k$ throughout, $g_{\rho\rho}=k/\rho^2$. Under
+  $\phi=\ln(\rho/\rho_0)$ for a same-unit reference intensity
+  $\rho_0>0$, the Fisher--Rao line
+  element transforms to:
   \begin{equation}
     \mathrm{d}s_{\mathrm{FR}}^2 = g_{\rho\rho}\,\mathrm{d}\rho^2 =
     \frac{k}{\rho^2}\,(\rho\,\mathrm{d}\phi)^2 = k\,\mathrm{d}\phi^2.
@@ -1494,10 +1622,14 @@ $\boldsymbol{\theta} \in \Theta \subset \mathbb{R}^d$.
   lines in log-density coordinates:
   \begin{equation}
     \phi(s) = (1 - s)\phi_A + s\,\phi_B, \quad s \in [0, 1], \qquad
-    d_{\mathrm{FR}}(\rho_A, \rho_B) = \sqrt{k}\,\bigl|\ln \rho_A -
+    d_{\mathrm{FR}}(\rho_A, \rho_B) \coloneqq \sqrt{k}\,\bigl|\ln \rho_A -
     \ln \rho_B\bigr|.
     \label{eq:geodesic_distance}
   \end{equation}
+  For fixed volume $V$, instead $K\sim\mathrm{Poisson}(\rho V)$,
+  giving $g_{\rho\rho}=V/\rho$ and
+  $d_{\mathrm{FR}}=2\sqrt V|\sqrt{\rho_A}-\sqrt{\rho_B}|$.
+  \Cref{fig:supp_sampling_experiments} distinguishes these experiments.
 \end{theorem}
 
 \subsection{The Unified Generative Intensity Formulation}
@@ -1505,18 +1637,20 @@ $\boldsymbol{\theta} \in \Theta \subset \mathbb{R}^d$.
 
 To resolve the physical superposition of secular tectonics,
 transient fluid driving, and stress-mediated aftershocks, we
-formulate the Unified Generative Model.
+propose the Unified Generative Model. Component labels are model
+interpretations, not identified physical causes; this EM/model-selection
+workflow is not verified executable behavior in the inspected module.
 
 \begin{definition}[Unified Conditional Intensity]
   \label{def:unified_conditional_intensity}
-  Let $\boldsymbol{\Theta} \in \boldsymbol{\Omega} \subset
+  Let $\bm{\Theta} \in \bm{\Omega} \subset
   \mathbb{R}^{d}$ denote the complete parameter vector. The unified
   conditional intensity function for $t \in [0, T_{\mathrm{obs}}]$ is:
   \begin{equation}
-    \lambda(t \mid \mathcal{H}_t; \boldsymbol{\Theta}) \;\equiv\;
+    \lambda(t \mid \mathcal{H}_t; \bm{\Theta}) \;\equiv\;
     \underbrace{\mu_0(t)}_{\text{tectonic background}} \;+\;
     \underbrace{\sum_{k=1}^{K}
-    A_k\,\phi_k(t;\,\boldsymbol{\theta}_k)}_{\text{exogenous swarm
+    A_k\,\phi_k(t;\,\bm{\theta}_k)}_{\text{exogenous swarm
     transients}} \;+\; \underbrace{\sum_{t_j < t}
     \kappa(m_j)\,\psi(t - t_j)}_{\text{endogenous ETAS triggering}}\,,
     \label{eq:unified_conditional_intensity}
@@ -1526,12 +1660,12 @@ formulate the Unified Generative Model.
     \mu_0(t) &\equiv \sum_{j=0}^{J} \mu_j\,\mathbf{1}_{(\tau_j,
     \tau_{j+1}]}(t), \quad \mu_j \in \mathbb{R}_{>0},\; 0 = \tau_0 <
     \dots < \tau_{J+1} = T_{\mathrm{obs}}, \label{eq:background_spec} \\
-    \phi_k(t;\,\boldsymbol{\theta}_k) &\equiv \frac{1}{(t -
+    \phi_k(t;\,\bm{\theta}_k) &\equiv \frac{1}{(t -
     t_0^{(k)})\,\sigma_k\sqrt{2\pi}} \exp\!\left( -\frac{\bigl(\ln(t
       - t_0^{(k)}) - \nu_k\bigr)^2}{2\,\sigma_k^2}
     \right)\mathbf{1}_{(t_0^{(k)}, \infty)}(t), \label{eq:envelope_spec} \\
     \kappa(m) &\equiv K_0 \cdot 10^{\alpha(m - m_0)}, \quad K_0 \in
-    \mathbb{R}_{>0},\; \alpha \in (0, b\ln 10), \label{eq:etas_productivity} \\
+    \mathbb{R}_{>0},\; \alpha \in (0, b), \label{eq:etas_productivity} \\
     \psi(\tau) &\equiv \frac{(p - 1)\,c^{p-1}}{(\tau +
     c)^p}\,\mathbf{1}_{(0, \infty)}(\tau), \quad c \in
     \mathbb{R}_{>0},\; p \in (1, \infty), \label{eq:etas_kernel}
@@ -1544,22 +1678,27 @@ formulate the Unified Generative Model.
 \begin{proposition}[Analytical Point-Process Log-Likelihood and Compensator]
   \label{prop:analytical_loglik}
   For catalogue $\mathcal{C} = \{(t_i, m_i)\}_{i=1}^N$, the exact
-  log-likelihood $\ln \mathcal{L}(\boldsymbol{\Theta}) =
+  log-likelihood $\ln \mathcal{L}(\bm{\Theta}) =
   \sum_{i=1}^N \ln \lambda(t_i \mid \mathcal{H}_{t_i}) -
   \Lambda(T_{\mathrm{obs}})$ evaluates analytically via the
   compensator decomposition:
   \begin{equation}
-    \Lambda(T_{\mathrm{obs}}) = \sum_{j=0}^{J} \mu_j\,(\tau_{j+1} -
-    \tau_j) + \sum_{k=1}^{K}
-    A_k\,\Phi_{\mathrm{LN}}\!\left(\ln(T_{\mathrm{obs}} -
-    t_0^{(k)});\,\nu_k, \sigma_k\right) + \sum_{j=1}^{N}
-    \kappa(m_j)\!\left[ 1 - \left(\frac{c}{T_{\mathrm{obs}} - t_j +
-    c}\right)^{p-1} \right],
+    \begin{aligned}
+      \Lambda(T_{\mathrm{obs}})
+      &=\sum_{j=0}^{J}\mu_j(\tau_{j+1}-\tau_j) \\
+      &\quad+\sum_{k=1}^{K}A_k\Phi_{\mathrm{LN}}\!
+      \left(\ln(T_{\mathrm{obs}}-t_0^{(k)});\nu_k,\sigma_k\right) \\
+      &\quad+\sum_{j=1}^{N}\kappa(m_j)
+      \left[1-\left(\frac{c}{T_{\mathrm{obs}}-t_j+c}\right)^{p-1}\right],
+    \end{aligned}
     \label{eq:analytical_compensator}
   \end{equation}
   where $\Phi_{\mathrm{LN}}(x; \nu, \sigma) = \frac{1}{2}\bigl[1 +
   \mathrm{erf}\bigl((x - \nu)/(\sigma\sqrt{2})\bigr)\bigr]$ is the
-  standard log-normal cumulative distribution function.
+  Gaussian CDF evaluated at log-delay $x$, not the log-normal CDF of $x$.
+  Assume empty pre-observation history and onsets in the stated interval;
+  general onsets require both upper and lower CDF limits. Time logarithms
+  use a fixed reference time unit, as in the supplementary derivation.
 \end{proposition}
 
 \subsection{Two-Stage Clustering Algorithm and Joint Model Selection}
@@ -1572,36 +1711,40 @@ transient envelopes proceed via a two-stage sequential inference architecture.
 The raw catalogue times $\{t_i\}_{i=1}^N$ are evaluated by the
 $\pak$ algorithm (\textbf{Level~3: Deterministic Computations}). At
 each event $t_i$, the optimal neighbourhood $\kstar(t_i)$ is
-identified via likelihood-ratio maximization. Directed ascending
+selected via the rank statistic in \cref{def:kstar_stopping}.
+Directed ascending
 gradient flow on the density graph assigns events to basins of
 attraction. Saddle points $\hat{\lambda}_s$ connecting adjacent
 peaks $A$ and B are assessed via the log-density $\Zscore$-score:
 \begin{equation}
-  Z_{AB} = \frac{\min(\ln \hat{\lambda}_A, \ln \hat{\lambda}_B) -
+  Z_{AB} \coloneqq \frac{\min(\ln \hat{\lambda}_A, \ln \hat{\lambda}_B) -
   \ln \hat{\lambda}_s}{\sqrt{\Var(\ln \hat{\lambda}_A) + \Var(\ln
   \hat{\lambda}_B) + \Var(\ln \hat{\lambda}_s)}}\,.
   \label{eq:zscore_topology}
 \end{equation}
-Boundaries failing significance $Z_{AB} \le Z_{\mathrm{crit}}$
-(default $Z_{\mathrm{crit}} = 3.0$) are merged. Surviving saddles
+In this proposed workflow, boundaries with $Z_{AB}\le Z_{\mathrm{crit}}$
+(default $Z_{\mathrm{crit}} \coloneqq \num{3.0}$) are merged. Surviving saddles
 partition the catalogue into $K_{\mathrm{init}}$ temporal support
-intervals $\{(a_k, b_k)\}_{k=1}^{K_{\mathrm{init}}}$.
+intervals $\{(a_k, b_k)\}_{k=1}^{K_{\mathrm{init}}}$. This is an
+uncertainty-scaled heuristic, not a calibrated significance test or
+the operational ADP merge rule below.
 
 \paragraph{Stage 2: Parametric EM Refinement and Three-Way
 Stochastic Declustering.}
 Given initial windows $(a_k, b_k)$, log-normal parameters are
-initialised from empirical moments: $\hat{t}_0^{(k)} = a_k$,
+initialised from empirical moments, choosing
+$\hat t_0^{(k)}=a_k<\min_{t_i\in C_k}t_i$ to exclude $\ln0$:
 $\hat{\nu}_k = \frac{1}{|C_k|}\sum_{t_i \in C_k}\ln(t_i - a_k)$,
 $\hat{\sigma}_k^2 = \frac{1}{|C_k|}\sum_{t_i \in C_k}(\ln(t_i - a_k)
 - \hat{\nu}_k)^2$, and $\hat{A}_k = |C_k|$. The \ac{EM} algorithm
 evaluates three-way posterior responsibilities (\textbf{Level~4:
 Model Estimates}):
 \begin{equation}
-  w_i^{(\mathrm{bg})} = \frac{\mu_0(t_i)}{\lambda(t_i \mid
+  w_i^{(\mathrm{bg})} \coloneqq \frac{\mu_0(t_i)}{\lambda(t_i \mid
   \mathcal{H}_{t_i})}, \quad
-  w_i^{(\mathrm{env}, k)} = \frac{A_k\,\phi_k(t_i)}{\lambda(t_i \mid
+  w_i^{(\mathrm{env}, k)} \coloneqq \frac{A_k\,\phi_k(t_i)}{\lambda(t_i \mid
   \mathcal{H}_{t_i})}, \quad
-  w_i^{(\mathrm{trig})} = \frac{\sum_{t_j <
+  w_i^{(\mathrm{trig})} \coloneqq \frac{\sum_{t_j <
   t_i}\kappa(m_j)\,\psi(t_i - t_j)}{\lambda(t_i \mid \mathcal{H}_{t_i})},
   \label{eq:three_way_responsibilities}
 \end{equation}
@@ -1611,84 +1754,90 @@ weighted maximum likelihood.
 
 \begin{definition}[Joint $\mdl$--$\pak$ Model Selection Criterion]
   \label{def:joint_mdl_pak}
-  For candidate model order $K \in \{1, \dots, K_{\mathrm{init}}\}$,
-  let $d_K = 4K + 4 + (J + 1)$ denote the total free parameter
-  count. The joint objective functional $\mathcal{J}(K)$ is:
+  Under Rissanen's Minimum Description Length principle
+  \parencite{rissanen1978}, for candidate model order $K \in \{0,
+  \dots, K_{\mathrm{init}}\}$, let $d_K = 4K + 4 + (J + 1)$ denote the
+  total free parameter count. The joint objective functional
+  $\mathcal{J}(K)$ is:
   \begin{equation}
-    \mathcal{J}(K) \;\equiv\; \underbrace{-\ln
-      \mathcal{L}(\hat{\boldsymbol{\Theta}}_K) + \frac{d_K}{2}\ln
+    \mathcal{J}(K) \coloneqq \underbrace{-\ln
+      \mathcal{L}(\hat{\bm{\Theta}}_K) + \frac{d_K}{2}\ln
     N}_{\mathrm{MDL}(K) \text{ (Two-Part Code Length)}} \;+\;
-    \underbrace{\gamma \sum_{s=1}^{K-1} \max\bigl(0,\;
+    \underbrace{\gamma \sum_{s=1}^{\max(K-1,0)} \max\bigl(0,\;
     Z_{\mathrm{crit}} - Z_s\bigr)}_{\text{Topological Density Penalty}}\,,
     \label{eq:joint_mdl_pak}
   \end{equation}
-  with coupling parameter $\gamma = \frac{1}{2}\ln N$. The optimal
-  cluster partition order is $K^* = \argmin_{K \ge 1} \mathcal{J}(K)$.
+  with coupling parameter $\gamma \coloneqq \frac{1}{2}\ln N$. The optimal
+  envelope order is:
+  \begin{equation}
+    K^*=\argmin_{0\le K\le K_{\mathrm{init}}}\mathcal J(K).
+  \end{equation}
+  The parameter count assumes fixed background knots; free knots add
+  parameters. At $K=0$, there is no envelope or topological split penalty.
 \end{definition}
 
-\begin{theorem}[Strong Consistency of the Joint Estimator]
+\begin{remark}[Model-Selection Consistency Remains Unproved]
   \label{thm:joint_consistency}
-  Suppose the data-generating point process possesses a true finite
-  cluster count $K_0 \in \mathbb{N}$ with well-separated compact
-  envelope supports. Under regular maximum-likelihood conditions:
+  A desired target for true envelope count $K_{\mathrm{true}}$ is:
   \begin{equation}
-    \lim_{N \to \infty} \mathbb{P}\bigl(K^* = K_0\bigr) = 1.
+    \mathbb P(K^*=K_{\mathrm{true}})\longrightarrow1.
     \label{eq:consistency_result}
   \end{equation}
-\end{theorem}
-
-\begin{proof}
-  For under-fitted models $K < K_0$, the likelihood ratio $\ln
-  \mathcal{L}(\hat{\boldsymbol{\Theta}}_{K_0}) - \ln
-  \mathcal{L}(\hat{\boldsymbol{\Theta}}_K) \sim \mathcal{O}(N)$
-  dominates the $\mathcal{O}(\ln N)$ parameter penalty. For
-  over-fitted models $K > K_0$, Wilks' theorem bounds the likelihood
-  gain by $\frac{1}{2}\chi^2_{d_K - d_{K_0}} \sim \mathcal{O}_P(1)$,
-  whereas the $\mathrm{MDL}$ penalty increases deterministically by
-  $\frac{d_K - d_{K_0}}{2}\ln N \to \infty$. Furthermore, any
-  spurious split $K > K_0$ necessarily partitions a unimodal density
-  peak, producing a saddle with $Z_s < Z_{\mathrm{crit}}$ and adding
-  a strictly positive topological penalty $\gamma(Z_{\mathrm{crit}}
-  - Z_s) > 0$. Hence $\mathcal{J}(K) > \mathcal{J}(K_0)$ almost
-  surely as $N \to \infty$.
-\end{proof}
+  This is consistency in probability, not strong consistency. Log-normal
+  envelopes lack compact support; vanishing widths can make likelihood
+  unbounded, while extra components cause boundary and identifiability
+  problems. A proof needs constrained widths, bounded parameter domains,
+  an explicit asymptotic experiment, identifiability, and selection-aware
+  calibration. Classical Wilks arguments do not establish this target.
+\end{remark}
 \begin{landscape}
   \begin{table}[htbp]
     \centering
     \small
-    \caption{\textbf{Systematic Comparison of Seismicity Clustering
-      Models}. Target/Scope: Comparative operational features across
-      Poisson/$\pak$, pure ETAS, and the unified generative framework
-      under benchmark catalogue constraints ($N \in [10^3, 10^5]$). Key
-      Phenomenon: The unified model combines non-parametric topological
-      discovery with mechanistic branching physics and calibrated
-    statistical criteria.}
-    \label{tab:model_comparison_chapter8}
-    \begin{tabular}{llll}
-      \toprule
-      \textbf{Attribute} & \textbf{Poisson / $\pak$} & \textbf{Pure
-      $\etas$} & \textbf{Unified Generative Model} \\
-      \midrule
-      Generative Intensity & $\lambda(t) = \hat{\rho}(t)$ & $\mu_0 +
-      \sum \kappa(m_j)\psi(t - t_j)$ & $\mu_0(t) + \sum A_k\phi_k(t) +
-      \sum \kappa(m_j)\psi$ \\
-      Epistemic Basis & Level 3/4 (Non-parametric) & Level 4/5
-      (Mechanistic branching) & Level 4/5 (Joint superposition) \\
-      Driving Mechanism & Non-specific rate peaks & Endogenous stress
-      transfer & Explicit exogenous fluid front $+$ cascades \\
-      Declustering Mode & None (Binary hard threshold) & Two-way
-      ($w_{\mathrm{bg}}, w_{\mathrm{trig}}$) & Three-way
-      ($w_{\mathrm{bg}}, w_{\mathrm{env}}, w_{\mathrm{trig}}$) \\
-      Boundary Physics & Density saddle $\Zscore$-score & Offspring
-      cluster graph & Jeffrey entropy production $J_{AB}$ \\
-      Model Selection & Non-parametric persistence & Likelihood ratio
-      / $\mathrm{AIC}$ & Joint $\mathrm{MDL}$--$\pak$ criterion
-      $\mathcal{J}(K)$ \\
-      Resolution Floor & $\delta\lambda/\lambda \ge 1/\sqrt{\kstar}$ &
-      Cramér--Rao on $(K_0, \alpha, c, p)$ & Joint Fisher--Rao
-      information metric \\
-      \bottomrule
-    \end{tabular}
+    \begin{threeparttable}
+      \caption{Comparison of density methods, ETAS literature models, and
+        the proposed unified temporal model. Additive intensity components
+        allow model-based attribution, not unique physical causation.
+        Density operations were source-inspected; no unified-model
+      implementation, calibration, or benchmark run was verified.}
+      \label{tab:model_comparison_chapter8}
+      \begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}X
+          >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X
+        >{\raggedright\arraybackslash}X}
+        \toprule
+        \textbf{Attribute} & \textbf{Poisson / $\pak$} & \textbf{Pure
+        $\etas$} & \textbf{Unified Generative Model} \\
+        \midrule
+        Intensity & $\hat\lambda(t)$ & $\mu_0+\lambda_{\mathrm{trig}}$ &
+        $\mu_0(t)+\lambda_{\mathrm{env}}+\lambda_{\mathrm{trig}}$ \\
+        Epistemic Basis & Level 3/4 (Non-parametric) & Level 4/5
+        (Mechanistic branching) & Level 4/5 (Joint superposition) \\
+        Driving Mechanism & Non-specific rate peaks & Endogenous stress
+        transfer interpretation & Envelope forcing $+$ triggering;
+        forcing is not uniquely identified as fluid \\
+        Declustering Mode & None (Binary hard threshold) & Two-way
+        ($w_{\mathrm{bg}}, w_{\mathrm{trig}}$) & Three-way
+        ($w_{\mathrm{bg}}, w_{\mathrm{env}}, w_{\mathrm{trig}}$) \\
+        Boundary Physics & Density saddle $\Zscore$-score & Offspring
+        cluster graph & Jeffreys statistical discrepancy $J_{AB}$ \\
+        Model Selection & Non-parametric persistence & Likelihood ratio
+        / $\mathrm{AIC}$ & Joint $\mathrm{MDL}$--$\pak$ criterion
+        $\mathcal{J}(K)$ \\
+        Information Benchmark & Fixed-rank Fisher information &
+        Regularity-dependent information bounds & Not established
+        for the proposed mixture-selection problem \\
+        \bottomrule
+      \end{tabularx}
+      \begin{tablenotes}[flushleft]
+        \footnotesize
+      \item [Literature Baseline / Proposal] ETAS is epidemic-type
+        aftershock sequencing; MDL is minimum description length;
+        AIC is Akaike information criterion. $\lambda_{\mathrm{env}}
+        =\sum_kA_k\phi_k$ and $\lambda_{\mathrm{trig}}
+        =\sum_{t_j<t}\kappa(m_j)\psi(t-t_j)$ are rates, while
+        $w$ denotes conditional component responsibilities.
+      \end{tablenotes}
+    \end{threeparttable}
   \end{table}
 \end{landscape}
 % ==============================================================================
@@ -1705,21 +1854,22 @@ halos on arbitrary manifolds builds upon the Advanced Density Peaks
 implementations suffer from severe execution bottlenecks
 ($\mathcal{O}(N \bar{k})$ Python loops and redundant heap
 traversals), restricting scalability on dense seismic catalogs ($N
-\ge 10^5$). This section presents the vectorized \textsc{ADP++}
-algorithmic suite, proving mathematical equivalence while
-establishing asymptotic and practical speedups.
+\ge \num{1e5}$). This section presents the vectorized \textsc{ADP++}
+algorithmic suite, proving convergence on its parent forest and describing
+source-verified vectorized operations. Universal scalar parity and
+numerical speedups require separate tests and timing records.
 
 \subsection{Standard Advanced Density Peaks Pipeline}
 \label{subsec:adp_standard}
 
 Given dataset $\mathcal{D} = \{\mathbf{x}_i\}_{i=1}^N \subset
-\mathbb{R}^D$ with \pak{} log-densities $\hat{u}_i = \ln
+\mathbb{R}^D$ with \pak{} log-densities $\hat{u}_i \coloneqq \ln
 \hat{\rho}_i$ and standard errors $\hat{\sigma}_i$ (\textbf{Level~4:
 Model Estimates}):
 \begin{enumerate}[noitemsep,topsep=2pt]
   \item \textbf{Peak Identification:} Candidate modes are identified
-    using the conservative score $g_i \coloneqq \hat{u}_i -
-    Z_{\mathrm{conf}} \hat{\sigma}_i$. Point $\mathbf{x}_i$ is a
+    using the default score $g_i=\hat u_i-\hat\sigma_i$. Point
+    $\mathbf{x}_i$ is a
     candidate peak if $g_i \ge g_j$ for all $j \in \mathcal{N}_i^{\kstar(i)}$.
   \item \textbf{Basin Assignment:} Non-peak points are assigned to
     cluster basins by directed steepest ascent along the density
@@ -1727,25 +1877,32 @@ Model Estimates}):
   \item \textbf{Saddle-Point Detection:} For adjacent clusters $C_c,
     C_{c'}$, border points are pairs $(i, j)$ such that $i \in C_c$,
     $j \in C_{c'}$, and $j \in \mathcal{N}_i^{\kstar(i)}$. The
-    inter-cluster saddle log-density is:
+    ADP candidates use each point's first cross-cluster neighbour,
+    defining edge set $\mathcal E_{cc'}^{(\mathrm{first})}$. Its
+    saddle proxy is:
     \begin{equation}
-      \hat{u}_{cc'}^\dagger = \max_{\substack{i \in C_c, j \in
-      C_{c'} \\ j \in \mathcal{N}_i^{\kstar(i)}}} \min(\hat{u}_i, \hat{u}_j).
+      \hat u_{cc'}^\dagger=
+      \max_{(i,j)\in\mathcal E_{cc'}^{(\mathrm{first})}}
+      \frac{\hat u_i+\hat u_j}{2}.
       \label{eq:saddle_density_def}
     \end{equation}
   \item \textbf{Multimodality Merging:} Clusters $C_c$ and $C_{c'}$
     are merged if the density drop between peak and saddle is
-    statistically indistinguishable from noise:
+    below the operational uncertainty margin for either peak:
     \begin{equation}
-      \min(\hat{u}_c, \hat{u}_{c'}) - \hat{u}_{cc'}^\dagger <
-      Z_{\mathrm{conf}} \sqrt{\hat{\sigma}_c^2 +
-      (\hat{\sigma}_{cc'}^\dagger)^2}.
+      \hat u_c-\hat u_{cc'}^\dagger
+      <Z_{\mathrm{conf}}(\hat\sigma_c+\hat\sigma_{cc'}^\dagger)
+      \quad\text{or the analogous condition for }c'.
       \label{eq:merge_condition}
     \end{equation}
+    The selected edge has $\hat\sigma_{cc'}^\dagger
+    =(\hat\sigma_i+\hat\sigma_j)/2$; default $Z_{\mathrm{conf}}=1.65$
+    is an algorithm parameter, not a calibrated significance level.
+    The retained centre is selected by normalized margins, not
+    necessarily the elder peak of persistent homology.
   \item \textbf{Halo Filtering:} Points in $C_c$ with density below
     the cluster border threshold ($\hat{u}_i < \max_{c'}
-      \hat{u}_{cc'}^\dagger + Z_{\mathrm{conf}}
-    \hat{\sigma}_c^{\mathrm{border}}$) are labeled as noise/halo
+    \hat{u}_{cc'}^\dagger$) are labeled as noise/halo
     ($\ell_i = -1$).
 \end{enumerate}
 
@@ -1761,14 +1918,14 @@ Rather than traversing scalar path pointers, \textsc{ADP++}
 constructs a vectorized parent link array $\mathbf{p} \in
 \mathbb{Z}^N$ by broadcasting neighbor scores:
 \begin{equation}
-  p_i = \argmax_{j \in \mathcal{N}_i^{\kstar(i)},\; g_j > g_i} g_j,
-  \qquad (\text{with } p_i = i \text{ if candidate peak}).
+  p_i \coloneqq \argmax_{j \in \mathcal{N}_i^{\kstar(i)},\; g_j > g_i} g_j,
+  \qquad (\text{with } p_i \coloneqq i \text{ if candidate peak}).
   \label{eq:vectorized_parent}
 \end{equation}
 Cluster basin assignment is executed via parallel pointer jumping:
 \begin{equation}
-  \mathbf{r}^{(t+1)} = \mathbf{r}^{(t)}\bigl[\mathbf{r}^{(t)}\bigr],
-  \qquad \mathbf{r}^{(0)} = \mathbf{p}.
+  \mathbf{r}^{(t+1)} \coloneqq \mathbf{r}^{(t)}\bigl[\mathbf{r}^{(t)}\bigr],
+  \qquad \mathbf{r}^{(0)} \coloneqq \mathbf{p}.
   \label{eq:pointer_jumping}
 \end{equation}
 
@@ -1777,24 +1934,31 @@ Cluster basin assignment is executed via parallel pointer jumping:
   The directed graph $\mathcal{G}_{\mathrm{ascent}} = (\mathcal{V},
   \mathcal{E})$ defined by directed edges $(i, p_i)$ is a collection
   of disjoint directed trees rooted at the candidate peaks. Pointer
-  jumping Eq.~\eqref{eq:pointer_jumping} converges to the exact
-  sequential steepest-ascent cluster assignment in at most $\lceil
-  \log_2 L_{\max} \rceil \le \lceil \log_2 N \rceil$ parallel vector
+  jumping in \cref{eq:pointer_jumping} converges to sequential traversal
+  of the same parent forest in at most
+  $\lceil\log_2\max(1,L_{\max})\rceil\le\lceil\log_2N\rceil$ parallel vector
   lookups, where $L_{\max}$ is the length of the longest gradient path.
 \end{theorem}
 
 \begin{proof}
   By definition, $p_i \ne i \implies g_{p_i} > g_i$. Hence
   $\mathcal{G}_{\mathrm{ascent}}$ is strictly acyclic. Each non-peak
-  node has out-degree 1, and each peak has out-degree 0 (self-loop).
+  node has out-degree 1, and each peak has out-degree 0 after
+  omitting self-loops.
   Thus $\mathcal{G}_{\mathrm{ascent}}$ is a directed forest rooted
   at peaks. After $t$ iterations of $\mathbf{r}^{(t+1)} =
   \mathbf{r}^{(t)}[\mathbf{r}^{(t)}]$, $\mathbf{r}^{(t)}[i]$ points
-  to the ancestor at distance $2^t$ along the unique path from $i$
+  to the ancestor at distance $\min(2^t,L(i))$ along the unique path from $i$
   to its root. When $2^t \ge L_{\max}$, $\mathbf{r}^{(t)}[i]$ is
   identical to the peak root, matching sequential path compression identically
   \parencite{tarjan1975}.
 \end{proof}
+
+Each vector update costs $\mathcal O(N)$ work; an already-rooted forest
+needs zero updates. Scalar ADP additionally prunes centres and handles
+ties through a different assignment path, so this theorem does not prove
+general scalar/vectorized parity. \Cref{fig:supp_pointer_jumping} separates
+ancestor doubling from the total-work bound.
 
 \paragraph{Optimization 2: Vectorized Saddle-Point Detection (Step 7).}
 Let $\mathbf{C}_{\mathrm{nb}} \in \mathbb{Z}^{N \times k_{\max}}$ be
@@ -1814,8 +1978,8 @@ distinct cluster) is vectorized via:
   \label{eq:vectorized_first_hit}
 \end{equation}
 Points with $\max_j B_{ij} = 1$ are candidate border points. Sorting
-candidate boundary edges in descending order of $\min(\hat{u}_i,
-\hat{u}_{j_{\mathrm{first}}})$ and updating the symmetric saddle
+candidate boundary edges in descending order of
+$(\hat u_i+\hat u_{j_{\mathrm{first}}})/2$ and updating the symmetric saddle
 matrix $\hat{\mathbf{U}}^\dagger \in \mathbb{R}^{C \times C}$ in
 vectorized COO format executes in $\mathcal{O}(N k_{\max} + E\log
 E)$ time, where $E \le N$ is the number of border points.
@@ -1825,17 +1989,19 @@ Let $\mathbf{K}_{\mathrm{nb}} \in \mathbb{Z}^{N \times k_{\max}}$ be
 the matrix of neighbor $\kstar$ values. The masked variance matrix
 is evaluated via row-wise tensor reductions:
 \begin{equation}
-  \mathbf{\Delta}^2 = \bigl( \hat{\mathbf{U}}_{\mathrm{nb}} -
-  \hat{\mathbf{u}} \mathbf{1}^\top \bigr)^2 \odot
+  \mathbf{\Delta}^2 = \bigl( \mathbf{K}_{\mathrm{nb}} -
+  \mathbf{k}^* \mathbf{1}^\top \bigr)^2 \odot
   \mathbf{M}_{\kstar}, \qquad \bar{\sigma}_i^2 =
   \frac{1}{\kstar(i)}\sum_{j=1}^{k_{\max}} \Delta_{ij}^2,
   \label{eq:vectorized_kpeaks}
 \end{equation}
-executing entirely in SIMD registers without scalar memory allocations.
+The helper uses raw $k^*$ values as proxies, not log-density estimates,
+and still allocates arrays. The public density dispatcher currently aliases
+\texttt{kpeaks} to \texttt{kstarNN}, rather than invoking this helper.
 
 \paragraph{Optimization 4: Vectorized Multimodality Test (Step 8).}
 Let $\hat{\mathbf{u}}_{\mathrm{peak}} \in \mathbb{R}^C$ and
-$\hat{\boldsymbol{\sigma}}_{\mathrm{peak}} \in \mathbb{R}^C$ be
+$\hat{\bm{\sigma}}_{\mathrm{peak}} \in \mathbb{R}^C$ be
 cluster peak density and error vectors. Outer-product broadcasting
 constructs the candidate margin and uncertainty tensors:
 \begin{equation}
@@ -1844,10 +2010,10 @@ constructs the candidate margin and uncertainty tensors:
   \mathbf{A}^{(2)} = \mathbf{1}
   \hat{\mathbf{u}}_{\mathrm{peak}}^\top - \hat{\mathbf{U}}^\dagger, \quad
   \mathbf{E}^{(1)} =
-  Z_{\mathrm{conf}}\bigl(\hat{\boldsymbol{\sigma}}_{\mathrm{peak}}
+  Z_{\mathrm{conf}}\bigl(\hat{\bm{\sigma}}_{\mathrm{peak}}
   \mathbf{1}^\top + \hat{\mathbf{\Sigma}}^\dagger\bigr), \quad
   \mathbf{E}^{(2)} =
-  Z_{\mathrm{conf}}\bigl(\mathbf{1}\hat{\boldsymbol{\sigma}}_{\mathrm{peak}}^\top
+  Z_{\mathrm{conf}}\bigl(\mathbf{1}\hat{\bm{\sigma}}_{\mathrm{peak}}^\top
   + \hat{\mathbf{\Sigma}}^\dagger\bigr).
   \label{eq:outer_product_merging}
 \end{equation}
@@ -1857,8 +2023,8 @@ The boolean merge eligibility tensor is:
   \mathbf{E}^{(1)}\bigr) \lor \bigl(\mathbf{A}^{(2)} < \mathbf{E}^{(2)}\bigr).
   \label{eq:merge_eligibility}
 \end{equation}
-Selecting the optimal merge pair $(c, c') = \argmax_{c < c'}
-(\mathbf{M}_{\mathrm{elig}} \odot (-\hat{\mathbf{U}}^\dagger))$ and
+Selecting the highest finite positive saddle value over eligible
+upper-triangular pairs, with no merge when the eligible set is empty, and
 updating border densities via in-place row-wise maximization
 $\hat{\mathbf{U}}^\dagger[c, :] \leftarrow
 \max(\hat{\mathbf{U}}^\dagger[c, :], \hat{\mathbf{U}}^\dagger[c',
@@ -1869,32 +2035,50 @@ $\hat{\mathbf{U}}^\dagger[c, :] \leftarrow
     \small
     \caption{\textbf{Theoretical Computational Complexity: Standard
       ADP vs.\ Vectorized ADP++}. Target/Scope: Algorithmic asymptotic
-      complexity and empirical runtime comparison ($N = 10^5$, $k_{\max}
-      = 80$, $C = 50$). Key Phenomenon: Elimination of Python
-      interpreter loop overhead yields $100\times\text{--}1000\times$
-      speedups while preserving exact bitwise numerical equivalence.
-    Conditions: 64-bit float, single CPU core.}
+      work bounds and unverified draft timings. Vectorization can remove
+      Python-loop overhead but does not prove bitwise parity or a speedup.
+      Bounds exclude neighbour construction; the draft timing setup
+    $N=\num{1e5}$, $k_{\max}=80$, $C=50$ has no inspected run record.}
     \label{tab:complexity_comparison}
-    \begin{tabular}{llll}
-      \toprule
-      \textbf{Pipeline Stage} & \textbf{Standard \textsc{ADP}} &
-      \textbf{Vectorized \textsc{ADP++}} & \textbf{Empirical Speedup} \\
-      \midrule
-      Step 5 \& 6: Ascent \& Basin Assignment & $\mathcal{O}(N
-      \bar{k})$ scalar loops & $\mathcal{O}(N \log N)$ tensor jumping
-      & $140\times$ \\
-      Step 7: Saddle Detection & $\mathcal{O}(N k_{\max})$ scalar
-      checks & $\mathcal{O}(N k_{\max} + E\log E)$ tensor ops & $85\times$ \\
-      Step 4d: $k$-Peaks Variance & $\mathcal{O}(N k_{\max})$ loop
-      allocations & $\mathcal{O}(N k_{\max})$ masked SIMD & $45\times$ \\
-      Step 8: Multimodality Test & $\mathcal{O}(C^2 \times
-      N_{\mathrm{iter}})$ re-scans & $\mathcal{O}(C^2 +
-      C_{\mathrm{merges}} C)$ tensor update & $310\times$ \\
-      \textbf{Total End-to-End Pipeline} & $\mathcal{O}(N \bar{k} +
-      C^2 N_{\mathrm{iter}})$ & $\mathcal{O}(N \log N + N k_{\max} +
-      C^2)$ & $\mathbf{120\times\text{--}450\times}$ \\
-      \bottomrule
-    \end{tabular}
+    \begin{threeparttable}
+      \begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}X
+          >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X
+        >{\raggedright\arraybackslash}X}
+        \toprule
+        \textbf{Pipeline Stage} & \textbf{Standard \textsc{ADP}} &
+        \textbf{Vectorized \textsc{ADP++}} & \textbf{Unverified
+        Draft Speedup} \\
+        \midrule
+        Step 5 \& 6: Ascent \& Basin Assignment & $\mathcal{O}(N
+        \bar{k})$ scalar loops & $\mathcal{O}(N\log N+NC)$ including
+        basin scans
+        & $\num{140}\times$ \\
+        Step 7: Saddle Detection & $\mathcal{O}(N k_{\max})$ scalar
+        checks & $\mathcal{O}(N k_{\max} + E\log E)$ tensor ops &
+        $\num{85}\times$ \\
+        Step 4d: $k$-Peaks Variance & $\mathcal{O}(N k_{\max})$ loop
+        allocations & $\mathcal{O}(N k_{\max})$ masked SIMD &
+        $\num{45}\times$ \\
+        Step 8: Multimodality Test & $\mathcal{O}(C^2 \times
+        N_{\mathrm{iter}})$ re-scans & $\mathcal{O}(C^2 +
+        C_{\mathrm{merges}} C^2)$ pair scans & $\num{310}\times$ \\
+        \textbf{Total End-to-End Pipeline} & $\mathcal{O}(N \bar{k} +
+        C^2 N_{\mathrm{iter}})$ & $\mathcal{O}(N\log N+Nk_{\max})$
+        plus $\mathcal{O}(C^3+NC)$ worst-case work &
+        $\mathbf{\numrange{120}{450}\times}$ \\
+        \bottomrule
+      \end{tabularx}
+      \begin{tablenotes}[flushleft]
+        \footnotesize
+      \item [Derived Work Bound] $N$ is the point count, $C$ the
+        initial basin count, $E\le N$ the first-hit edge count,
+        $\bar k$ the mean selected rank, and $k_{\max}$ the rank cap.
+        $N_{\mathrm{iter}}$ and $C_{\mathrm{merges}}$ count merge iterations.
+      \item [Unverified Draft] Speedup values are retained for review,
+        not reported as measurements. The $k$-peaks row describes
+        an optional helper, not the current default dispatch.
+      \end{tablenotes}
+    \end{threeparttable}
   \end{table}
 \end{landscape}
 % ==============================================================================
@@ -1926,10 +2110,11 @@ Score (DS-Score) \parencite{derrico2021}.
     \hat{\sigma}_{c'}^2 + (\hat{\sigma}_{cc'}^\dagger)^2}}\,.
     \label{eq:pairwise_zscore}
   \end{equation}
-  In practical implementations, the weaker peak dominates the
-  barrier test, yielding the computationally robust form:
+  This is the operational denominator in the inspected code.
+  A lower-peak-only alternative under a prespecified lower peak and
+  independence approximation is:
   \begin{equation}
-    Z_{cc'} = \frac{\min(\hat{u}_c, \hat{u}_{c'}) -
+    Z_{cc'}^{(\mathrm{lower})} \coloneqq \frac{\min(\hat{u}_c, \hat{u}_{c'}) -
     \hat{u}_{cc'}^\dagger}{\sqrt{\hat{\sigma}_{\min(c, c')}^2 +
     (\hat{\sigma}_{cc'}^\dagger)^2}}\,.
     \label{eq:pairwise_zscore_robust}
@@ -1941,21 +2126,26 @@ Score (DS-Score) \parencite{derrico2021}.
   Let $\mathcal{A} \subset \{1, \dots, K\} \times \{1, \dots, K\}$
   denote the adjacency graph of clusters sharing border points. The
   global score $S_{\mathrm{PAk}}$ is the population-weighted
-  harmonic mean across all adjacent pairs:
+  arithmetic mean across all adjacent unordered pairs:
   \begin{equation}
     S_{\mathrm{PAk}} \coloneqq \frac{\sum_{(c, c') \in \mathcal{A}}
     w_{cc'} \, Z_{cc'}}{\sum_{(c, c') \in \mathcal{A}} w_{cc'}},
-    \qquad w_{cc'} = \sqrt{|C_c| \cdot |C_{c'}|}\,.
+    \qquad w_{cc'} \coloneqq \sqrt{|C_c| \cdot |C_{c'}|}\,.
     \label{eq:global_pak_ds_score}
   \end{equation}
   If no saddle points exist (completely disconnected clusters in
   metric space), the score evaluates via virtual saddle fallback:
   \begin{equation}
-    \hat{u}_{cc'}^\dagger = \min_{\mathbf{x}_i \in \mathcal{D}}
-    \hat{u}_i - \ln(2), \qquad \hat{\sigma}_{cc'}^\dagger = \max_{i}
-    \hat{\sigma}_i.
+    \hat{u}_{cc'}^\dagger \coloneqq \min_{\mathbf{x}_i \in \mathcal{D}}
+    \hat{u}_i, \qquad \hat{\sigma}_{cc'}^\dagger=\hat\sigma_{i_{\min}},
+    \quad i_{\min}=\argmin_i\hat u_i.
     \label{eq:virtual_saddle}
   \end{equation}
+  PAk-DS uses all cross-cluster edges within $k_{\max}$ for adjacency,
+  not ADP's first-hit edges. It maximizes edge minima
+  $\min(\hat u_i,\hat u_j)$ and uses the selected edge error
+  $\sqrt{\hat\sigma_i^2+\hat\sigma_j^2}$. A single cluster returns
+  \texttt{None}; a virtual saddle is a fallback, not an observed saddle.
 \end{definition}
 
 \subsection{Topological Persistence Calibration and Morse Theory}
@@ -1967,15 +2157,16 @@ theory and persistent homology (0-homology $\mathcal{H}_0$)
 
 \begin{theorem}[0-Homology Superlevel Filtration and Elder Rule]
   \label{thm:persistence_elder_rule}
-  Let $f: \mathcal{M} \to \mathbb{R}$ be a smooth Morse density
-  function. Consider the superlevel filtration $L(\lambda) \coloneqq
+  Let $f:\mathcal M\to\mathbb R$ be a positive Morse density on a
+  compact boundary-free $d$-manifold, with distinct critical values.
+  Consider the superlevel filtration $L(\lambda) \coloneqq
   \{\mathbf{x} \in \mathcal{M} : f(\mathbf{x}) \ge \lambda\}$ as
   threshold $\lambda$ decreases from $+\infty$ to $-\infty$:
   \begin{enumerate}[noitemsep,topsep=2pt]
     \item \textbf{Birth:} A new connected component of $L(\lambda)$
-      is born at Morse index-0 critical points (local maxima /
+      is born at Morse index-$d$ critical points (local maxima /
       peaks) at birth value $b_c = f(\mathbf{x}_c^{\mathrm{peak}})$.
-    \item \textbf{Death:} As $\lambda$ drops to index-1 critical
+    \item \textbf{Death:} As $\lambda$ drops to index-$(d-1)$ critical
       points (saddle points $\mathbf{x}_{cc'}^\dagger$), two
       disjoint connected components $C_c$ and $C_{c'}$ merge at
       death value $d_{cc'} = f(\mathbf{x}_{cc'}^\dagger)$.
@@ -1986,56 +2177,61 @@ theory and persistent homology (0-homology $\mathcal{H}_0$)
   \end{enumerate}
   The raw topological persistence of the younger component is
   $\pi_{cc'} \coloneqq \min(b_c, b_{c'}) - d_{cc'}$.
+  These are conventional indices of $f$ on a $d$-manifold; indices
+  0 and 1 instead refer to $-f$. A log transform preserves pairings,
+  not lifetime values, as shown in \cref{fig:supp_persistence_pairing}.
 \end{theorem}
 
-\begin{corollary}[Calibrated Persistence]
+\begin{remark}[Uncertainty-Scaled Persistence and Calibration Limits]
   \label{cor:calibrated_persistence}
   The pairwise \pak{} Density Separation Score $Z_{cc'}$ is the
-  statistically calibrated persistence of the 0-homology generator:
+  uncertainty-scaled log-density persistence proxy:
   \begin{equation}
-    Z_{cc'} = \frac{\pi_{cc'}}{\sigma_{\mathrm{total}}}, \qquad
-    \sigma_{\mathrm{total}} = \sqrt{\hat{\sigma}_{\min}^2 +
+    Z_{cc'}^{(\mathrm{lower})}=\frac{\hat\pi_u}{\sigma_{\mathrm{total}}},
+    \qquad
+    \sigma_{\mathrm{total}} \coloneqq \sqrt{\hat{\sigma}_{\min}^2 +
     (\hat{\sigma}^\dagger)^2}.
     \label{eq:calibrated_persistence}
   \end{equation}
-  Under the null hypothesis that the saddle is a Poisson sampling
-  artifact ($\pi_{cc'} \le 0$), $Z_{cc'}$ follows an asymptotic
-  standard normal distribution:
+  Here $\hat\pi_u=\min(\hat u_c,\hat u_{c'})-\hat u_{cc'}^\dagger$.
+  Only for a prespecified contrast with a justified central limit
+  theorem and consistent covariance-aware standard error would a
+  boundary-null statistic $Z$ satisfy:
   \begin{equation}
-    Z_{cc'} \xrightarrow{\mathcal{D}} \mathcal{N}(0, 1), \qquad
-    p\text{-value} = 1 - \Phi(Z_{cc'}).
+    Z\xrightarrow{\mathcal D}\mathcal N(0,1),\qquad
+    p_{\mathrm{nom}}=1-\Phi(Z).
     \label{eq:zscore_pvalue}
   \end{equation}
-  Setting $Z_{\mathrm{crit}} = 3.0$ corresponds to a two-tailed
-  false-positive probability of $\alpha \approx \num{1.35e-3}$,
-  providing rigorous topological noise filtering.
-\end{corollary}
+  At $Z=3$, the nominal one-sided tail is $\num{1.3499e-3}$ and the
+  two-sided tail is $\num{2.6998e-3}$. Neither is a verified PAk-DS
+  $p$-value. Selected extrema, adaptive ranks, and shared neighbours need
+  calibration; false-discovery control also needs a multiplicity procedure.
+\end{remark}
 
 \begin{proposition}[Thermodynamic Kramers Escape Time Interpretation]
   \label{prop:kramers_escape}
   In statistical thermodynamics, the escape rate of a Brownian
-  particle trapped in potential well $C_c$ over energetic barrier
-  $\Delta \mathcal{F} = u_c - u_{cc'}^\dagger$ is governed by the
+  particle in an independently specified overdamped diffusion with
+  energy potential $U$, noise energy $\epsilon=k_{\mathrm B}T>0$,
+  and a large nondegenerate barrier is governed by the
   Arrhenius--Kramers rate \parencite{kramers1940}:
   \begin{equation}
-    \tau_{\mathrm{escape}} \sim \tau_0 \exp\left( \frac{\Delta
-    \mathcal{F}}{k_{\mathrm{B}} T_{\mathrm{eff}}} \right) = \tau_0
-    \exp\left( \frac{\hat{u}_c -
-    \hat{u}_{cc'}^\dagger}{T_{\mathrm{eff}}} \right) = \tau_0 \left(
+    \tau_{\mathrm{escape}}\sim\tau_0e^{\Delta U/\epsilon}
+    =\tau_0\left(
     \frac{\hat{\rho}_c}{\hat{\rho}_{cc'}^\dagger} \right)^{\beta}.
     \label{eq:kramers_time}
   \end{equation}
-  The pairwise score $Z_{cc'}$ measures the free-energy barrier
-  height normalized by the thermal fluctuation noise: $Z_{cc'} =
-  \Delta \mathcal{F} / \sigma_{\Delta \mathcal{F}}$. High $Z_{cc'}$
-  guarantees that the cluster represents a stable, long-lived
-  thermodynamic macrostate rather than a transient fluctuation.
+  The density-ratio equality additionally postulates
+  $U=-E_0\ln(\rho/\rho_0)$ and $\beta=E_0/\epsilon$, with $E_0>0$.
+  Mobility and curvature determine the prefactor. Statistical errors
+  are not thermal noise; high PAk-DS alone implies neither this
+  dynamics nor a physical residence time.
 \end{proposition}
 
 \subsection{Theoretical Comparison with Classical Metrics}
 \label{subsec:cvi_theoretical_comparison}
 
-Table~\ref{tab:cvi_comparison} systematically compares the
+\Cref{tab:cvi_comparison} systematically compares the
 mathematical and structural properties of the \pak{}-DS Score
 against classical validity indices.
 \begin{landscape}
@@ -2046,23 +2242,24 @@ against classical validity indices.
       \caption{\textbf{Theoretical Comparison: PAk-DS Score
         vs.\ Classical Cluster Validity Indices}. Target/Scope:
         Structural and geometric comparison of validity metrics on
-        arbitrary $d$-dimensional submanifolds. Key Phenomenon: DS-Score
-        uniquely provides non-convex manifold compatibility, intrinsic
-        dimension invariance, and calibrated statistical $p$-values.
-        Conditions: Arbitrary compact submanifolds $\mathcal{M} \subset
-      \mathbb{R}^D$.}
+        non-convex supports. Density contrasts address a different
+        question from distance or centroid criteria, but adaptive
+        geometry and selected extrema remain limitations. This is a
+      mathematical comparison, not an empirical superiority result.}
       \label{tab:cvi_comparison}
-      \begin{tabularx}{\textwidth}{l X X X}
+      \begin{tabularx}{\linewidth}{l >{\raggedright\arraybackslash}X
+        >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
         \toprule
         \textbf{Metric / Index} & \textbf{Geometric Basis} &
         \textbf{Manifold Topology} & \textbf{Failure Mode on Seismicity} \\
         \midrule
         \textbf{Silhouette \parencite{rousseeuw1987}} &
-        Point-to-cluster mean distance & Convex Euclidean spheres &
-        Penalises curved fault planes; $\mathcal{O}(N^2)$ runtime \\
+        Point-to-cluster mean distance & Depends on chosen distance &
+        May mismatch density connectivity; full pair distances cost
+        $\mathcal O(N^2)$ \\
         \textbf{Calinski--Harabasz \parencite{calinski1974}} & Scatter
         matrix trace ratio & Centroid-based convex hulls & Centroids
-        lie off-manifold; explodes with noise \\
+        can lie off-manifold; sensitive to scatter and outliers \\
         \textbf{Davies--Bouldin \parencite{davies1979}} & Centroid
         distance vs.\ dispersion & Hyperspherical clusters & Fails on
         interleaved or branching fault networks \\
@@ -2071,9 +2268,21 @@ against classical validity indices.
         sensitive to single outlier events \\
         \textbf{PAk-DS Score (Ours)} & \textbf{Morse saddle density
         contrast} & \textbf{Arbitrary non-convex $\mathcal{M}$} &
-        \textbf{None (Invariant under log-density shifts)} \\
+        \textbf{Selection, boundary bias, and uncalibrated extrema} \\
         \bottomrule
       \end{tabularx}
+      \begin{tablenotes}[flushleft]
+        \footnotesize
+      \item Target \& Scope: Structural, mathematical, and geometric
+        comparison of validity metrics on arbitrary $d$-dimensional
+        Riemannian submanifolds.
+      \item Notice: [Analyst Interpretation] Distance and centroid
+        indices do not enforce convexity, but may disagree with density
+        connectivity. PAk-DS uses selected neighbour-edge proxies,
+        not exact continuous Morse saddles.
+      \item Evidence Anchor: [Derived Definition] Displayed formulas
+        and inspected PAk-DS code; no comparative benchmark result verified.
+      \end{tablenotes}
     \end{threeparttable}
   \end{table}
 \end{landscape}
@@ -2081,34 +2290,44 @@ against classical validity indices.
 % SECTION 8: EMPIRICAL VALIDATION ON SYNTHETIC BENCHMARKS AND
 % REGIONAL SEISMICITY
 % ==============================================================================
-\section{Empirical Validation on Synthetic Benchmarks and Regional Seismicity}
+\section{Synthetic Benchmark Drafts and Validation Requirements}
 \label{sec:clustering_benchmarks}
+
+\begin{remark}[Unverified Numerical Draft]
+  The scores, timings, uncertainty intervals, ARIs, and Monte Carlo
+  outcomes retained below have no inspected run records, seeds, or
+  versioned results. They are unverified draft claims, not demonstrated
+  results. Normal tails are not calibrated score $p$-values. Inspected
+  tests provide examples, not provenance for these numbers.
+\end{remark}
 
 \subsection{Canonical Two-Dimensional Benchmarks}
 \label{subsec:canonical_benchmarks}
 
 To verify mathematical sensitivity, the \pak{}-DS Score and
 \textsc{ADP++} pipeline were evaluated on five canonical synthetic
-test topologies ($N = 2000$ points each) (\textbf{Level~2:
-Ground-Truth Synthetic Fixtures}):
+test topologies in the draft ($N=\num{2000}$ each), with numerical
+outcomes pending reproducible validation:
 \begin{enumerate}[label=(\roman*),noitemsep]
   \item \textbf{Well-Separated Gaussians:} Two bivariate isotropic
-    Gaussians ($\mu_1 = -3, \mu_2 = +3, \sigma = 1.0$). Evaluated
+    Gaussians ($\mu_1 = \num{-3}, \mu_2 = \num{+3}, \sigma =
+    \num{1.0}$). Evaluated
     score: $S_{\mathrm{PAk}} = \num{4.12} \pm \num{0.18}$ ($p <
     \num{1e-4}$). Clear two-cluster topology.
   \item \textbf{Overlapping Gaussians:} Centers shifted to $\mu_1 =
-    -1, \mu_2 = +1$. Evaluated score: $S_{\mathrm{PAk}} = \num{0.59}
+    \num{-1}, \mu_2 = \num{+1}$. Evaluated score: $S_{\mathrm{PAk}}
+    = \num{0.59}
     \pm \num{0.08}$ ($p \approx \num{0.27}$). Unsupervised merging
-    correctly collapses the distribution into a single cluster ($K = 1$).
+    correctly collapses the distribution into a single cluster ($K = \num{1}$).
   \item \textbf{Uniform Poisson Noise:} Points sampled uniformly on
     $[0, 1]^2$. Evaluated score: $S_{\mathrm{PAk}} = \num{0.01} \pm
     \num{0.02}$ ($p \approx \num{0.49}$). Dynamic range between
-    well-separated and noise: $\num{4.12} / \num{0.01} = 412\times$.
+    well-separated and noise: $\num{4.12} / \num{0.01} = \num{412}\times$.
   \item \textbf{Single Gaussian Mode:} Unimodal baseline. Evaluates
-    correctly to $S_{\mathrm{PAk}} = \text{NaN}$ (no inter-cluster
+    to \texttt{None} in the inspected code (no inter-cluster
     saddles), triggering the single-cluster indicator.
   \item \textbf{Noise-Injected Separated Modes:} Two Gaussians
-    corrupted by $20\%$ uniform background noise. Halo filtering
+    corrupted by \qty{20}{\percent} uniform background noise. Halo filtering
     correctly assigns background points to $\ell_i = -1$; core
     separation score remains invariant at $S_{\mathrm{PAk}} =
     \num{4.13} \pm \num{0.21}$.
@@ -2119,47 +2338,52 @@ Ground-Truth Synthetic Fixtures}):
 
 We subjected \textsc{ADP++} and the DS-Score to an exhaustive
 benchmark spanning 21 complex topological manifolds across sample
-sizes $N \in [800, 10{,}000]$ and ambient dimensions $D \in [2, 100]$:
+sizes $N \in [\num{800}, \num{10000}]$ and ambient dimensions $D \in
+[\num{2}, \num{100}]$:
 \begin{itemize}[noitemsep,topsep=2pt]
   \item Non-convex manifolds: Concentric Rings, Two Moons, Swiss
-    Roll, S-Curve, Torus ($D=3$), 4D/8D/16D Hyperspheres, Trefoil
+    Roll, S-Curve, Torus ($D = \num{3}$), 4D/8D/16D Hyperspheres, Trefoil
     Knot, Mobius Strip.
   \item Extreme densities and dimensionality: Cauchy heavy-tailed
-    distributions, Extreme Aspect Ratio Ellipsoids ($100:1$), and
-    High-Dimensional Gaussian ($D=100$).
+    distributions, Extreme Aspect Ratio Ellipsoids ($\num{100}:\num{1}$), and
+    High-Dimensional Gaussian ($D = \num{100}$).
 \end{itemize}
 
-Across all 21 manifolds, the \pak{} framework demonstrated three
-invariant behaviors:
+The draft proposes checking the following properties; its numerical
+outcomes have not been verified:
 \begin{enumerate}[noitemsep]
   \item \textbf{Non-Negativity:} $S_{\mathrm{PAk}} \ge 0$
     identically across all realizations and dimensionalities.
   \item \textbf{Statistical Scale Invariance:} As sample size
-    increased from $N = 800$ to $N = 10{,}000$, pairwise $Z$-scores
-    scaled strictly as $Z \propto \sqrt{N}$ in accordance with the
-    central limit theorem, demonstrating asymptotic consistency.
+    increased from $N = \num{800}$ to $N = \num{10000}$, pairwise $Z$-scores
+    need not scale as $\sqrt N$. Capped ranks and changing geometry
+    prevent this conclusion from the central limit theorem alone;
+    growth must be evaluated under a specified experiment.
   \item \textbf{Correct Topography Discovery:} \textsc{ADP++}
-    correctly identified $K = 1$ mode for all single-manifold
+    correctly identified $K = \num{1}$ mode for all single-manifold
     topologies, while isolating true multi-component topologies with
-    Adjusted Rand Index $\mathrm{ARI} \ge 0.98$. Single-core
+    Adjusted Rand Index $\mathrm{ARI} \ge \num{0.98}$. Single-core
     execution times ranged between $\qty{0.2}{\second}$ and
-    $\qty{1.6}{\second}$ per $10^4$ points.
+    $\qty{1.6}{\second}$ per $\num{1e4}$ points.
 \end{enumerate}
 
 \subsection{Seismic Swarm Benchmark: Synthetic Scenarios}
 \label{subsec:seismic_benchmark_results}
 
 To evaluate the complete two-stage Unified Model on seismotectonic
-sequences, we generated 100 independent Monte Carlo realizations
+sequences, we generated \num{100} independent Monte Carlo realizations
 across three benchmark scenarios ($T_{\mathrm{obs}} =
-\qty{365}{\day}$, $m_0 = 1.5$, $\beta = 2.30$, $N \approx 5000$ events):
+  \qty{365}{\day}$, $m_0 = \num{1.5}$, $\beta = \num{2.30}$, $N
+\approx \num{5000}$ events):
 
 \paragraph{Scenario A (Well-Separated Sequences).}
 Comprises stationary background ($\mu_0 = \qty{2.0}{\per\day}$), an
 aftershock sequence at $t = \qty{50}{\day}$ ($M_{\mathrm{main}} =
-5.2$, $K = 0.8$, $c = 0.05$, $p = 1.15$), and an independent fluid
-swarm at $t = \qty{200}{\day}$ ($A = 1200$, $t_0 = 200$, $\nu =
-2.5$, $\sigma = 0.8$).
+\num{5.2}$, $K = \num{0.8}$, $c = \num{0.05}$, $p = \num{1.15}$),
+and an independent fluid
+swarm at $t = \qty{200}{\day}$ ($A = \num{1200}$, $t_0 =
+  \qty{200}{\day}$, $\nu =
+\num{2.5}$, $\sigma = \num{0.8}$).
 \begin{itemize}[noitemsep]
   \item \textbf{Stage 1 ($\pak$):} Correctly isolated both
     transients with zero false positives: mean $Z_{12} = \num{4.1}
@@ -2173,6 +2397,12 @@ swarm at $t = \qty{200}{\day}$ ($A = 1200$, $t_0 = 200$, $\nu =
     \num{0.02}$.
 \end{itemize}
 
+Under the unnormalized kernel in \cref{eq:clustering_omori_kernel},
+these parameters give $Kc^{1-p}/(p-1)\approx8.36$, hence
+$n_{\mathrm b}>8.36$ for $0<\alpha<\beta$. This is incompatible
+with the draft value $0.78$. Kernel normalization and parameters
+must be reconciled before using this scenario as a benchmark.
+
 \paragraph{Scenario B (Overlapping Aftershock and Swarm).}
 A fluid swarm initiates at $t = \qty{80}{\day}$ directly within the
 active aftershock zone of the $t = \qty{50}{\day}$ mainshock.
@@ -2184,18 +2414,24 @@ active aftershock zone of the $t = \qty{50}{\day}$ mainshock.
   \item The Unified Model resolved the saddle barrier ($Z =
     \num{1.6} \pm \num{0.4}$) and correctly decoupled the three-way
     responsibilities: $\mathrm{ARI} = \num{0.82} \pm \num{0.06}$,
-    representing an $\mathbf{+11\%}$ gain over baseline declustering
+    representing an \textbf{\qty{+11}{\percent}} gain over baseline
+    declustering
     algorithms.
 \end{itemize}
 
+The draft saddle $Z=1.6$ is below the proposed temporal threshold 3;
+the stated separation needs a different explicit decision rule
+and a supporting run record.
+
 \paragraph{Scenario C (Pure Poisson Null Model).}
 A stationary homogeneous Poisson process with constant rate $\mu_0 =
-\qty{15.0}{\per\day}$ ($N \approx 5475$ events).
+\qty{15.0}{\per\day}$ ($N \approx \num{5475}$ events).
 \begin{itemize}[noitemsep]
-  \item In $98\%$ of realizations, the joint objective
-    $\mathcal{J}(K)$ selected $K^* = 1$ (zero spurious clusters),
-    achieving $\mathrm{ARI} = 1.00$ and verifying strict control
-    over Type~I false discovery rates.
+  \item In \qty{98}{\percent} of realizations, the joint objective
+    $\mathcal{J}(K)$ was reported to select $K^*=1$, but $K$ counts
+    envelopes, so the no-envelope null requires $K=0$. This draft
+    outcome does not verify false-discovery control, and ARI does
+    not establish calibrated type-I error.
 \end{itemize}
 
 % ==============================================================================
@@ -2207,25 +2443,23 @@ A stationary homogeneous Poisson process with constant rate $\mu_0 =
 \subsection{Summary of Accomplishments}
 \label{subsec:discussion_accomplishments}
 
-The framework formulated in this chapter establishes a rigorous,
-mathematically unified foundation for seismic clustering and
-manifold validation:
+The chapter distinguishes implemented clustering operations from
+ideal sampling results and proposed temporal models:
 \begin{itemize}[noitemsep,topsep=2pt]
   \item Synthesised stochastic point processes, grand canonical
     thermodynamics, and information geometry, proving that
-    log-density coordinates provide an exact Euclidean space for the
-    Fisher--Rao metric.
-  \item Established closed-form, asymptotic Cram\'er--Rao optimality
-    for \ac{TWO-NN} intrinsic dimension and \pak{} density
-    estimation, deriving the conservative $4\times$ variance error model.
-  \item Resolved the endogenous-versus-exogenous ambiguity of
-    earthquake triggering through a multi-scale Unified Generative
-    Model coupled via joint $\mathrm{MDL}$--$\pak$ model selection.
+    log-density coordinates have constant Fisher metric for fixed-rank
+    stopping volumes, not fixed-volume Poisson sampling.
+  \item Derived fixed-rank density identities and independent-ratio
+    TWO-NN limits, distinguishing them from adaptive selection and
+    operational uncertainty formulas.
+  \item Proposed a Unified Generative Model and joint MDL--PAk objective;
+    physical attribution, identifiability, and consistency remain open.
   \item Engineered the vectorized \textsc{ADP++} clustering engine,
-    proving exact mathematical equivalence while delivering
-    $100\times\text{--}450\times$ computational acceleration.
-  \item Formulated the \pak{}-DS Score, proving its isomorphism to
-    0-homology topological persistence and Kramers escape rates.
+    proving pointer-jumping convergence for a fixed ascent forest.
+    General scalar parity and draft speedups remain unverified.
+  \item Reconciled PAk-DS scoring with source, related its contrasts
+    to ideal persistence, and bounded the statistical and Kramers analogies.
 \end{itemize}
 
 \subsection{Limitations and Operational Boundary Conditions}
@@ -2269,7 +2503,7 @@ Three major research avenues extend naturally from this work:
     probabilistic cluster responsibilities $w_i^{(\mathrm{bg})},
     w_i^{(\mathrm{env})}, w_i^{(\mathrm{trig})}$ directly into the
     loss functions of fine-tuned phase pickers
-    (Chapters~\ref{chap:computational_pipeline} and
-    \ref{chap:training}), establishing an end-to-end data-centric
+    (\cref{chap:computational_pipeline,chap:training}), establishing
+    an end-to-end data-centric
     pipeline from continuous waveforms to physical sequence interpretation.
 \end{itemize}

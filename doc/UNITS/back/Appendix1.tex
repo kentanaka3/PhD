@@ -8,7 +8,7 @@
 \label{units:app:config}
 
 This appendix provides the complete, production-grade \textbf{Hydra}
-(\cite{Hydra}) configuration file and associated parameter
+\parencite{Hydra} configuration file and associated parameter
 dictionaries governing the automated machine-learning seismic
 processing pipeline. The pipeline architecture decouples procedural
 execution logic from runtime parameters, instantiating all
@@ -22,9 +22,11 @@ relocation via \texttt{NonLinLoc}, calibrated Richter local
 magnitude estimation via \texttt{OGSLocalMagnitude}, and
 asynchronous distributed execution via a \texttt{Dask} cluster.
 
-Section~\ref{sec:app_yaml} presents the complete, executable YAML
-configuration manifest. Sections~\ref{sec:app_data_params}
-through~\ref{sec:app_loc_mag_params} provide detailed parameter
+\Cref{sec:app_yaml} presents the historical Hydra YAML
+configuration example and defines its boundary relative to the
+checked-in configuration.
+\Cref{sec:app_data_params,sec:app_assoc_qc_params,sec:app_loc_mag_params}
+provide detailed parameter
 dictionaries formatted in publication-grade \texttt{booktabs}
 tables, documenting parameter names, data types, configured values,
 epistemic categories, and operational physical semantics.
@@ -230,9 +232,9 @@ libpath: .
 \section{Data Ingestion and Phase Picker Parameter Dictionaries}
 \label{sec:app_data_params}
 
-Table~\ref{tab:app_data_dictionary} documents the parameters
+\Cref{tab:app_data_dictionary} documents the parameters
 governing waveform and station metadata ingestion via Pyrocko
-Squirrel. Table~\ref{tab:app_picker_dictionary} details the
+Squirrel. \Cref{tab:app_picker_dictionary} details the
 operational parameters for deep-learning phase picking.
 
 \begin{landscape}
@@ -243,7 +245,7 @@ operational parameters for deep-learning phase picking.
     ingestion (\texttt{SquirrelDataSource}).}
     \label{tab:app_data_dictionary}
     \begin{threeparttable}
-      \begin{tabularx}{\linewidth}{l l l c X}
+      \begin{tabularx}{\linewidth}{l l l c >{\raggedright\arraybackslash}X}
         \toprule
         \textbf{Parameter} & \textbf{Data Type} & \textbf{Configured
         Value} & \textbf{Epistemic Tag\tnote{a}} & \textbf{Operational
@@ -300,7 +302,7 @@ operational parameters for deep-learning phase picking.
     phase picking (\texttt{SeisBenchPicker}).}
     \label{tab:app_picker_dictionary}
     \begin{threeparttable}
-      \begin{tabularx}{\linewidth}{l l l c X}
+      \begin{tabularx}{\linewidth}{l l l c >{\raggedright\arraybackslash}X}
         \toprule
         \textbf{Parameter} & \textbf{Data Type} & \textbf{Configured
         Value} & \textbf{Epistemic Tag} & \textbf{Operational
@@ -348,9 +350,9 @@ operational parameters for deep-learning phase picking.
 \section{Phase Associator and Quality Control Parameter Dictionaries}
 \label{sec:app_assoc_qc_params}
 
-Table~\ref{tab:app_gamma_dictionary} documents the parameters
+\Cref{tab:app_gamma_dictionary} documents the parameters
 governing the Bayesian Gaussian Mixture Model Associator
-(\texttt{GammaAssociator}). Table~\ref{tab:app_qc_dictionary}
+(\texttt{GammaAssociator}). \Cref{tab:app_qc_dictionary}
 outlines the quality-control gates enforced by \texttt{OGSPickStatQC}.
 
 \begin{landscape}
@@ -361,7 +363,7 @@ outlines the quality-control gates enforced by \texttt{OGSPickStatQC}.
     association (\texttt{GammaAssociator}).}
     \label{tab:app_gamma_dictionary}
     \begin{threeparttable}
-      \begin{tabularx}{\linewidth}{l l l c X}
+      \begin{tabularx}{\linewidth}{l l l c >{\raggedright\arraybackslash}X}
         \toprule
         \textbf{Parameter} & \textbf{Data Type} & \textbf{Configured
         Value} & \textbf{Epistemic Tag} & \textbf{Operational
@@ -369,14 +371,15 @@ outlines the quality-control gates enforced by \texttt{OGSPickStatQC}.
         \midrule
         \texttt{crs.value} & Proj4 String & \texttt{+proj=sterea ...}
         & [Analyst-Normalized] & Conformal stereographic projection
-        centered at $(12^\circ\,\mathrm{E}, 46^\circ\,\mathrm{N})$ \\
+        centered at $(\ang{12}\,\mathrm{E}, \ang{46}\,\mathrm{N})$ \\
         \texttt{dims} & List[String] & \texttt{[x(km), y(km), z(km)]}
         & [System Architecture] & Spatial coordinate axes in
         kilometers for distance calculations \\
-        \texttt{x(km), y(km)} & Pair[Float] & $[-300, 400], [-350,
-        250]$ & [Analyst-Normalized] & Lateral spatial bounding box
+        \texttt{x(km), y(km)} & Pair[Float] & $[\num{-300},
+        \num{400}], [\num{-350},
+        \num{250}]$ & [Analyst-Normalized] & Lateral spatial bounding box
         enclosing regional network aperture \\
-        \texttt{z(km)} & Pair[Float] & $[0, 40]$ &
+        \texttt{z(km)} & Pair[Float] & $[\num{0}, \num{40}]$ &
         [Analyst-Normalized] & Seismogenic crustal depth search range
         (\qtyrange{0}{40}{\kilo\meter}) \\
         \texttt{vel.p, vel.s} & Float [\unit{\kilo\meter\per\second}] &
@@ -405,7 +408,8 @@ outlines the quality-control gates enforced by \texttt{OGSPickStatQC}.
         \texttt{min\_s\_picks\_per\_eq} & Integer & \num{2} &
         [Analyst-Normalized] & Minimum S-wave arrivals required to
         constrain focal depth \\
-        \texttt{covariance\_prior\_pre} & Pair[Float] & $[5.0, 5.0]$ &
+        \texttt{covariance\_prior\_pre} & Pair[Float] & $[\num{5.0},
+        \num{5.0}]$ &
         [Model Hypothesis] & Prior variance scale for horizontal and
         vertical travel-time misfits \\
         \texttt{max\_sigma11} & Float & \num{1.0} & [Model Hypothesis] &
@@ -435,7 +439,7 @@ outlines the quality-control gates enforced by \texttt{OGSPickStatQC}.
     control (\texttt{OGSPickStatQC}).}
     \label{tab:app_qc_dictionary}
     \begin{threeparttable}
-      \begin{tabularx}{\linewidth}{l l l X}
+      \begin{tabularx}{\linewidth}{l l l >{\raggedright\arraybackslash}X}
         \toprule
         \textbf{Parameter} & \textbf{Data Type} & \textbf{Configured
         Value} & \textbf{Operational Semantics / Description} \\
@@ -447,15 +451,15 @@ outlines the quality-control gates enforced by \texttt{OGSPickStatQC}.
         for event survival into location \\
         \texttt{p\_and\_s\_picks} & Integer & \num{3} & Minimum
         stations recording
-        both P and S arrivals \\
+        both $P$ and $S$ arrivals \\
         \bottomrule
       \end{tabularx}
       \begin{tablenotes}[flushleft]
         \footnotesize
       \item Target \& Scope: Quality-control filter gating associated
         event hypotheses prior to \ac{NonLinLoc} inversion.
-      \item What the reader should notice: Enforcing 3 co-located P
-        and S stations eliminates unconstrained hypocenters with
+      \item What the reader should notice: Enforcing 3 co-located $P$
+        and $S$ picks eliminates fictitious unconstrained hypocenters with
         infinite trade-offs between depth and origin time.
       \item Evidence Anchor: Implemented in \path{OGS/src/ogsqc.py}.
       \end{tablenotes}
@@ -469,10 +473,9 @@ outlines the quality-control gates enforced by \texttt{OGSPickStatQC}.
 \section{Hypocenter Location and Magnitude Parameter Dictionaries}
 \label{sec:app_loc_mag_params}
 
-Table~\ref{tab:app_nll_dictionary} specifies the \ac{NonLinLoc} inversion
-cards.
-Table~\ref{tab:app_mag_cluster_dictionary} details local magnitude estimation
-and Dask parallel cluster parameters.
+\Cref{tab:app_nll_dictionary} specifies the \ac{NonLinLoc} inversion cards.
+\Cref{tab:app_mag_cluster_dictionary} details local magnitude estimation and
+Dask parallel cluster parameters.
 \begin{landscape}
   \begin{table}[htbp]
     \centering
@@ -481,7 +484,7 @@ and Dask parallel cluster parameters.
     hypocenter location (\texttt{NonLinLoc}).}
     \label{tab:app_nll_dictionary}
     \begin{threeparttable}
-      \begin{tabularx}{\linewidth}{l l l c X}
+      \begin{tabularx}{\linewidth}{l l l c >{\raggedright\arraybackslash}X}
         \toprule
         \textbf{NLL Card} & \textbf{Data Type} & \textbf{Configured
         Value} & \textbf{Epistemic Tag} & \textbf{Operational
@@ -489,10 +492,10 @@ and Dask parallel cluster parameters.
         \midrule
         \texttt{TRANS} & Statement & \texttt{TRANS\_MERC WGS-84 ...} &
         [Analyst-Normalized] & Transverse Mercator projection; origin
-        $(9.5^\circ\,\mathrm{E}, 44.3^\circ\,\mathrm{N})$ \\
-        \texttt{VGGRID} & Grid Spec & $9000 \times 550$,
-        $0.1\,\unit{\kilo\meter}$ & [System Architecture] &
-        High-resolution 2D velocity lookup grid ($100\,\unit{\meter}$
+        $(\ang{9.5}\,\mathrm{E}, \ang{44.3}\,\mathrm{N})$ \\
+        \texttt{VGGRID} & Grid Spec & $\num{9000} \times \num{550}$,
+        \qty{0.1}{\kilo\meter} & [System Architecture] &
+        High-resolution 2D velocity lookup grid (\qty{100}{\meter}
         node spacing) \\
         \texttt{GTMODE} & Mode & \texttt{GRID2D ANGLES\_YES} & [System
         Architecture] & Computes take-off angles and ray paths via
@@ -500,10 +503,10 @@ and Dask parallel cluster parameters.
         \texttt{LOCSEARCH} & Search Spec & \texttt{OCT 50 50 5 0.01
         ...} & [Model Architecture] & Oct-Tree importance sampling:
         initial cells, max nodes (\num{50000}) \\
-        \texttt{LOCGRID} & Grid Bounds & $600 \times 450 \times
-        50\,\unit{\kilo\meter}$ & [Analyst-Normalized] & 3D search
+        \texttt{LOCGRID} & Grid Bounds & $\num{600} \times \num{450} \times
+        \qty{50}{\kilo\meter}$ & [Analyst-Normalized] & 3D search
         domain enclosing regional crustal volume down to
-        $50\,\unit{\kilo\meter}$ \\
+        \qty{50}{\kilo\meter} \\
         \texttt{LOCMETH} & Inversion & \texttt{EDT\_OT\_WT 9999.0 4
         ...} & [Model Architecture] & Equal Differential Time
         formulation; minimum 4 station pairs \\
@@ -538,7 +541,7 @@ and Dask parallel cluster parameters.
     estimation and Dask execution.}
     \label{tab:app_mag_cluster_dictionary}
     \begin{threeparttable}
-      \begin{tabularx}{\linewidth}{l l l c X}
+      \begin{tabularx}{\linewidth}{l l l c >{\raggedright\arraybackslash}X}
         \toprule
         \textbf{Parameter} & \textbf{Data Type} & \textbf{Configured
         Value} & \textbf{Epistemic Tag} & \textbf{Operational

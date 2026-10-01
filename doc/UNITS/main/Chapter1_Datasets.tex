@@ -46,17 +46,17 @@ study include:
     box} (\texttt{OGS\_STUDY\_REGION}) for waveform queries covers longitudes
     \ang{9.5}\,E to \ang{15.0}\,E and latitudes \ang{44.3}\,N to \ang{47.5}\,N.
   \item \textbf{Instrumental Network Aperture}: Waveform data were retrieved
-    from \placeholder{NUM STATIONS} \textbf{distinct seismic stations}
-    belonging to \placeholder{NUM NETWORKS} regional, national, and
-    international networks (\cref{fig:ogs_stations,fig:ogs_availability}). The
-    sensor network comprises high-sensitivity three-component broadband
-    velocimeters \eg{Streckeisen STS-2, Nanometrics Trillium 120/240, Guralp
-    CMG-3T/40T} and high-dynamic-range strong-motion accelerometers
-    \eg{Kinemetric and Episensor}. Over \placeholder{NUM WAVEFORMS} continuous
-    channels were monitored, providing dense spatial sampling across the
-    Northeastern region of Italy.
+    from \placeholder{NUM STATIONS} distinct seismic stations belonging to
+    \placeholder{NUM NETWORKS} regional, national, and international networks
+    (\cref{fig:ogs_stations,fig:ogs_availability}). The sensor network
+    comprises high-sensitivity three-component broadband velocimeters
+    \eg{Streckeisen STS-2, Nanometrics Trillium 120/240, Guralp CMG-3T/40T} and
+    high-dynamic-range strong-motion accelerometers \eg{Kinemetric and
+    Episensor}. Over \placeholder{NUM WAVEFORMS} continuous channels were
+    monitored, providing dense spatial sampling across the Northeastern region
+    of Italy.
   \item \textbf{Temporal Window Observation Horizon}: The target observation
-    window spans over twenty years of continuous observational data, from
+    window spans \num{21} years of continuous observational data, from
     \textbf{January 1st, 2005} to \textbf{December 31st, 2025} (00:00:00 UTC to
     23:59:59 UTC). This multi-decade horizon captures long-term regional
     background microseismicity, significant earthquake sequences \eg{the March
@@ -149,7 +149,7 @@ inversion parameterization employed in our computational pipeline.
 
 The resulting relocated \ac{OGS} reference catalog contains:
 \begin{itemize}
-  \item \textbf{\placeholder{NUM EVENTS} confirmed seismic events} strictly
+  \item \placeholder{NUM EVENTS} confirmed seismic events strictly
     contained within the regional polygon boundary \texttt{OGS\_POLY\_REGION}
     during the twenty year observation window (January 1st, 2005 to December
     31st, 2024).
@@ -159,8 +159,8 @@ The resulting relocated \ac{OGS} reference catalog contains:
   \item Focal depths predominantly confined between
     \qtyrange{5.0}{14.0}{\kilo\meter}, reflecting the shallow seismogenic
     brittle layer of the Southern Alps.
-  \item \textbf{\placeholder{NUM PICKS} manually verified phase picks},
-    comprising \textbf{\placeholder{NUM P PICKS} Primary (P)} wave arrivals and
+  \item \placeholder{NUM PICKS} manually verified phase picks, comprising
+    \textbf{\placeholder{NUM P PICKS} Primary (P)} wave arrivals and
     \textbf{\placeholder{NUM S PICKS} Secondary (S)} wave arrivals. Each pick
     includes analyst-assigned onset polarity, weight, and timing uncertainty.
 \end{itemize}
@@ -185,7 +185,7 @@ The resulting relocated \ac{OGS} reference catalog contains:
 This high-quality reference catalog provides the baseline for the \ac{BPGMA}
 developed in \cref{chap:pipeline_evaluation}.
 
-\section{Benchmark \ac{ML} Training Datasets}
+\section{Benchmark Machine Learning Training Datasets}
 \label{sec:benchmark_datasets}
 
 The \ac{DL} phase pickers evaluated in this thesis (\ac{PhaseNet} and \ac{EQT})
@@ -193,8 +193,8 @@ rely on supervised training over massive datasets of three component seismic
 waveforms labeled with expert ground-truth P- and S-wave arrival times. To
 understand how models generalize across varying tectonic regimes and noise
 backgrounds, we selected four benchmark datasets available through the
-SeisBench framework \parencite{SeisBench} that covers local (L) and
-regional (R) records (L: \qtyrange{0}{150}{\kilo\meter}, R:
+SeisBench framework \parencite{SeisBench} that covers local (L) and regional
+(R) records (L: \qtyrange{0}{150}{\kilo\meter}, R:
 \qtyrange{150}{600}{\kilo\meter}). Each dataset represents a distinct
 combination of scale, geographical setting, instrumentation density, and
 labeling curation.
@@ -206,7 +206,7 @@ The \acf{INSTANCE} dataset (see \cref{fig:instance_sample}) is a comprehensive
 open-access collection of labeled seismic waveforms recorded across the Italian
 peninsula between 2005 and 2020 by the National Seismic Network
 \parencite{RSN}, operated by \ac{INGV}, and partner regional networks including
-\ac{OGS}.
+\ac{OGS} (see \cref{fig:instance_sample})
 
 Unlike global \ac{ML} datasets curated primarily for high \ac{SNR},
 \ac{INSTANCE} was specifically designed to preserve the realistic operational
@@ -216,24 +216,24 @@ conditions of active regional monitoring networks:
     encompasses a large proportion of small-magnitude events
     ($M_{\mathrm{L}} < \num{2.5}$) exhibiting emergent onsets, complex
     scattering, and low signal-to-noise ratios.
-  \item \textbf{Volume and Balance}: \ac{INSTANCE} comprises nearly
-    \textbf{\num{1.3} million three component waveform traces}
-    (\num{1291537}), including \num{1159249} labeled P-wave arrivals,
-    \num{713883} labeled S-wave arrivals, across \num{54008} distinct events,
-    and a dedicated negative class of \num{132288} pure noise windows
-    extracted during periods without seismic activity.
+  \item \textbf{Volume and Balance}: \ac{INSTANCE} comprises of \num{1291537}
+    three component waveform traces, including \num{1159249} labeled P-wave
+    arrivals, \num{713883} labeled S-wave arrivals, across \num{54008} distinct
+    events, and a dedicated negative class of \num{132288} pure noise windows
+    extracted during periods without seismic activity, and it includes events
+    in the magnitude range $0.0 < M_{\mathrm{L}} < \num{6.5}$.
   \item \textbf{Geographical Proximity}: Because \ac{INSTANCE} waveforms
-    originate from Italy, the training wavefields reflect crustal attenuation,
-    complex fault structures, and station vault installations physically
-    similar to those of our Northeastern Italy study area.
+    originate from Italy, the training wavefields comprise crustal attenuation,
+    complex fault structures, and station installations of Northeastern Italy
+    study area.
 \end{itemize}
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=0.82\textwidth]{INSTANCE.png}
-  \caption{Geographical station distribution and event density of the
-    \ac{INSTANCE} benchmark dataset across Italy. Image taken from
-    \textcite{SeisBench}.
+  \caption{Geographical station and event distribution (black triangles and red
+    dots, respectively) of the \ac{INSTANCE} benchmark dataset across
+    Italy. Image taken from \textcite{SeisBench}.
   }
   \label{fig:instance_sample}
 \end{figure}
@@ -241,43 +241,36 @@ conditions of active regional monitoring networks:
 \subsection{STEAD: STanford EArthquake Dataset}
 \label{subsec:stead}
 
-The \acf{STEAD} dataset is a globally distributed
-benchmark dataset curated by researchers at Stanford University to
-facilitate artificial intelligence research in seismology. Sourced
-from seismic stations worldwide, \ac{STEAD} incorporates waveforms from
-subduction zones, continental collision zones, volcanic systems, and
-oceanic intraplate environments.
+The \acf{STEAD} dataset is a globally distributed benchmark dataset curated by
+researchers at Stanford University. Sourced from seismic stations worldwide,
+\ac{STEAD} incorporates waveforms from subduction zones, continental collision
+zones, volcanic systems, and oceanic intraplate environments (see
+\cref{fig:stead_sample}).
 
 Key characteristics of \ac{STEAD} include:
 \begin{itemize}
-  \item \textbf{High Signal Clarity and Curation}: Waveforms were
-    subjected to strict automated and manual quality filters,
-    ensuring distinct wavefield onsets and elevated signal-to-noise
-    ratios for earthquake signals.
-  \item \textbf{Extensive Labeling}: \ac{STEAD} contains over
-    \textbf{\num{1.26} million three-component traces} (\num{1265657}), with
-    \num{1030231} P-wave picks and \num{1030231} S-wave picks across
-    \num{441705} distinct earthquakes.
-  \item \textbf{Dedicated Noise Partition}: The dataset includes
-    \num{235426} continuous noise recordings sampled across global
-    stations, allowing neural networks to learn robust
-    discriminative boundaries between non-stationary environmental
-    noise and true seismic arrivals.
-  \item \textbf{Global Transferability}: By encompassing a wide
-    variety of sensor types, crustal velocity structures, and
-    epicentral distances (local to regional, up to
-    \qty{350}{\kilo\meter}), \ac{STEAD} is engineered to prevent models from
-    overfitting to region-specific propagation paths.
+  \item \textbf{High Signal Clarity and Curation}: Waveforms were subjected to
+    strict automated and manual quality filters, ensuring distinct wavefield
+    onsets and elevated signal-to-noise ratios for earthquake signals.
+  \item \textbf{Extensive Labeling}: \ac{STEAD} contains \num{1265657}
+    three-component traces, with \num{1030231} P-wave picks and \num{1030231}
+    S-wave picks across \num{441705} distinct earthquakes.
+  \item \textbf{Dedicated Noise Partition}: The dataset includes \num{235426}
+    continuous noise recordings sampled across global stations, allowing neural
+    networks to learn robust discriminative boundaries between non-stationary
+    environmental noise and true seismic arrivals.
+  \item \textbf{Global Transferability}: By encompassing a wide variety of
+    sensor types, crustal velocity structures, and epicentral distances (local
+    to regional, up to \qty{350}{\kilo\meter}), \ac{STEAD} is engineered to
+    prevent models from overfitting to region-specific propagation paths.
 \end{itemize}
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=0.82\textwidth]{STEAD.png}
-  \caption{Worldwide distribution of seismological stations contributing
-    waveform recordings to the global \ac{STEAD} benchmark dataset. The reader
-    should notice the broad geographic and tectonic representation across
-    diverse orogenic belts and plate boundaries. Image taken from
-    \textcite{SeisBench}.
+  \caption{Worldwide station and event distribution (black triangles and red
+    dots, respectively) of the global \ac{STEAD} benchmark dataset. Image taken
+    from \textcite{SeisBench}.
   }
   \label{fig:stead_sample}
 \end{figure}
@@ -285,76 +278,70 @@ Key characteristics of \ac{STEAD} include:
 \subsection{SCEDC: Southern California Earthquake Data Center}
 \label{subsec:scedc}
 
-The \acf{SCEDC} dataset provides an unprecedented
-volume of seismic recordings curated from the \acf{SCSN}, spanning decades
-of continuous monitoring across the San Andreas fault system.
+The \acf{SCEDC} dataset provides an unprecedented volume of seismic recordings
+curated from the \acf{SCSN}, spanning decades of continuous monitoring across
+the San Andreas fault system (see \cref{fig:scedc_sample})
 
 \ac{SCEDC} is characterized by:
 \begin{itemize}
-  \item \textbf{Massive Data Volume}: Sourced through SeisBench, the
-    \ac{SCEDC} dataset contains \textbf{\num{8.11} million three-component
-    traces} (\num{8111060}), incorporating \num{7571970} P-wave picks
-    and \num{4364155} S-wave picks across \num{378528} local earthquakes.
+  \item \textbf{Massive Data Volume}: \ac{SCEDC} dataset contains \num{8111060}
+    three-component traces, incorporating \num{7571970} P-wave picks and
+    \num{4364155} S-wave picks across \num{378528} local earthquakes.
   \item \textbf{Dense Local Network Geometry}: The \ac{SCSN} features an
-    exceptionally high spatial sensor density, capturing
-    high-frequency wavefield details over purely local propagation
-    paths ($\Delta \le \qty{150}{\kilo\meter}$).
-  \item \textbf{Catalog Completeness}: Decades of continuous analyst
-    curation and automated cross-correlation template matching make
-    the \ac{SCEDC} catalog complete to very low magnitude thresholds
-    ($M_{\mathrm{c}} \approx \num{1.0}$), minimizing missing pick
-    annotations in the training labels.
-  \item \textbf{Regional Bias}: While mathematically advantageous
-    for training deep high-capacity networks with millions of
-    parameters without overfitting, the dataset is geographically
-    homogeneous, reflecting Southern California crustal velocity
-    gradients and strike-slip tectonic structures.
+    exceptionally high spatial sensor density, capturing high-frequency
+    wavefield details over purely local propagation paths ($\Delta \le
+    \qty{150}{\kilo\meter}$).
+  \item \textbf{Catalog Completeness}: Decades of continuous analyst curation
+    and automated cross-correlation template matching make the \ac{SCEDC}
+    catalog complete to very low magnitude thresholds ($M_{\mathrm{c}} \approx
+    \num{1.0}$), minimizing missing pick annotations in the training labels.
+  \item \textbf{Regional Bias}: While mathematically advantageous for training
+    deep high-capacity networks with millions of parameters without
+    overfitting, the dataset is geographically homogeneous, reflecting Southern
+    California crustal velocity gradients and strike-slip tectonic structures.
 \end{itemize}
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=0.82\textwidth]{SCEDC.png}
-  \caption{Spatial station distribution of the \ac{SCSN} represented
-    in the \ac{SCEDC} dataset. The
-    reader should notice the dense spatial grid concentrated along the
-    San Andreas fault system and the Los Angeles basin. Image
-  taken from \textcite{SeisBench}.}
+  \caption{Station and event distribution (black triangles and red dots,
+    respectively) of the \ac{SCEDC} dataset. Notice the dense spatial grid
+    concentrated along the San Andreas fault system and the Los Angeles basin.
+    Image taken from \textcite{SeisBench}.
+  }
   \label{fig:scedc_sample}
 \end{figure}
 
 \subsection{Original Author Dataset: PhaseNet and EQTransformer}
 \label{subsec:original_corpora}
 
-In addition to the three standard community benchmark datasets, we
-evaluate the models trained on the original datasets established by
-the respective model architects:
+In addition to the three standard community benchmark datasets, we evaluate the
+models trained on the original datasets established by the respective model
+architects:
 \begin{itemize}
   \item \textbf{Original \acs{PhaseNet} Dataset} \parencite{PhaseNet}: Curated
-    by the \ac{NCSN}, this dataset
-    comprises approximately \num{779514} waveform traces recorded
-    across \num{234117} local seismic events in Northern California.
-    The dataset features high-quality manual analyst arrival times
-    but lacks explicitly segregated noise-only windows, relying
-    instead on pre-onset waveform segments to represent ambient noise.
+    by the \ac{NCSN}, this dataset comprises of \num{779514} waveform traces
+    recorded across \num{234117} local seismic events in Northern California.
+    The dataset features high-quality manual analyst arrival times but lacks
+    explicitly segregated noise-only windows, relying instead on pre-onset
+    waveform segments to represent ambient noise.
   \item \textbf{Original \acs{EQT} Dataset}
     \parencite{EQTransformer}: Curated as a specialized subset of the
-    \ac{STEAD} repository, comprising approximately \num{1200000}
-    three-component traces (\num{1000000} P-wave picks,
-      \num{1000000} S-wave picks across \num{400000} events,
-    and \num{200000} pure noise windows) selected to optimize multi-task
-    transformer training for simultaneous earthquake detection, P
+    \ac{STEAD} repository, comprising of \num{1200000} three component traces
+    (\num{1000000} P-wave picks, \num{1000000} S-wave picks across \num{400000}
+    events, and \num{200000} pure noise windows) selected to optimize
+    multi-task transformer training for simultaneous earthquake detection, P
     picking, and S picking across \qty{60}{\second} waveform windows.
 \end{itemize}
 
 \section{Synthesis of Benchmark Datasets and Methodological Comparison}
 \label{sec:dataset_synthesis}
 
-\Cref{tab:datasets} provides a rigorous, publication-grade
-comparative synthesis of all benchmark datasets utilized in this
-thesis. All datasets share a common sampling frequency of
-\qty{100}{\hertz}, either natively or through standardized
-SeisBench decimation, ensuring absolute tensor dimensionality
-consistency across all \ac{DL} inference workflows.
+\Cref{tab:datasets} provides a rigorous comparative synthesis of all benchmark
+datasets used in this thesis. All datasets share a common sampling frequency of
+\qty{100}{\hertz}, either natively or through standardized SeisBench
+decimation, ensuring absolute tensor dimensionality consistency across all
+\ac{DL} inference workflows.
 
 \begin{table}[htbp]
   \centering
@@ -369,7 +356,7 @@ consistency across all \ac{DL} inference workflows.
   }
   \label{tab:datasets}
   \begin{threeparttable}
-    \begin{tabularx}{\linewidth}{l r r r r c l}
+    \begin{tabular*}{\linewidth}{@{\extracolsep{\fill}} l r r r r c l @{}}
       \toprule
       \textbf{Dataset} & \textbf{Traces} & \textbf{P Picks} &
       \textbf{S Picks} & \textbf{Events} & \textbf{Noise Traces} &
@@ -387,20 +374,19 @@ consistency across all \ac{DL} inference workflows.
       \ac{EQT}\tnote{c} & \num{1200000} & \num{1000000}
       & \num{1000000} & \num{400000} & \num{200000} & Global (L / R) \\
       \bottomrule
-    \end{tabularx}
+    \end{tabular*}
     \begin{tablenotes}[flushleft]
       \footnotesize
     \item[a] Epicentral distance classification: Local
       ($\mathrm{L}$) denotes $\Delta \le \qty{150}{\kilo\meter}$; Regional
-      ($\mathrm{R}$) denotes $\qty{150}{\kilo\meter} < \Delta \le
-      \qty{600}{\kilo\meter}$.
+      ($\mathrm{R}$) denotes \qtyrange{150}{600}{\kilo\meter}.
     \item[b] Dedicated pure noise trace partitions were not
       independently generated in the \ac{SCEDC} and original \ac{PhaseNet}
       repositories; ambient noise representations are extracted from
       pre-P arrival waveform windows.
     \item[c] Original \ac{PhaseNet} and \ac{EQT} datasets as described in their
       respective publications.
-    \item[d] In the original \ac{PhaseNet} publication \parencite{PhaseNet},
+    \item[d] In the original publication by \textcite{PhaseNet},
       separate counts for P and S arrivals were not reported
       individually; both phase classes are present in the labeled
       training windows.
@@ -411,43 +397,43 @@ consistency across all \ac{DL} inference workflows.
 \subsection{The Domain Adaptation Hypothesis}
 \label{subsec:domain_adaptation_hypothesis}
 
-A central scientific question explored in this dissertation is the
-\textbf{domain adaptation hypothesis}: does a deep neural network
-trained on massive volumes of data from a distant geological setting
-(such as the 8.1 million traces of \ac{SCEDC} in Southern California)
-outperform a network trained on a smaller but regionally congruent
-dataset (such as the 1.3 million traces of \ac{INSTANCE} in Italy)?
+\textcite{WhichPicker} observed that models trained on regional data can be
+transferred between regions with only mild performance degradation, compared to
+teleseismic data. One of the scientific questions explored in this dissertation
+is the \textbf{domain adaptation hypothesis}: given the metrics defined in
+\cref{sec:confusion_matrix}, how effectively do \ac{DL} phase pickers
+(\ac{PhaseNet} and \ac{EQT}) trained on large external datasets (\ac{INSTANCE}
+in Italy, \ac{STEAD} globally, \ac{SCEDC} in California) generalize to the
+complex geological and noise environment of Northeastern Italy?
 
-In classical supervised machine learning, statistical theory assumes
-that training and testing samples are identically and independently
-distributed ($i.i.d.$) from the same underlying probability distribution:
+In classical supervised \ac{ML}, statistical theory assumes that training and
+testing samples are \ac{IID} from the same underlying probability distribution:
 \begin{equation}
-  P_{\mathrm{train}}(\mathbf{X}, \mathbf{Y}) =
+  P_{\mathrm{train}}(\mathbf{X}, \mathbf{Y}) \equiv
   P_{\mathrm{test}}(\mathbf{X}, \mathbf{Y}).
   \label{eq:iid_assumption}
 \end{equation}
-In operational seismology, this assumption is fundamentally violated
-when transferring models across geographical regions
-($P_{\mathrm{train}} \neq P_{\mathrm{test}}$). Regional differences include:
+In operational seismology, this assumption is fundamentally violated when
+transferring models across geographical regions ($P_{\mathrm{train}} \not\equiv
+P_{\mathrm{test}}$). Regional differences include:
 \begin{enumerate}
-  \item \textbf{Path Effects and Velocity Dispersions}: Distinct
-    crustal velocity gradients, Conrad/Moho discontinuity depths,
-    and intrinsic attenuation ($Q$-factor) modify wavefield
-    dispersion and P-to-S coda energy ratios.
-  \item \textbf{Anthropogenic and Environmental Noise Spectra}:
-    Cultural noise in densely populated European valleys
-    (characterized by \qty{50}{\hertz} electrical harmonics, narrow road
-    networks, and industrialized river plains) differs substantially
-    from noise in the Mojave desert or Southern California coastal basins.
+  \item \textbf{Path Effects and Velocity Dispersions}: Distinct crustal
+    velocity gradients, Conrad/Moho discontinuity depths, and intrinsic
+    attenuation ($Q$-factor) modify wavefield dispersion and P-to-S coda energy
+    ratios.
+  \item \textbf{Anthropogenic and Environmental Noise Spectra}: Cultural noise
+    in densely populated European valleys (characterized by \qty{50}{\hertz}
+      electrical harmonics, narrow road networks, and industrialized river
+    plains) differs substantially from noise in the Mojave desert or Southern
+    California coastal basins.
   \item \textbf{Instrumental Hardware Responses}: Variations in
     sensor eigenfrequencies, digitizer bit depths, and vault
     coupling introduce subtle spectral colorations into the
     digitized waveforms.
 \end{enumerate}
 
-By systematically evaluating \ac{PhaseNet} and \ac{EQT} models
-trained across \ac{INSTANCE}, \ac{STEAD}, \ac{SCEDC}, and the
-original datasets on
-the identical three-month \ac{SMINO} continuous dataset, this study
-provides empirical bounds on regional domain transferability
-(presented in Chapter~\ref{chap:results}).
+By systematically evaluating \ac{PhaseNet} and \ac{EQT} models trained across
+\ac{INSTANCE}, \ac{STEAD}, \ac{SCEDC}, and the original datasets on the
+identical \num{21} years \ac{SMINO} continuous dataset, this study provides
+empirical bounds on regional domain transferability (presented in
+\cref{chap:results}).
