@@ -32,7 +32,6 @@ Read and follow [`AGENTS.md`](../../AGENTS.md) — it is the repository-wide con
   3. **Derived Statistics & Model Predictions**: Quantities computed deterministically by verified algorithms.
   4. **Model Estimates & Forecasts**: Approximations, statistical fits, or machine-learning outputs.
   5. **Hypotheses & Literature Baselines**: Conceptual benchmarks or design questions.
-  6. **Subjective Feedback**: User ratings, survey responses, or usability feedback.
 - Enforce visual and tabular evidence boundaries: never present a planned, speculative, or simulated component with the same visual style, precision, or certainty as demonstrated, executable code.
 - Never present an LLM inference, prototype heuristic, or unverified draft as an established scientific result.
 - Never invent authors, affiliations, citations, dates, links, benchmark results, dataset statistics, or uncertainty bounds. Use explicit placeholders and flag drafts for human review.
@@ -52,9 +51,7 @@ For every new or substantially revised TeX document, begin with concise purpose 
 % Evidence Anchors: [Repository-relative paths to supporting source code, schemas, tests, or data]
 ```
 
-### Standard Scientific Document Hierarchy
-
-Structure scientific LaTeX documents logically according to venue guidelines and document class (`article`, `report`, `book`, `beamer`):
+Structure Scientific LaTeX documents logically according to venue guidelines and document class (`article`, `report`, `book`, `beamer`):
 
 1. **Title, Authors, and Abstract**: Clear problem statement, methodology, principal results, and scope.
 2. **Introduction & Motivation**: Research gap, scientific questions, and concrete contributions.
@@ -67,29 +64,26 @@ Structure scientific LaTeX documents logically according to venue guidelines and
 
 For compact conference abstracts and extended summaries, use `article` with compact section-style headings to avoid unnecessary page breaks while preserving clear structural hierarchy.
 
----
-
 ## Mathematical exposition and formal scientific rigor
 
 All mathematical formulations must adhere to strict formal notation, explicit domain bounds, and direct alignment with underlying computational models.
 
-### 1. Notation dictionary and domain constraints
+### 1. Notation Dictionary and Domain Constraints
 
 Every mathematical symbol must be explicitly defined and bounded upon introduction.
 
-### 2. Algorithmic and formula alignment
+### 2. Algorithmic and Formula Alignment
 
 Ensure mathematical expressions match the exact executable implementation.
 
-### 3. Theoretical reference indices for design comparisons
-
+### 3. Theoretical Reference Indices for Design Comparisons
 When discussing planned extensions or literature baselines, state their exact mathematical formulations and axiomatic properties explicitly.
 
-### 4. Mathematical typography standards
-
+### 4. Mathematical Typography Standards
 - Use `amsmath` environments (`equation`, `align*`, `aligned`, `gather`, `multline`) rather than raw `$$...$$`, `\[...\]` or deprecated `eqnarray`.
+- Write explanatory abbreviations with the shared macros `\ie{...}` and `\eg{...}` rather than literal `i.e.` or `e.g.`. These macros provide their own parentheses, italic abbreviation, comma, and following space; do not wrap a macro call in additional parentheses.
 - Define semantic operators via `\DeclareMathOperator{\argmin}{arg\,min}` or `\DeclareMathOperator{\diag}{diag}` in the preamble.
-- Typeset multi-character identifiers and units in upright text using `\mathrm{...}` or `\mathit{...}` (e.g., $\mathrm{km}$, $\mathrm{Hz}$, $\unit{\kilo\meter}$).
+- Typeset multi-character identifiers and units in upright text using `\mathrm{...}` or `\mathit{...}` (e.g., $\unit{\kilo\gram}$, $\mathit{velocity}$, $\mathrm{MXN}$).
 - Annotate worked examples with complete step-by-step arithmetic matching verification tests.
 
 ```tex
@@ -110,26 +104,23 @@ When discussing planned extensions or literature baselines, state their exact ma
 
 Every table must function as a self-contained, publication-grade scientific artifact.
 
-### 1. Layout and typography standards
-
+### 1. Layout and Typography Standards
 - **Booktabs Standard**: Use strictly `\toprule`, `\midrule`, `\bottomrule`, and `\cmidrule(lr){a-b}`. Never use vertical rules (`|`) or double horizontal lines.
 - **Fluid Text Columns**: Use `tabularx` with `X` columns for multi-line descriptive text cells, eliminating brittle manual width guessing (`p{...}`).
-- **Numeric & Decimal Alignment**: Use `siunitx` (`S` column descriptor) for numerical values, magnitudes, residuals, financial figures, percentages, and metrics to ensure alignment at the decimal point. Format negative numbers with mathematical minus signs (`$-2.50$` or `\num{-2.50}`), never hyphens.
+- **Numeric & Decimal Alignment**: Use `siunitx` (`S` column descriptor) for numerical values, financial figures, percentages, and metrics to ensure alignment at the decimal point. Format negative numbers with mathematical minus signs (`$-2.50$` or `\num{-2.50}`), never hyphens.
 - **Self-Contained Table Notes**: Wrap structured tables in a `threeparttable` environment with `\begin{tablenotes}`. Define all acronyms, physical units, baseline assumptions, currencies, and statistical notations directly in table notes.
 
-### 2. Epistemic data tagging in tables
-
+### 2. Epistemic Data Tagging in Tables
 Explicitly distinguish data rows and columns by epistemic classification:
 - `[Observed (Synthetic)]`: Mock, benchmark, or sanitized input records.
 - `[Analyst-Normalized]`: Cleaned canonical keys, mapped categories, or standardized units.
 - `[Derived Metric]`: Deterministically computed analytical quantities (Mean, Variance, Standard Deviation, RMSE, Correlation, Covariance, F1 Score, Accuracy, Precision, Recall, etc.).
 - `[Model Forecast / Hypothesis]`: Projected values, simulated counterfactuals, or theoretical bounds.
-- `[Literature Baseline]`: Published statistical benchmark results, historical references or third-party catalog statistics.
+- `[Literature Baseline]`: Historical references or third-party statistical benchmarks.
 
-### 2. Standard Scientific Table Archetypes
+### 3. Standardized Scientific Table Archetypes
 
-#### Archetype A: Schema and variable data dictionary
-
+#### Archetype A: Schema and Variable Data Dictionary
 ```tex
 \begin{table}[htbp]
   \centering
@@ -160,8 +151,7 @@ Explicitly distinguish data rows and columns by epistemic classification:
 \end{table}
 ```
 
-#### Archetype C: System Architecture & Evidence Provenance Matrix
-
+#### Archetype B: Capability and Evidence Provenance Matrix
 ```tex
 \begin{table}[htbp]
   \centering
@@ -216,19 +206,17 @@ Explicitly distinguish data rows and columns by epistemic classification:
 
 ---
 
-## Publication-Grade TikZ and PGFPlots Standards
+## TikZ and PGFPlots Scientific Diagram Standards
 
 When modeling system architectures, data provenance pipelines, mathematical DAGs, or quantitative time-series in `doc/**/*.tex`, adhere to reproducible vector standards.
 
-### 1. Robust TikZ structure and style hierarchy
-
+### 1. Robust TikZ Structure and Style Hierarchy
 - Define reusable semantic styles in the preamble or via `\tikzset{...}` before environments; avoid hardcoding ad-hoc styling inline.
 - Use relative coordinate placement via `positioning` (e.g., `below=3mm of nodeA`) instead of absolute coordinates.
 - Maintain strict layering: declare `\pgfdeclarelayer{background}` and `\pgfsetlayers{background,main}` for grouping enclosures and bounding boxes (`fit` library).
 - Limit TikZ packages to stable, core libraries: `arrows.meta`, `positioning`, `calc`, `fit`, `backgrounds`, `shapes.geometric`, `matrix`.
 
-### 2. Visual evidence boundaries (Demonstrated vs. Planned)
-
+### 2. Visual Evidence Boundaries (Demonstrated vs. Planned)
 Every architectural and pipeline diagram must visually encode component implementation status:
 
 | Component Status | Stroke & Border Style | Node Fill / Background | Annotation / Badge Rule |
@@ -238,20 +226,19 @@ Every architectural and pipeline diagram must visually encode component implemen
 | **Human / Analyst Decision** (manual review, input) | Hexagon or chamfered rectangle | Warm amber fill (`orange!10`) | Labeled "Manual" or "Review" |
 | **Planned / Future Milestone** (roadmap target) | Dashed stroke (`dash pattern=on 3.5pt off 2.5pt`) | Muted/patterned fill (`gray!4`) | Mandatory `[Planned]` badge on node |
 
-### 2. TikZ Architectural Diagram Template
-
+### 3. TikZ Architecture and Pipeline Template
 ```tex
 \begin{figure}[htbp]
 \centering
 \begin{tikzpicture}[
   >=Stealth,
-  node distance=8mm and 10mm,
+  node distance=6mm and 8mm,
   every node/.style={font=\small},
-  base/.style={rectangle, rounded corners=3pt, draw=black!80, line width=0.7pt, align=center, inner sep=5pt, minimum height=9mm},
+  base/.style={rectangle, rounded corners=3pt, draw=black!80, line width=0.7pt, align=center, inner sep=5pt, minimum height=8mm},
   manual/.style={base, fill=orange!10, draw=orange!80!black},
-  impl/.style={base, fill=blue!8, draw=blue!80!black, text width=30mm},
-  audit/.style={base, fill=gray!10, draw=black!80, double, double distance=1pt, text width=30mm},
-  planned/.style={base, fill=gray!4, draw=black!50, dash pattern=on 3.5pt off 2.5pt, text width=30mm, font=\small\itshape},
+  impl/.style={base, fill=blue!8, draw=blue!80!black, text width=32mm},
+  audit/.style={base, fill=gray!10, draw=black!80, double, double distance=1pt, text width=32mm},
+  planned/.style={base, fill=gray!4, draw=black!50, dash pattern=on 3.5pt off 2.5pt, text width=32mm, font=\small\itshape},
   arrow/.style={->, thick, draw=black!75},
   dashedarrow/.style={->, thick, dashed, draw=black!50}
 ]
@@ -286,7 +273,7 @@ Every architectural and pipeline diagram must visually encode component implemen
 \end{figure}
 ```
 
-### 3. Quantitative PGFPlots Standards
+### 4. Quantitative PGFPlots Standards
 When plotting empirical trajectories, experimental comparisons, or benchmark results:
 - **Explicit Baselines**: Fix baseline reference values with an explicit grid line (`extra y ticks={100}, extra y tick style={grid=major, dashed}`).
 - **Multi-Series Typography**: Visually distinguish primary series (solid curve with filled circle markers) from secondary or comparative series (dashed curve with square markers).
@@ -314,7 +301,7 @@ When plotting empirical trajectories, experimental comparisons, or benchmark res
     legend cell align={left},
     font=\small,
     grid=both,
-    grid style={dotted, gray!50}
+    grid style={dotted, gray!40}
   ]
     \addplot[thick, color=blue!80!black, mark=*] coordinates {
       (1, 100.0)
@@ -340,16 +327,14 @@ When plotting empirical trajectories, experimental comparisons, or benchmark res
 
 Captions and explanatory prose must be self-contained, informative, and scientifically testable. Reject purely decorative or title-only captions.
 
-### 1. Required 3-part caption architecture
-
+### 1. Required 3-Part Caption Architecture
 Every `\caption{...}` for figures, plots, and tables must satisfy the 3-part structure:
 1. **Target & Scope**: State the exact system, pipeline, model, dataset, or mathematical relationship being presented.
 2. **Key Phenomenon / Mechanism ("What the reader should notice")**: State the critical takeaway, quantitative divergence, or design rationale that the visual conveys.
 3. **Evidence Anchor & Limitations**: Declare data origin (e.g., *Synthetic benchmark fixture*, *Empirical trial $N=50$*), baseline reference values, sample bounds, and implementation status.
 
-### 2. Pre-flight scientific verification checklist
-
-Before declaring any scientific LaTeX revision complete, verify:
+### 2. Pre-Flight Scientific Verification Checklist
+Before declaring any Scientific LaTeX revision complete, verify:
 - [ ] Variable and field names match the underlying source code and schemas verbatim.
 - [ ] Mathematical equations precisely align with algorithm implementations and literature definitions.
 - [ ] Worked numerical examples perfectly reproduce automated test fixture assertions.
@@ -402,7 +387,7 @@ git status --short
 
 ## Response and Handoff Protocol
 
-Conclude every scientific LaTeX authoring or review task with a structured handoff summary:
+Conclude every task with a concise handoff containing:
 
 - **Modified File(s)**: Document paths and overarching scientific purpose.
 - **Evidence Anchors Inspected**: Specific source modules, schemas, or test suites verified.
