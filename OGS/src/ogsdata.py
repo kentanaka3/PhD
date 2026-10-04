@@ -12,7 +12,7 @@ copies, and ObsPy conversion helpers for downstream seismic ML workflows.
 The module implements:
 
 1. OPTIONAL PYROCKO / SQUIRREL INTEGRATION
-  - Import-time fallback when Pyrocko is unavailable
+  - Guarded local Pyrocko imports (ml_catalog must still be importable)
   - Runtime validation with clear installation guidance
   - Conversion from Pyrocko traces to ObsPy streams
 
@@ -68,7 +68,7 @@ SEISMIC APPLICATIONS:
     to local temporary directories
 
 USAGE:
-  from ogsdata import OGSSquirrelDataSource
+  from OGS.src.ogsdata import OGSSquirrelDataSource
 
   data = OGSSquirrelDataSource(
           env="/path/to/ogsDB",
@@ -132,8 +132,9 @@ from ml_catalog.util import logger, normalize_pyrocko_time
 # OPTIONAL PYROCKO / SQUIRREL IMPORTS
 # =============================================================================
 # Pyrocko is an optional runtime dependency in some development environments.
-# The module can still be imported without it, but methods that need Squirrel
-# call _require_squirrel_runtime() or _verify_squirrel() before doing work.
+# Local imports tolerate missing Pyrocko; ml_catalog has its own dependencies.
+# Squirrel opening uses _require_squirrel_runtime(); conversion/version helpers
+# still require the corresponding Pyrocko objects.
 
 try:
   import pyrocko
@@ -392,8 +393,8 @@ def _require_squirrel_runtime():
   """
   Return Pyrocko Squirrel runtime objects or raise a helpful ImportError.
 
-  Importing this module should be cheap even without Pyrocko installed, but
-  indexing and waveform retrieval cannot proceed without Squirrel.
+  Indexing and waveform retrieval require Squirrel. This guard only checks
+  the locally imported Squirrel and init_environment objects.
   """
   if Squirrel is None or init_environment is None:
     raise ImportError(
@@ -430,7 +431,9 @@ def _fast_update_squirrel_db(sq, squirrel_add_paths: list[pathlike]) -> None:
   -----
   Deletions are restricted to files under the requested roots. This avoids
   removing paths from a shared database simply because they were not included
-  in the current indexing request.
+  in the current indexing request. Existing paths are not rechecked for changed
+  contents. Add/remove failures are logged and swallowed; missing local
+  Squirrel support causes an immediate no-op.
   """
   if Squirrel is None:
     return
@@ -508,7 +511,7 @@ def _index_day_worker(
       Base Squirrel environment path supplied by ``OGSSquirrelDataSource``.
   day_iso : str
       ISO-formatted calendar day (``YYYY-MM-DD``) to index. Strings keep
-      the worker payload picklable and unambiguous across processes.
+      the worker payload unambiguous; index_parallel uses threads.
   paths : list[str]
       Source archive roots or files.
   persistent : str
@@ -520,7 +523,14 @@ def _index_day_worker(
   Returns
   -------
   str
-      Human-readable status message logged by the parent process.
+      Human-readable status message logged by the caller. Fast-update warnings
+      do not prevent a success message.
+
+  Raises
+  ------
+  RuntimeError
+      On an unhandled failure, after attempting to remove the shard's
+      .squirrel directory.
   """
   try:
     import datetime
@@ -587,7 +597,9 @@ def _ogs_day_dir_cache_signature(
   -------
   tuple or None
       Signature entries ``(relative_path, mtime_ns)``. ``None`` means the
-      root is not a directory or could not be inspected.
+      root is not a directory or its unbounded child listing fails. Failed
+      stat calls produce None timestamps; unreadable month listings can
+      yield partial signatures.
   """
   if not root.is_dir():
     return None
@@ -737,9 +749,9 @@ def _select_squirrel_add_paths(
   """
   Select the minimal set of paths that Squirrel should index for a time span.
 
-  For OGS archive roots with a ``YYYY/MM/DD`` hierarchy, this returns only
-  day directories inside the inclusive date range plus station metadata
-  children. For non-OGS paths, metadata paths, or unparseable time windows,
+  For OGS archive roots with a ``YYYY/MM/DD`` hierarchy, this returns only day
+  directories inside the inclusive date range plus station metadata children.
+  If no matching day directories are found, or time bounds cannot be parsed,
   the original input paths are preserved.
   """
   paths = list(paths)
@@ -800,8 +812,8 @@ def _available_ogs_groups(
   Return available daily group names directly from the OGS filesystem.
 
   The returned group strings are ISO dates (``YYYY-MM-DD``). This path avoids
-  querying Squirrel for every day when the archive layout already identifies
-  which days have files.
+  querying Squirrel for every day. Any child in a valid day directory is
+  sufficient; waveform type/content is not checked.
   """
   if start_date is None or end_date is None:
     return []
@@ -829,9 +841,10 @@ class OGSSquirrelDataSource(BaseSquirrelDataSource):
   Fast OGS waveform data source backed by Pyrocko Squirrel.
 
   This class implements the ``ml_catalog`` data-source interface while adding
-  OGS-specific optimizations for large archives. It can query prebuilt yearly
+  OGS-specific optimizations for large archives. It can query prebuilt daily
   Squirrel databases, build/update those databases in parallel, or fall back
-  to a single monolithic Squirrel environment.
+  to a single monolithic Squirrel environment. Legacy year environments are
+  also considered by the shard lookup.
 
   Design Goals
   ------------
@@ -867,8 +880,8 @@ class OGSSquirrelDataSource(BaseSquirrelDataSource):
       Number of segment requests to keep in one Squirrel accessor before
       clearing it in ``get_segments``.
   index_workers : int, optional
-      Worker process count for year-sharded indexing. Defaults to the number
-      of years, capped by CPU count.
+      Worker thread count for day-sharded indexing. Defaults to the number
+      of target days, capped by CPU count.
   copy_to_tmp : bool, default=True
       Copy Squirrel environments to temporary directories before opening.
       This is useful for read-only or shared network filesystems.
@@ -907,7 +920,8 @@ class OGSSquirrelDataSource(BaseSquirrelDataSource):
     Initialize the data source and optionally update Squirrel databases.
 
     Initialization is intentionally lazy for read operations: Squirrel
-    instances are not opened until a query asks for a specific day. When
+    instances are opened lazily. If no shard is found, a missing monolithic
+    environment is initialized even when check=False. When
     ``check=True``, the constructor performs the requested database update
     so later calls can use pre-indexed environments.
     """
@@ -1043,7 +1057,8 @@ class OGSSquirrelDataSource(BaseSquirrelDataSource):
     because daily indexing is dominated by filesystem I/O and SQLite work
     that releases the GIL, and it avoids the pickling/process-startup
     overhead of ``ProcessPoolExecutor``. After workers finish, ``day_envs``
-    is refreshed so newly created shards are available for queries.
+    is refreshed so newly created shards are available for queries. Worker
+    failures are logged and are not re-raised by this method.
     """
     import concurrent.futures
 
@@ -1113,8 +1128,7 @@ class OGSSquirrelDataSource(BaseSquirrelDataSource):
       )
       return self._sq_instances[day]
 
-    # Read-only copy-to-temp logic: day shards are small enough that the
-    # copy cost is usually lower than fighting shared SQLite locks.
+    # Open a writable temporary copy rather than the shared shard.
     if day not in self._tmp_squirrel_paths:
       tmp_path = Path(tempfile.mkdtemp()) / f"squirrel_env_{day.isoformat()}"
       shutil.copytree(env_path, tmp_path)
@@ -1175,11 +1189,13 @@ class OGSSquirrelDataSource(BaseSquirrelDataSource):
   @property
   def tmp_squirrel_path(self):
     """
-    Return the temporary Squirrel path used by the representative DB.
+    Return an existing first-shard copy path or the base temporary path.
 
     This preserves compatibility with the base ``SquirrelDataSource`` API,
     which expects one temporary environment path even though this subclass
-    may maintain one temporary copy per day.
+    may maintain one temporary copy per day. Before the first shard copy
+    exists this can open the base environment; with copying disabled the
+    returned base temporary path can be None.
     """
     # Override base-class accessor for sharded temporary environments.
     if self.day_envs:
@@ -1262,8 +1278,9 @@ class OGSSquirrelDataSource(BaseSquirrelDataSource):
 
     Groups are date strings accepted by ``_parse_group_times``. The method
     first tries filesystem-derived daily groups, then falls back to the
-    Squirrel waveform time span and verifies each candidate with
-    ``_check_group``.
+    configured time bounds (or the base database waveform span) and verifies
+    each candidate with _check_group. Filesystem-derived groups only require
+    non-empty day directories, not verified waveform nuts.
     """
     if self._groups is None:
       filesystem_groups = self._filesystem_day_groups()
@@ -1376,20 +1393,19 @@ class OGSSquirrelDataSource(BaseSquirrelDataSource):
     """
     Return station coordinates as a de-duplicated pandas DataFrame.
 
-    The DataFrame contains ``id``, ``longitude``, ``latitude``, and
-    ``elevation`` columns derived from Squirrel channel metadata. Sharded
-    metadata is preferred, with monolithic fallback when no channels are
-    found.
+    For non-empty channel results the DataFrame contains ``id``, ``longitude``,
+    ``latitude``, and ``elevation`` columns derived from Squirrel channel
+    metadata. Sharded metadata is preferred, with monolithic fallback when no
+    channels are found. If no channels exist, the returned empty frame has no
+    columns.
     """
     channels = []
     for d in self._query_days():
       try:
         sq = self.get_sq(d)
-        channels.extend(
-            sq.get_channels(
-                tmin=self.starttime, tmax=self.endtime, codes=self.all_codes
-            )
-        )
+        channels.extend(sq.get_channels(
+            tmin=self.starttime, tmax=self.endtime, codes=self.all_codes
+        ))
       except Exception as e:
         logger.warning(
             f"Failed to query stations for day {d.isoformat()}: {e}"
@@ -1400,15 +1416,12 @@ class OGSSquirrelDataSource(BaseSquirrelDataSource):
           tmin=self.starttime, tmax=self.endtime, codes=self.all_codes
       )
 
-    station_df = [
-        {
-            "id": str(channel.codes)[:-4],
-            "longitude": channel.lon,
-            "latitude": channel.lat,
-            "elevation": channel.elevation,
-        }
-        for channel in channels
-    ]
+    station_df = [{
+        "id": str(channel.codes)[:-4],
+        "longitude": channel.lon,
+        "latitude": channel.lat,
+        "elevation": channel.elevation,
+    } for channel in channels]
     return pd.DataFrame(station_df).drop_duplicates()
 
   def get_inventory(self) -> Optional[obspy.Inventory]:
@@ -1417,7 +1430,8 @@ class OGSSquirrelDataSource(BaseSquirrelDataSource):
 
     Squirrel station nuts provide the inventory file paths. Each unique path is
     read with ``obspy.read_inventory`` and added to a single
-    ``obspy.Inventory`` object.
+    ``obspy.Inventory`` object, returned even when no files are found (then
+    empty, not None). Fallback-query and inventory-read failures propagate.
     """
     inventory_paths = set()
     for d in self._query_days():
@@ -1462,15 +1476,18 @@ class OGSSquirrelDataSource(BaseSquirrelDataSource):
     ----------
     segments : pandas.DataFrame
         Table with ``starttime``, ``endtime``, and ``station`` columns.
-        Station values may be full Pyrocko/ObsPy code patterns or bare
-        station codes, which are expanded to ``*.STA.*``.
+        Station values are NET.STA.LOC patterns or bare station codes,
+        which are expanded to ``*.STA.*`` before channel patterns are appended.
 
     Returns
     -------
     list[obspy.Stream]
-        One stream per input segment. Missing data or Squirrel errors are
-        represented by empty ObsPy streams so output order stays aligned
-        with the input table.
+        One stream per input segment, in input order. All channel-priority
+        patterns are queried together (unlike get_group's first-match rule).
+        NoData and SquirrelError from waveform queries are handled per day;
+        partial data are retained, or an empty stream is returned when none
+        remain. Other errors, including time conversion, database opening,
+        and trace conversion failures, propagate.
     """
     output = []
     for seg_idx, (t0, t1, station) in enumerate(
@@ -1551,8 +1568,8 @@ class OGSSquirrelDataSource(BaseSquirrelDataSource):
     """
     Return pickle state without live Squirrel objects or temp paths.
 
-    This makes the data source safe to serialize for multiprocessing. Each
-    worker reopens Squirrel environments lazily after unpickling.
+    This removes this class's live database handles and copy paths from the
+    serialized state. Workers can reopen environments lazily after unpickling.
     """
     state = self.__dict__.copy()
     state["_sq"] = None
@@ -1594,8 +1611,8 @@ class OGSSquirrelDataSource(BaseSquirrelDataSource):
 
     Day-sharded data sources need this enumeration to route waveform queries to
     the correct per-day Squirrel environments. The end timestamp is treated as
-    exclusive to avoid double-counting the boundary day when a request stops
-    exactly at midnight.
+    exclusive (with a one-microsecond adjustment) to avoid including the
+    boundary day at midnight. Non-positive intervals return the start day.
     """
     start_day = UTCDateTime(t0).date
     end_utc = UTCDateTime(t1 - 1e-6) if t1 > t0 else UTCDateTime(t0)
@@ -1640,8 +1657,8 @@ class OGSSquirrelDataSource(BaseSquirrelDataSource):
     """
     Raise ImportError when Pyrocko Squirrel is unavailable.
 
-    This mirrors the base class verification hook while keeping the module
-    importable in environments where Pyrocko is not installed.
+    This mirrors the base class verification hook for the locally imported
+    Squirrel object; upstream ml_catalog import requirements are separate.
     """
     if Squirrel is None:
       raise ImportError(

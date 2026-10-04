@@ -3,6 +3,8 @@
 OGS TXT Test Suite - Unit and Integration Tests for Catalog Event Summary TXT
 ===============================================================================
 
+Real Hypo71 and NLL1D TXT contracts; no inferred MD-selection policy.
+
 OVERVIEW:
 Comprehensive test suite for ``DataFileTXT`` covering:
   1. Input validation (file existence and .txt extension checks).
@@ -18,224 +20,301 @@ Comprehensive test suite for ``DataFileTXT`` covering:
 ===============================================================================
 """
 
-from datetime import datetime
-import os
+from datetime import date, datetime, timedelta
 from pathlib import Path
-import tempfile
-import unittest
+from unittest.mock import patch
 
-import numpy as np
 import pandas as pd
+import pytest
 
-import ogsconstants as OGS_C
-from ogsdatafile import OGSDataFile
-from ogstxt import DataFileTXT, DEFAULT_FILTERED_EVENT_TYPES
-import ogsutils as OGS_U
-
-# Base paths
-TEST_DIR = Path(__file__).resolve().parent
-PROJECT_DIR = TEST_DIR.parent
-DATASET_DIR = PROJECT_DIR / "dataset"
-HYPO71_DIR = DATASET_DIR / "OnlyEqHypo71"
-NLL1D_DIR = DATASET_DIR / "OnlyEqNLL1D"
+from OGS.src import ogsconstants as C, ogsutils as U
+from OGS.src.ogsdatafile import OGSDataFile
+from OGS.src.ogstxt import DataFileTXT
 
 
-class TestDataFileTXT(unittest.TestCase):
-  """Unit and integration test cases for DataFileTXT."""
+DATA = Path(__file__).parent / "data"
 
-  def setUp(self):
-    """Set up test fixtures and paths."""
-    self.txt_hypo_2005 = HYPO71_DIR / "onlyeq2005.txt"
-    self.txt_hypo_2024 = HYPO71_DIR / "onlyeq2024.txt"
-    self.txt_nll_2005 = NLL1D_DIR / "onlyeq2005.nll1D.txt"
-    self.txt_nll_2024 = NLL1D_DIR / "onlyeq2024.nll1D.txt"
 
-  def test_input_validation_missing_file(self):
-    """DataFileTXT raises FileNotFoundError when the file does not exist."""
-    non_existent = HYPO71_DIR / "non_existent_file.txt"
-    with self.assertRaises(FileNotFoundError):
-      DataFileTXT(non_existent)
+def _slice(tmp_path, source, *line_numbers):
+  """Copy 1-based fixture lines without rewriting fields or line endings."""
+  lines = (DATA / source).read_bytes().splitlines(keepends=True)
+  path = tmp_path / source
+  path.write_bytes(b"".join(lines[number - 1] for number in line_numbers))
+  return path
 
-  def test_input_validation_invalid_extension(self):
-    """DataFileTXT raises ValueError when the file extension is not .txt."""
-    with tempfile.NamedTemporaryFile(suffix=".hpl", delete=False) as tmp:
-      tmp_path = Path(tmp.name)
-    try:
-      parser = DataFileTXT(tmp_path)
-      with self.assertRaises(ValueError):
-        parser.read()
-    finally:
-      if tmp_path.exists():
-        tmp_path.unlink()
 
-  def test_parse_txt_args(self):
-    """Test CLI argument parsing for TXT parser via parse_txt_args."""
-    if not self.txt_hypo_2005.is_file():
-      self.skipTest(f"Dataset file {self.txt_hypo_2005} not found")
+def _read(tmp_path, source="hypo71.txt", path=None,
+          start=datetime(2000, 1, 1), end=datetime(2025, 1, 1)):
+  parser = DataFileTXT(
+      path or DATA / source, start=start, end=end,
+      output=tmp_path / "output",
+  )
+  assert parser.read() is None
+  return parser
 
-    args = OGS_U.parse_txt_args([
-        "-f", str(self.txt_hypo_2005),
-        "-D", "20050101", "20050110",
-        "-v",
-    ])
-    self.assertEqual(args.file, [self.txt_hypo_2005])
-    self.assertTrue(args.verbose)
-    self.assertEqual(len(args.dates), 2)
-    self.assertEqual(args.dates[0], datetime(2005, 1, 1))
-    self.assertEqual(args.dates[1], datetime(2005, 1, 10))
 
-  def test_parse_txt_args_defaults(self):
-    """Test parse_txt_args default dates and options."""
-    if not self.txt_hypo_2005.is_file():
-      self.skipTest(f"Dataset file {self.txt_hypo_2005} not found")
+@pytest.mark.parametrize(
+    "source,line,idx,origin,lat,lon,depth,gap,rms,erh,erz,ml,md,place",
+    [
+        ("hypo71.txt", 4, 2005000003, "2005-01-01T14:22:09.040",
+         46.3500, 13.0957, 7., 59, .24, .5, .5, None, 2.4, "MOGGIO UDINESE (FRIULI)"),
+        ("hypo71.txt", 9, 2005000008, "2005-01-02T11:56:15.320",
+         46.3482, 13.0905, 7., 56, .30, .6, .6, None, 2.7, "MOGGIO UDINESE (FRIULI)"),
+        ("hypo71.txt", 11, 2005000010, "2005-01-03T03:09:59.830",
+         46.1547, 12.4360, 8.5, 147, .25, .7, .7, None, 2.6, "PUOS D'ALPAGO (VENETO)"),
+        ("nll1d.txt", 2, 2005000001, "2005-01-01T14:22:08.359",
+         46.3527, 13.0964, 8.4, 58, None, 1.4, 1.6, None, 2.4, "MOGGIO UDINESE (FRIULI)"),
+        ("nll1d.txt", 3, 2005000002, "2005-01-02T11:56:14.654",
+         46.3517, 13.0902, 8.3, 39, None, 1.2, 1.3, None, 2.7, "MOGGIO UDINESE (FRIULI)"),
+        ("nll1d.txt", 4, 2005000003, "2005-01-03T03:09:59.423",
+         46.1629, 12.4526, 8.4, 68, None, 2.8, 1.8, None, 2.6, "PUOS D'ALPAGO (VENETO)"),
+        ("nll1d.txt", 5, 2005000004, "2005-01-03T13:14:27.722",
+         46.3514, 13.0987, 5.9, 154, None, 1.9, 1.3, None, 1.9, "MOGGIO UDINESE (FRIULI)"),
+        ("hypo71.txt", 12, 2017000303, "2017-02-21T04:33:33.080",
+         45.7053, 14.1802, 10., 74, .14, .3, .3, 1.8, 2.1, "PIVKA (SLOVENIA)"),
+        ("hypo71.txt", 23, 2023000001, "2023-01-01T03:35:48.270",
+         46.8145, 11.2200, 5.7, 153, .32, 1., 1., 1.1, 1.5, "S.LEONARDO PASSIRIA (ALTO ADIGE)"),
+        ("hypo71.txt", 24, 2023000002, "2023-01-01T04:11:23.100",
+         46.8047, 11.2135, 9.2, 118, .27, .8, .8, 1.3, 2., "S.LEONARDO PASSIRIA (ALTO ADIGE)"),
+        ("nll1d.txt", 6, 2023000001, "2023-01-01T03:35:47.953",
+         46.7840, 11.1902, 7.9, 144, None, 4.3, 2.9, 1.1, 1.5, "S.LEONARDO PASSIRIA (ALTO ADIGE)"),
+        ("nll1d.txt", 7, 2023000002, "2023-01-01T04:11:22.850",
+         46.7878, 11.1928, 8.5, 114, None, 3.8, 3.1, 1.3, 2., "S.LEONARDO PASSIRIA (ALTO ADIGE)"),
+        ("hypo71.txt", 25, 2024000001, "2024-01-01T03:36:13.320",
+         46.7320, 12.4692, 4.4, 198, .15, 1., 1.5, .8, .9, "M.CAVALLINO (ALTO ADIGE)"),
+        ("nll1d.txt", 8, 2024000001, "2024-01-01T03:36:12.759",
+         46.7085, 12.4675, 2.9, 170, None, 3.3, 2.2, .8, .9, "M.CAVALLINO (ALTO ADIGE)"),
+        ("hypo71.txt", 26, 2024000002, "2024-01-01T13:21:37.680",
+         46.3643, 12.9683, 12.1, 116, .11, .4, .7, .5, 1.1, "TOLMEZZO (FRIULI)"),
+        ("nll1d.txt", 9, 2024000002, "2024-01-01T13:21:37.343",
+         46.3646, 12.9573, 11.4, 122, None, 1.7, 1.6, .5, 1.1, "TOLMEZZO (FRIULI)"),
+        ("hypo71.txt", 27, 2024000003, "2024-01-01T17:41:32.830",
+         46.4343, 13.3252, 10.1, 123, .17, .8, 1.1, .5, 1., "DOGNA (FRIULI)"),
+        ("nll1d.txt", 10, 2024000003, "2024-01-01T17:41:32.388",
+         46.4412, 13.3263, 9.5, 121, None, 2., 1.6, .5, 1., "DOGNA (FRIULI)"),
+        ("hypo71.txt", 28, 2024000004, "2024-01-01T20:53:49.910",
+         45.7917, 11.1065, 12.4, 87, .23, .6, 1.3, 1.5, 2.1, "PASUBIO (TRENTINO)"),
+        ("nll1d.txt", 11, 2024000004, "2024-01-01T20:53:49.585",
+         45.7941, 11.1016, 11.8, 86, None, 2.1, 2.1, 1.5, 2.1, "PASUBIO (TRENTINO)"),
+        ("hypo71.txt", 29, 2024000005, "2024-01-01T21:26:35.320",
+         46.4815, 13.7912, 7., 174, .15, .7, 2.9, .3, .8, "KRANJSKA GORA (SLOVENIA)"),
+        ("nll1d.txt", 12, 2024000005, "2024-01-01T21:26:34.811",
+         46.4723, 13.7911, 3.6, 170, None, 2.4, 3.7, .3, .8, "KRANJSKA GORA (SLOVENIA)"),
+        ("hypo71.txt", 30, 2024000006, "2024-01-02T02:09:56.680",
+         46.6003, 13.8420, 8., 204, .23, 1., 2.4, 1.2, 1.9, "VILLACH (AUSTRIA)"),
+        ("nll1d.txt", 13, 2024000006, "2024-01-02T02:09:56.159",
+         46.5755, 13.8334, 5.9, 191, None, 2.9, 3., 1.2, 1.9, "VILLACH (AUSTRIA)"),
+    ],
+)
+def test_summary_fields(tmp_path, source, line, idx, origin, lat, lon, depth,
+                        gap, rms, erh, erz, ml, md, place):
+  frame = _read(tmp_path, source, _slice(tmp_path, source, 1, line)).EVENTS
+  assert len(frame) == 1
+  row = frame.iloc[0]
+  assert row[C.IDX_EVENTS_STR] == idx
+  assert row[C.TIME_STR] == datetime.fromisoformat(origin)
+  assert row[C.GROUPS_STR] == origin[:10]
+  assert row[C.LOC_NAME_STR] == place
+  assert row[C.EVENT_TYPE_STR] == "[earthquake]"
+  for column, value in (
+      (C.LATITUDE_STR, lat), (C.LONGITUDE_STR, lon), (C.DEPTH_STR, depth),
+      (C.GAP_STR, gap), (C.RMS_STR, rms), (C.ERH_STR, erh), (C.ERZ_STR, erz),
+      (C.MAGNITUDE_L_STR, ml), (C.MAGNITUDE_D_STR, md),
+  ):
+    assert pd.api.types.is_numeric_dtype(frame[column])
+    if value is None:
+      assert pd.isna(row[column])
+    else:
+      assert row[column] == pytest.approx(value, abs=1e-8)
 
-    args = OGS_U.parse_txt_args(["-f", str(self.txt_hypo_2005)])
-    self.assertEqual(args.file, [self.txt_hypo_2005])
-    self.assertFalse(args.verbose)
-    self.assertEqual(len(args.dates), 2)
-    self.assertEqual(args.dates[0], datetime.min)
 
-  def test_iso_datetime_parsing(self):
-    """Test that ISO datetime strings are correctly parsed into datetime objects."""
-    parser = DataFileTXT(self.txt_hypo_2005)
-    dt_str = "2005-01-01T14:22:09.040"
-    parsed_dt = parser._parse_event_datetime(dt_str)
-    expected_dt = datetime(2005, 1, 1, 14, 22, 9, 40000)
-    self.assertEqual(parsed_dt, expected_dt)
+@pytest.mark.parametrize(
+    "source,ids",
+    [
+        ("hypo71.txt", [2005000003, 2005000008, 2005000010,
+                        2017000303, 2017000306, 2017000307,
+                        2017001058, 2017001062, 2017001063,
+                        2023000001, 2023000002,
+                        2024000001, 2024000002, 2024000003,
+                        2024000004, 2024000005, 2024000006]),
+        ("nll1d.txt", [2005000001, 2005000002, 2005000003, 2005000004,
+                       2023000001, 2023000002,
+                       2024000001, 2024000002, 2024000003,
+                       2024000004, 2024000005, 2024000006]),
+    ],
+)
+def test_whole_fixture_schema_ids_defaults_and_daily_cache(tmp_path, source, ids):
+  parser = _read(tmp_path, source)
+  frame = parser.EVENTS
+  assert list(frame.columns) == OGSDataFile._EVENT_COLUMNS
+  assert len(frame.columns) == 28
+  assert C.LEGACY_ID_STR not in frame.columns
+  assert frame[C.IDX_EVENTS_STR].tolist() == ids
+  assert frame[C.IDX_EVENTS_STR].is_unique
+  assert frame[C.EVENT_TYPE_STR].eq("[earthquake]").all()
+  for column in (C.NO_STR, C.QM_STR, C.DMIN_STR, C.ERT_STR):
+    assert frame[column].isna().all()
+  for column in (C.NUMBER_P_PICKS_STR, C.NUMBER_S_PICKS_STR,
+                 C.NUMBER_P_AND_S_PICKS_STR):
+    assert frame[column].eq(0).all()
+  assert parser.PICKS.empty
+  assert parser.picks == {}
+  assert sum(len(rows) for rows in parser.events.values()) == len(ids)
+  assert len(parser.events[date(2024, 1, 1)]) == 5
+  assert len(parser.events[date(2024, 1, 2)]) == 1
+  for day, rows in parser.events.items():
+    pd.testing.assert_frame_equal(
+        rows, frame.loc[frame[C.GROUPS_STR] == day.isoformat()],
+    )
+  if source == "nll1d.txt":
+    assert frame[C.RMS_STR].isna().all()
 
-  def test_hypo71_dataset_2005_schema_and_filtering(self):
-    """Integration test with OnlyEqHypo71/onlyeq2005.txt: schema and unlocated skipping."""
-    if not self.txt_hypo_2005.is_file():
-      self.skipTest(f"Dataset file {self.txt_hypo_2005} not found")
 
-    start = datetime(2005, 1, 1)
-    end = datetime(2005, 1, 5)
-    parser = DataFileTXT(self.txt_hypo_2005, start=start, end=end)
+@pytest.mark.parametrize("line", [2, 3, 5, 6, 7, 8, 10, 13, 18])
+def test_real_unlocated_rows_excluded_individually(tmp_path, line):
+  path = _slice(tmp_path, "hypo71.txt", 1, line, 4)
+  frame = _read(tmp_path, path=path).EVENTS
+  assert frame[C.IDX_EVENTS_STR].tolist() == [2005000003]
+
+
+@pytest.mark.parametrize("line", [14, 19, 20])
+def test_real_located_non_earthquake_rows_excluded(tmp_path, line):
+  # Located excluded rows isolate type filtering from unlocated filtering.
+  path = _slice(tmp_path, "hypo71.txt", 1, line, 12)
+  frame = _read(tmp_path, path=path).EVENTS
+  assert frame[C.IDX_EVENTS_STR].tolist() == [2017000303]
+
+
+def test_2017_case_retains_all_six_earthquake_controls(tmp_path):
+  path = _slice(tmp_path, "hypo71.txt", 1, *range(12, 23))
+  frame = _read(tmp_path, path=path).EVENTS
+  assert frame[C.IDX_EVENTS_STR].tolist() == [
+      2017000303, 2017000306, 2017000307, 2017001058, 2017001062, 2017001063,
+  ]
+  assert frame[C.MAGNITUDE_L_STR].tolist() == [1.8, 1., .7, .6, 1.1, 1.2]
+  assert frame[C.MAGNITUDE_D_STR].tolist() == [2.1, 1.2, .9, .9, 1.6, 1.1]
+
+
+@pytest.mark.parametrize("source", ["hypo71.txt", "nll1d.txt"])
+@pytest.mark.parametrize(
+    "start,end,indices",
+    [
+        (datetime(2024, 1, 1), datetime(2024, 1, 1), [1, 2, 3, 4, 5]),
+        (datetime(2024, 1, 2), datetime(2024, 1, 2), [6]),
+        (datetime(2024, 1, 1), datetime(2024, 1, 2), [1, 2, 3, 4, 5, 6]),
+        (datetime(2025, 1, 1), datetime(2025, 1, 1), []),
+    ],
+)
+def test_calendar_date_windows(tmp_path, source, start, end, indices):
+  parser = _read(tmp_path, source, start=start, end=end)
+  assert parser.EVENTS[C.IDX_EVENTS_STR].tolist() == [
+      2024000000 + i for i in indices
+  ]
+  if not indices:
+    assert parser.events == {}
+
+
+def test_exact_start_inclusive_and_end_plus_day_exclusive(tmp_path):
+  path = _slice(tmp_path, "hypo71.txt", 1, 4, 9)
+  origin = datetime(2005, 1, 1, 14, 22, 9, 40000)
+  assert _read(tmp_path, path=path, start=origin).EVENTS[C.IDX_EVENTS_STR].tolist() == [
+      2005000003, 2005000008,
+  ]
+  assert _read(tmp_path, path=path, start=origin + timedelta(microseconds=1)).EVENTS[
+      C.IDX_EVENTS_STR
+  ].tolist() == [2005000008]
+  assert _read(tmp_path, path=path, end=origin -
+               timedelta(days=1)).EVENTS.empty
+
+
+def test_txt_continues_after_out_of_window_record(tmp_path):
+  path = _slice(tmp_path, "hypo71.txt", 1, 4, 25, 9)
+  frame = _read(tmp_path, path=path, end=datetime(2005, 1, 2)).EVENTS
+  assert frame[C.IDX_EVENTS_STR].tolist() == [2005000003, 2005000008]
+
+
+def test_first_line_is_unconditionally_skipped(tmp_path):
+  path = _slice(tmp_path, "hypo71.txt", 4, 9)
+  frame = _read(tmp_path, path=path).EVENTS
+  assert frame[C.IDX_EVENTS_STR].tolist() == [2005000008]
+
+
+def test_non_record_header_inside_data_is_logged_and_skipped(tmp_path):
+  path = _slice(tmp_path, "hypo71.txt", 1, 4, 1, 9)
+  parser = DataFileTXT(path, datetime(2005, 1, 1), datetime(2005, 1, 2),
+                       output=tmp_path / "output")
+  with patch.object(parser.logger, "error", wraps=parser.logger.error) as error:
+    parser.read()
+  error.assert_called_once()
+  assert "(TXT) Could not parse line:" in error.call_args.args[0]
+  frame = parser.EVENTS
+  assert frame[C.IDX_EVENTS_STR].tolist() == [2005000003, 2005000008]
+
+
+def test_solution_specific_origins_coordinates_and_independent_magnitudes(tmp_path):
+  hypo = _read(tmp_path, start=datetime(2024, 1, 1),
+               end=datetime(2024, 1, 2)).EVENTS
+  nll = _read(tmp_path, "nll1d.txt", start=datetime(2024, 1, 1),
+              end=datetime(2024, 1, 2)).EVENTS
+  assert hypo[C.IDX_EVENTS_STR].tolist() == nll[C.IDX_EVENTS_STR].tolist() == list(
+      range(2024000001, 2024000007)
+  )
+  assert hypo[C.LOC_NAME_STR].tolist() == nll[C.LOC_NAME_STR].tolist()
+  for frame in (hypo, nll):
+    assert frame[C.MAGNITUDE_L_STR].tolist() == [.8, .5, .5, 1.5, .3, 1.2]
+    assert frame[C.MAGNITUDE_D_STR].tolist() == [.9, 1.1, 1., 2.1, .8, 1.9]
+  assert hypo[C.TIME_STR].tolist() == [
+      datetime.fromisoformat(value) for value in [
+          "2024-01-01T03:36:13.320", "2024-01-01T13:21:37.680",
+          "2024-01-01T17:41:32.830", "2024-01-01T20:53:49.910",
+          "2024-01-01T21:26:35.320", "2024-01-02T02:09:56.680",
+      ]
+  ]
+  assert nll[C.TIME_STR].tolist() == [
+      datetime.fromisoformat(value) for value in [
+          "2024-01-01T03:36:12.759", "2024-01-01T13:21:37.343",
+          "2024-01-01T17:41:32.388", "2024-01-01T20:53:49.585",
+          "2024-01-01T21:26:34.811", "2024-01-02T02:09:56.159",
+      ]
+  ]
+  assert hypo[C.LATITUDE_STR].tolist() == [46.7320, 46.3643,
+                                           46.4343, 45.7917, 46.4815, 46.6003]
+  assert nll[C.LATITUDE_STR].tolist() == [46.7085, 46.3646, 46.4412,
+                                          45.7941, 46.4723, 46.5755]
+  assert hypo[C.LONGITUDE_STR].tolist() == [12.4692, 12.9683,
+                                            13.3252, 11.1065, 13.7912, 13.8420]
+  assert nll[C.LONGITUDE_STR].tolist() == [12.4675, 12.9573, 13.3263,
+                                           11.1016, 13.7911, 13.8334]
+
+
+@pytest.mark.parametrize("numbers", [(), (1,), (1, 2, 3, 14, 19, 20)])
+def test_empty_header_only_or_fully_excluded_input(tmp_path, numbers):
+  parser = _read(tmp_path, path=_slice(tmp_path, "hypo71.txt", *numbers))
+  assert parser.EVENTS.empty
+  assert list(parser.EVENTS.columns) == OGSDataFile._EVENT_COLUMNS
+  assert parser.events == {}
+
+
+def test_input_validation(tmp_path):
+  with pytest.raises(FileNotFoundError, match="missing.txt"):
+    DataFileTXT(tmp_path / "missing.txt", output=tmp_path / "output")
+  path = tmp_path / "wrong.pun"
+  path.write_bytes((DATA / "hypo71.txt").read_bytes())
+  parser = DataFileTXT(path, output=tmp_path / "output")
+  with pytest.raises(ValueError, match=r"extension must be \.txt"):
     parser.read()
 
-    # Schema invariants: unified 28 columns
-    self.assertEqual(len(parser.EVENTS.columns), 28)
-    self.assertEqual(list(parser.EVENTS.columns), OGSDataFile._EVENT_COLUMNS)
 
-    # 7 located events in this window (unlocated events properly skipped)
-    self.assertEqual(len(parser.EVENTS), 7)
-
-    # Ensure unlocated placeholders did not enter latitude/longitude
-    self.assertTrue((parser.EVENTS[OGS_C.LATITUDE_STR] > 0).all())
-    self.assertTrue((parser.EVENTS[OGS_C.LONGITUDE_STR] > 0).all())
-
-    # Ensure event types are valid
-    for etype in parser.EVENTS[OGS_C.EVENT_TYPE_STR]:
-      self.assertNotIn(etype, DEFAULT_FILTERED_EVENT_TYPES)
-
-  def test_nll1d_dataset_2005_schema_and_counts(self):
-    """Integration test with OnlyEqNLL1D/onlyeq2005.nll1D.txt."""
-    if not self.txt_nll_2005.is_file():
-      self.skipTest(f"Dataset file {self.txt_nll_2005} not found")
-
-    start = datetime(2005, 1, 1)
-    end = datetime(2005, 1, 5)
-    parser = DataFileTXT(self.txt_nll_2005, start=start, end=end)
-    parser.read()
-
-    self.assertEqual(len(parser.EVENTS.columns), 28)
-    self.assertEqual(len(parser.EVENTS), 7)
-    self.assertEqual(list(parser.EVENTS.columns), OGSDataFile._EVENT_COLUMNS)
-
-  def test_dataset_2024_schema_hypo71_and_nll1d(self):
-    """Integration test with 2024 Hypo71 and NLL1D TXT files."""
-    if not self.txt_hypo_2024.is_file() or not self.txt_nll_2024.is_file():
-      self.skipTest("2024 TXT dataset files not found")
-
-    start = datetime(2024, 1, 1)
-    end = datetime(2024, 1, 3)
-
-    parser_hypo = DataFileTXT(self.txt_hypo_2024, start=start, end=end)
-    parser_hypo.read()
-    self.assertEqual(len(parser_hypo.EVENTS.columns), 28)
-
-    parser_nll = DataFileTXT(self.txt_nll_2024, start=start, end=end)
-    parser_nll.read()
-    self.assertEqual(len(parser_nll.EVENTS.columns), 28)
-
-    self.assertEqual(len(parser_hypo.EVENTS), len(parser_nll.EVENTS))
-
-  def test_date_range_filtering(self):
-    """Test start and end date filtering on TXT catalog records."""
-    if not self.txt_hypo_2005.is_file():
-      self.skipTest(f"Dataset file {self.txt_hypo_2005} not found")
-
-    # Jan 1 only
-    parser_day1 = DataFileTXT(
-        self.txt_hypo_2005,
-        start=datetime(2005, 1, 1),
-        end=datetime(2005, 1, 1),
-    )
-    parser_day1.read()
-    self.assertEqual(len(parser_day1.EVENTS), 1)
-
-    # Jan 1 to Jan 3
-    parser_day3 = DataFileTXT(
-        self.txt_hypo_2005,
-        start=datetime(2005, 1, 1),
-        end=datetime(2005, 1, 3),
-    )
-    parser_day3.read()
-    self.assertEqual(len(parser_day3.EVENTS), 5)
-
-  def test_synthetic_txt_unlocated_and_event_type_filtering(self):
-    """Test synthetic TXT file filtering chemical explosions, suspected slides, and unlocated rows."""
-    synthetic_txt = (
-        "index event-id     origin_time(UTC)      t_err   lat     lon   h_err depth v_err gap  ml   md  place event_type\n"
-        # 1. Unlocated event with dashes and 'Not localized' in place
-        "00001 2005_00001 2005-01-01T03:22:00.000 ----- ------- ------- ----- ----- ----- --- ---- ---- Not localized with first station DRE [earthquake]\n"
-        # 2. Valid local earthquake
-        "00002 2005_00002 2005-01-01T14:22:09.040  0.24 46.3500 13.0957   0.5   7.0   0.5  59 ----  2.4 MOGGIO UDINESE (FRIULI) [earthquake]\n"
-        # 3. Filtered chemical explosion
-        "00003 2005_00003 2005-01-01T15:30:00.000  0.15 46.2000 13.1000   0.4   1.0   0.4  80 ----  1.5 CAVE DEL PREDIL [chemical explosion]\n"
-        # 4. Filtered suspected slide
-        "00004 2005_00004 2005-01-01T16:00:00.000  0.18 46.4000 12.8000   0.6   0.5   0.6  90 ----  1.2 VAJONT VALLEY [suspected slide]\n"
-        # 5. Filtered suspected explosion
-        "00005 2005_00005 2005-01-01T17:00:00.000  0.20 45.9000 13.5000   0.5   2.0   0.5  75 ----  1.8 MONFALCONE QUARRY [suspected explosion]\n"
-        # 6. Another valid earthquake
-        "00006 2005_00006 2005-01-02T11:56:15.320  0.30 46.3482 13.0905   0.6   7.0   0.6  56 ----  2.7 TOLMEZZO (FRIULI) [earthquake]\n"
-    )
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as tmp:
-      tmp.write(synthetic_txt)
-      tmp_path = Path(tmp.name)
-
-    try:
-      parser = DataFileTXT(tmp_path, start=datetime(
-          2005, 1, 1), end=datetime(2005, 1, 5))
-      parser.read()
-
-      # Out of 6 rows:
-      # - Row 1 is unlocated (skipped)
-      # - Row 3 is chemical explosion (skipped)
-      # - Row 4 is suspected slide (skipped)
-      # - Row 5 is suspected explosion (skipped)
-      # Only rows 2 and 6 must remain (2 events)
-      self.assertEqual(len(parser.EVENTS), 2)
-
-      # Check event indexes (normalized with year stride)
-      indices = list(parser.EVENTS[OGS_C.IDX_EVENTS_STR])
-      self.assertEqual(indices, [2005000002, 2005000006])
-
-      # Check coordinates and magnitudes
-      ev1 = parser.EVENTS.iloc[0]
-      self.assertEqual(ev1[OGS_C.LOC_NAME_STR], "MOGGIO UDINESE (FRIULI)")
-      self.assertEqual(ev1[OGS_C.EVENT_TYPE_STR], "[earthquake]")
-      self.assertAlmostEqual(ev1[OGS_C.LATITUDE_STR], 46.35)
-      self.assertAlmostEqual(ev1[OGS_C.LONGITUDE_STR], 13.0957)
-      self.assertEqual(ev1[OGS_C.DEPTH_STR], 7.0)
-      self.assertEqual(ev1[OGS_C.MAGNITUDE_D_STR], 2.4)
-      self.assertTrue(pd.isna(ev1[OGS_C.MAGNITUDE_L_STR]))
-
-    finally:
-      if tmp_path.exists():
-        tmp_path.unlink()
-
-
-if __name__ == "__main__":
-  unittest.main()
+def test_cli_arguments_without_main_side_effects():
+  paths = [DATA / "hypo71.txt", DATA / "nll1d.txt"]
+  args = U.parse_txt_args(["-f", *(str(path) for path in paths),
+                           "-D", "20240102", "20240101", "-v"])
+  assert args.file == [path.resolve() for path in paths]
+  assert args.dates == [datetime(2024, 1, 1), datetime(2024, 1, 2)]
+  assert args.verbose is True
+  defaults = U.parse_txt_args(["-f", str(paths[0])])
+  assert defaults.dates == [datetime.min, datetime.max - timedelta(days=1)]
+  assert defaults.verbose is False
+  with pytest.raises(SystemExit) as error:
+    U.parse_txt_args(["-f", str(paths[0]), "-D", "invalid", "20240102"])
+  assert error.value.code == 2

@@ -177,7 +177,7 @@ from sklearn.neighbors import NearestNeighbors  # k-NN distance computation
 from scipy.special import gammaln     # Log-Gamma for volume prefactor
 from scipy.optimize import curve_fit  # 2NN intrinsic-dimension fit
 
-from ogsutils import labels_to_colormap, setup_logger
+from .ogsutils import labels_to_colormap, setup_logger
 
 # =============================================================================
 # SCIKIT-LEARN CLUSTERING ALGORITHMS
@@ -3917,21 +3917,26 @@ class OGSAdvancedDensityPeaksPP(OGSAdvancedDensityPeaks):
       Per-cluster point index lists.
     """
     # ── Phase 1: Parent-link construction ──────────────────────────────
-    # Build (N, maxk) neighbor score matrix via fancy indexing, then mask to
-    # keep only k*-range neighbors with strictly higher g.
-    # A single axis-1 argmax yields the parent pointer for every point.
-    neighbor_indices = dist_indices[:, 1:maxk + 1]        # (N, maxk)
-    neighbor_g = g[neighbor_indices]                      # (N, maxk)
+    # Process in chunks to prevent memory spikes for N > 100K
+    parent = np.arange(N, dtype=np.int64)
+    chunk_size = max(1, 10_000_000 // maxk)  # ~80MB per chunk matrix
+    col_idx = np.arange(maxk)[np.newaxis, :]
 
-    col_idx = np.arange(maxk)[np.newaxis, :]              # (1, maxk)
-    valid = (col_idx < kstar[:, np.newaxis]) & (neighbor_g > g[:, np.newaxis])
+    for start in range(0, N, chunk_size):
+      end = min(N, start + chunk_size)
+      n_idx = dist_indices[start:end, 1:maxk + 1]
+      ng = g[n_idx]
+      valid = (col_idx < kstar[start:end, np.newaxis]) & (
+          ng > g[start:end, np.newaxis])
+      ng_masked = np.where(valid, ng, -np.inf)
 
-    neighbor_g_masked = np.where(valid, neighbor_g, -np.inf)
-    best_local = np.argmax(neighbor_g_masked, axis=1)     # (N,)
-    has_higher = np.max(neighbor_g_masked, axis=1) > -np.inf
+      best_local = np.argmax(ng_masked, axis=1)
+      has_higher = np.max(ng_masked, axis=1) > -np.inf
+      best_global = n_idx[np.arange(end - start), best_local]
 
-    best_global = neighbor_indices[np.arange(N), best_local]
-    parent = np.where(has_higher, best_global, np.arange(N, dtype=np.int64))
+      parent[start:end] = np.where(
+          has_higher, best_global, np.arange(start, end, dtype=np.int64)
+      )
 
     # ── Phase 2: Path compression (pointer-jumping) ──────────────────
     # root^{t+1}[i] = root^t[root^t[i]]  — doubles compressed length each

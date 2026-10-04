@@ -4,17 +4,18 @@ OGS Data File Abstractions and Logging Helpers
 ===============================================================================
 
 OVERVIEW:
-This module provides the OGSDataFile class, an abstract base class for parsing
-and processing seismic data files from OGS (Istituto Nazionale di Oceanografia
-e di Geofisica Sperimentale). It extends OGSCatalog to add file I/O and regex-
-based record extraction capabilities.
+This module provides the OGSDataFile class, a subclass-oriented base for
+parsing and processing seismic data files from OGS (Istituto Nazionale di
+Oceanografia e di Geofisica Sperimentale). It extends OGSCatalog to add file
+I/O and regex-based record extraction capabilities.
 
 KEY FEATURES:
   - Regex-based parsing: Uses configurable regex patterns to extract seismic
     picks (phase arrivals) and events (earthquakes) from text-based data files
   - Extensible design: Subclasses define RECORD_EXTRACTOR_LIST and
     EVENT_EXTRACTOR_LIST to handle different file formats
-  - Geographic filtering: Supports polygon-based spatial filtering of events
+  - Geographic filtering inherited for loaded Parquet event days; builders
+    normalize coordinates but do not apply the polygon to parsed rows
   - Parquet output: Persists parsed data in efficient columnar format
   - Debug utilities: Helps identify which regex group fails during parsing
 
@@ -23,15 +24,14 @@ ARCHITECTURE:
   │
   └── OGSDataFile (this class)
       │
-      ├── Subclass for format A (e.g., .hyp files)
-      ├── Subclass for format B (e.g., .cnv files)
+      ├── DataFileDAT / DataFileHPL (phase picks)
+      ├── DataFilePUN / DataFileTXT (event summaries)
       └── ...
 
 USAGE:
-  Subclasses must:
-    1. Define RECORD_EXTRACTOR_LIST: List of regex patterns for pick records
-    2. Define EVENT_EXTRACTOR_LIST: List of regex patterns for event headers
-    3. Implement read(): Parse input file into picks/events DataFrames
+  Format subclasses define the relevant RECORD_EXTRACTOR_LIST and/or
+  EVENT_EXTRACTOR_LIST fragments and implement read() to populate aggregate
+  PICKS/EVENTS DataFrames and their per-date picks/events dictionaries.
 
 DEPENDENCIES:
   - obspy: Seismological Python library for time handling (UTCDateTime)
@@ -54,18 +54,13 @@ AUTHORS:
 # -----------------------------------------------------------------------------
 # IMPORTS
 # -----------------------------------------------------------------------------
+from .ogscatalog import OGSCatalog
+from . import ogsconstants as OGS_C
 
-# Local module: Parent class providing catalog data structures and methods
-from ogscatalog import OGSCatalog
-
-# Local module: OGS-specific constants (strings, default paths, regions)
-import ogsconstants as OGS_C
+from abc import ABC, abstractmethod
 
 # Standard library: Regular expressions for pattern matching
 import re
-
-# Standard library: Functional programming utilities (accumulate for debugging)
-import itertools as it
 
 # Standard library: Filesystem path handling
 from pathlib import Path
@@ -93,7 +88,7 @@ import numpy as np
 # OGSDataFile Class
 # =============================================================================
 
-class OGSDataFile(OGSCatalog):
+class OGSDataFile(OGSCatalog, ABC):
   """
   Abstract base class for parsing OGS seismic data files.
 
@@ -106,7 +101,7 @@ class OGSDataFile(OGSCatalog):
     EVENT_EXTRACTOR_LIST: Regex patterns for event header lines
     RECORD_EXTRACTOR: Compiled regex from RECORD_EXTRACTOR_LIST
     EVENT_EXTRACTOR: Compiled regex from EVENT_EXTRACTOR_LIST
-    name: File format identifier (uppercase extension, e.g., "HYP")
+    name: File format identifier (uppercase extension, e.g., "HPL")
   """
 
   # -------------------------------------------------------------------------
@@ -142,16 +137,16 @@ class OGSDataFile(OGSCatalog):
       OGS_C.NUMBER_P_PICKS_STR,        # 11: number_p_picks
       OGS_C.NUMBER_S_PICKS_STR,        # 12: number_s_picks
       OGS_C.NUMBER_P_AND_S_PICKS_STR,  # 13: number_p_and_s_picks
-      OGS_C.MAGNITUDE_D_STR,           # 14: MD
-      OGS_C.MAGNITUDE_L_STR,           # 15: ML
+      OGS_C.MAGNITUDE_D_STR,           # 14: Duration magnitude (MD)
+      OGS_C.MAGNITUDE_L_STR,           # 15: Local magnitude (ML)
       OGS_C.ML_MEDIAN_STR,             # 16: ML_median
       OGS_C.ML_UNC_STR,                # 17: ML_unc
       OGS_C.ML_STATIONS_STR,           # 18: ML_stations
-      OGS_C.DMIN_STR,                  # 19: DMIN
-      OGS_C.RMS_STR,                   # 20: RMS
-      OGS_C.QM_STR,                    # 21: QM
+      OGS_C.DMIN_STR,                  # 19: Minimum distance (D)
+      OGS_C.RMS_STR,                   # 20: Root mean square (RMS)
+      OGS_C.QM_STR,                    # 21: Quality measure (QM)
       OGS_C.LOC_NAME_STR,              # 22: LOC_NAME
-      OGS_C.EVENT_TYPE_STR,            # 23: E_TYPE
+      OGS_C.EVENT_TYPE_STR,            # 23: Event type
       OGS_C.NOTES_STR,                 # 24: NOTES
       OGS_C.MD_UNC_STR,                # 25: MD_unc
       OGS_C.MD_STATIONS_STR,           # 26: MD_stations
@@ -167,7 +162,7 @@ class OGSDataFile(OGSCatalog):
   EVENT_EXTRACTOR_LIST: list = []   # TBD in subclasses
 
   # Regex to extract named group identifiers from regex patterns
-  # Used by debug() to identify which capture group failed matching
+  # Used by debug() to select a suspected capture-group failure
   # Matches patterns like: (?P<station>[\w]+) and extracts "station"
   GROUP_PATTERN = re.compile(r"\(\?P<(\w+)>[\[\]\w\d\{\}\-\\\?\+]+\)(\w)*")
 
@@ -200,7 +195,10 @@ class OGSDataFile(OGSCatalog):
       verbose: Enable verbose logging output (default: False)
       polygon: matplotlib Path defining geographic region of interest
                 (default: OGS regional polygon from constants)
-      output: Directory path for output files (default: data/OGSCatalog)
+      output: Directory for output files (default: OGS/src/data/OGSCatalog)
+
+    The parent checks input existence and creates output/img directories.
+    Default start/end bounds are reversed; pass a valid range to retain rows.
     """
     # Initialize parent class with catalog management capabilities
     super().__init__(input, start, end, verbose, polygon, output)
@@ -209,30 +207,31 @@ class OGSDataFile(OGSCatalog):
     # _flatten handles nested lists, join concatenates all fragments
     self.RECORD_EXTRACTOR: re.Pattern = re.compile(OGS_C.EMPTY_STR.join(
         list(self._flatten(self.RECORD_EXTRACTOR_LIST))
-    ))  # TBD in subclasses
+    ))  # Patterns supplied by subclasses
 
     # Compile the event extractor regex from the list of pattern fragments
     self.EVENT_EXTRACTOR: re.Pattern = re.compile(OGS_C.EMPTY_STR.join(
         list(self._flatten(self.EVENT_EXTRACTOR_LIST))
-    ))   # TBD in subclasses
+    ))   # Patterns supplied by subclasses
 
-    # Extract file format name from extension (e.g., ".hyp" -> "HYP")
+    # Extract file format name from extension (e.g., ".hpl" -> "HPL")
     self.name = self.input.suffix.lstrip(OGS_C.PERIOD_STR).upper()
 
   # -------------------------------------------------------------------------
   # ABSTRACT METHOD: read()
   # -------------------------------------------------------------------------
 
+  @abstractmethod
   def read(self):
     """
     Read and parse the input data file into picks and events.
 
-    This is an abstract method that must be implemented by subclasses.
+    Subclasses must implement this abstract method to be instantiated.
     The implementation should:
       1. Open and read the input file
       2. Use RECORD_EXTRACTOR to parse pick/phase records
       3. Use EVENT_EXTRACTOR to parse event headers
-      4. Populate self.picks and self.events DataFrames
+      4. Populate self.PICKS / self.EVENTS and postload per-date dictionaries
 
     Raises:
       NotImplementedError: Always, as subclasses must override this method
@@ -282,6 +281,8 @@ class OGSDataFile(OGSCatalog):
       {output}/{extension}/events/{year}-{month}-{day}       (for events)
 
     Uses Parquet format for efficient columnar storage and fast I/O.
+    Rebuilds daily caches from non-empty aggregates before threaded writes.
+    Individual worker failures are logged rather than re-raised. Returns None.
     """
     tasks = [
         (key, date, df)
@@ -317,23 +318,22 @@ class OGSDataFile(OGSCatalog):
     """
     Identify which regex capture group fails to match a given input line.
 
-    This debugging utility helps diagnose parsing failures by progressively
-    testing truncated versions of the regex pattern to find the exact point
-    of failure. Useful when adding support for new file formats or handling
-    malformed input data.
-
-    Algorithm:
-      1. Build a list of progressively shorter regex patterns (reversed accumulation)
-      2. Test each pattern against the input line
-      3. When a match succeeds, the previous (longer) pattern's last group
-         is the one that failed
+    Flatten nested fragments and test syntactically valid cumulative prefixes.
+    Partial prefixes may leave groups open; their compilation errors are logged
+    and only those prefixes are skipped. The full extractor must compile.
+    Named groups added by the next longer valid prefix identify a suspected
+    field, not a proven cause of the mismatch.
 
     Args:
       line: The input line that failed to match the full regex
       EXTRACTOR_LIST: The list of regex pattern fragments to debug
 
     Returns:
-      str: The name of the regex capture group that caused the match failure
+      str or list: A suspected named field, or [] when no field is
+        identifiable. The input line and diagnosis are always logged.
+
+    Raises:
+      re.error: If the full extractor is invalid.
     """
     # Build reversed cumulative list of regex patterns for progressive testing
     # This creates patterns of decreasing length to isolate the failure point
@@ -355,13 +355,11 @@ class OGSDataFile(OGSCatalog):
       match_extractor = re.match(extractor, line)
 
       if match_extractor:
-        # Match succeeded! The failure is in the next group (previous pattern)
-        # Extract named groups from the pattern that just worked
+        # Compare captures with the previously tested pattern as a heuristic
         match_group = self.GROUP_PATTERN.findall(RECORD_EXTRACTOR_DEBUG[i - 1])
         match_compare = self.GROUP_PATTERN.findall(extractor)
 
-        # Identify the differing group between the two patterns
-        # This is the group that caused the failure
+        # Select a tuple element from the final named-group capture
         bug = match_group[-1][match_group[-1][1] != match_compare[-1][1]]
 
         # Log the failure for debugging purposes
@@ -379,10 +377,11 @@ class OGSDataFile(OGSCatalog):
       dataframe: pd.DataFrame, time_col: str = OGS_C.TIME_STR
   ) -> pd.DataFrame:
     """
-    Normalize timestamp column to uniform pandas datetime64[ns] Series.
+    Coerce the timestamp column with pandas.to_datetime(errors="coerce").
 
-    Coerces the timestamp column (default: ``time``) to pandas ``datetime64[ns]``,
-    handling string representations, Python datetime objects, and NaT.
+    Handles strings, Python datetime objects, and missing values. Invalid
+    values become NaT; timezone/dtype behavior follows pandas. Updates the
+    supplied DataFrame and returns it.
     """
     if dataframe.empty or time_col not in dataframe.columns:
       return dataframe
@@ -399,7 +398,7 @@ class OGSDataFile(OGSCatalog):
     """
     if not self.input.exists():
       raise FileNotFoundError(f"File {self.input} does not exist")
-    if hasattr(self, "EXTENSION") and self.EXTENSION:
+    if self.EXTENSION:
       if self.input.suffix != self.EXTENSION:
         raise ValueError(f"File extension must be {self.EXTENSION}")
 
@@ -420,7 +419,7 @@ class OGSDataFile(OGSCatalog):
         f".{station}.",                       # OGS_C.STATION_STR
         phase,                                # OGS_C.PHASE_STR
         weight,                               # OGS_C.WEIGHT_STR
-        None,                                 # OGS_C.EPICENTER_DISTANCE_STR
+        None,                                 # OGS_C.EPICENTRAL_DISTANCE_STR
         None,                                 # OGS_C.DEPTH_STR
         None,                                 # OGS_C.AMPLITUDE_STR
         None,                                 # OGS_C.STATION_ML_STR
@@ -432,7 +431,7 @@ class OGSDataFile(OGSCatalog):
     return self.start is not None and value < self.start
 
   def _is_after_end(self, value: datetime) -> bool:
-    """Check if the given datetime is after the configured end date."""
+    """Check the exclusive end + ONE_DAY bound, with overflow fallback."""
     if self.end is None:
       return False
     try:
@@ -447,7 +446,7 @@ class OGSDataFile(OGSCatalog):
 
   @staticmethod
   def _parse_float(value: str, default_value: float | None = None):
-    """Convert a fixed-width float field, allowing fully blank values."""
+    """Convert to float; blank or invalid strings return default_value."""
     if not value or value.strip(OGS_C.SPACE_STR) == OGS_C.EMPTY_STR:
       return default_value
     return float(value)

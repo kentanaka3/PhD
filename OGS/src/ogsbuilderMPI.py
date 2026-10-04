@@ -59,10 +59,8 @@ from ml_catalog import CatalogBuilder
 
 class OGSCatalogBuilderMPI(CatalogBuilder):
   """
-  OGS-specific implementation of the ML CatalogBuilder.
-
-  This class extends the base CatalogBuilder to include OGS-specific
-  configurations and methods for building seismic event catalogs.
+  CatalogBuilder subclass that bootstraps Dask-MPI, optionally selects a CUDA
+  device by local rank, executes configured modules, and writes their outputs.
   """
 
   def run(self) -> None:

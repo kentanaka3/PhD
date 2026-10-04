@@ -1,15 +1,18 @@
 """
 ===============================================================================
-MHPC Thesis Driver - BGMA Comparison for the 2024 Italian Sequence
+MHPC Thesis Driver - BPGMA Comparison for the 2024 Italian Sequence
 ===============================================================================
 
 OVERVIEW:
-Reproducible driver script used for the MHPC thesis. It evaluates several
-picker / associator / locator configurations against the OGS NLL 1D reference
-catalog over the 2024-03-20 to 2024-06-20 sequence (including the M_L 4.6
-shock of 2024-03-27 and the 2024-05-22 IT marker).
+Workstation-specific driver for MHPC thesis catalog comparisons. It compares
+configured candidate catalogs against the OGS NLL 1D reference catalog over the
+2024-03-20 to 2024-06-20 sequence (including the M_L 4.6 shock of 2024-03-27
+and the 2024-05-22 IT marker).
 
-For each scenario the script:
+The enabled model sweep calls ``OGSCatalog.bpgma`` for PhaseNet and
+EQTransformer with STEAD and Original datasets at threshold 0.3.
+The Config, GaMMA, and PyOcto target lists are currently empty; enabling
+those loops would perform the following steps:
   1. Loads the reference OGS catalog window.
   2. For each target configuration / model, loads the candidate ML catalog.
   3. Calls :meth:`OGSCatalog.plot` to render comparative figures with the
@@ -17,14 +20,14 @@ For each scenario the script:
   4. Calls :meth:`OGSCatalog.bpgma` to run the bipartite-graph matching
      review and write per-stage reports.
 
-Configuration families covered:
+Configuration families represented in enabled or commented lists:
     - Config1 / Config2 / Config3 (PhaseNet[INSTANCE] + PyOcto + NLL 1D)
     - PhaseNet / EQTransformer model and dataset sweeps
     - GaMMA0.1 / GaMMA0.2 / GaMMA0.3 association thresholds
     - PyOcto0.1 / PyOcto0.2 / PyOcto0.3 association thresholds
 
 USAGE:
-    python MHPCThesis.py     # runs the hard-coded configurations
+    python -m OGS.src.MHPCThesis  # runs the enabled hard-coded configurations
 
 NOTE:
 Paths and waveform mount points are hard-coded for the author's workstation;
@@ -50,8 +53,8 @@ AUTHORS:
 from pathlib import Path
 from datetime import datetime
 
-import ogsconstants as OGS_C
-from ogscatalog import OGSCatalog
+from . import ogsconstants as OGS_C
+from .ogscatalog import OGSCatalog
 
 
 def main():

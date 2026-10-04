@@ -22,8 +22,7 @@ USAGE:
 python -m unittest OGS/test/testogsdata.py
 
 DEPENDENCIES:
-- unittest / tempfile: isolated filesystem testing
-  - ml_catalog.data: base Squirrel data source primitives
+  - unittest / tempfile: isolated filesystem testing
   - ogsdata: waveform cache and path selector under test
 
 AUTHORS:

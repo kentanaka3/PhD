@@ -1,37 +1,53 @@
 # OGS Seismic Toolkit (AI2Seism)
 
-A Python toolkit for parsing, managing, clustering, comparing, and visualizing
-seismic catalogs from OGS (Istituto Nazionale di Oceanografia e di Geofisica
-Sperimentale), focused on the seismicity of north-eastern Italy and surrounding
-regions.
+*A High-Performance Scientific Toolkit for Seismic Catalog Ingestion, Deep-Learning Phase Processing, Graph-Theoretic Association Verification, and Spatiotemporal Clustering in North-Eastern Italy.*
 
-## Purpose and scope
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
+[![Platform: CINECA Leonardo HPC](https://img.shields.io/badge/platform-CINECA%20Leonardo%20HPC-orange.svg)](https://wiki.u-gov.it/confluence/display/SCAIUS/UG3.1%3A+LEONARDO+UserGuide)
+[![Framework: ObsPy & SeisBench](https://img.shields.io/badge/seismology-ObsPy%20%7C%20SeisBench-green.svg)](https://github.com/seisbench/seisbench)
+[![Validation: Pass](https://img.shields.io/badge/validation-passing-brightgreen.svg)](LLM/scripts/README.md)
 
-This repository documents and supports the OGS seismic-catalog workflow. It
-contains reusable Python modules, Hydra configuration, tests, High-Performance
-shared systems (CINECA Leonardo) and local workstation execution helpers, and
-research documentation. The repository is not a replacement for the external
-waveform/catalog workspace and does not by itself provide a complete runtime
-environment.
+---
 
-## Inputs, outputs, and operational boundary
+## Table of Contents
 
-- **Inputs:** OGS catalog files (`.dat`, `.hpl`, `.pun`, `.txt`), date/region
-  and client options for FDSN waveform retrieval, Parquet catalogs, and JSON
-  metadata for sequence clustering.
-- **Outputs:** date-partitioned Parquet catalogs, comparison tables and plots,
-  clustering CSV files, and diagnostic figures. Exact paths depend on the
-  selected command or Makefile variables.
-- **Assumptions:** optional dependencies such as ObsPy, Pyrocko, SeisBench,
-  Hydra, and `ml_catalog` are installed and configured before the related
-  workflow is run. Source code, tests, configuration, and the Makefile are
-  authoritative when this overview differs from implementation.
-- **Side effects and safety:** downloading contacts external data services and
-  writes waveform files; parsing and analysis commands write output files;
-  Leonardo Makefile targets can submit SLURM jobs. Inspect help or a dry run
-  first, keep outputs in the configured workspace, and do not use destructive
-  targets such as `make clean` as a smoke test.
+- [Executive Summary and Scientific Scope](#executive-summary-and-scientific-scope)
+- [Epistemic Data Hierarchy and Governance](#epistemic-data-hierarchy-and-governance)
+- [End-to-End Scientific Architecture](#end-to-end-scientific-architecture)
+- [Repository Layout and Navigation](#repository-layout-and-navigation)
+- [Core Modules and Capabilities](#core-modules-and-capabilities)
+  - [Core Catalog and Parsers](#core-catalog-and-parsers)
+  - [Bipartite Matching and Distance Engine](#bipartite-matching-and-distance-engine)
+  - [Clustering Zoo and Sequence Pipeline](#clustering-zoo-and-sequence-pipeline)
+  - [Supporting and Machine Learning Modules](#supporting-and-machine-learning-modules)
+- [Catalog Storage Architecture and Parquet Sharding](#catalog-storage-architecture-and-parquet-sharding)
+- [Bipartite Graph Matching Algorithm (BPGMA)](#bipartite-graph-matching-algorithm-BPGMA)
+  - [Graph Assignment Formulation](#graph-assignment-formulation)
+  - [Similarity and Distance Metrics](#similarity-and-distance-metrics)
+  - [Classification and Review Partitions](#classification-and-review-partitions)
+- [Spatiotemporal Clustering Framework](#spatiotemporal-clustering-framework)
+  - [Algorithm and Metric Registries](#algorithm-and-metric-registries)
+  - [Sequence Analysis Workflow](#sequence-analysis-workflow)
+  - [Density Clustering Computational Map](#density-clustering-computational-map)
+    - [Purpose](#purpose)
+    - [Current Execution Flow](#current-execution-flow)
+    - [Pseudocode and Mathematical Derivations](#pseudocode)
+    - [State and Responsibilities](#state-and-responsibilities)
+    - [Confirmed Problems](#confirmed-problems)
+    - [Condensed Target — Proposed Only](#condensed-target)
+    - [Tests and Evidence](#tests-and-evidence)
+    - [Open Decisions](#open-decisions)
+- [Object-Oriented Class Hierarchy](#object-oriented-class-hierarchy)
+- [High-Performance Computing (HPC) Execution Boundary](#high-performance-computing-hpc-execution-boundary)
+- [CLI and Programmatic Usage](#cli-and-programmatic-usage)
+  - [Environment Activation](#environment-activation)
+  - [CLI Workflows](#cli-workflows)
+  - [Python API Examples](#python-api-examples)
+- [Project Governance and Verification](#project-governance-and-verification)
 
+---
+
+## Partners
 
 <code><pre>
 &nbsp;                          ###
@@ -108,7 +124,7 @@ environment.
 
 ---
 
-## Overview
+## Executive Summary and Scientific Scope
 
 The OGS Seismic Toolkit provides an end-to-end pipeline for seismic catalog analysis:
 

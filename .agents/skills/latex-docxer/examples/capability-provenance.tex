@@ -1,0 +1,51 @@
+% Purpose: Demonstrate a capability matrix with explicit evidence boundaries.
+% Status: Draft template; implementation and human layout review pending.
+% Source-of-truth: .claude/agents/latex-docxer.md (extracted capability archetype).
+% Origin: Illustrative stages and placeholders; no implementation was verified.
+\documentclass{article}
+\usepackage[a4paper,margin=2cm]{geometry}
+\usepackage{booktabs,tabularx,threeparttable}
+
+\begin{document}
+\section*{Illustrative capability and provenance matrix}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \begin{threeparttable}
+    \caption{Illustrative seismic-pipeline capability matrix.
+      Separate status, source, and validation columns make evidence gaps
+      visible. No row establishes an implemented feature or project roadmap;
+      every source and validation anchor awaits inspection.}
+    \label{tab:pipeline-capability}
+    \begin{tabularx}{\linewidth}{@{} X l X X @{}}
+      \toprule
+      \textbf{Stage} & \textbf{Status} & \textbf{Source Anchor}
+        & \textbf{Validation / Data Anchor} \\
+      \midrule
+      Waveform acquisition & Unverified & [TODO: source]
+        & [TODO: validation] \\
+      Phase picking & Unverified & [TODO: source]
+        & [TODO: model/version/test] \\
+      Phase association & Unverified & [TODO: source]
+        & [TODO: comparison/test] \\
+      Event location & Unverified & [TODO: source]
+        & [TODO: residual validation] \\
+      Catalog comparison & Unverified & [TODO: source]
+        & [TODO: matching/metrics] \\
+      Clustering & [Planned]\tnote{a} & [TODO: proposal]
+        & Validation pending (illustrative) \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item[a] Planned is an illustrative status label, not an approved
+      project decision.
+      \item Mark a component implemented only after citing inspected source
+      and relevant executed validation. Code existence alone establishes
+      neither empirical performance nor scientific validity.
+      \item Record dataset/version/settings/reviewer where applicable.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+\end{document}

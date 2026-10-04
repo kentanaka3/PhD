@@ -7,14 +7,12 @@ OVERVIEW:
 This module implements an automated seismic sequence clustering pipeline for
 analyzing spatiotemporal patterns in earthquake catalogs. It identifies and
 visualizes clusters of seismic events using machine learning algorithms,
-enabling the detection of earthquake sequences, swarms, and aftershock
-patterns.
+producing candidate groupings for analysis. Cluster labels alone do not
+establish whether a grouping is a sequence, swarm, or aftershock population.
 
 KEY FEATURES:
-  - Multi-algorithm clustering: Supports multiple clustering algorithms
-    (DBSCAN, HDBSCAN, OPTICS, etc.) with hyperparameter optimization
-  - Multi-metric evaluation: Optimizes clustering using various metrics
-    (silhouette score, Davies-Bouldin index, Calinski-Harabasz, etc.)
+  - Multi-algorithm clustering: Delegates configured algorithm/metric
+    optimization to OGSClusteringZoo
   - Temporal windowing: Processes catalog in configurable time windows
   - Dual visualization: Generates map views and cross-section plots
   - Cartesian projection: Converts lat/lon to local km coordinates
@@ -36,7 +34,8 @@ FEATURE SET:
     - X_KM: East-West position in kilometers (from longitude)
     - Y_KM: North-South position in kilometers (from latitude)
     - DEPTH: Hypocenter depth in kilometers
-    - INTEREVENT: Time since previous event in seconds
+    - INTEREVENT_LOG: log10(max(time since previous event in seconds, 0.1))
+      after sorting integer-second timestamps; the first interval is zero
 
 METADATA CONFIGURATION (JSON):
   {
@@ -56,23 +55,26 @@ METADATA CONFIGURATION (JSON):
 
 USAGE:
   Command line:
-    python ogssequence.py -i config.json -v
+    python -m OGS.src.ogssequence -i config.json -v
 
   Programmatic:
-    from ogssequence import OGSSequence
+    from OGS.src.ogssequence import OGSSequence
     run = OGSSequence(metadata=config_dict, verbose=True)
     run.run()
 
 OUTPUT:
   - Clusters/{algorithm}/{metric}/{range}/cluster_id.csv  (per-cluster CSVs)
   - Clusters/{algorithm}_{metric}_{angle}.png             (visualization plots)
+  - Clusters/{algorithm}_{metric}_noise_{angle}.png       (noise-only plots)
+    Angles in filenames have one decimal place.
 
 VISUALIZATION:
   Each plot contains:
     - Top row: Map view (longitude vs latitude) with cluster colors
     - Bottom row: Cross-section (projection vs depth) along specified azimuth
     - Events colored by cluster ID
-    - High-magnitude events (>3.5) marked with red stars
+    - High-magnitude events marked with red stars (>3.5 on maps,
+      >OGS_C.OGS_MAX_MAGNITUDE in cross-sections)
     - Projection line showing cross-section orientation
 
 DEPENDENCIES:
@@ -133,20 +135,11 @@ from matplotlib.axes import Axes
 # Matplotlib: Type hints for figure objects
 from matplotlib.figure import Figure
 
-# Local module: OGS-specific constants (column names, date formats)
-import ogsconstants as OGS_C
-
-# Local module: Clustering algorithms and utilities (parent class)
-import ogsclustering as OGS_CL
-
-# Local module: Utilities and argument parsers
-import ogsutils as OGS_U
-
-# Local module: Catalog loading and management
-from ogscatalog import OGSCatalog
+from . import ogsconstants as OGS_C, ogsutils as OGS_U, ogsclustering as OGS_CL
+from .ogscatalog import OGSCatalog
 
 # Type hints for improved code documentation
-from typing import Tuple, Optional, Callable, Any, Dict
+from typing import Tuple, Optional, Any
 
 
 # =============================================================================
@@ -185,7 +178,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     - metric name: Evaluation metric
 
   logger : logging.Logger
-    Module-level logger for status and debug messages.
+    Class-named logger for status and debug messages.
 
   Methods
   -------
@@ -207,8 +200,9 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     Prepare event features including Cartesian coordinates and inter-event
     times.
 
-  _save_clusters(myCatalog: OGSCatalog, algo_name: str,
-                 metric_name: Optional[str] = None) -> None
+  _save_clusters(
+      myCatalog: OGSCatalog, algo_name: str, metric_name: Optional[str] = None
+  ) -> None
     Save clustered events to CSV files organized by cluster ID.
 
   plot_map_view(ax: Axes, df: pd.DataFrame, lon_col: str, lat_col: str,
@@ -248,7 +242,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     # Structure: {range_idx: {algo_name: {metric_name: params_dict}}}
     self.best_params: dict[int, dict[str, dict[str, Any]]] = {}
 
-    # Configure module-level logger
+    # Configure the class-named logger.
     self.logger = OGS_U.setup_logger(self.__class__.__name__, self.verbose)
 
   # -------------------------------------------------------------------------
@@ -335,7 +329,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
       feature_x: Ignored (not used in this implementation)
       feature_y: Ignored (not used in this implementation)
       y_true: Ignored (unsupervised clustering)
-      **common_kwargs: Additional keyword arguments (passed through)
+      **common_kwargs: Accepted but unused
     """
     # Get configured algorithms from parent class
     algorithms = self._algorithms
@@ -564,7 +558,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
         "Window #%s: %s to %s", range_idx + 1, range_[0], range_[1]
     )
 
-    # Build polygon from map_deg bounds if available
+    # Construct a map-bounds polygon; it is not passed to the catalog below.
     from matplotlib.path import Path as mplPath
     lon_min, lon_max, lat_min, lat_max = self.metadata_map_bounds
     polygon = mplPath([
@@ -628,7 +622,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
                       myCatalog: OGSCatalog,
                       R: float = 6371.0) -> None:
     """
-    Prepare event features: timestamps, Cartesian coords, inter-event time.
+    Prepare event features in place and sort/reset event rows chronologically.
 
     Transforms geographic coordinates to local Cartesian approximation
     and computes inter-event times for temporal clustering.
@@ -638,10 +632,11 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
       R: Earth radius in km (default: 6371.0)
 
     Computed columns:
-      - TIMESTAMP: Unix timestamp (seconds since epoch)
-      - X_KM: East-West position in km (from longitude)
-      - Y_KM: North-South position in km (from latitude)
-      - INTEREVENT: Seconds since previous event
+      - TIMESTAMP: Unix timestamp truncated to integer seconds
+      - X_KM: R * longitude_radians * cos(mean_latitude_radians)
+      - Y_KM: R * latitude_radians (not centered on the catalog)
+      - INTEREVENT: Nonnegative seconds since previous event, initially zero
+      - INTEREVENT_LOG: log10(max(INTEREVENT, 0.1)), initially -1
     """
     # Ensure timestamp column exists and is datetime type
     myCatalog.EVENTS[OGS_C.TIME_STR] = pd.to_datetime(
@@ -655,9 +650,8 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     ].astype("int64") // 10**9
 
     # ----- Convert lat/lon to local Cartesian approximation (km) -----
-    # This is an equirectangular projection centered on the mean latitude.
-    # Using a constant reference latitude prevents trapezoidal distortion of
-    # distances.
+    # Equirectangular approximation with mean latitude as the longitude scale;
+    # coordinates are not translated to a local origin here.
     lat = myCatalog.EVENTS[OGS_C.LATITUDE_STR].to_numpy()
     lon = myCatalog.EVENTS[OGS_C.LONGITUDE_STR].to_numpy()
 
@@ -692,7 +686,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
           prepend=first_ts
       )
       myCatalog.EVENTS["INTEREVENT"] = np.maximum(diffs, 0.0)
-      # Logarithmic inter-event time for power-law Omori sequence scaling
+      # Log-transform inter-event spacing with a 0.1-second floor.
       myCatalog.EVENTS["INTEREVENT_LOG"] = np.log10(
           np.maximum(myCatalog.EVENTS["INTEREVENT"], 0.1))
     else:
@@ -707,9 +701,11 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
   # -------------------------------------------------------------------------
 
   @staticmethod
-  def _save_clusters(myCatalog: OGSCatalog,
-                     algo_name: str,
-                     metric_name: Optional[str] = None) -> None:
+  def _save_clusters(
+      myCatalog: OGSCatalog,
+      algo_name: str,
+      metric_name: Optional[str] = None
+  ) -> None:
     """
     Save cluster members to CSV files under the Clusters directory.
 
@@ -742,15 +738,17 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
   # PLOTTING: Map View
   # -------------------------------------------------------------------------
 
-  def plot_map_view(self,
-                    ax: Axes,
-                    df: pd.DataFrame,
-                    lon_col: str,
-                    lat_col: str,
-                    mag_col: str,
-                    range_idx: int,
-                    center: Tuple[float, float],
-                    angle_rad: float) -> Axes:
+  def plot_map_view(
+      self,
+      ax: Axes,
+      df: pd.DataFrame,
+      lon_col: str,
+      lat_col: str,
+      mag_col: str,
+      range_idx: int,
+      center: Tuple[float, float],
+      angle_rad: float
+  ) -> Axes:
     """
     Plot clustered events on the map view with labels and projection line.
 
@@ -847,6 +845,8 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
       - Scatter plot colored by cluster ID
       - High-magnitude events marked with red stars
       - Cluster centroid labels
+      - Selection by along-section extent and an axis-aligned X_KM band;
+        this is not a perpendicular-distance swath filter
 
     Args:
       ax: Matplotlib Axes object to plot on
@@ -1064,7 +1064,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
         - n_cols: Number of columns (for legend placement)
         - angle_deg: Azimuth angle (for filename)
         - algo_name: Algorithm name (for filename)
-        - metric_name: Metric name (for filename)
+        - metric_name: Optional metric name (None appears in filename if absent)
     """
     # Extract required kwargs
     n_cols = kwargs["n_cols"]

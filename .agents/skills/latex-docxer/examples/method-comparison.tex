@@ -1,0 +1,49 @@
+% Purpose: Demonstrate an evidence-bounded methodological comparison table.
+% Status: Draft template; literature and human layout review pending.
+% Source-of-truth: .claude/agents/latex-docxer.md (extracted method archetype).
+% Origin: Illustrative model names; architecture/training/output facts unverified.
+\documentclass{article}
+\usepackage[a4paper,margin=2cm]{geometry}
+\usepackage{booktabs,tabularx,threeparttable}
+
+\begin{document}
+\section*{Illustrative methodological comparison}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \begin{threeparttable}
+    \caption{Illustrative phase-picking method comparison.
+      Architecture, training provenance, and output semantics require
+      independent anchors. The named methods are comparison candidates,
+      not verified project baselines or claims of particular capabilities.}
+    \label{tab:method-comparison}
+    \begin{tabularx}{\linewidth}{@{} l X X X l @{}}
+      \toprule
+      \textbf{Candidate} & \textbf{Architecture}
+        & \textbf{Training Provenance} & \textbf{Outputs}
+        & \textbf{Status} \\
+      \midrule
+      PhaseNet & [TODO: citation] & [TODO: dataset/version]
+        & [TODO: verify] & Unverified \\
+      EQTransformer & [TODO: citation] & [TODO: dataset/version]
+        & [TODO: verify] & Unverified \\
+      GPD\tnote{a} & [TODO: citation] & [TODO: dataset/version]
+        & [TODO: verify] & Unverified \\
+      Proposed tuning & [TODO: formulation] & [TODO: proposal]
+        & [TODO: proposal] & [Planned]\tnote{b} \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item[a] GPD is a candidate identifier; provide its cited expansion,
+      exact publication, and model version before populating the row.
+      \item[b] Proposed tuning is an illustrative extension, not a named
+      implemented model or an approved project milestone.
+      \item Distinguish phase picks from event-detection outputs. Training
+      datasets, architectures, and operational status require separate
+      citations or inspected implementation records.
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+\end{document}

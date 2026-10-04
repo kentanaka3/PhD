@@ -114,6 +114,7 @@ TT_DB        	 	?= $(OGS_PATH)/data/VelocityModel/1D/tt_db.txt
 CONDA_BIN			 	?= $(CONDA_ROOT)/bin/conda
 PYTHON_BIN		 	?= $(CONDA_ROOT)/envs/$(CONDA_ENV)/bin/python
 SBC_RUN_BIN			?= ml_catalog_run --config-dir conf +libpath=.
+export PYTHONPATH := $(abspath $(OGS_PATH)/..)$(if $(PYTHONPATH),:$(PYTHONPATH))
 
 # SLURM template (defaults to user template if present, else default)
 SLURM_TEMPLATE 	?= $(if $(wildcard $(OGS_PATH)/utils/Leonardo/$(USER).sh),$(USER),default)
@@ -214,7 +215,7 @@ download: #
 		echo "Downloading waveforms $$start → $$end"; \
 		OVERRIDE_CORES=$(CORES) CORE_COUNT=$(CORES) \
 		bash LAUNCHME.sh download 1 1 "DownLoad_$${start}_$${end}" \
-			$(PYTHON_BIN) $(OGS_PATH)/src/ogsdownloader.py \
+			$(PYTHON_BIN) -m OGS.src.ogsdownloader \
 				-D $$start $$end \
 				-W $(WAVEFORM_PATH) \
 				-S $(STATION_PATH) \
@@ -247,7 +248,7 @@ station:
 	@echo "Processing station metadata $(START_DATE) → $(END_DATE)..."
 	@OVERRIDE_CORES=$(CORES) CORE_COUNT=$(CORES) \
 	bash LAUNCHME.sh station 1 1 "Stations_$(START_DATE)_$(END_DATE)" \
-	  $(PYTHON_BIN) $(OGS_PATH)/src/ogsstation.py \
+	  $(PYTHON_BIN) -m OGS.src.ogsstation \
 	    $(OGS_PATH)/src \
 	    -S $(STATION_PATH) \
 	    -W $(WAVEFORM_PATH) \
@@ -412,7 +413,7 @@ $(foreach n,$(NLLS),  $(eval $(call _NLL_RULES,$n)))
 #   make -n Trainer                                    # dry-run preview
 Trainer:
 	@bash LAUNCHME.sh $(SLURM_TEMPLATE) 1 1 "Trainer_$(MODEL)_$(DATASET)" \
-	  $(PYTHON_BIN) $(OGS_PATH)/src/ogstrainer.py \
+	  $(PYTHON_BIN) -m OGS.src.ogstrainer \
 	    -C $(CATALOG_PATH) \
 	    -W $(WAVEFORM_PATH) \
 	    -D $(START_DATE) $(END_DATE) \
@@ -473,7 +474,7 @@ Indexes:
 parse: # 5
 	@OVERRIDE_CORES=$(CORES) CORE_COUNT=$(CORES) \
 	bash LAUNCHME.sh parse 1 1 "Parse_$(TARGET)" \
-	$(PYTHON_BIN) $(OGS_PATH)/src/ogsparser.py \
+	$(PYTHON_BIN) -m OGS.src.ogsparser \
 		-D $(START_DATE) $(END_DATE) \
 		-f $(DATASET_PATH)/$(TARGET)/* \
 		--merge \

@@ -30,7 +30,7 @@ The module implements:
 
 4. CATALOG-EVENT PLOTTERS
     - ``event_plotter``: per-event waveform / pick visualization.
-    - ``day_plotter``: daily station overview figures.
+    - ``day_plotter``: cumulative counts from date-valued input.
 
 5. MAP AND DEPTH PLOTTERS
     - ``map_plotter``: cartopy maps with stations, events, polygons,
@@ -48,16 +48,19 @@ ARCHITECTURE:
             +-- stack_plotter        (time-series, stacked traces)
             +-- line_plotter         (single line + vlines / hlines)
             +-- event_plotter        (per-event waveform/picks)
-            +-- day_plotter          (daily multi-station overview)
+            +-- day_plotter          (cumulative counts by date)
             +-- map_plotter          (cartopy map with overlays)
             +-- scatter_plotter      (2D scatter)
             +-- histogram_plotter    (distributions)
             +-- ConfMtx_plotter      (confusion matrices)
 
 USAGE:
-    from ogsplotter import map_plotter, line_plotter
+    from OGS.src.ogsplotter import map_plotter, line_plotter
 
-    mp = map_plotter(stations_df, events_df, extent=[12, 14, 45, 47])
+    mp = map_plotter(
+        domain=(12, 14, 45, 47),
+        x=events_df["longitude"], y=events_df["latitude"]
+    )
     mp.savefig("map.png")
 
     lp = line_plotter(x=dates, y=values, xlabel="date", ylabel="count")
@@ -108,8 +111,7 @@ from sklearn.metrics import ConfusionMatrixDisplay as ConfMtxDisp
 from matplotlib_scalebar.scalebar import ScaleBar
 from matplotlib_map_utils.core.north_arrow import north_arrow
 
-import ogsconstants as OGS_C
-import ogsutils as OGS_U
+from . import ogsconstants as OGS_C, ogsutils as OGS_U
 
 # =============================================================================
 # PRIVATE PROTOCOLS AND TYPED HELPERS
@@ -152,7 +154,7 @@ def _plot_vline(ax: Axes, x: datetime, color: str, label: str) -> None:
 
 
 def v_lat_long_to_distance(lng1, lat1, depth1, lng2, lat2, depth2, dim=2):
-  """Pairwise great-circle (optionally 3D) distance in km between two point
+  """Pairwise geodetic (optionally 3D) distance in km between two point
   sequences.
 
   Parameters
@@ -162,13 +164,14 @@ def v_lat_long_to_distance(lng1, lat1, depth1, lng2, lat2, depth2, dim=2):
   lng2, lat2, depth2 : Iterable[float]
     Longitude (deg), latitude (deg) and depth (m) of the second point set.
   dim : int, default 2
-    ``2`` for purely horizontal great-circle distance; ``3`` to add the
-    vertical separation in quadrature.
+    ``3`` adds vertical separation in quadrature; other values use only
+    horizontal geodetic distance.
 
   Returns
   -------
   list[float]
-    Distance in kilometers for each input pair.
+    Distance in kilometers for each input pair, truncated to the shortest
+    of the six input sequences by ``zip``.
   """
   return [
       np.sqrt(
@@ -189,7 +192,8 @@ class plotter:
 
   Owns a ``matplotlib.figure.Figure`` (either created here or supplied by the
   caller) plus a class-named logger. Subclasses focus on adding axes and
-  artists; saving the figure to disk is handled uniformly by :meth:`savefig`.
+  artists; :meth:`savefig` saves Matplotlib's current figure, which is not
+  necessarily ``self.fig`` if another figure has become current.
 
   Parameters
   ----------
@@ -228,8 +232,8 @@ class stack_plotter(plotter):
   """Stacked time-series plot of multiple labeled series sharing one x axis.
 
   Useful to compare several daily/cumulative curves on a common axis with
-  optional vertical reference lines (``vlines``) and horizontal threshold
-  markers (``hlines``).
+  optional vertical reference lines (``vlines``). The constructor accepts
+  ``ax``, ``xlim``, ``ylim``, or ``hlines``; limits are derived from the data.
   """
 
   def __init__(self, x, y, labels, colors, xlabel=None, ylabel=None,
@@ -502,10 +506,10 @@ class event_plotter(plotter):
 
 
 class day_plotter(plotter):
-  """Daily multi-station overview plot.
+  """Cumulative-count plot from a non-empty date/time-valued Series.
 
-  Composes one axis per station for a single calendar day, useful as a quick
-  diagnostic summary of catalog activity.
+  Counts equal input values, sorts them, and cumulatively sums their counts on
+  one axis. Values are converted to calendar dates for the x coordinates.
   """
 
   def __init__(
@@ -631,7 +635,7 @@ class map_plotter(plotter):
     """
     north_arrow(
         ax,
-        location="upper left",
+        location="upper right",
         scale=0.6,
         rotation={"crs": proj, "reference": "center"},
         shadow=False,
@@ -679,12 +683,14 @@ class map_plotter(plotter):
     rg_map_ax.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
     rg_map_ax.set_extent([6, 19, 36, 48], crs=self.proj)
     rgAx.set_aspect('equal', adjustable='box')
-    ita = rgAx.annotate("Italy", xy=(0.5, 0.55), xycoords='axes fraction',
-                        ha='center', va='center', fontsize=20,
-                        color=OGS_C.MEX_PINK)
+    ita = rgAx.annotate(
+        OGS_C.OGS_ITALY_STR, xy=(0.5, 0.55), xycoords='axes fraction',
+        ha='center', va='center', fontsize=20, color=OGS_C.MEX_PINK
+    )
     ita.set(rotation=-30)
-    self.ax.add_patch(mpatches.Rectangle(xy, w, h, linewidth=1, color='blue',
-                                         fill=False, label="Station Area"))
+    self.ax.add_patch(mpatches.Rectangle(
+        xy, w, h, linewidth=1, color='blue', fill=False, label="Station Area"
+    ))
     map_ax.add_feature(cfeature.OCEAN, facecolor=("lightblue"))
     map_ax.add_feature(
         cfeature.BORDERS, linewidth=0.5, edgecolor=OGS_C.MEX_PINK
@@ -704,12 +710,14 @@ class map_plotter(plotter):
         self.ax.legend()
       return
     if magnitude is not None:
-      for (m_min, m_max), size in OGS_C.OGS_MAGNITUDE_SIZE.items():
+      for (m_min, m_max), (size, c_qk) in (
+          list(OGS_C.OGS_MAGNITUDE_SIZE.items())[::-1]
+      ):
         mask = (m_min <= magnitude) & (magnitude < m_max)
         self.ax.scatter(
             x[mask], y[mask], s=size, marker=self.marker,
             label=f"{m_min} $\\leq M_L$ < {m_max}",
-            facecolors=facecolors, edgecolors=edgecolors,
+            facecolor="none", edgecolor=c_qk,
         )
       mask = magnitude >= OGS_C.OGS_MAX_MAGNITUDE
       self.logger.info(
@@ -720,7 +728,7 @@ class map_plotter(plotter):
       )
       self.ax.scatter(x[mask], y[mask], s=320, marker="*",
                       label=f"$M_L \\geq$ {OGS_C.OGS_MAX_MAGNITUDE}",
-                      facecolors=OGS_C.LIP_ORANGE, edgecolors=OGS_C.LIP_ORANGE)
+                      facecolor=OGS_C.LIP_ORANGE, edgecolor=OGS_C.LIP_ORANGE)
     else:
       self.ax.scatter(x, y, s=self.s, marker=self.marker, label=label,
                       facecolors=facecolors, edgecolors=edgecolors)
@@ -729,31 +737,33 @@ class map_plotter(plotter):
                     horizontalalignment='center',
                     verticalalignment='center')
     if legend:
-      self.ax.legend()
+      self.ax.legend(loc="upper left", framealpha=0.4)
     if title:
       self.ax.set_title(title)
     if output is not None:
       self.savefig(output=output)
 
-  def add_plot(self, x, y, xlabel=None, ylabel=None,
-               color: str | None = OGS_C.MEX_PINK,
-               label=None, facecolors=None, edgecolors=None, legend=None,
-               s=None, output=None, savefig=False, marker=None,
-               magnitude=None) -> None:
+  def add_plot(
+      self, x, y, xlabel=None, ylabel=None, color: str | None = OGS_C.MEX_PINK,
+      label=None, facecolors=None, edgecolors=None, legend=None, s=None,
+      output=None, savefig=False, marker=None, magnitude=None
+  ) -> None:
     if marker is not None:
       self.marker = marker
     if magnitude is not None:
-      for (m_min, m_max), size in OGS_C.OGS_MAGNITUDE_SIZE.items():
+      for (m_min, m_max), (size, c_qk) in (
+          list(OGS_C.OGS_MAGNITUDE_SIZE.items())[::-1]
+      ):
         mask = (m_min <= magnitude) & (magnitude < m_max)
         self.ax.scatter(
             x[mask], y[mask], s=size, marker=self.marker,
+            facecolor="none", edgecolor=c_qk,
             label=f"{m_min} ≤ $M_L$ < {m_max}",
-            facecolors=facecolors, edgecolors=edgecolors,
         )
       mask = magnitude >= OGS_C.OGS_MAX_MAGNITUDE
       self.ax.scatter(x[mask], y[mask], s=320, marker="*",
                       label=f"$M_L \\geq$ {OGS_C.OGS_MAX_MAGNITUDE}",
-                      facecolors=OGS_C.SUN_YELLOW, edgecolors=OGS_C.SUN_YELLOW)
+                      facecolor=OGS_C.SUN_YELLOW, edgecolor=OGS_C.SUN_YELLOW)
     else:
       self.ax.scatter(x, y, s=self.s if s is None else s, c=color,
                       marker=self.marker, label=label, facecolors=facecolors,
@@ -763,7 +773,7 @@ class map_plotter(plotter):
     if ylabel:
       self.ax.set_ylabel(ylabel)
     if legend is not None:
-      self.ax.legend()
+      self.ax.legend(loc="upper left", framealpha=0.4)
     if output is not None:
       savefig = True
     if savefig:
@@ -980,10 +990,7 @@ class ConfMtx_plotter(plotter):
     disp.plot(values_format='d', colorbar=True, ax=self.ax)
     for labels in disp.text_.ravel():
       labels.set(color=OGS_C.MEX_PINK, fontsize=12, fontweight="bold")
-    # Set the color limits to the range of the data (i.e., 0 to max value in
-    # the confusion matrix). This approach emphasizes the relative differences
-    # between the values in the confusion matrix, making it easier to see which
-    # values are more significant.
+    # Use logarithmic color scaling from 1 to the maximum matrix count.
     disp.im_.set(clim=(1, data.max().max()), cmap="Blues", norm="log")
     if basename:
       disp.ax_.set_ylabel(f"{basename}")

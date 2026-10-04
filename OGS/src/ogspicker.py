@@ -1,6 +1,6 @@
 """
 ===============================================================================
-OGS Amplitude Extractor - Wood-Anderson Simulation with SNR Gating
+OGS Amplitude Extractor - Wood-Anderson Simulation and SNR Measurement
 ===============================================================================
 
 OVERVIEW:
@@ -10,16 +10,19 @@ horizontal components around SeisBench picks for use by the OGS local
 magnitude module.
 
 Processing pipeline (per pick):
-  1. Slice a wide window around the pick peak time.
+  1. Receive a wide waveform window and require one trace per component.
   2. Detrend (demean + linear) and remove instrument response with a fixed
      water-level deconvolution.
   3. Apply a 1-40 Hz bandpass filter.
   4. Split the window into a noise segment (before pick) and a signal segment
-     (after pick) of width ``TIME_SLACK``.
-  5. Reject picks whose SNR is below ``SNR_THRESHOLD`` on either component.
+     (after pick), using ``TIME_SLACK``; the noise window ends 0.1 s before
+     the pick.
+  5. Require nonempty noise and signal streams for both components.
   6. Simulate the OGS Wood-Anderson instrument response.
-  7. Report the maximum absolute amplitude (in mm) on each component over the
-     [pick - TIME_BEFORE, pick + TIME_AFTER] window.
+  7. Report signal/noise L2-norm ratios and maximum absolute amplitudes (in mm)
+     on each component over [pick - TIME_BEFORE, pick + TIME_AFTER].
+     This extractor does not apply an SNR threshold; the magnitude module
+     performs its own amplitude gating.
 
 MODULE CONSTANTS:
     OGS_WOOD_ANDERSON : dict
@@ -29,12 +32,12 @@ MODULE CONSTANTS:
     FREQ_RANGE : list[float]
         Bandpass corner frequencies [Hz].
     SNR_THRESHOLD : float
-        Minimum noise/signal ratio gate.
+        Defined here but not used by the extractor.
     TIME_BEFORE / TIME_AFTER / TIME_SLACK : float
         Window geometry in seconds.
 
 USAGE:
-    from ogspicker import OGSAmplitudeExtractor
+    from OGS.src.ogspicker import OGSAmplitudeExtractor
 
     extractor = OGSAmplitudeExtractor()
     builder.add_module(extractor)
@@ -105,7 +108,7 @@ class OGSAmplitudeExtractor(AmplitudeExtractor):
     if any([len(large_window.select(component=component)) != 1
             for component in self.components]):
       return output
-    # Normalize window
+    # Demean and remove the linear trend in place.
     large_window.detrend("demean")
     large_window.detrend("linear")
     print("Removing response...")

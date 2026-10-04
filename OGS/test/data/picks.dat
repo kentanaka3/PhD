@@ -1,0 +1,114 @@
+BUA eP   7705061140 5400        5650eS                        FL         70   1 gg
+COLIeP   7705061140 5550        5930eS                        FL         60   1 gg
+                 1                                               
+COLIiP+  7705061234 3190        3520iS                        FL        100   2 gg
+                 1                                               
+COLIeP   7705061254 3000        3560eS                        FL         50   3 gg
+                 1                                               
+BAD eP   7705072010 5870        6020iS                        FLD             8 gg
+BUA eP   7705072010 5900        6090iS                        FLD       245   8 gg
+COLIeP-  7705072011 0140         530iS                        FLD       195   8 gg
+                 1                                              D
+BAD iPC  7711020660 0060         410iS                        FLD       100 692 gg
+RCL eP   7711020660 0200         640iS                        FLD       110 692 gg
+                 1                                              D
+ALP ipd  8010141334 2090                                      VLD          1148 g                                       
+AMBEep-  8010141333 4124        5160es                        VLD          1148 gg                                      
+AQU ipc  8010141334 2650                                      VLD          1148 g                                       
+PLROiPC0 9701020838 2574        2980iS 0                      FLD       570   1 gg
+BAD iPD0 9701020838 2595        3070eS 2                      FLD       520   1 gg
+BOO iPC0 9701020838 2661        3150eS 1                      FLD       530   1 gg
+VOY eP 2 9701020838 2990        3820eS 2                      FLD             1 gg
+                 1                                              D
+                 1                                               
+CAE iPC010001031836 3603                                      VLD       850   4 g
+MLN iPD010001031836 3789        4620iS 0                      VLD       800   4 gg
+CLA1eP 210001031836 4071        4875eS 2                      VLD             4 gg
+MPRIePC010001031836 4050                                      VLD       650   4 g
+BUA eP+010001031836 4118                                      VLD             4 g
+CSO iPD010001031836 4037        5020iS 0                      VLD       650   4 gg
+COLIiPD010001031836 4242                                      VLD             4 g
+LSR ePD010401010018 5826        6051eS 1                      FL        170   1 gg                                      
+                 1                                                            1                                         
+LSR iPC010401010221 1456        1826eS 1                      FLD       580   2 gg                                      
+PLROePC010401010221 1866        2574eS 2                      FLD       510   2 gg                                      
+ZOU eP-110401010221 2070        2881eS 2                      FLD       430   2 gg                                      
+BUA ePC110401010221 1750                                      FLD       400   2 g                                       
+BAD eP+110401010221 1578        2054eS 1                      FLD       470   2 gg                                      
+BOO ePC010401010221 1722        2302eS 2                      FLD       460   2 gg                                      
+COLIePD010401010221 1517        1955eS 1                      FLD       420   2 gg                                      
+DRE iPD010401010221 1272        1456eS 1                      FLD       650   2 gg                                      
+ROBSiPD210401010221 1267        1440iS 2                      FLD             2 gg                                      
+VOY iPC210401010221 1630        2120eS 2                      FLD             2 gg                                      
+DRE ePC210501010322 0294         471eS 2                      FL        188   1 gg                                      
+                 1                                                                                                      
+BOO iPD010501011341 2171        2327iS 0                      FL        165   2 gg                                      
+                 1                                                                                                      
+BOO iPC010501011422 1018        1095iS 2                      FLD       480   3 gg                                      
+MPRIiPD010501011422 1178        1406iS 2                      FLD       457   3 gg                                      
+BUA iPD010501011422 1183        1423iS 2                      FLD       536   3 gg                                      
+BAD iPC010501011422 1210        1478iS 2                      FLD       586   3 gg                                      
+PLROiPD010501011422 1300        1694iS 2                      FLD       675   3 gg                                      
+ZOU iPD010501011422 1345        1723iS 2                      FLD       650   3 gg                                      
+COLIiPC010501011422 1476        1978iS 2                      FLD       526   3 gg                                      
+LSR iPD010501011422 1533        2016eS 0                      FLD       483   3 gg                                      
+CSM iPD010501011422 1554        2098eS 0                      FLD       628   3 gg                                      
+MLN iPC010501011422 1650        2280iS 2                      FLD       530   3 gg                                      
+DRE iPC010501011422 1676        2341eS 0                      FLD       724   3 gg                                      
+OBKAiPC410501011422 2710        4230iS 4                      FLD             3 gg                                      
+ROBSiP 210501011422 1459                                      FLD             3 g                                       
+VOJSiP 410501011422 2045        3109iS 2                      FLD             3 gg                                      
+JAVSiP 410501011422 2354                                      FLD             3 g                                       
+                 1                                              D                                                       
+BOO iPC010501021156 1648        1735iS 1                      FLD       610   8 gg                                      
+MPRIiPD010501021156 1808        2034eS 0                      FLD       665   8 gg                                      
+BUA iPD010501021156 1813        2023iS 2                      FLD       457   8 gg                                      
+BAD iPD010501021156 1840        2094eS 0                      FLD       725   8 gg                                      
+PLROiPD010501021156 1930        2292iS 2                      FLD       834   8 gg                                      
+ZOU iPD010501021156 1971        2352eS 0                      FLD       740   8 gg                                      
+COLIiPD010501021156 2105        2595eS 0                      FLD      1042   8 gg                                      
+LSR ePD010501021156 2164        2691eS 0                      FLD       633   8 gg                                      
+CSM iPC010501021156 2177        2718eS 0                      FLD       765   8 gg                                      
+MLN iPD010501021156 2268        2939eS 0                      FLD       748   8 gg                                      
+DRE iPD010501021156 2305        2973eS 0                      FLD       894   8 gg                                      
+TLI iPD010501021156 2344                                      FLD       863   8 g                                       
+CSO iPD010501021156 2484                                      FLD       695   8 g                                       
+CAE iPD010501021156 2591                                      FLD       890   8 g                                       
+MOA iPC410501021156 4790        7650iS 4                      FLD             8 gg                                      
+OBKAiPC410501021156 3510        5020iS 4                      FLD             8 gg                                      
+ROBSiP 410501021156 2091        2544iS 4                      FLD             8 gg                                      
+VOJSiP 410501021156 2672        3700iS 4                      FLD             8 gg                                      
+CEY eP 410501021156 3589                                      FLD             8 g                                       
+LEGSeP 410501021156 4506                                      FLD             8 g                                       
+GMNAiPD410501021156 1727        1875eS 4                      FLD             8 gg                                      
+PTCCiPC310501021156 1905        2241eS 3                      FLD             8 gg                                      
+FVI iPD410501021156 2144        2660eS 4                      FLD             8 gg                                      
+TRI eP 410501021156 2928        4291eS 4                      FLD             8 gg                                      
+CTI eP 410501021156 3634                                      FLD             8 n                                       
+                 1                                              D                                                       
+GEPF P 011707130936 5816                                      FBD       2331060 g                                       
+BOO  P 011707130936 5822                                      FBD       2681060 g                                       
+BUA  P 011707130936 5866                                      FBD       2511060 g                                       
+MPRIeP 211707130936 5908                                      FBD          1060 g                                       
+BAD  P 111707130936 5960                                      FBD          1060 g                                       
+VINOeP 211707130936 5996                                      FBD          1060 g                                       
+FUSE P 211707130937 0027                                      FBD       2041060 g                                       
+PTCC P 211707130937 0149                                      FBD          1060 g                                       
+CLUD P 211707130937 0174                                      FBD       2371060 g                                       
+STAL P 211707130937 0225                                      FBD          1060 g                                       
+COLI P 211707130937 0240                                      FBD          1060 g                                       
+PLROeP 211707130937 0269                                      FBD          1060 g                                       
+PURAeP 111707130937 0269                                      FBD          1060 g                                       
+ZOU2 P 211707130937 0304                                      FBD          1060 g                                       
+MLN  P 111707130937 0455                                      FBD          1060 g                                       
+                 1                                              D                                                       
+CIMO P 312110091626 5515                                      VF        6121431 g                                       
+CSM  P 212110091626 5551                                      VF        5811431 g                                       
+CSO  P 312110091626 5604                                      VF        4101431 g                                       
+                 1                                                                                                      
+ABTAeP 212401010336 1411        1519eS 2                      ALD       153   1 gg
+CSM eP 212401010336 1834        2223eS 2                      ALD       150   1 gg
+FVI eP 012401010336 1821        2184eS 1                      ALD        76   1 gg
+AFL eP 012401010336 1891        2309eS 2                      ALD             1 gg
+PURAeP 212401010336 2033        2521eS 3                      ALD             1 gg
+                 1                                              D

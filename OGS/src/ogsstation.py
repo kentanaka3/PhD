@@ -4,24 +4,33 @@ OGS Station Waveform Inventory Helper - CLI Entry Point
 ===============================================================================
 
 OVERVIEW:
-Command-line wrapper around :func:`ogsutils.waveforms` that discovers
-and summarizes the per-station waveform inventory available under a source
-directory over a given date window. Supports parallel multi-threaded scanning.
+Command-line wrapper around :func:`ogsutils.waveforms` that discovers and
+summarizes daily MiniSEED files under the waveform directory over an inclusive
+date window. Scanning concurrency comes from shared constants, not a CLI
+thread argument.
 
 USAGE:
-    python ogsstation.py <src_root>
-                         -S <stations> \
-                         -W <waveforms> \
-                         [-D <YYYYMMDD> <YYYYMMDD>] \
-                         [-o <output>] [--threads <N>]
+    python -m OGS.src.ogsstation <src_root> \
+        -S <stations> \
+        -W <waveforms> \
+        [-D <YYYYMMDD> <YYYYMMDD>] \
+        [-o <output>] [--threads <N>]
 
 Where:
-    - ``src_root``         is prepended to ``sys.path`` so ``ogsutils`` resolves
+    - ``src_root``         required legacy parser positional argument; unused
+                           by this entry point, which does not alter sys.path
     - ``-S / --stations``  station metadata directory
     - ``-W / --waveforms`` directory tree containing daily waveform files
     - ``-D / -J``          date range (Gregorian YYYYMMDD or Julian YYYYJJJ)
     - ``-o / --output``    optional output directory (default: current dir)
-    - ``--threads``        optional worker thread count (default: SLURM/CPU count)
+
+OUTPUT:
+    Creates the output directory, then delegates CSVs (OGSWaveforms.csv,
+    OGSInventory.csv), the station map (OGSStations.png), and, when data are
+    available, the availability plot (OGSAvailability.png) to
+    ogsutils.waveforms.
+    Expected files are <waveforms>/YYYY/MM/DD/
+    NET.STA.LOC.CHA__YYYYMMDDTHHMMSSZ__YYYYMMDDTHHMMSSZ.mseed.
 
 DEPENDENCIES:
     - ogsutils.waveforms: actual scanning / inventory logic
@@ -39,7 +48,7 @@ AUTHORS:
 ===============================================================================
 """
 
-import ogsutils as OGS_U
+from . import ogsutils as OGS_U
 
 
 def main():
@@ -52,6 +61,7 @@ def main():
       start=args.dates[0],
       end=args.dates[1],
       output=args.output,
+      threads=args.threads,
   )
 
 

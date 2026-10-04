@@ -1,0 +1,39 @@
+% Purpose: Demonstrate bounded notation and a stepwise quadratic derivation.
+% Status: Draft template; human mathematical and layout review pending.
+% Source-of-truth: .claude/agents/latex-docxer.md (extracted algebraic example).
+% Origin: Symbolic algebra only; no project implementation or test fixture.
+\documentclass{article}
+\usepackage[a4paper,margin=2cm]{geometry}
+\usepackage{amsmath,amssymb}
+
+\begin{document}
+\section*{Illustrative quadratic derivation}
+
+Let $a,b,c,x\in\mathbb{R}$, with $a\ne0$. Define the discriminant
+$\Delta=b^2-4ac$. The real-root derivation below assumes $\Delta\ge0$;
+when $\Delta<0$, the equation has no real roots.
+
+\begin{equation}
+  \begin{aligned}
+    ax^2+bx+c &= 0
+      && \text{Given equation} \\
+    x^2+\frac{b}{a}x &= -\frac{c}{a}
+      && \text{Divide by }a \\
+    x^2+2\frac{b}{2a}x+\left(\frac{b}{2a}\right)^2
+      &= -\frac{c}{a}+\left(\frac{b}{2a}\right)^2
+      && \text{Complete the square} \\
+    \left(x+\frac{b}{2a}\right)^2
+      &= \frac{\Delta}{4a^2}
+      && \text{Collect terms} \\
+    x+\frac{b}{2a} &= \pm\frac{\sqrt{\Delta}}{2a}
+      && \text{Absorb the sign of }a\text{ into }\pm \\
+    x &= \frac{-b\pm\sqrt{\Delta}}{2a}
+      && \text{Isolate }x
+  \end{aligned}
+  \label{eq:quadratic-formula-derivation}
+\end{equation}
+
+The two signs in Equation~\ref{eq:quadratic-formula-derivation} coincide
+when $\Delta=0$. This example demonstrates algebraic exposition; it does
+not assert alignment with a repository algorithm or automated test.
+\end{document}

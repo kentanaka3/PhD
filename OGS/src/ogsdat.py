@@ -12,35 +12,41 @@ FILE FORMAT DESCRIPTION:
   The .dat format uses fixed-width columns with the following structure:
   - Columns 1-4:   Station code (4 chars, right-padded)
   - Column 5:      P-wave onset quality (e/i/?)
-  - Column 6:      P-wave polarity (+/-/c/d)
-  - Column 7:      P-wave weight (0-4, quality indicator)
-  - Column 8:      Fixed "1" marker
-  - Columns 9-18:  Date-time (YYMMDDHHMM format)
-  - Columns 19-22: P-wave arrival time (SSCC, seconds.centiseconds)
-  - Columns 23-30: Reserved/unknown
-  - Columns 31-38: Optional S-wave data (time, onset, polarity, weight)
-  - Columns 39-60: Padding
-  - Column 61:     Geographic zone code
-  - Column 62:     Event type code
-  - Column 63:     Event localization flag (D = distant)
-  - Columns 64-68: Padding
-  - Columns 69-73: Signal duration (samples or seconds)
-  - Columns 74-77: Event index number
+  - Column 6:      P marker or whitespace
+  - Column 7:      P-wave polarity (+/-/c/C/d/D or whitespace)
+  - Column 8:      P-wave weight (0-4 or whitespace)
+  - Column 9:      "1" marker or whitespace
+  - Columns 10-19: Date-time (YYMMDDHHMM format)
+  - Column 20:     Whitespace or zero separator
+  - Columns 21-24: P-wave seconds/centiseconds (SSCC)
+  - Columns 25-32: Ignored field (any eight characters)
+  - Columns 33-40: S seconds/centiseconds, onset, S marker, polarity, weight;
+                  alternatively eight whitespace characters
+  - Columns 41-62: Whitespace padding
+  - Column 63:     Geographic zone code or whitespace
+  - Column 64:     Event type code (B/E/F/L/U or whitespace)
+  - Column 65:     Event localization flag (D or whitespace)
+  - Columns 66-70: Whitespace padding
+  - Columns 71-75: Captured duration field (not converted or exported)
+  - Columns 76-79: Event index number
+  These positions describe the regex input after stripping each raw line.
+  Records are prefix-matched; trailing text is not rejected.
 
 KEY FEATURES:
   - Regex-based parsing with named capture groups
   - P and S wave pick extraction from the same record
   - Date range filtering for temporal subsetting
-  - Weight quality indicator preservation
-  - Event type filtering (local earthquakes only by default)
+  - Numeric pick weights, defaulting to zero for blanks
+  - Retention of distant, blank-type, and local-earthquake records
   - Parquet output for efficient storage
 
 USAGE:
   Command line:
-    python ogsdat.py -f input.dat -D 20220101 20221231 -v
+    python -m OGS.src.ogsdat -f input.dat -D 20220101 20221231 -v
 
   Programmatic:
-    from ogsdat import DataFileDAT
+    from pathlib import Path
+    from OGS.src.ogsdat import DataFileDAT
     parser = DataFileDAT(Path("input.dat"), start_date, end_date)
     parser.read()
     parser.log()
@@ -75,21 +81,11 @@ AUTHORS:
 # Standard library: Regular expressions for pattern matching
 import re
 
-
-# ObsPy: Seismological library - precise time handling
-from obspy import UTCDateTime
-
 # Standard library: Date/time objects and time deltas
 from datetime import datetime, timedelta as td
 
-# Local module: OGS-specific constants (column names, patterns, formats)
-import ogsconstants as OGS_C
-
-# Local module: OGS-specific utility functions (date parsing, path validation)
-import ogsutils as OGS_U
-
-# Local module: Base class providing regex extraction and logging
-from ogsdatafile import OGSDataFile
+from . import ogsconstants as OGS_C, ogsutils as OGS_U
+from .ogsdatafile import OGSDataFile
 
 
 # =============================================================================
@@ -126,25 +122,25 @@ class DataFileDAT(OGSDataFile):
       fr"(?P<{OGS_C.P_ONSET_STR}>[ei\s\?])[{OGS_C.PWAVE}\s]",
       # P-wave polarity: c/C/+=compression(up), d/D/-=dilatation(down), space=unknown
       fr"(?P<{OGS_C.P_POLARITY_STR}>[cC\+dD\-\s])",
-      # P-wave weight: 0=best, 4=worst quality, space=unweighted
+      # P-wave weight: digit 0-4 or whitespace (blank defaults to zero)
       fr"(?P<{OGS_C.P_WEIGHT_STR}>[0-4\s])",
-      # Fixed marker "1" (format identifier) or space for legacy pre-2000 files
+      # Marker "1" or whitespace
       fr"[1\s]",
       # Date-time: YYMMDDHHMM format (10 digits) followed by space or zero
       fr"(?P<{OGS_C.DATE_STR}>\d{{10}})[\s0]",
-      # P-wave arrival time: SSCC (seconds.centiseconds, 4 digits)
+      # P-wave seconds/centiseconds: four whitespace/digit characters
       fr"(?P<{OGS_C.P_TIME_STR}>[\s\d]{{4}})",
       # Reserved/unknown field: 8 characters (ignored)
       fr".{{8}}",
       # Optional S-wave data block (may be 8 spaces if no S pick)
       [
-          # S-wave arrival time: SSCC (seconds.centiseconds, 4 digits)
+          # S-wave seconds/centiseconds: four whitespace/digit characters
           fr"(((?P<{OGS_C.S_TIME_STR}>[\s\d]{{4}})",
           # S-wave onset quality: e=emergent, i=impulsive, ?=uncertain, space=unknown
           fr"(?P<{OGS_C.S_ONSET_STR}>[ei\s\?]){OGS_C.SWAVE}",
           # S-wave polarity: c/C/+=compression(up), d/D/-=dilatation(down), space=unknown
           fr"(?P<{OGS_C.S_POLARITY_STR}>[cC\+dD\-\s])",
-          # S-wave weight: 0=best, 5=worst quality, space=unweighted
+          # S-wave weight: digit 0-5 or whitespace (blank defaults to zero)
           fr"(?P<{OGS_C.S_WEIGHT_STR}>[0-5\s]))|\s{{8}})"
       ],
       # Padding: 22 spaces to align with fixed-width format
@@ -153,17 +149,17 @@ class DataFileDAT(OGSDataFile):
       fr"(?P<{OGS_C.GEO_ZONE_STR}>" + (
           fr"[{OGS_C.EMPTY_STR.join(OGS_C.OGS_GEO_ZONES.keys())}\s]"
       ) + fr")",
-      # Event type code: Single character classifying the seismic event (L=local, R=regional, T=teleseismic, Q=quarry blast, etc.)
+      # Event type: B/E/F/L/U from OGS_EVENT_TYPES, or whitespace
       fr"(?P<{OGS_C.EVENT_TYPE_STR}>" + (
           fr"[{OGS_C.EMPTY_STR.join(OGS_C.OGS_EVENT_TYPES.keys())}\s]"
       ) + fr")",
-      # Event localization flag: D=distant event, space=local/regional
+      # Event localization flag: D or whitespace
       fr"(?P<{OGS_C.EVENT_LOCALIZATION_STR}>[D\s])",
       # Padding: 5 spaces
       fr"\s{{5}}",
-      # Signal duration: 5 digits (in samples or deciseconds)
+      # Duration: five whitespace/digit characters, captured but not exported
       fr"(?P<{OGS_C.DURATION_STR}>[\s\d]{{5}})",
-      # Event index: 4-digit sequential event number within the year
+      # Event index: four whitespace/digit characters, normalized with year
       fr"(?P<{OGS_C.IDX_EVENTS_STR}>[\s\d]{{4}})",
       fr""
   ]
@@ -172,23 +168,23 @@ class DataFileDAT(OGSDataFile):
   # EVENT EXTRACTOR: Metadata-only lines without pick data
   # -------------------------------------------------------------------------
   EVENT_EXTRACTOR_LIST = [
-      # Event type code: Single character classifying the seismic event (L=local, R=regional, T=teleseismic, Q=quarry blast, etc.)
+      # Event type: B/E/F/L/U from OGS_EVENT_TYPES, or whitespace
       fr"(?P<{OGS_C.EVENT_TYPE_STR}>" + (
           fr"[{OGS_C.EMPTY_STR.join(OGS_C.OGS_EVENT_TYPES.keys())}\s]"
       ) + fr")",
-      # Event localization flag: D=distant event, space=local/regional
+      # Event localization flag: D or whitespace
       fr"(?P<{OGS_C.EVENT_LOCALIZATION_STR}>[D\s])",
       # Padding: 5 spaces
       fr"\s{{5}}",
-      # Signal duration: 5 digits (in samples or deciseconds)
+      # Duration: five whitespace/digit characters
       fr"(?P<{OGS_C.DURATION_STR}>[\s\d]{{5}})",
-      # Event index: 4-digit sequential event number within the year
+      # Event index: four whitespace/digit characters
       fr"(?P<{OGS_C.IDX_EVENTS_STR}>[\s\d]{{4}})",
   ]
 
   @staticmethod
   def _parse_event_datetime(value: str) -> datetime:
-    """Convert the DAT date field to a datetime, handling minute rollover."""
+    """Parse YYMMDDHHMM; minutes >= 60 become the next hour at minute zero."""
     if int(value[-2:]) >= 60:
       return datetime.strptime(
           value[:-2], OGS_C.DATETIME_FMT[:-4]
@@ -197,7 +193,7 @@ class DataFileDAT(OGSDataFile):
 
   @staticmethod
   def _parse_pick_time(base_time: datetime, value: str) -> datetime:
-    """Convert a SSCC field to an absolute pick time."""
+    """Add SSCC / 100 seconds to base_time, replacing spaces with zeros."""
     offset = float(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR)) / 100.
     return base_time + td(seconds=offset)
 
@@ -208,10 +204,18 @@ class DataFileDAT(OGSDataFile):
     The parser walks through the input file line by line, skips metadata-only
     lines, extracts station records with regex patterns, filters by date range
     and event type, and stores grouped picks in self.PICKS and self.picks.
+    Invalid regex records and handled field-conversion failures are logged and
+    skipped. An invalid event index is retained as None before the DataFrame
+    builder converts it to zero.
+
+    Returns:
+      None: Results are stored on the instance.
 
     Raises:
       FileNotFoundError: If the input file does not exist.
       ValueError: If the input file does not use the .dat extension.
+      RuntimeError: If opening or reading fails; a .dat.corrupt copy is
+        attempted before raising. Other processing failures may propagate.
     """
     # -----------------------------------------------------------------------
     # INPUT VALIDATION
@@ -384,7 +388,7 @@ def main(args):
     3. Logs output through the shared OGS pipeline
 
   Args:
-    args: Parsed command-line arguments from parse_arguments()
+    args: Parsed command-line arguments from ogsutils.parse_dat_args()
   """
   for file in args.file:
     datafile = DataFileDAT(file, args.dates[0], args.dates[1],

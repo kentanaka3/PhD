@@ -1,35 +1,47 @@
-all: .dat .hpl .pun .txt parser constants clustering downloader catalog data trainer
+.PHONY: .dat .hpl .pun .txt parser datafile parser-tests constants catalog data downloader catalog-support-tests reformed-tests
+
+PYTEST ?= python -m pytest -q
+PARSER_TESTS = testogsdat.py testogshpl.py testogspun.py testogstxt.py testogsdatafile.py testogsparser.py
+CATALOG_SUPPORT_TESTS = testogsconstants.py testogscatalog.py testogsdata.py testogsdownloader.py
+
+all: .dat .hpl .pun .txt parser datafile constants clustering downloader catalog data trainer
+
+parser-tests: .dat .hpl .pun .txt datafile parser
+
+catalog-support-tests: constants catalog data downloader
+
+datafile:
+	$(PYTEST) testogsdatafile.py
 
 constants:
-	python testogsconstants.py
+	$(PYTEST) testogsconstants.py
 
 parser:
-	python testogsparser.py
+	$(PYTEST) testogsparser.py
 
 .dat:
-	python testogsdat.py
+	$(PYTEST) testogsdat.py
 
 .hpl:
-	python testogshpl.py
+	$(PYTEST) testogshpl.py
 
 .pun:
-	python testogspun.py
+	$(PYTEST) testogspun.py
 
 .txt:
-	python testogstxt.py
+	$(PYTEST) testogstxt.py
 
 clustering:
 	python testogsclustering.py
 
 downloader:
-	python testogsdownloader.py
+	$(PYTEST) testogsdownloader.py
 
 catalog:
-	python testogscatalog.py
+	$(PYTEST) testogscatalog.py
 
 data:
-	python testogsdata.py
+	$(PYTEST) testogsdata.py
 
 trainer:
 	python testogstrainer.py
-

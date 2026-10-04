@@ -26,8 +26,27 @@ Install the dependencies required by the selected test before running it.
 | [`testogsdata.py`](testogsdata.py) | `ogsdata.py` | *(manual / pytest)* | Pyrocko Squirrel data source access and sharding. |
 | [`testogsdownloader.py`](testogsdownloader.py) | `ogsdownloader.py` | `make downloader` | FDSN client parameter validation and domain bounds. |
 | [`testogstrainer.py`](testogstrainer.py) | `ogstrainer.py` | `make trainer` | CLI argument parsing, vector cross-entropy loss, station/event parsing, trace conditioning, SeisBench augmentations, checkpointing, and training/validation loops. |
+| [`test_package_imports.py`](test_package_imports.py) | Public API and source imports | *(pytest)* | Isolated package/standalone imports, lazy class exports, dependency-error propagation, synthetic plotting, and safe CLI help. |
 
 ## Running Tests
+
+### Import Compatibility
+
+After activating the project Conda environment:
+
+```bash
+python -m pytest -q -rs OGS/test/test_package_imports.py
+```
+
+The suite starts isolated Python subprocesses without inherited `PYTHONPATH`
+or pytest's source-path injection. It checks `OGS.src.*`, deployed `src.*`,
+and top-level imports, plus the public API in
+[`OGS/__init__.py`](../__init__.py). It uses synthetic histogram data and
+temporary plot outputs; CLI checks request help only. No real catalog,
+download, model training, MPI initialization, or cluster submission is run.
+Scientific dependencies must be present for modules under test. If `dask_mpi`
+is absent, MPI module-import checks report explicit skips, while the lazy API
+test verifies that requesting its class raises the dependency error.
 
 ### Self-Contained Unit Tests (No External Fixtures Required):
 These tests use synthetic in-memory data, mocks, and constant definitions:

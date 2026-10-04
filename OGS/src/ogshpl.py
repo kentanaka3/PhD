@@ -6,7 +6,8 @@ OGS HPL File Parser - Hypo71 Event and Pick Extractor
 OVERVIEW:
 This module parses OGS .hpl format files produced by legacy Hypo71 workflows.
 An HPL file stores event summary rows together with station-level P and
-optional S picks, plus optional analyst notes and locality descriptions.
+optional S picks, plus optional analyst notes and locality lines. Locality
+lines are recognized and ignored; notes update the last retained event.
 
 FILE FORMAT DESCRIPTION:
   The .hpl format is organized as fixed-width text blocks:
@@ -17,16 +18,17 @@ FILE FORMAT DESCRIPTION:
 KEY FEATURES:
   - Regex-based extraction of event, station, location, and notes lines
   - Separate DataFrame construction for picks and event metadata
-  - Date range filtering while streaming through the file
-  - Preservation of Hypo71 quality metrics and analyst annotations
+  - Date range filtering after reading the file into memory
+  - Selected Hypo71 quality metrics and the last note per retained event
   - Parquet output via the shared OGSDataFile logging pipeline
 
 USAGE:
   Command line:
-    python ogshpl.py -f input.hpl -D 240320 240620 -v
+    python -m OGS.src.ogshpl -f input.hpl -D 20240320 20240620 -v
 
   Programmatic:
-    from ogshpl import DataFileHPL
+    from pathlib import Path
+    from OGS.src.ogshpl import DataFileHPL
     parser = DataFileHPL(Path("input.hpl"), start_date, end_date)
     parser.read()
     parser.log()
@@ -62,34 +64,11 @@ AUTHORS:
 # Standard library: regular expressions for pattern matching
 import re
 
-# Pandas: tabular data manipulation
-import pandas as pd
-
-# Standard library: filesystem path handling
-from pathlib import Path
-
-# ObsPy: seismological time conversions
-from obspy import UTCDateTime
-
 # Standard library: date/time objects and time deltas
 from datetime import datetime, timedelta as td
 
-# Local module: OGS-specific constants and formatting strings
-import ogsconstants as OGS_C
-
-# Local module: OGS-specific argument parsing helpers
-import ogsutils as OGS_U
-
-# Local module: base parser and logging pipeline
-from ogsdatafile import OGSDataFile
-
-# -----------------------------------------------------------------------------
-# CONSTANTS
-# -----------------------------------------------------------------------------
-
-# Base path for data files (two levels up from this script's location)
-DATA_PATH = Path(__file__).parent.parent.parent
-
+from . import ogsconstants as OGS_C, ogsutils as OGS_U
+from .ogsdatafile import OGSDataFile
 
 # =============================================================================
 # DataFileHPL Class - HPL Format Parser
@@ -100,8 +79,9 @@ class DataFileHPL(OGSDataFile):
   Parser for OGS .hpl format event summaries and phase picks.
 
   Extends OGSDataFile to parse legacy Hypo71 fixed-width output. HPL files
-  contain event summary records followed by a configurable number of station
-  records, with optional locality and notes lines after each event block.
+  contain event summary records followed by a summary-declared number of
+  station records. Locality lines are ignored and note lines replace the
+  last retained event's notes. Not every captured summary field is exported.
 
   Attributes:
     RECORD_EXTRACTOR_LIST: Regex patterns for station phase-pick records
@@ -110,82 +90,84 @@ class DataFileHPL(OGSDataFile):
     NOTES_EXTRACTOR_LIST: Regex pattern for analyst note lines
   """
 
+  EXTENSION: str = OGS_C.HPL_EXT
+
   # -------------------------------------------------------------------------
   # RECORD EXTRACTOR: station-level phase pick lines
   # -------------------------------------------------------------------------
   # Many fixed-width columns are still not mapped to domain names, so the
   # unknown fields remain intentionally positional until the format is decoded.
   RECORD_EXTRACTOR_LIST = [
-      # Event index: 6-digit sequential event number within the year
+      # Event index: six whitespace/digit characters, normalized with year
       fr"^(?P<{OGS_C.IDX_EVENTS_STR}>[\d\s]{{6}})\s",
       # Station
       fr"(?P<{OGS_C.STATION_STR}>[A-Z0-9\s]{{4}})\s",
-      # Unknown fields: 5-digit
+      # Unknown field: five whitespace/digit/period characters
       fr"([\d\s\.]{{5}})\s",
-      # Unknown fields: 3-digit
+      # Unknown field: three whitespace/digit characters
       fr"([\d\s]{{3}})\s",
-      # Unknown fields: 3-digit
+      # Unknown field: three whitespace/digit characters
       fr"([\d\s]{{3}})\s",
       # P-wave onset quality: e=emergent, i=impulsive, ?=uncertain, space=unknown
       fr"(?P<{OGS_C.P_ONSET_STR}>[ei?\s]){OGS_C.PWAVE}",
       # P-wave polarity: c/C/+=compression(up), d/D/-=dilatation(down), space=unknown
       fr"(?P<{OGS_C.P_POLARITY_STR}>[cC\+dD\-\s])",
-      # P-wave weight: 0=best, 4=worst quality, space=unweighted
+      # P-wave weight: one required digit from 0 through 4
       fr"(?P<{OGS_C.P_WEIGHT_STR}>[0-4])\s",
-      # P-wave arrival time: 4-digit HHMM
+      # P-wave clock base: four whitespace/digit characters (HHMM)
       fr"(?P<{OGS_C.P_TIME_STR}>[\s\d]{{4}})\s",
-      # P-wave seconds: 5-digit ss.ss
+      # P-wave seconds: five whitespace/digit/period characters
       fr"(?P<{OGS_C.SECONDS_STR}>[\s\d\.]{{5}})",
-      # Unknown fields: 6-digit
+      # Unknown field: six whitespace/digit/minus/period characters
       fr"(?P<A>[\s\d\-\.]{{6}})\s",
-      # Unknown fields: 5-digit
+      # Unknown field: five whitespace/digit/minus/period characters
       fr"(?P<B>[\s\d\-\.]{{5}})\s",
-      # Unknown fields: 5-digit
+      # Unknown field: five whitespace/digit/minus/period characters
       fr"(?P<C>[\s\d\-\.]{{5}})",
-      # Unknown fields: 6-digit
+      # Unknown field: six whitespace/digit/minus/period characters
       fr"(?P<D>[\s\d\-\.]{{6}})\s",
-      # Unknown fields: 5-digit
+      # Unknown field: five whitespace/digit/minus/period characters
       fr"(?P<E>[\s\d\-\.]{{5}})\s",
-      # Unknown fields: 3-digit
+      # Unknown field: three whitespace/digit/minus/period characters
       fr"(?P<F>[\s\d\-\.]{{3}})\s",
-      # Unknown fields: 2-digit
+      # Unknown field: two whitespace/digit/minus/period characters
       fr"(?P<G>[\s\d\-\.]{{2}})\s",
-      # Unknown fields: 5-digit
+      # Unknown field: five whitespace/digit/minus/period characters
       fr"(?P<H>[\s\d\-\.]{{5}})\s",
-      # Unknown fields: 6-digit
+      # Unknown field: one whitespace/digit character, then six whitespace chars
       fr"(?P<I>[\s\d])\s{{6}}",
       # Geographical zone code
       fr"(?P<{OGS_C.GEO_ZONE_STR}>" + (
           fr"[{OGS_C.EMPTY_STR.join(OGS_C.OGS_GEO_ZONES.keys())}\s]"
       ) + fr")",
-      # Event type code: Single character classifying the seismic event (L=local, R=regional, T=teleseismic, Q=quarry blast, etc.)
+      # Event type: B/E/F/L/R/U from OGS_EVENT_TYPES, or whitespace
       fr"(?P<{OGS_C.EVENT_TYPE_STR}>" + (
           fr"[{OGS_C.EMPTY_STR.join(OGS_C.OGS_EVENT_TYPES.keys())}\s]"
       ) + fr")",
-      # Event localization flag: D=distant event, space=local/regional
+      # Event localization flag: D or whitespace
       fr"(?P<{OGS_C.EVENT_LOCALIZATION_STR}>[D\s])",
-      # Unknown fields: 4-digit
+      # Unknown field: four whitespace/digit/asterisk characters
       fr"(?P<J>[\s\d\*]{{4}})",
-      # Unknown fields: 5-digit
+      # Unknown field: five whitespace/digit/minus/period/asterisk characters
       fr"(?P<K>[\s\d\-\.\*]{{5}})\s",
       # Optional S-wave pick block (may be 33 spaces if no S pick)
       [
           # S-wave onset quality: e=emergent, i=impulsive, ?=uncertain, space=unknown
           fr"(((?P<{OGS_C.S_ONSET_STR}>[ei\s\?]){OGS_C.SWAVE}\s",
-          # S-wave weight: 0=best, 5=worst quality, space=unweighted
+          # S-wave weight: digit 0-5 or whitespace (blank defaults to zero)
           fr"(?P<{OGS_C.S_WEIGHT_STR}>[0-5\s])\s",
-          # S-wave arrival time: 4-digit HHMM
+          # S-wave seconds offset from the P-wave HHMM base: five characters
           fr"(?P<{OGS_C.S_TIME_STR}>[\s\d\.]{{5}})",
-          # Unknown fields: 6-digit
+          # Unknown field: six whitespace/digit/minus/period characters
           fr"(?P<P>[\s\d\-\.]{{6}})",
-          # Unknown fields: 6-digit
+          # Unknown field: six whitespace/digit/minus/period characters
           fr"(?P<Q>[\s\d\-\.]{{6}})\s{{2}}",
-          # Unknown fields: 4-digit
+          # Unknown field: four whitespace/digit/period characters
           fr"(?P<R>[\s\d\.]{{4}})\s{{5}})|\s{{33}})\s"
       ],
-      # Unknown fields: 4-digit
+      # Unknown field: four uppercase-letter/digit/whitespace characters
       fr"(?P<S>[A-Z0-9\s]{{4}})\s{{4}}"
-      # Unknown fields: 2-digit
+      # Unknown suffix: one or more whitespace/g/n characters
       fr"[\sgn][\sgn]*",
       # End of line anchor to ensure full-line match
       fr"$"
@@ -265,10 +247,6 @@ class DataFileHPL(OGSDataFile):
     return event_time + self._parse_seconds(result[OGS_C.SECONDS_STR])
 
   @staticmethod
-  def _is_blank_line(line: str) -> bool:
-    return line.strip() == OGS_C.EMPTY_STR
-
-  @staticmethod
   def _is_supported_event_record(result: dict) -> bool:
     """Keep distant, blank-type, and local-earthquake records."""
     if result[OGS_C.EVENT_LOCALIZATION_STR] == "D":
@@ -280,46 +258,9 @@ class DataFileHPL(OGSDataFile):
 
     return OGS_C.OGS_EVENT_TYPES.get(event_type) == OGS_C.EVENT_LOCAL_EQ_STR
 
-  def _build_event_row(
-      self, result: dict, event_index: int | None = None
-  ) -> list:
-    event_time = result[OGS_C.TIME_STR]
-    if event_index is None:
-      event_index = self.normalize_index(
-          result[OGS_C.IDX_EVENTS_STR], event_time.year
-      )
-    return [
-        event_index,                            # 0: idx
-        event_time,                             # 1: time
-        result[OGS_C.LATITUDE_STR],             # 2: latitude
-        result[OGS_C.LONGITUDE_STR],            # 3: longitude
-        result[OGS_C.DEPTH_STR],                # 4: depth
-        result[OGS_C.GAP_STR],                  # 5: azimuthal_gap
-        result[OGS_C.ERZ_STR],                  # 6: max_vertical_uncertainty
-        result[OGS_C.ERH_STR],                  # 7: max_horizontal_uncertainty
-        None,                                   # 8: max_time_uncertainty
-        event_time.strftime(OGS_C.DATE_FMT),    # 9: group
-        result[OGS_C.NO_STR],                   # 10: number_picks
-        0,                                      # 11: number_p_picks
-        0,                                      # 12: number_s_picks
-        0,                                      # 13: number_p_and_s_picks
-        result[OGS_C.MAGNITUDE_D_STR],          # 14: MD
-        result[OGS_C.MAGNITUDE_L_STR],          # 15: ML
-        None,                                   # 16: ML_median
-        result[OGS_C.ML_UNC_STR],               # 17: ML_unc
-        result[OGS_C.ML_STATIONS_STR],          # 18: ML_stations
-        None,                                   # 19: DMIN
-        result[OGS_C.RMS_STR],                  # 20: RMS
-        None,                                   # 21: QM
-        None,                                   # 22: LOC_NAME
-        None,                                   # 23: E_TYPE
-        None,                                   # 24: NOTES
-        result[OGS_C.MD_UNC_STR],               # 25: MD_unc
-        result[OGS_C.MD_STATIONS_STR],          # 26: MD_stations
-        None,                                   # 27: MD_median
-    ]
-
-  def _apply_metadata_line(self, line: str, events_data: list) -> bool:
+  def _apply_metadata_line(
+      self, line: str, events_data: list[dict[str, object]],
+  ) -> bool:
     if self.LOCATION_EXTRACTOR.match(line):
       return True
 
@@ -328,7 +269,7 @@ class DataFileHPL(OGSDataFile):
       return False
 
     if events_data:
-      events_data[-1][self._EVENT_COLUMNS.index(OGS_C.NOTES_STR)] = (
+      events_data[-1][OGS_C.NOTES_STR] = (
           match.groupdict()[OGS_C.NOTES_STR].rstrip(OGS_C.SPACE_STR)
       )
     return True
@@ -388,27 +329,32 @@ class DataFileHPL(OGSDataFile):
     Read and parse an .hpl format file into event and pick tables.
 
     The parser walks through the file sequentially, alternating between event
-    summary lines and the following station records declared by the summary.
+    summary lines and the following station records declared by each retained
+    summary. Recognized unlocated events skip their declared following lines
+    (falling back to one line). Event summaries use origin-time filtering;
+    station records use their HHMM base before adding P/S seconds.
     Parsed picks are stored in self.PICKS / self.picks, while event-level
     metadata is stored in self.EVENTS / self.events.
 
+    Returns:
+      None: Results are stored on the instance.
+
     Raises:
       FileNotFoundError: If the input file does not exist.
-      ValueError: If the input file does not use the .hpl extension.
+      ValueError: If the suffix is not .hpl or a field conversion fails.
+      OSError: If opening or reading the file fails.
+      Other processing failures propagate; regex-mismatched station lines
+      are logged and skipped.
     """
     # -----------------------------------------------------------------------
     # INPUT VALIDATION
     # -----------------------------------------------------------------------
-    if not self.input.exists():
-      raise FileNotFoundError(f"File {self.input} does not exist")
-
-    if self.input.suffix != OGS_C.HPL_EXT:
-      raise ValueError(f"File extension must be {OGS_C.HPL_EXT}")
+    self.validate_input()
 
     # -----------------------------------------------------------------------
     # STATE INITIALIZATION
     # -----------------------------------------------------------------------
-    events_data = list()
+    events_data: list[dict[str, object]] = []
     picks_data = list()
     record_lines_remaining = 0
     event_time = datetime.min
@@ -453,18 +399,16 @@ class DataFileHPL(OGSDataFile):
         result[OGS_C.P_WEIGHT_STR] = self._parse_weight(
             result[OGS_C.P_WEIGHT_STR]
         )
-
-        event_index = self.normalize_index(
+        result[OGS_C.IDX_EVENTS_STR] = self.normalize_index(
             result[OGS_C.IDX_EVENTS_STR], event_time.year
         )
         picks_data.append(self._build_pick_row(
-            event_index,
+            result[OGS_C.IDX_EVENTS_STR],
             result[OGS_C.P_TIME_STR] + result[OGS_C.SECONDS_STR],
             result[OGS_C.STATION_STR],
             OGS_C.PWAVE,
             result[OGS_C.P_WEIGHT_STR],
         ))
-
         if result[OGS_C.S_TIME_STR]:
           result[OGS_C.S_TIME_STR] = self._parse_seconds(
               result[OGS_C.S_TIME_STR]
@@ -473,13 +417,12 @@ class DataFileHPL(OGSDataFile):
               result[OGS_C.S_WEIGHT_STR]
           )
           picks_data.append(self._build_pick_row(
-              event_index,
+              result[OGS_C.IDX_EVENTS_STR],
               result[OGS_C.P_TIME_STR] + result[OGS_C.S_TIME_STR],
               result[OGS_C.STATION_STR],
               OGS_C.SWAVE,
               result[OGS_C.S_WEIGHT_STR],
           ))
-
         continue
 
       match = self.EVENT_EXTRACTOR.match(line)
@@ -498,14 +441,15 @@ class DataFileHPL(OGSDataFile):
           continue
 
         result[OGS_C.TIME_STR] = event_time
-        result[OGS_C.DEPTH_STR] = self._parse_float(result[OGS_C.DEPTH_STR])
+        result[OGS_C.IDX_EVENTS_STR] = self.normalize_index(
+            result[OGS_C.IDX_EVENTS_STR], event_time.year
+        )
         result[OGS_C.GAP_STR] = self._parse_zero_padded_int(
             result[OGS_C.GAP_STR]
         )
         result[OGS_C.NO_STR] = self._parse_zero_padded_int(
             result[OGS_C.NO_STR]
         )
-        result[OGS_C.RMS_STR] = self._parse_float(result[OGS_C.RMS_STR])
         result[OGS_C.ML_STATIONS_STR] = self._parse_zero_padded_int(
             result[OGS_C.ML_STATIONS_STR]
         )
@@ -527,18 +471,11 @@ class DataFileHPL(OGSDataFile):
             if result[OGS_C.MAGNITUDE_L_STR] is not None
             else None
         )
-
-        event_index = self.normalize_index(
-            result[OGS_C.IDX_EVENTS_STR], event_time.year
-        )
         record_lines_remaining = int(result[f"{OGS_C.NO_STR}_picks"])
-        events_data.append(self._build_event_row(result, event_index))
+        events_data.append(result)
         continue
 
       if self._apply_metadata_line(line, events_data):
-        continue
-
-      if self._is_blank_line(line):
         continue
 
     self._build_dataframes(events_data, picks_data)
@@ -558,7 +495,7 @@ def main(args):
     3. Logs output through the shared OGS pipeline
 
   Args:
-    args: Parsed command-line arguments from parse_arguments()
+    args: Parsed command-line arguments from ogsutils.parse_hpl_args()
   """
   for file in args.file:
     datafile = DataFileHPL(file, args.dates[0], args.dates[1],

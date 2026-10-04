@@ -5,24 +5,28 @@ OGS Local Magnitude Module - Calibrated M_L for the OGS Network
 
 OVERVIEW:
 Provides :class:`OGSLocalMagnitude`, an OGS-specific subclass of
-``ml_catalog.modules.LocalMagnitude`` that implements the local magnitude
-scale calibrated for the OGS / Swiss-Alpine seismicity. The class:
+``ml_catalog.modules.LocalMagnitude`` using a configurable attenuation formula
+and station corrections. Calibration provenance is not established by this
+implementation. The class:
 
-1. Loads per-station amplitude corrections from a ``pandas`` table.
+1. Accepts per-station amplitude corrections in a ``pandas`` table.
 2. Optionally restricts station contributions to a network whitelist.
 3. Optionally ignores stations known to produce unreliable amplitudes.
 4. Computes the reference log-amplitude attenuation curve
    ``log10(A_0) = c0 + c1*log10(r) + c2*log10(r*c3 + c4) + c5_station``
    where ``r`` is the hypocentral distance in kilometers.
-5. Simulates a Wood-Anderson response on horizontal components, screens picks
-   by SNR, and aggregates station magnitudes into the event-level M_L using
-   median-absolute-deviation outlier rejection (5x MAD cutoff).
+5. Uses S-pick component amplitudes supplied by an upstream extractor when
+   the corresponding P-pick SNR is at least 1.3, taking their geometric mean.
+6. Aggregates station magnitudes into mean and median event M_L values,
+   rejecting deviations greater than 5x MAD only with at least three non-NaN
+   magnitudes and positive MAD. ML_unc is the population standard deviation
+   divided by sqrt(n_stations - 1), or NaN for at most one station.
 
-CALIBRATION CONSTANTS:
+DEFAULT ATTENUATION CONSTANTS:
     c0 = -18.0471, c1 = 1.105, c2 = 147.111, c3 = 4.015e-5, c4 = 1.33885
 
 USAGE:
-    from ogsmagnitude import OGSLocalMagnitude
+    from OGS.src.ogsmagnitude import OGSLocalMagnitude
 
     ml = OGSLocalMagnitude(
         station_corrections=pd.read_csv("station_corrections.csv"),
@@ -59,18 +63,18 @@ class OGSLocalMagnitude(LocalMagnitude):
   """
   OGS-specific implementation of the ML Catalog LocalMagnitude.
 
-  OGS has performed extensive calibration of the local magnitude scale for
-  Switzerland and surrounding regions. This implementation includes station
-  corrections and the option to ignore specific stations that are known to
-  produce unreliable amplitude measurements.
+  Applies configurable attenuation coefficients, station corrections, optional
+  station/network exclusions, and event-level magnitude aggregation.
   """
 
-  def __init__(self,
-               station_corrections: pd.DataFrame,
-               ignore_stations: pd.DataFrame = pd.DataFrame(),
-               networkfocus: list[str] = [],
-               components: str = "NE",
-               attenuation_params: dict | None = None) -> None:
+  def __init__(
+      self,
+      station_corrections: pd.DataFrame,
+      ignore_stations: pd.DataFrame = pd.DataFrame(),
+      networkfocus: list[str] = [],
+      components: str = "NE",
+      attenuation_params: dict | None = None
+  ) -> None:
     self.components = components
     self.station_corrections = station_corrections
     self.ignore_stations = ignore_stations
@@ -130,8 +134,10 @@ class OGSLocalMagnitude(LocalMagnitude):
   def _calc_station_amplitude(self, assignments: pd.DataFrame) -> None:
     """
     Calculate the amplitude for each station and event_idx in the assignments
-    DataFrame. The amplitude is calculated as the geometric mean of the
-    amplitudes of the P and S picks, if available.
+    DataFrame in place. P and S rows are inner-joined by event and station.
+    Each S-component amplitude is retained only when its P-component SNR is
+    at least 1.3; the station amplitude is the geometric mean of non-NaN
+    component amplitudes, not a mean over P and S amplitudes.
     """
     SNR_THRESHOLD = 1.3
     # Remove amplitude column to avoid confusion
@@ -139,13 +145,9 @@ class OGSLocalMagnitude(LocalMagnitude):
     # Step 1
     mask_ = assignments["phase"] == self.phase
     # We merge all P picks with S picks based on event_idx and station.
-    # This should return (merged) a single row for each event detected from a
-    # station containing the SNR of P and the maximum amplitude registered of S
-    # pick if found, once again in the same row.
-    # NOTE: This assumes that there will be always 1 P pick and optionally 1 S
-    #       pick for each event_idx and station.
-    # NOTE: If there is no S pick, the amplitude will be NaN for that station
-    #       for that event_idx.
+    # One row per event/station requires unique P and S picks; duplicates
+    # produce multiple matches. Without both phases, no joined amplitude
+    # exists.
     merged = pd.merge(
         assignments[mask_], assignments[~mask_], how="inner",
         on=["event_idx", "station"], suffixes=[
@@ -202,8 +204,8 @@ class OGSLocalMagnitude(LocalMagnitude):
             ~event_df["station"].isin(self.ignore_stations["station"])
         ]
 
-      # Remove stations with absolute deviation NO greater than 5 times the
-      # median absolute deviation
+      # With at least three valid magnitudes and positive MAD, discard
+      # deviations greater than five times the median absolute deviation.
       station_magnitudes = event_df["station_ML"].values
       valid = ~np.isnan(station_magnitudes)
       if np.sum(valid) >= 3:

@@ -21,7 +21,7 @@
 
 | Type | Definition | Typical Use Case | Distinguishing Feature |
 |:-----|:-----------|:-----------------|:-----------------------|
-| **Swim Lane / Cross-Functional Flowchart** | A flowchart divided into parallel horizontal or vertical lanes, each representing a department, role, or system. Process steps are placed in the lane of the responsible party. |Cross-departmental process mapping, accountability analysis, handoff identification. | Adds a **responsibility dimension**; visually answers "who does what." |
+| **Swim Lane / Cross-Functional Flowchart** | A flowchart divided into horizontal or vertical lanes, each representing a department, role, or system. Steps are placed in the responsible party's lane. | Cross-departmental process mapping, accountability analysis, handoff identification. | Adds a **responsibility dimension** |
 | **Workflow Flowchart** | A general-purpose diagram mapping the sequence of tasks required to complete a business process from start to finish. | SOPs, employee training, operational documentation. | Emphasizes **task sequencing and completion criteria** rather than data or control logic. |
 | **Process Flowchart** | A step-by-step map of all steps and decisions ina process, often used in quality management (Six Sigma, Lean). | Process improvement, bottleneck identification, quality control. | Typically includes **measurement points, decision gates, and rework loops**. |
 | **Event-Driven Process Chain (EPC)** | A modeling language showing the logical and chronological relationship between events (states) and functions(activities), connected by AND/OR/XOR operators. | ERP implementations (SAP), enterprise process analysis, business process reengineering. | Uses **explicit logical connectors** (∧, ∨, ⊕) between alternating events and functions. |
@@ -97,7 +97,9 @@
 
 ## 3. Canonical Mathematical Pseudocode Symbols & Notation
 
-### 3.1 Assignment, Binding & Definitions
+### 3.A Discrete & Operational Semantics
+
+#### 3.A.1 Assignment, Binding & Definitions
 
 | Symbol | Meaning | Example |
 |:-------|:--------|:--------|
@@ -110,7 +112,109 @@
 
 > **Convention**: Use `←` to distinguish assignment from equality comparison (`=`).
 
-### 3.2 Comparison, Ordering & Distribution
+#### 3.A.2 Logic, Boolean Algebra, Proof Theory & Type Judgments
+
+| Symbol | Meaning | Example |
+|:-------|:--------|:--------|
+| `⊢` | Turnstile: Syntactic entailment / Type judgment | `Γ ⊢ e : τ` or `pre ⊢ state_valid` |
+| `⊨` | Semantic entailment / Model satisfaction | `ℳ ⊨ φ` |
+| `⊬`, `⊭` | Negated syntactic / semantic entailment | `Γ ⊬ contradiction` |
+| `∧` (`and`) | Logical conjunction | `valid ∧ ¬expired ⇒ …` |
+| `∨` (`or`) | Logical disjunction | `failed ∨ timeout ⇒ …` |
+| `¬` (`not`) | Logical negation | `¬exists(path) ⇒ …` |
+| `⊻` (`xor`) | Exclusive `∨` | `a ⊻ b ≝ (a ∨ b) ∧ ¬(a ∧ b)` |
+| `⇒` (`implies`) | Logical implication | `valid ⇒ score > 0` |
+| `⇔` (`iff`) | Logical equivalence | `x ∈ (A \ B) ⇔ (x ∈ A ∧ x ∉ B)` |
+| `⊤` (`true`) | Boolean True / Top | `found ← ⊤` |
+| `⊥` (`false`) | Boolean False / Bottom | `valid ← ⊥` |
+| `None` / `Nil` | Absence of value / Optional nullary | `cached ← None` |
+| `Result(τ, ε)` | Result sum type constructor | `Ok(v : τ) \| Err(e : ε)` |
+| `Option(τ)` | Option sum type constructor | `Some(v : τ) \| None` |
+
+#### 3.A.3 Operational Semantics, State Transitions & Concurrency
+
+| Symbol | Meaning | Example |
+|:-------|:--------|:--------|
+| `⇓` | Big-step evaluation / Natural semantics | `⟨e, σ⟩ ⇓ ⟨v, σ'⟩` |
+| `⇑` | Divergence / Non-termination | `⟨e, σ⟩ ⇑` |
+| `⟶` | Small-step reduction / State transition | `⟨e, σ⟩ ⟶ ⟨e', σ'⟩ ∨ σ ⟶ σ'` |
+| `↠` | Multi-step reduction (reflexive-transitive) | `e ↠ v` |
+| `⟵` | Return value / Result assignment | `⟵ manifest` |
+| `⤅` | Yield item (generator) | `⤅ next_sample` |
+| `⟦·⟧` | Denotational semantics brackets | `⟦program⟧ : State → State` |
+| `⫽` | Fallback / Coalescing | `val ← cached ⫽ compute()` |
+| `⑂` | Fork / Spawn asynchronous task | `⑂ worker(task)` |
+| `⑃` | Join / Synchronize concurrent tasks | `⑃ {t₁, t₂} ⟶ ⟨r₁, r₂⟩` |
+| `σ[x ↦ v]` | Store / Environment update | `σ' ← σ[x ↦ v]` |
+| `G → A` / `□` | Dijkstra guarded command / nondeterministic guarded choice | `G₁ → A₁ □ G₂ → A₂` |
+| `Δσ` | State mutation increment / delta | `σ' ← σ ⊕ Δσ` |
+
+#### 3.A.4 Set Theory, Lattice Theory & Aggregations
+
+| Symbol | Meaning | Example |
+|:-------|:--------|:--------|
+| `∈` | Element of (membership) | `if x ∈ S ⇒ …` |
+| `∉` | Not element of | `if s ∉ R ⇒ …` |
+| `⊂` | Proper subset | `A ⊂ Ω` |
+| `⊆` | Subset (inclusive) | `A ⊆ 𝒰` |
+| `∪` | Union | `C ← A ∪ B` |
+| `∩` | Intersection | `overlap ← A ∩ B` |
+| `\` | Set difference / relative complement | `unprocessed ← all \ processed` |
+| `▵` | Symmetric difference | `A ▵ B ≝ (A \ B) ∪ (B \ A)` |
+| `∅` | Empty set | `if candidates = ∅ ⇒ ⟵ None` |
+| `\|S\|` | Set cardinality / collection length | `n ← \|events\|` |
+| `𝒫(S)` | Power set | `subsets ← 𝒫(features)` |
+| `⊔` | Lattice join / Least upper bound | `lub ← x ⊔ y` |
+| `⊓` | Lattice meet / Greatest lower bound | `glb ← x ⊓ y` |
+| `Σ` | Summation over bounded index or set | `total ← Σ_{i=1}^{n} a[i]` |
+| `Π` | Product over bounded index or set | `prob ← Π_{i=1}^{k} p_i` |
+| `min` | Minimum value | `best ← min_{x ∈ S} f(x)` |
+| `max` | Maximum value | `peak ← max(a, b)` |
+| `argmin` | Argument minimizing the objective | `opt_θ ← argmin_{θ} Loss(θ)` |
+| `argmax` | Argument maximizing the objective | `best_c ← argmax_{c} P(c \| x)` |
+| `{x ∈ S : P(x)}` | Set comprehension / filtering | `valid ← {x ∈ S : score(x) > θ}` |
+
+#### 3.A.5 Quantifiers & Selection
+
+| Symbol | Meaning | Example |
+|:-------|:--------|:--------|
+| `∀` | Universal quantifier ("for all" / loop) | `∀ x ∈ S : x > 0` |
+| `∃` | Existential quantifier | `if ∃ e ∈ E : e.id = target ⇒ …` |
+| `∄` | Negative existential | `if ∄ f ∈ 𝒟 : f.active = ⊤ ⇒ …` |
+| `∃!` | Unique existential | `if ∃! master ∈ nodes : master.active = ⊤ ⇒ …` |
+| `:` | Predicate separator | `∀ s ∈ S : s.active = ⊤` |
+
+#### 3.A.6 Sequences, Pipelines, Intervals & Type Signatures
+
+| Symbol | Meaning | Example |
+|:-------|:--------|:--------|
+| `⟨x₁, x₂, …, xₙ⟩` | Ordered tuple or vector | `p ← ⟨t₀, x₀, y₀, z₀⟩` |
+| `A[i]` | Array indexing | `first ← waveforms[1]` |
+| `A[i..j]` | Array slice / subsequence | `window ← trace[start..end]` |
+| `s₁ ⧺ s₂` | String / sequence concatenation | `greeting ← "Hello" ⧺ ", " ⧺ "World"` |
+| `stream ▷ sink` | Pipelined sequential dataflow | `stream ▷ filter ▷ picker ▷ catalog` |
+| `[a, b]` | Closed numerical interval | `freq ∈ [0.5, 20.0]` |
+| `(a, b)` | Open numerical interval | `residual ∈ (−1.0, 1.0)` |
+| `[a, b)` | Half-open interval | `bin_range ← [t_start, t_end)` |
+| `f : X → Y` | Function signature | `locate : Catalog × Model → Hypo` |
+| `∞` | Infinity | `min_cost ← ∞` |
+| `NaN` | Not-a-Number (floating-point error) | `if value = NaN ⇒ …` |
+| `ε` | Infinitesimal tolerance / machine epsilon | `while \|x_{k+1} − x_k\| > ε ⇒ ⟳` |
+
+#### 3.A.7 Asymptotic Complexity Notation
+
+| Symbol | Meaning | Usage |
+|:-------|:--------|:------|
+| `O(g(n))` | Upper bound (Big-O) | `Time: O(n log n), Space: O(n)` |
+| `Ω(g(n))` | Lower bound (Big-Omega) | `Comparisons: Ω(n log n)` |
+| `Θ(g(n))` | Tight asymptotic bound (Big-Theta) | `Lookup: Θ(1) average case` |
+| `o(g(n))` | Strict upper bound (Little-o) | `error = o(1) as n → ∞` |
+
+---
+
+### 3.B Continuous Mathematical Physics, Calculus & Tensor Operators
+
+#### 3.B.1 Comparison, Ordering & Distribution
 
 | Symbol | Meaning | Example |
 |:-------|:--------|:--------|
@@ -125,76 +229,47 @@
 | `∝` | Proportional to | `P(θ \| D) ∝ P(D \| θ) × P(θ)` |
 | `≅` | Isomorphic to | `G₁ ≅ G₂` |
 | `⊑`, `⊒` | Information ordering / Subsumption | `s₁ ⊑ s₂` |
-| `⊥` | Orthogonal / Independent | `X ⊥ Y` |
-| `∥` | Parallel | `v₁ ∥ v₂` |
+| `⟂` | Geometric orthogonality (disambiguated from lattice bottom `⊥`) | `u ⟂ v` |
+| `⫫` | Statistical independence (disambiguated from orthogonality `⟂`) | `X ⫫ Y` |
+| `∥` | Parallel execution / Geometric parallel | `v₁ ∥ v₂` or `worker₁ ∥ worker₂` |
 
-### 3.3 Proof Theory, Logic & Type Judgments
-
-| Symbol | Meaning | Example |
-|:-------|:--------|:--------|
-| `⊢` | Turnstile: Syntactic entailment / Type judgment | `Γ ⊢ e : τ` or `pre ⊢ state_valid` |
-| `⊨` | Semantic entailment / Model satisfaction | `ℳ ⊨ φ` |
-| `⊬`, `⊭` | Negated syntactic / semantic entailment | `Γ ⊬ contradiction` |
-| `∧` (`and`) | Logical conjunction | `valid ∧ ¬expired ⇒ …` |
-| `∨` (`or`) | Logical disjunction | `failed ∨ timeout ⇒ …` |
-| `¬` (`not`) | Logical negation | `¬exists(path) ⇒ …` |
-| `⊕` (`xor`) | Exclusive `or` | `a ⊕ b ≝ (a ∨ b) ∧ ¬(a ∧ b)` |
-| `⇒` (`implies`) | Logical implication | `valid ⇒ score > 0` |
-| `⇔` (`iff`) | Logical equivalence | `converged ⇔ residual < ε` |
-| `⊤` (`true`) | Boolean True / Top | `found ← ⊤` |
-| `⊥` (`false`) | Boolean False / Bottom / Error / Null | `if err ≠ ⊥ ⇒ fail ⊥` |
-
-### 3.4 Operational Semantics & Transitions
+#### 3.B.2 Calculus, Analysis & Differential Operators
 
 | Symbol | Meaning | Example |
 |:-------|:--------|:--------|
-| `⇓` | Big-step evaluation / Natural semantics | `⟨e, σ⟩ ⇓ ⟨v, σ'⟩` |
-| `⇑` | Divergence / Non-termination | `⟨e, σ⟩ ⇑` |
-| `⟶` | Small-step reduction / Transition | `⟨e, σ⟩ ⟶ ⟨e', σ'⟩` |
-| `↠` | Multi-step reduction (reflexive-transitive) | `e ↠ v` |
-| `⟵` | Return value / Result assignment | `⟵ manifest` |
-| `⤅` | Yield item (generator) | `⤅ next_sample` |
-| `⟦·⟧` | Denotational semantics brackets | `⟦program⟧ : State → State` |
-| `⫽` | Fallback / Coalescing | `val ← cached ⫽ compute()` |
-| `⑂` | Fork / Spawn asynchronous task | `⑂ worker(task)` |
-| `⑃` | Join / Synchronize concurrent tasks | `⑃` |
-
-### 3.5 Calculus, Analysis & Differential Operators
-
-| Symbol | Meaning | Example |
-|:-------|:--------|:--------|
-| `∫` (`integral`) | Definite / Indefinite integral | `F ∈ AC([a, b], ℝ) ⟺ (∃ F' m-a.e.) ∧ (F' ∈ L¹([a, b], m)) ∧ (∀x ∈ [a, b], F(x) = F(a) + ∫_a^x F'(t) dt) ; a, b ∈ ℝ, a < b` |
-| `∬`, `∭` (`integral`) | Double / Triple surface or volume integral | `∭_{Ω} (∇ · 𝐅) d𝑉 = ∯_{∂Ω} (𝐅 · 𝐧) d𝑆 ; Ω ⊂ ℝ³, 𝐅 ∈ C¹(Ω, ℝ³), 𝐧 : ∂Ω → S² ≔ {v ∈ ℝ³ : ‖v‖ = 1} ∧ 𝐧(x) ⟂ T_x(∂Ω), d𝑉 ∈ ℳ(Ω), d𝑆 ∈ ℳ(∂Ω)` |
-| `∮` | Contour / Line integral | `∮_{∂Ω} 𝐅 · 𝐓 \mathrm{d}s = ∬_{Ω} (∇ × 𝐅) · 𝐧 d𝑆 ; Ω ⊂ U ⊆ ℝ³, 𝐅 ∈ C¹(U, ℝ³), 𝐧 : Ω → S² ≝ {v ∈ ℝ³ : ‖v‖ = 1} ∧ 𝐧(x) ⟂ T_x Ω, 𝐓 : ∂Ω → S² ∧ 𝐓(x) ∈ T_x(∂Ω) ∧ ‖𝐓‖ = 1, d𝑆 ∈ ℳ(∂Ω), d𝑆 ∈ ℳ(Ω)` |
-| `∯` | Surface integral over closed surface | `∯_{∂Ω} 𝐅 · 𝐧 d𝑆` |
+| `∇²` | Laplacian operator (disambiguated from symmetric difference `▵`) | `∇²f ≝ ∇· ∇f` |
 | `∂` (`partial`) | Partial derivative / Manifold boundary | `J_{ij} ← \frac{∂r_i}{∂m_j}` |
-| `∇` (`grad`) | Nabla / Gradient operator | `∇ : C^k(Ω, ℝ) → C^{k-1}(Ω, ℝⁿ), f ↦ ∑_{i=1}ⁿ (∂_i f) 𝐞_i ; Ω ⊆ ℝⁿ, n ∈ ℕ_{≥ 1}, k ∈ ℕ_{≥ 1} ∪ {∞}` |
-| `∇·` (`div`) | Divergence | `∇· : C^k(Ω, ℝⁿ) → C^{k-1}(Ω, ℝ), 𝐅 ↦ ∑_{i=1}ⁿ ∂_i F^i ; Ω ⊆ ℝⁿ, n ∈ ℕ_{≥ 1}, k ∈ ℕ_{≥ 1} ∪ {∞}` |
-| `∇×` (`curl`) | Curl / Rotor | `∇× : C^k(Ω, ℝⁿ) → C^{k-1}(Ω, 𝔰𝔬(n)), 𝐅 ↦ ½ (D𝐅 - (D𝐅)ᵀ) ≅ C^{k-1}(Ω, ℝ^{n(n-1)/2}) ; Ω ⊆ ℝⁿ, n ∈ ℕ_{≥ 1}, k ∈ ℕ_{≥ 1} ∪ {∞}` |
-| `Δ` | Laplacian operator (`∇²`) / Difference | `Δf ≝ ∇· ∇f` |
+| `∇` (`grad`) | Nabla / Gradient operator | `∇f ≝ \sum_{i=1}^n (\partial_i f) \mathbf{e}_i` |
+| `∇·` (`div`) | Divergence | `∇· \mathbf{F} ≝ \sum_{i=1}^n \partial_i F^i` |
+| `∇×` (`curl`) | Curl / Rotor | `∇× \mathbf{F} ≝ \text{curl}(\mathbf{F})` |
+| `∫` (`integral`) | Definite / Indefinite integral | `F(x) = F(a) + ∫_a^x F'(t) \mathrm{d}t` |
+| `∬`, `∭` | Double / Triple surface or volume integral | `∭_Ω (∇ · \mathbf{F}) \mathrm{d}V = ∯_{\partialΩ} (\mathbf{F} · \mathbf{n}) \mathrm{d}S` |
+| `∮`, `∯` | Contour / Closed surface integral | `∮_{\partialΩ} \mathbf{F} · \mathbf{T} \mathrm{d}s = ∬_Ω (∇ × \mathbf{F}) · \mathbf{n} \mathrm{d}S` |
 | `lim` | Limit | `\lim_{Δt \to 0} \frac{f(t+Δt) − f(t)}{Δt}` |
 | `\mathrm{d}` | Differential | `\mathrm{d}t, \, \mathrm{d}x` |
 | `\|x\|` | Absolute value | `delta ← \|x − x₀\|` |
-| `‖·‖` | Vector, matrix or operator norm | `‖r‖₂ = √{rᵀ r}` |
+| `‖·‖` | Vector, matrix or operator norm | `‖r‖₂ = \sqrt{rᵀ r}` |
 
-### 3.6 Algebraic, Tensor & Signal Operators
+#### 3.B.3 Algebraic, Tensor & Signal Operators
 
 | Symbol | Meaning | Example |
 |:-------|:--------|:--------|
-| `⋆` | Convolution / Kleene star / Dual | `y ← x ⋆ h` or `Σ^⋆` |
-| `⊛` | Circular convolution / Cross-correlation | `C_{xy} ← x ⊛ y` |
+| `*` | Signal convolution (disambiguated from Kleene closure `Σ^*`) | `y ← x * h` |
+| `Σ^*` | Kleene star closure | `words ∈ Σ^*` |
+| `V^*` | Dual vector space | `v^* ∈ V^*` |
+| `⊕` | Direct sum / State overlay | `V ⊕ W` or `σ' ← σ ⊕ Δσ` |
+| `⊛` | Circular convolution | `y ← x ⊛ h` |
 | `∘` | Function composition | `(f ∘ g)(x) ≝ f(g(x))` |
-| `·` | Scalar dot product | `\mathbf{u} · \mathbf{v} ≝ Σ_i u^i v^i` |
-| `×` | Vector cross product / Cartesian product | `\mathbf{u} × \mathbf{v} = sgn(det(g)) √\|det(g)\| g^{mi} ε_{ijk} u^j v^k 𝐞_m; \mathbf{u} = u^j 𝐞_j, \mathbf{v} = v^k 𝐞_k, i,j,k,m ∈ {1,2,3}, det(g) ≠ 0` |
+| `·` | Scalar dot product | `\mathbf{u} · \mathbf{v} ≝ \sum_i u^i v^i` |
+| `×` | Vector cross product / Cartesian product | `\mathbf{u} × \mathbf{v}` |
 | `⊗` | Tensor / Kronecker product | `(A ⊗ B)_{ik,jl} ≝ a_{i,j} b_{k,l}` |
-| `⊕` | Direct sum | `V ⊕ W` |
 | `⊙` | Hadamard element-wise product | `A ⊙ B ≝ [a_{ij} b_{ij}]` |
 | `ᵀ` | Matrix transpose | `Jᵀ r` |
 | `A^†` | Moore-Penrose pseudo-inverse / Adjoint | `m ← (Gᵀ G)^{−1} Gᵀ d` |
 | `ℱ{·}` | Fourier transform | `\hat{u}(ω) ← ℱ{u(t)}` |
 | `ℋ{·}` | Hilbert transform | `u_H(t) ← ℋ{u(t)}` |
 
-### 3.7 Arithmetic, Floor & Ceiling
+#### 3.B.4 Arithmetic, Floor, Ceiling & Numerical Constants
 
 | Symbol | Meaning | Example |
 |:-------|:--------|:--------|
@@ -204,72 +279,11 @@
 | `/` | Real division | `mean ← sum / n` |
 | `div` | Integer division (quotient) | `q ← a div b` |
 | `mod` | Modulo (remainder) | `r ← a mod b` |
-| `^` | Exponentiation (`xⁿ`, `x¹`, `x²`, `x³`, etc.) | `e^{iπ} + 1 = 0` |
+| `^` | Exponentiation | `e^{iπ} + 1 = 0` |
 | `√` | Square root | `rms ← √(sum_sq / n)` |
 | `⌊·⌋` | Floor function | `mid ← ⌊(lo + hi) / 2⌋` |
 | `⌈·⌉` | Ceiling function | `pages ← ⌈n / page_size⌉` |
-
-### 3.8 Set Theory, Lattice Theory & Aggregations
-
-| Symbol | Meaning | Example |
-|:-------|:--------|:--------|
-| `∈` | Element of (membership) | `if x ∈ S ⇒ …` |
-| `∉` | Not element of | `if s ∉ R ⇒ …` |
-| `⊂` | Proper subset | `A ⊂ Ω` |
-| `⊆` | Subset (inclusive) | `A ⊆ 𝒰` |
-| `∪` | Union | `C ← A ∪ B` |
-| `∩` | Intersection | `overlap ← A ∩ B` |
-| `\` | Set difference / relative complement | `unprocessed ← all \ processed` |
-| `Δ` | Symmetric difference | `diff ← set_a Δ set_b` |
-| `∅` | Empty set | `if candidates = ∅ ⇒ ⟵ ⊥` |
-| `\|S\|` | Set cardinality / collection length | `n ← \|events\|` |
-| `𝒫(S)` | Power set | `subsets ← 𝒫(features)` |
-| `⊔` | Lattice join / Least upper bound | `lub ← x ⊔ y` |
-| `⊓` | Lattice meet / Greatest lower bound | `glb ← x ⊓ y` |
-| `Σ` | Summation over bounded index or set | `total ← Σ_{i=1}^{n} a[i]` |
-| `Π` | Product over bounded index or set | `prob ← Π_{i=1}^{k} p_i` |
-| `min` | Minimum value | `best ← min_{x ∈ S} f(x)` |
-| `max` | Maximum value | `peak ← max(a, b)` |
-| `argmin` | Argument minimizing the objective | `opt_θ ← argmin_{θ} Loss(θ)` |
-| `argmax` | Argument maximizing the objective | `best_c ← argmax_{c} P(c \| x)` |
-| `{x ∈ S : P(x)}` | Set comprehension / filtering | `valid ← {x ∈ S : score(x) > θ}` |
-
-### 3.9 Quantifiers
-
-| Symbol | Meaning | Example |
-|:-------|:--------|:--------|
-| `∀` | Universal quantifier ("for all" / loop) | `∀ x ∈ S : x > 0` |
-| `∃` | Existential quantifier | `if ∃ e ∈ E : e.id = target ⇒ …` |
-| `∄` | Negative existential | `if ∄ f ∈ 𝒟 : f.active = ⊤ ⇒ …` |
-| `∃!` | Unique existential | `if ∃! master ∈ nodes : master.active = ⊤ ⇒ …` |
-| `:` | "such that" / "where" | `∀ s ∈ S : s.active ← ⊤` |
-
-### 3.10 Sequences, Intervals & Special Constants
-
-| Symbol | Meaning | Example |
-|:-------|:--------|:--------|
-| `⟨x₁, x₂, …, xₙ⟩` | Ordered tuple or vector | `p ← ⟨t₀, x₀, y₀, z₀⟩` |
-| `A[i]` | Array indexing | `first ← waveforms[1]` |
-| `A[i..j]` | Array slice / subsequence | `window ← trace[start..end]` |
-| `s₁ ∥ s₂` | String / sequence concatenation | `greeting ← "Hello" ∥ ", " ∥ "World"` |
-| `[a, b]` | Closed numerical interval | `freq ∈ [0.5, 20.0]` |
-| `(a, b)` | Open numerical interval | `residual ∈ (−1.0, 1.0)` |
-| `[a, b)` | Half-open interval | `bin_range ← [t_start, t_end)` |
-| `f : X → Y` | Function signature | `locate : Catalog × Model → Hypo` |
-| `x ⟶ g ⟶ y` | Pipelined sequential dataflow | `stream ⟶ filter ⟶ picker ⟶ catalog` |
-| `∞` | Infinity | `min_cost ← ∞` |
-| `NaN` | Not-a-Number (floating-point error) | `if value = NaN ⇒ …` |
-| `ε` | Machine epsilon / infinitesimal tolerance | `if \|x_{k+1} − x_k\| > ε ⇒ ⟳` |
-| `π`, `e`, `φ`, `i`, `ℏ`, `ℝ`, `ℂ`, `ℕ`, `ℤ` | Mathematical constants | `A ← π × r²` |
-
-### 3.11 Asymptotic Complexity Notation
-
-| Symbol | Meaning | Usage |
-|:-------|:--------|:------|
-| `O(g(n))` | Upper bound (Big-O) | `Time: O(n log n), Space: O(n)` |
-| `Ω(g(n))` | Lower bound (Big-Omega) | `Comparisons: Ω(n log n)` |
-| `Θ(g(n))` | Tight asymptotic bound (Big-Theta) | `Lookup: Θ(1) average case` |
-| `o(g(n))` | Strict upper bound (Little-o) | `error = o(1) as n → ∞` |
+| `π`, `e`, `φ`, `i`, `ℏ`, `ℝ`, `ℂ`, `ℕ`, `ℤ` | Mathematical constants & number fields | `A ← π × r²` |
 
 ---
 

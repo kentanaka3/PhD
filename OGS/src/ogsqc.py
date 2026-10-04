@@ -7,16 +7,17 @@ OVERVIEW:
 Extends the ``ml_catalog`` ``PickStatQC`` module with OGS-specific filtering:
 
 1. Geographic region filtering using the OGS study polygon (longitude/latitude
-   bounding box covering Switzerland and adjacent Alpine regions).
+   bounding box from 9.5 to 15.0 degrees longitude and 44.3 to 47.5 latitude).
 2. Event-level statistics computation for downstream catalog QC.
-3. Optional comparison against a base catalog directory.
+3. Storage of an optional base catalog path; no comparison is implemented here.
 
 The module implements two classes:
 
 - ``OGSPickStatQC``: subclass of ``PickStatQC`` adding a polygon-based
   region filter on top of the standard pick-count thresholds.
-- ``EventStatQC``: further extension that computes per-event pick statistics
-  via :meth:`_get_pick_stats` before applying QC thresholds. Useful when
+- ``OGSEventStatQC``: further extension that computes per-event pick statistics
+  via :meth:`_get_pick_stats` after the initial threshold/region filter, then
+  reapplies the region filter. Useful when
   attached after the associator.
 
 MODULE CONSTANTS:
@@ -24,7 +25,7 @@ MODULE CONSTANTS:
         Closed polygon defining the OGS study region in (lon, lat) degrees.
 
 USAGE:
-    from ogsqc import OGSPickStatQC, EventStatQC
+    from OGS.src.ogsqc import OGSPickStatQC, OGSEventStatQC
 
     qc = OGSPickStatQC(p_picks=3, s_picks=2, total_picks=6)
     builder.add_module(qc)
@@ -105,17 +106,16 @@ class OGSEventStatQC(OGSPickStatQC):
   that many picks will be retained. In addition to performing quality control,
   this module writes statistics on the picks per event to the event dataframe.
   Therefore, it's often convenient to include it even without using it to
-  filter events. This module is intended to be used after the associator, so
-  that the statistics are computed on the associated picks. If used before the
-  associator, it will compute statistics on the unassociated picks, which may
-  not be as meaningful.
+  filter by pick counts. The geographic filter still applies. This module
+  requires associated events and assignments with event_idx links; it is
+  intended for use after the associator.
 
   :param p_picks: Minimum number of P picks per event
   :param s_picks: Minimum number of S picks per event
   :param total_picks: Minimum total number of picks per event
-  :param p_and_s_picks: Minimum number of P and S picks per event
-  :param region: Geographical region to consider for events
-  :param base: Path to the base directory to compare outputs with
+  :param p_and_s_picks: Paired P/S threshold forwarded to PickStatQC
+  :param region: Polygon used for contains_point testing; None is not handled
+  :param base: Optional base directory stored but not used for comparison
   """
 
   def __init__(

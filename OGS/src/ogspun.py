@@ -15,7 +15,8 @@ FILE FORMAT DESCRIPTION:
   - Latitude and longitude in degree-minute notation
   - Depth and duration magnitude
   - Number of observations, GAP, DMIN, RMS, ERH, ERZ, and QM quality code
-  - A leading header line that is skipped before parsing begins
+  - The first line is unconditionally skipped as a header
+  - Data regex matches a prefix beginning with "1"; suffix text is accepted
 
 KEY FEATURES:
   - Regex-based extraction with named capture groups
@@ -26,10 +27,11 @@ KEY FEATURES:
 
 USAGE:
   Command line:
-    python ogspun.py -f input.pun -D 20240320 20240620 -v
+    python -m OGS.src.ogspun -f input.pun -D 20240320 20240620 -v
 
   Programmatic:
-    from ogspun import DataFilePUN
+    from pathlib import Path
+    from OGS.src.ogspun import DataFilePUN
     parser = DataFilePUN(Path("input.pun"), start_date, end_date)
     parser.read()
     parser.log()
@@ -61,23 +63,11 @@ AUTHORS:
 # IMPORTS
 # -----------------------------------------------------------------------------
 
-# ObsPy: seismological time conversions
-from obspy import UTCDateTime
-
 # Standard library: date/time objects and time deltas
 from datetime import datetime, timedelta as td
 
-# Pandas: tabular data manipulation
-import pandas as pd
-
-# Local module: OGS-specific constants and formatting strings
-import ogsconstants as OGS_C
-
-# Local module: OGS-specific argument parsing helpers
-import ogsutils as OGS_U
-
-# Local module: base parser for extraction and logging
-from ogsdatafile import OGSDataFile
+from . import ogsconstants as OGS_C, ogsutils as OGS_U
+from .ogsdatafile import OGSDataFile
 
 
 # =============================================================================
@@ -139,59 +129,27 @@ class DataFilePUN(OGSDataFile):
         OGS_C.DATETIME_FMT[:-2]
     ) + seconds
 
-  def _build_event_row(
-      self,
-      result: dict,
-      event_index: int | None = None,
-  ) -> list:
-    """Create a standardized event row for the output DataFrame."""
-    event_time = result[OGS_C.DATE_STR]
-    if event_index is None:
-      event_index = self.normalize_index(
-          result.get(OGS_C.IDX_EVENTS_STR), event_time.year
-      )
-    return [
-        event_index,                          # 0: idx
-        event_time,                           # 1: time
-        result[OGS_C.LATITUDE_STR],           # 2: latitude
-        result[OGS_C.LONGITUDE_STR],          # 3: longitude
-        result[OGS_C.DEPTH_STR],              # 4: depth
-        result[OGS_C.GAP_STR],                # 5: azimuthal_gap
-        result[OGS_C.ERZ_STR],                # 6: max_vertical_uncertainty
-        result[OGS_C.ERH_STR],                # 7: max_horizontal_uncertainty
-        None,                                 # 8: max_time_uncertainty
-        event_time.strftime(OGS_C.DATE_FMT),  # 9: group
-        result[OGS_C.NO_STR],                 # 10: number_picks
-        0,                                    # 11: number_p_picks
-        0,                                    # 12: number_s_picks
-        0,                                    # 13: number_p_and_s_picks
-        result[OGS_C.MAGNITUDE_D_STR],        # 14: MD
-        None,                                 # 15: ML
-        None,                                 # 16: ML_median
-        None,                                 # 17: ML_unc
-        None,                                 # 18: ML_stations
-        result[OGS_C.DMIN_STR],               # 19: DMIN
-        result[OGS_C.RMS_STR],                # 20: RMS
-        result[OGS_C.QM_STR],                 # 21: QM
-        None,                                 # 22: LOC_NAME
-        None,                                 # 23: E_TYPE
-        result.get(OGS_C.NOTES_STR),          # 24: NOTES
-        None,                                 # 25: MD_unc
-        None,                                 # 26: MD_stations
-        None,                                 # 27: MD_median
-    ]
-
   def read(self):
     """
     Read and parse a .pun format file into an event summary DataFrame.
 
     The parser skips the header line, extracts one event summary per remaining
     line, filters by the configured date range, and stores grouped results in
-    self.EVENTS and self.events.
+    self.EVENTS and self.events. Reading stops at the first parsed event
+    beyond the upper date bound, assuming chronological input. Event IDs use
+    a zero-based counter of retained events plus the calendar-year stride,
+    not an identifier read from the file.
+
+    Returns:
+      None: Results are stored on the instance.
 
     Raises:
       FileNotFoundError: If the input file does not exist.
-      ValueError: If the input file does not use the .pun extension.
+      ValueError: If the suffix is not .pun or a field conversion fails.
+      OSError: If opening or reading the file fails.
+      UnicodeError: If UTF-8 decoding fails.
+      Other processing failures propagate; regex mismatches are logged and
+      skipped.
     """
     # -----------------------------------------------------------------------
     # INPUT VALIDATION
@@ -201,7 +159,7 @@ class DataFilePUN(OGSDataFile):
     # -----------------------------------------------------------------------
     # FILE READING
     # -----------------------------------------------------------------------
-    events_data = list()
+    events_data: list[dict[str, object]] = []
     event_counter = 0
 
     self.logger.info(f"Reading PUN file: {self.input}")
@@ -249,11 +207,6 @@ class DataFilePUN(OGSDataFile):
         # ---------------------------------------------------------------------
         # FIELD PROCESSING
         # ---------------------------------------------------------------------
-        result[OGS_C.DEPTH_STR] = self._parse_float(result[OGS_C.DEPTH_STR])
-        result[OGS_C.MAGNITUDE_D_STR] = self._parse_float(
-            result[OGS_C.MAGNITUDE_D_STR]
-        )
-
         result[OGS_C.NO_STR] = self._parse_zero_padded_int(
             result[OGS_C.NO_STR]
         )
@@ -272,13 +225,11 @@ class DataFilePUN(OGSDataFile):
         result[OGS_C.ERZ_STR] = self._parse_zero_padded_float(
             result[OGS_C.ERZ_STR]
         )
-
-        event_index = self.normalize_index(
+        result[OGS_C.IDX_EVENTS_STR] = self.normalize_index(
             event_counter, result[OGS_C.DATE_STR].year
         )
-        events_data.append(
-            self._build_event_row(result, event_index=event_index)
-        )
+        result[OGS_C.TIME_STR] = result[OGS_C.DATE_STR]
+        events_data.append(result)
         event_counter += 1
 
     # -----------------------------------------------------------------------
@@ -303,11 +254,12 @@ def main(args):
     3. Logs output through the shared OGS pipeline
 
   Args:
-    args: Parsed command-line arguments from parse_arguments()
+    args: Parsed command-line arguments from ogsutils.parse_pun_args()
   """
   for file in args.file:
-    datafile = DataFilePUN(file, args.dates[0], args.dates[1],
-                           verbose=args.verbose)
+    datafile = DataFilePUN(
+        file, args.dates[0], args.dates[1], verbose=args.verbose
+    )
     datafile.read()
     datafile.log()
 

@@ -77,9 +77,11 @@ Every mathematical symbol must be explicitly defined and bounded upon introducti
 Ensure mathematical expressions match the exact executable implementation.
 
 ### 3. Theoretical Reference Indices for Design Comparisons
+
 When discussing planned extensions or literature baselines, state their exact mathematical formulations and axiomatic properties explicitly.
 
 ### 4. Mathematical Typography Standards
+
 - Use `amsmath` environments (`equation`, `align*`, `aligned`, `gather`, `multline`) rather than raw `$$...$$`, `\[...\]` or deprecated `eqnarray`.
 - Write explanatory abbreviations with the shared macros `\ie{...}` and `\eg{...}` rather than literal `i.e.` or `e.g.`. These macros provide their own parentheses, italic abbreviation, comma, and following space; do not wrap a macro call in additional parentheses.
 - Define semantic operators via `\DeclareMathOperator{\argmin}{arg\,min}` or `\DeclareMathOperator{\diag}{diag}` in the preamble.
@@ -111,6 +113,7 @@ Every table must function as a self-contained, publication-grade scientific arti
 - **Self-Contained Table Notes**: Wrap structured tables in a `threeparttable` environment with `\begin{tablenotes}`. Define all acronyms, physical units, baseline assumptions, currencies, and statistical notations directly in table notes.
 
 ### 2. Epistemic Data Tagging in Tables
+
 Explicitly distinguish data rows and columns by epistemic classification:
 - `[Observed (Synthetic)]`: Mock, benchmark, or sanitized input records.
 - `[Analyst-Normalized]`: Cleaned canonical keys, mapped categories, or standardized units.
@@ -118,7 +121,7 @@ Explicitly distinguish data rows and columns by epistemic classification:
 - `[Model Forecast / Hypothesis]`: Projected values, simulated counterfactuals, or theoretical bounds.
 - `[Literature Baseline]`: Historical references or third-party statistical benchmarks.
 
-### 3. Standardized Scientific Table Archetypes
+### 3. Standard Scientific Table Archetypes
 
 #### Archetype A: Schema and Variable Data Dictionary
 ```tex
@@ -151,7 +154,8 @@ Explicitly distinguish data rows and columns by epistemic classification:
 \end{table}
 ```
 
-#### Archetype B: Capability and Evidence Provenance Matrix
+#### Archetype C: System Architecture & Evidence Provenance Matrix
+
 ```tex
 \begin{table}[htbp]
   \centering
@@ -211,6 +215,7 @@ Explicitly distinguish data rows and columns by epistemic classification:
 When modeling system architectures, data provenance pipelines, mathematical DAGs, or quantitative time-series in `doc/**/*.tex`, adhere to reproducible vector standards.
 
 ### 1. Robust TikZ Structure and Style Hierarchy
+
 - Define reusable semantic styles in the preamble or via `\tikzset{...}` before environments; avoid hardcoding ad-hoc styling inline.
 - Use relative coordinate placement via `positioning` (e.g., `below=3mm of nodeA`) instead of absolute coordinates.
 - Maintain strict layering: declare `\pgfdeclarelayer{background}` and `\pgfsetlayers{background,main}` for grouping enclosures and bounding boxes (`fit` library).
@@ -218,7 +223,7 @@ When modeling system architectures, data provenance pipelines, mathematical DAGs
 
 ### 2. Visual Evidence Boundaries in System Architectures
 
-Every architectural and pipeline diagram must visually encode component implementation status:
+Every diagram node must visually reflect its implementation status:
 
 | Component Status | Stroke & Border Style | Node Fill / Background | Annotation / Badge Rule |
 | :--- | :--- | :--- | :--- |
@@ -302,7 +307,7 @@ When plotting empirical trajectories, experimental comparisons, or benchmark res
     legend cell align={left},
     font=\small,
     grid=both,
-    grid style={dotted, gray!40}
+    grid style={dotted, gray!50}
   ]
     \addplot[thick, color=blue!80!black, mark=*] coordinates {
       (1, 100.0)

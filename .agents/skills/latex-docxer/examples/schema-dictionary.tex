@@ -1,0 +1,56 @@
+% Purpose: Demonstrate a fluid, self-contained seismic-field dictionary.
+% Status: Draft template; schema and human layout review pending.
+% Source-of-truth: .claude/agents/latex-docxer.md (extracted schema archetype).
+% Origin: Illustrative field assumptions; no repository schema was inspected.
+\documentclass{article}
+\usepackage[a4paper,margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs,tabularx,threeparttable}
+
+\begin{document}
+\section*{Illustrative schema dictionary}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \begin{threeparttable}
+    \caption{Illustrative seismic-field dictionary.
+      The rows distinguish types, domains, and optional fields.
+      All constraints are schematic assumptions, not verified project
+      schema definitions; replace them using an inspected schema anchor.}
+    \label{tab:data-dictionary}
+    \begin{tabularx}{\linewidth}{@{} l l l c X @{}}
+      \toprule
+      \textbf{Field} & \textbf{Type} & \textbf{Domain}
+        & \textbf{Null?\tnote{a}} & \textbf{Meaning / Binding} \\
+      \midrule
+      \texttt{network} & String & Network code & No
+        & Network identifier; verify code format. \\
+      \texttt{station} & String & Station code & No
+        & Station identifier; verify code format. \\
+      \texttt{channel} & String & Channel code & No
+        & Channel identifier; verify code format. \\
+      \texttt{phase} & Enum & $\{P,S\}$ & No
+        & Illustrative compressional/shear phase labels. \\
+      \texttt{onset\_time} & DateTime & ISO 8601 UTC & No
+        & Arrival time; identify observed, analyst, or predicted origin. \\
+      \texttt{probability} & Float & $[0,1]$ & Yes
+        & Model score; verify meaning and calibration.\tnote{b} \\
+      \texttt{residual} & Float & Signed seconds & Yes
+        & Travel-time residual; verify sign convention. \\
+      \texttt{weight} & Integer & $\{0,1,2,3,4\}$ & Yes
+        & Illustrative analyst quality code; verify its domain. \\
+      \bottomrule
+    \end{tabularx}
+    \begin{tablenotes}[flushleft]
+      \footnotesize
+      \item[a] Nullability is illustrative, not a rule for any pipeline stage.
+      ISO 8601 denotes a date/time representation; UTC is Coordinated
+      Universal Time. Residuals use seconds.
+      \item[b] A score is a model prediction, not an analyst label or
+      established probability calibration.
+      \item Source/schema/version/reviewer: [TODO: provide authorized anchors].
+    \end{tablenotes}
+  \end{threeparttable}
+\end{table}
+\end{document}

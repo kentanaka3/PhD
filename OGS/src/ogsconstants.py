@@ -1,13 +1,11 @@
 """
 ===============================================================================
-OGS Constants Module - Central Configuration and Utility Functions
+OGS Constants Module - Shared Configuration Values and Labels
 ===============================================================================
 
 OVERVIEW:
-This module serves as the central repository for all constants, configuration
-parameters, utility functions, and bipartite graph matching classes used
-throughout the OGS seismic data processing pipeline. It provides a unified
-interface for:
+This module defines shared constants and configuration defaults for the OGS
+seismic data processing pipeline. This module provides:
 
   1. GLOBAL CONFIGURATION
     - MPI/GPU rank and size for parallel processing
@@ -27,8 +25,6 @@ interface for:
 
   4. DATA COLUMN HEADERS
     - Standard column names for DataFrames (TIME, STATION, PHASE, etc.)
-    - Catalog header definitions (HEADER_EVENTS, HEADER_PICKS)
-    - Sorting hierarchies
 
   5. OGS REGION DEFINITIONS
     - Geographic polygon boundaries for the OGS study area
@@ -39,51 +35,19 @@ interface for:
     - URLs for INGV, IRIS, GFZ, OGS, and other data centers
     - Default client priority list
 
-  7. DISTANCE/SIMILARITY FUNCTIONS
-    - dist_time(): Time-based similarity scoring
-    - dist_space(): Spatial distance calculation using geodetic functions
-    - dist_pick(): Weighted pick matching score
-    - dist_event(): Weighted event matching score
-
-  8. BIPARTITE GRAPH MATCHING
-    - OGSBPGraph: Base class for bipartite matching
-    - OGSBPGraphPicks: Maximum weight matching for phase picks
-    - OGSBPGraphEvents: Maximum weight matching for seismic events
-
 ARCHITECTURE:
-  ┌─────────────────────────────────────┐
-  │         ogsconstants.py             │
-  ├─────────────────────────────────────┤
-  │  Constants     │  Utility Functions │
-  │  ────────────  │  ────────────────  │
-  │  • Formats     │  • is_date()       │
-  │  • Extensions  │  • is_file_path()  │
-  │  • Headers     │  • decimeter()     │
-  │  • Colors      │  • inventory()     │
-  │  • Thresholds  │  • waveforms()     │
-  ├─────────────────────────────────────┤
-  │        Bipartite Graph Classes      │
-  │  ─────────────────────────────────  │
-  │  OGSBPGraph (base)                  │
-  │    ├── OGSBPGraphPicks              │
-  │    └── OGSBPGraphEvents             │
-  └─────────────────────────────────────┘
+  ``ogsconstants`` supplies formats, extensions, headers, colors, thresholds,
+  region definitions, endpoint identifiers, and mutable MPI/GPU defaults to
+  the other OGS modules. It defines no functions or classes.
 
 USAGE:
-  from ogsconstants import (
+  from OGS.src.ogsconstants import (
     PWAVE, SWAVE,           # Phase identifiers
     DATE_FMT, TIME_FMT,     # Format strings
-    HEADER_PICKS,           # Column headers
-    dist_pick, dist_event,  # Matching functions
-    OGSBPGraphPicks         # Bipartite matching
   )
 
 DEPENDENCIES:
-  - numpy: Numerical operations
-  - pandas: DataFrame handling
-  - obspy: Seismological utilities (UTCDateTime, geodetics)
-  - networkx: Graph algorithms for bipartite matching
-  - matplotlib: Plotting utilities
+  - Python standard library: os, pathlib, datetime.timedelta
 
 AUTHORS:
   - 健
@@ -106,16 +70,10 @@ import os                                 # Operating system interfaces
 from datetime import timedelta as td      # Time handling
 
 # =============================================================================
-# THIRD-PARTY LIBRARY IMPORTS
-# =============================================================================
-import numpy as np                        # Numerical computing
-
-
-# =============================================================================
 # MODULE-LEVEL CONFIGURATION
 # =============================================================================
 
-# Reference to this file's path for relative imports
+# Reference to this file's path for deriving package-local paths
 THIS_FILE = Path(__file__)
 
 DEFAULT_CORES_COUNT = int(
@@ -148,14 +106,6 @@ GPU_SIZE = 0      # Total number of available GPUs
 GPU_RANK = -1     # Assigned GPU device ID (-1 = no GPU assigned)
 
 # =============================================================================
-# PROBABILITY THRESHOLDS
-# =============================================================================
-# Threshold values for ML model confidence scoring (0.1 to 0.9 in 0.1 steps)
-# Used for pick probability filtering and performance evaluation
-
-THRESHOLDS: list[str] = ["{:.1f}".format(t) for t in np.linspace(0.1, 0.9, 9)]
-
-# =============================================================================
 # DATE/TIME FORMAT CONSTANTS
 # =============================================================================
 # Standard format strings for parsing and formatting dates/times throughout
@@ -168,7 +118,6 @@ TIME_FMT = "%H%M%S"                   # Compact time format (143052)
 YYMMDD_FMT = "%y%m%d"                 # 2-digit year date (220115)
 YYYYMMDD_FMT = "%Y%m%d"               # 4-digit year date (20220115)
 DATETIME_FMT = YYMMDD_FMT + TIME_FMT  # Combined datetime (220115143052)
-DATETIME_STR = "DATETIME"             # Column name for datetime fields
 TIMESTAMP_STR = "TIMESTAMP"           # Column name for Unix timestamps
 
 # =============================================================================
@@ -187,22 +136,20 @@ PICK_TRAIN_OFFSET = td(seconds=60)    # 60 second window for ML training
 
 # =============================================================================
 # H71 WEIGHT CONVERSION TABLE
-# Mapping of H71 weight classes to numerical offsets for event matching
-# Used in the dist_event() function to convert H71 weights to time offsets
+# Project mapping of H71 pick weight classes to offsets in seconds.
 H71_OFFSET: dict[int, float] = {
     0: 0.01,
     1: 0.04,
     2: 0.2,
     3: 1,
     4: 5,
-    5: 25
 }
 """
 ===============================================================================
 H71 WEIGHT CONVERSION TABLE
 ===============================================================================
 Hypo71 standard weight codes mapped to uncertainty in seconds
-These represent picking precision: 0 = most precise, 5 = least precise
+These represent picking precision: 0 = most precise, 4 = least precise
 Weight | Uncertainty (sec) | Interpretation
 -------|-------------------|----------------
   0    |       0.01        | Impulsive onset, very clear
@@ -210,7 +157,8 @@ Weight | Uncertainty (sec) | Interpretation
   2    |       0.2         | Fairly clear onset
   3    |       1.0         | Emergent onset
   4    |       5.0         | Poor quality pick
-  5    |      25.0         | Very uncertain (often unused)
+These configured values do not establish measured picking uncertainty or
+onset quality.
 """
 
 # =============================================================================
@@ -221,16 +169,10 @@ Weight | Uncertainty (sec) | Interpretation
 EVENT_TIME_OFFSET = td(seconds=2)
 """
 Max time difference for event matching: 2 seconds\n
-This is used in the dist_event() function to determine if a detected event is
-close enough in time to a catalog event to be considered a match. This
-threshold accounts for uncertainties in pick timing, association, and event
-location.
 """
-EVENT_DIST_OFFSET = 8                 # Max spatial distance (km) for matching
+EVENT_DIST_OFFSET = 8
 """
 Max spatial distance for event matching: 8 km\n
-This is used in the dist_event() function to determine if a detected event is
-close enough to a catalog event to be considered a match.
 """
 
 # Commonly used string literals to ensure consistency and avoid typos
@@ -244,7 +186,6 @@ SPACE_STR = ' '                         # Space character
 COMMA_STR = ','                         # Comma character
 SEMICOL_STR = ';'                       # Semicolon character
 ZERO_STR = "0"                          # String representation of zero
-NAN_STR = "NaN"                         # String representation of Not-a-Number
 NONE_STR = "None"                       # String representation of None
 
 # =============================================================================
@@ -254,54 +195,8 @@ NONE_STR = "None"                       # String representation of None
 
 DEFAULT_PICKER = "SeisBenchPicker"      # ML-based phase picker identifier
 DEFAULT_ASSOCIATOR = "GammaAssociator"  # GaMMA phase associator identifier
-FILE_STR = "file"                       # Generic file reference
-TEMPORAL_STR = "tmp"                    # Temporary file prefix
 DURATION_STR = "duration"               # Duration field name
-STATUS_STR = "status"                   # Status field name
 SECONDS_STR = "seconds"                 # Seconds unit label
-
-# =============================================================================
-# POLARITY IDENTIFIERS
-# =============================================================================
-# First-motion polarity labels for focal mechanism analysis
-
-COMPRESSIONAL_STR = "compressional"     # Upward first motion (compression)
-DILATATIONAL_STR = "dilatational"       # Downward first motion (dilation)
-
-# =============================================================================
-# CLASSIFICATION AND LOGGING LABELS
-# =============================================================================
-# Labels used for categorization and log message formatting
-
-CLSSFD_STR = "CLSSFD"                   # Classified status marker
-SOURCE_STR = "SOURCE"                   # Data source identifier
-DETECT_STR = "DETECT"                   # Detection status
-UNKNOWN_STR = "UNKNOWN"                 # Unknown/unclassified label
-LEVEL_STR = "LEVEL"                     # Log level indicator
-WARNING_STR = "WARNING"                 # Warning log level
-FATAL_STR = "FATAL"                     # Fatal error log level
-NOTABLE_STR = "NOTABLE"                 # Notable event marker
-ASSIGN_STR = "ASSIGN"                   # Assignment status
-UNABLE_STR = "UNABLE"                   # Unable to process marker
-
-# =============================================================================
-# DATA CATEGORY LABELS
-# =============================================================================
-# Labels for distinguishing between manual (TRUE) and predicted data
-
-TRUE_STR = "TRUE"                       # Manual/ground truth data
-PRED_STR = "PRED"                       # Predicted/ML-generated data
-ASCT_STR = "ASCT"                       # Associated data marker
-STAT_STR = "STAT"                       # Statistics marker
-FALSE_STR = "FALSE"                     # Negative/false marker
-
-# =============================================================================
-# ASSOCIATOR ALGORITHM IDENTIFIERS
-# =============================================================================
-# Names for phase association algorithms
-
-GMMA_STR = "GaMMA"                      # GaMMA (Gaussian Mixture Model Assoc.)
-OCTO_STR = "PyOcto"                     # PyOcto (Octree-based associator)
 
 # =============================================================================
 # CLASSIFICATION METRICS
@@ -316,15 +211,11 @@ SP_STR = "SP"                           # Skipped count
 FN_STR = "FN"                           # False Negative count
 MS_STR = "MS"                           # Missed count
 SM_STR = "SM"                           # Skimmed count
+SW_STR = "SW"                           # Swapped count
 TN_STR = "TN"                           # True Negative count
 
-ACCURACY_STR = "AC"                     # Accuracy metric
-PRECISION_STR = "PC"                    # Precision metric
-RECALL_STR = "RC"                       # Recall metric
 NETCOLOR_STR = "NC"                     # Network color for plotting
 STACOLOR_STR = "SC"                     # Station color for plotting
-F1_STR = "F1"                           # F1 score metric
-DISTANCE_STR = "Distance"               # Distance metric label
 
 # =============================================================================
 # SEISMIC PHASE IDENTIFIERS
@@ -348,16 +239,6 @@ PWAVE_THRESHOLD = SWAVE_THRESHOLD = 0.1  # 10% minimum confidence
 # Format: NETWORK.STATION.LOCATION.CHANNEL (e.g., IV.ACER..HHZ)
 
 SEED_ID_FMT = "{NETWORK}.{STATION}..{CHANNEL}"
-
-# =============================================================================
-# OUTPUT FILE IDENTIFIERS
-# =============================================================================
-# Prefixes/suffixes for various output file types
-
-CFN_MTX_STR = "CM"                      # Confusion matrix output
-CMTV_PICKS_STR = "CP"                   # Cumulative picks output
-CLSTR_PLOT_STR = "CT"                   # Cluster plot output
-TIME_DSPLCMT_STR = "TD"                 # Time displacement output
 
 # =============================================================================
 # COLOR PALETTE FOR SCIENTIFIC VISUALIZATION
@@ -445,9 +326,11 @@ XML_EXT = PERIOD_STR + XML_STR          # .xml
 # =============================================================================
 # WAVEFORM FILE NAMING FORMAT
 # =============================================================================
-# Template for constructing waveform filenames following SEED conventions
-
-PRC_FMT = SEED_ID_FMT + ".{BEGDT}.{EXT}"  # NETWORK.STATION..CHANNEL.DATE.EXT
+# SEED channel ID followed by start/end timestamps (YYYYMMDDTHHMMSSZ).
+# LOCATION may be empty; EXT does not include the leading period.
+PRC_FMT = (
+    "{NETWORK}.{STATION}.{LOCATION}.{CHANNEL}__{BEGDT}__{ENDDT}.{EXT}"
+)
 
 # =============================================================================
 # ML MODEL IDENTIFIERS
@@ -465,15 +348,15 @@ PHASENET_STR = "PhaseNet"               # PhaseNet deep learning model
 
 OGS_PROJECTION = "+proj=sterea +lon_0={lon} +lat_0={lat} +units=km"
 
-# Maximum magnitude threshold for OGS catalog (filter out larger events)
+# Plotting threshold: events at or above this magnitude use star markers.
 OGS_MAX_MAGNITUDE = 4.0
 OGS_MAGNITUDE_SIZE = {
-    # Magnitude : [Marker Size]
-    (-1., 0.): 10,
-    (0., 1.): 20,
-    (1., 2.): 40,
-    (2., 3.): 80,
-    (3., OGS_MAX_MAGNITUDE): 160,
+    # Magnitude interval [lower, upper) : (marker size, color)
+    (-1., 0.): (10, MEX_PINK_DARK),
+    (0., 1.): (20, OGS_BLUE),
+    (1., 2.): (40, ALN_GREEN),
+    (2., 3.): (80, SUN_YELLOW_DARK),
+    (3., OGS_MAX_MAGNITUDE): (160, LIP_ORANGE_DARK),
 }
 
 # =============================================================================
@@ -490,7 +373,8 @@ PHASE_STR = "phase"                     # Phase type (P or S)
 PROBABILITY_STR = "probability"         # ML confidence score
 AMPLITUDE_STR = "amplitude"             # Waveform amplitude
 EPICENTRAL_DISTANCE_STR = "epicentral_distance"  # Distance from epicenter
-DEPTH_STR = "depth"                     # Event depth (km)
+# Event depth (km); inventory elevation (m)
+DEPTH_STR = "depth"
 STATION_ML_STR = "station_ML"           # Station-specific magnitude
 NUMBER_P_PICKS_STR = "number_p_picks"   # Count of P-wave picks
 NUMBER_S_PICKS_STR = "number_s_picks"   # Count of S-wave picks
@@ -523,7 +407,6 @@ M3_UNC_STR = "m3_unc"                   # 3rd magnitude uncertainty
 IDX_EVENTS_STR = "idx"                  # Event index identifier
 LEGACY_ID_STR = "legacy_id"             # Legacy catalog event identifier
 METADATA_STR = "metadata"               # Metadata container column
-TYPE_STR = "type"                       # Type classification column
 
 # Geographic coordinate columns
 LONGITUDE_STR = "longitude"             # Longitude (degrees)
@@ -534,13 +417,9 @@ Y_COORD_STR = "y(km)"                   # Y coordinate in kilometers (local)
 Z_COORD_STR = "z(km)"                   # Z coordinate in kilometers (depth)
 
 # Additional event attributes
-MAGNITUDE_STR = "magnitude"             # Generic magnitude column
 MAGNITUDE_L_STR = "ML"                  # Local magnitude type
 MAGNITUDE_D_STR = "MD"                  # Duration magnitude type
-PLACE_STR = "place"                     # Location description
 VELOCITY_STR = "vel"                    # Velocity model reference
-METHOD_STR = "method"                   # Processing method used
-DIMENSIONS_STR = "dims"                 # Dimensionality (2D/3D)
 
 # Clustering method identifiers
 GAUSS_MIX_MODEL_STR = "GMM"             # Gaussian Mixture Model
@@ -551,15 +430,12 @@ BAYES_GAUSS_MIX_MODEL_STR = "B" + GAUSS_MIX_MODEL_STR  # Bayesian GMM
 # =============================================================================
 # Column names for configuration DataFrames and file management
 
-ARGUMENTS_STR = "arguments"             # Command-line arguments
 WAVEFORM_STR = "waveform"               # Waveform data reference
 STATION_STR = "station"                 # Station metadata reference
-DATASET_STR = "dataset"                 # Dataset identifiers
-MODELS_STR = "models"                   # Model identifiers
 
 # Comparison labels for base vs. target analysis
-BASE_STR = "Base"                       # Reference/ground truth dataset
-TARGET_STR = "Target"                   # Comparison/predicted dataset
+BASE_STR = "Base"                       # Reference-side label
+TARGET_STR = "Target"                   # Comparison-side label
 
 # =============================================================================
 # UPPERCASE COLUMN NAMES FOR HEADERS
@@ -567,16 +443,8 @@ TARGET_STR = "Target"                   # Comparison/predicted dataset
 # Uppercase versions for header rows and configuration files
 
 EVENT_STR = "EVENT"                     # Event identifier (uppercase)
-MODEL_STR = "MODEL"                     # Model name column
 WEIGHT_STR = "WEIGHT"                   # Weight/pretrained weights
-DIRECTORY_STR = "DIRECTORY"             # Directory path column
-JULIAN_STR = "JULIAN"                   # Julian day column
-DENOISER_STR = "DENOISER"               # Denoising model reference
-DOMAIN_STR = "DOMAIN"                   # Domain/region identifier
-CLIENT_STR = "CLIENT"                   # FDSN client identifier
-RESULTS_STR = "RESULTS"                 # Results directory
 FILENAME_STR = "FILENAME"               # Filename column
-THRESHOLD_STR = "THRESHOLD"             # Probability threshold column
 NETWORK_STR = "NETWORK"                 # Seismic network code
 CHANNEL_STR = "CHANNEL"                 # Channel code
 DATE_STR = "DATE"                       # Date column
@@ -605,17 +473,16 @@ S_WEIGHT_STR = "S_WEIGHT"               # S-wave pick weight
 # =============================================================================
 # Column names for event location quality metrics
 
-ORIGIN_STR = "ORIGIN"                   # Origin time column
 NO_STR = "number_picks"                 # Number of picks used
 GAP_STR = "azimuthal_gap"               # Azimuthal gap in degrees
-DMIN_STR = "DMIN"                       # Distance to nearest station
-RMS_STR = "RMS"                         # RMS travel time residual
+DMIN_STR = "dmin"                       # Distance to nearest station
+RMS_STR = "rms"                         # RMS travel time residual
 ERH_STR = "max_horizontal_uncertainty"  # Horizontal error (km)
 ERZ_STR = "vertical_uncertainty"        # Vertical error (km)
 ERT_STR = "weight"                      # Overall location weight
-QM_STR = "QM"                           # Quality metric
-ONSET_STR = "ONSET"                     # Onset type (I=impulsive, E=emergent)
-POLARITY_STR = "POLARITY"               # First motion polarity (U/D)
+QM_STR = "qm"                           # Quality metric
+ONSET_STR = "onset"                     # Onset type (I=impulsive, E=emergent)
+POLARITY_STR = "polarity"               # First motion polarity (U/D)
 
 # =============================================================================
 # OGS GEOGRAPHIC CLASSIFICATION
@@ -627,10 +494,11 @@ EVENT_TYPE_STR = "E_TYPE"               # Event type column
 
 # Event type classification values
 EVENT_LOCAL_EQ_STR = "local_eq"         # Local tectonic earthquake
+EVENT_REGIONAL_STR = "regional"         # Regional tectonic earthquake
 EVENT_EXPLD_STR = "explosion"           # Industrial explosion
 EVENT_BOMB_STR = "bomb"                 # Military detonation (historical)
 EVENT_LNDSLD_STR = "landslide"          # Landslide-induced event
-EVENT_UNKNOWN_STR = UNKNOWN_STR         # Unknown/unclassified event
+EVENT_UNKNOWN_STR = "UNKNOWN"           # Unknown/unclassified event
 
 # Location metadata
 EVENT_LOCALIZATION_STR = "E_LOC"        # Localization method/status
@@ -681,7 +549,7 @@ OGS_REJECT_STATIONS = ["SP", "OL", "ED", "VNZE"]
 # =============================================================================
 # DEFAULT CLIENT PRIORITY LIST
 # =============================================================================
-# Ordered list of FDSN clients to query (first available wins)
+# Ordered default list of FDSN clients; query behavior belongs to callers.
 
 OGS_CLIENTS_DEFAULT = [
     # Tier-0: OGS internal servers (highest priority)
@@ -695,36 +563,6 @@ OGS_CLIENTS_DEFAULT = [
     RASPISHAKE_CLIENT_STR,              # Raspberry Shake citizen network
     RESIF_CLIENT_STR,                   # French RESIF network
 ]
-
-# =============================================================================
-# DATAFRAME HEADER DEFINITIONS
-# =============================================================================
-# Predefined column lists for creating consistent DataFrames
-
-CATEGORY_STR = "CATEGORY"               # Category column name
-HEADER_STR = "HEADER"                   # Header identifier
-
-# Model configuration header (3 columns)
-HEADER_MODL = [MODEL_STR, WEIGHT_STR, THRESHOLD_STR]
-
-# File system tracking header (6 columns)
-HEADER_FSYS = [FILENAME_STR, MODEL_STR, WEIGHT_STR, TIME_STR, NETWORK_STR,
-               STATION_STR]
-
-# Manual pick data header (5 columns)
-HEADER_MANL = [IDX_EVENTS_STR, TIME_STR, PHASE_STR, STATION_STR, GROUPS_STR]
-
-# Predicted pick header (model info + pick info)
-HEADER_PRED = HEADER_MODL + HEADER_MANL
-
-# Station metadata header (5 columns)
-HEADER_SNSR = [STATION_STR, LATITUDE_STR, LONGITUDE_STR, DEPTH_STR, TIME_STR]
-
-# Statistics header (model info + thresholds)
-HEADER_STAT = [MODEL_STR, WEIGHT_STR, STAT_STR] + THRESHOLDS
-
-# Sorting priority for prediction DataFrames
-SORT_HIERARCHY_PRED = [MODEL_STR, WEIGHT_STR, IDX_EVENTS_STR, TIME_STR]
 
 # =============================================================================
 # SPECULATIVE/EXPERIMENTAL CONSTANTS
@@ -781,7 +619,6 @@ areas of interest in NE Italy, Austria, Slovenia, and Croatia.
 
 # Place name strings
 OGS_ITALY_STR = "Italy"                 # Country identifier
-DESCRIPTION_STR = "Description"         # Description field label
 
 OGS_TIMEOUT = 30                        # Timeout (seconds)
 OGS_RETRY = 3                           # Retry attempts
@@ -839,6 +676,7 @@ OGS_EVENT_TYPES = {
     "E": EVENT_EXPLD_STR,               # Industrial explosion/quarry blast
     "F": EVENT_LNDSLD_STR,              # Landslide-induced seismic event
     "L": EVENT_LOCAL_EQ_STR,            # Local tectonic earthquake
+    "R": EVENT_REGIONAL_STR,            # Regional tectonic earthquake
     "U": EVENT_UNKNOWN_STR              # Unknown/unclassified source
 }
 """
@@ -850,41 +688,6 @@ Single-letter codes used in OGS catalog to classify event types:
 - E: Industrial explosion/quarry blast
 - F: Landslide-induced seismic event
 - L: Local tectonic earthquake
+- R: Regional tectonic earthquake
 - U: Unknown/unclassified source
-"""
-
-# =============================================================================
-# CATALOG OUTPUT HEADER DEFINITIONS
-# =============================================================================
-# Standard column order for event and pick output files
-
-# Event catalog header (8 columns: ID, time, location, uncertainties, gap)
-HEADER_EVENTS = [IDX_EVENTS_STR, TIME_STR, LATITUDE_STR, LONGITUDE_STR,
-                 DEPTH_STR, ERH_STR, ERZ_STR, GAP_STR]
-"""
-EVENT CATALOG HEADER DEFINITIONS\n
-Standard column order for event output files:
-- idx: Unique event identifier
-- time: Origin time of the event
-- latitude: Event latitude in degrees
-- longitude: Event longitude in degrees
-- depth: Event depth in kilometers
-- ERH: Maximum horizontal uncertainty in kilometers
-- ERZ: Vertical uncertainty in kilometers
-- GAP: Azimuthal gap in degrees (measure of station coverage)
-"""
-
-# Pick catalog header (7 columns: ID, time, phase info, quality)
-HEADER_PICKS = [IDX_EVENTS_STR, TIME_STR, PHASE_STR, STATION_STR, ONSET_STR,
-                POLARITY_STR, WEIGHT_STR]
-"""
-PICK CATALOG HEADER DEFINITIONS\n
-Standard column order for pick output files:
-- idx: Unique pick identifier
-- time: Pick arrival time
-- phase: Seismic phase type (e.g., P, S)
-- station: Station code where pick was made
-- onset: Onset quality (I=impulsive, E=emergent)
-- polarity: First motion polarity (U=up, D=down)
-- weight: Pick weight (0-4, with 0 being most precise)
 """

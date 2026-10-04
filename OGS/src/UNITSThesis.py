@@ -4,8 +4,8 @@ UniTS Thesis Driver - Multi-Year Catalog Evaluation & BPGMA Benchmarks
 ===============================================================================
 
 OVERVIEW:
-Reproducible driver script used for the UniTS PhD thesis. It benchmarks
-machine-learning seismic catalog pipelines against the official OGS reference
+Workstation-specific driver for UniTS thesis comparisons. It passes
+candidate machine-learning seismic catalogs and the OGS reference
 catalogs across multi-year observation windows (2020-2021).
 
 The pipeline evaluates:
@@ -13,16 +13,15 @@ The pipeline evaluates:
   2. Candidate deep-learning and automated processing stages:
      - PhaseNet[INSTANCE] + GaMMA associator + QC (OGSPickStatQC)
      - PhaseNet[INSTANCE] + GaMMA + NonLinLoc 1D + Local Magnitude (OGSLocalMagnitude)
-  3. Bipartite graph matching assessment (BPGMA) comparing reference events
-     and picks with automated ML outputs to quantify precision, recall, and
-     location residuals.
+  3. Calls ``OGSCatalog.bpgma`` with the configured station directory.
+     The direct plotting call is commented out.
 
 NOTE:
 Paths and station inventory directories are configured for the analysis
 workstation; adjust paths before executing on cluster environments.
 
 USAGE:
-python UNITSThesis.py
+python -m OGS.src.UNITSThesis
 
 DEPENDENCIES:
 - ogsconstants: date formats and styling definitions
@@ -44,13 +43,13 @@ AUTHORS:
 from pathlib import Path
 from datetime import datetime
 
-import ogsconstants as OGS_C
-from ogscatalog import OGSCatalog
+from . import ogsconstants as OGS_C
+from .ogscatalog import OGSCatalog
 
 
 def main():
   stations = Path("/Users/admin/Desktop/OGS_Catalog/station")
-  # Parse the files
+  # Compare the two configured catalog stages for each year.
   for target, start, end in [(
       "OGS20", datetime.strptime("20200101", OGS_C.YYYYMMDD_FMT),
       datetime.strptime("20201231", OGS_C.YYYYMMDD_FMT)

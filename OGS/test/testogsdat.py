@@ -3,6 +3,9 @@
 OGS DAT Test Suite - Unit and Integration Tests for Legacy Phase Pick DAT Parser
 ===============================================================================
 
+DAT reader contracts backed by unchanged real station records.
+
+
 OVERVIEW:
 Comprehensive test suite for ``DataFileDAT`` covering:
   1. Input validation (file existence and .dat extension checks).
@@ -19,248 +22,139 @@ Comprehensive test suite for ``DataFileDAT`` covering:
 ===============================================================================
 """
 
-from datetime import datetime, timedelta as td
-import os
+from datetime import date, datetime
 from pathlib import Path
-import tempfile
-import unittest
 
-import numpy as np
 import pandas as pd
+import pytest
 
-import ogsconstants as OGS_C
-from ogsdatafile import OGSDataFile
-from ogsdat import DataFileDAT
-import ogsutils as OGS_U
-
-# Base paths
-TEST_DIR = Path(__file__).resolve().parent
-PROJECT_DIR = TEST_DIR.parent
-DATASET_DIR = PROJECT_DIR / "dataset"
-HYPO71_DIR = DATASET_DIR / "OnlyEqHypo71"
-RSFVG_DIR = DATASET_DIR / "RSFVG"
+from OGS.src import ogsconstants as C
+from OGS.src.ogsdat import DataFileDAT
+from OGS.src.ogsutils import parse_dat_args
 
 
-class TestDataFileDAT(unittest.TestCase):
-  """Unit and integration test cases for DataFileDAT."""
-
-  def setUp(self):
-    """Set up test fixtures and paths."""
-    self.dat_hypo_2005 = HYPO71_DIR / "onlyeq2005.dat"
-    self.dat_hypo_2024 = HYPO71_DIR / "onlyeq2024.dat"
-    self.dat_rsfvg_1977 = RSFVG_DIR / "RSFVG-1977.dat"
-    self.dat_rsfvg_2004 = RSFVG_DIR / "RSFVG-2004.dat"
-
-  def test_input_validation_missing_file(self):
-    """DataFileDAT raises FileNotFoundError when the file does not exist."""
-    non_existent = HYPO71_DIR / "non_existent_file.dat"
-    with self.assertRaises(FileNotFoundError):
-      DataFileDAT(non_existent)
-
-  def test_input_validation_invalid_extension(self):
-    """DataFileDAT raises ValueError when the file extension is not .dat."""
-    with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as tmp:
-      tmp_path = Path(tmp.name)
-    try:
-      parser = DataFileDAT(tmp_path)
-      with self.assertRaises(ValueError):
-        parser.read()
-    finally:
-      if tmp_path.exists():
-        tmp_path.unlink()
-
-  def test_parse_dat_args(self):
-    """Test CLI argument parsing for DAT parser via parse_dat_args."""
-    if not self.dat_hypo_2005.is_file():
-      self.skipTest(f"Dataset file {self.dat_hypo_2005} not found")
-
-    args = OGS_U.parse_dat_args([
-        "-f", str(self.dat_hypo_2005),
-        "-D", "20050101", "20050110",
-        "-v",
-    ])
-    self.assertEqual(args.file, [self.dat_hypo_2005])
-    self.assertTrue(args.verbose)
-    self.assertEqual(len(args.dates), 2)
-    self.assertEqual(args.dates[0], datetime(2005, 1, 1))
-    self.assertEqual(args.dates[1], datetime(2005, 1, 10))
-
-  def test_parse_dat_args_defaults(self):
-    """Test parse_dat_args default arguments."""
-    if not self.dat_hypo_2005.is_file():
-      self.skipTest(f"Dataset file {self.dat_hypo_2005} not found")
-
-    args = OGS_U.parse_dat_args(["-f", str(self.dat_hypo_2005)])
-    self.assertEqual(args.file, [self.dat_hypo_2005])
-    self.assertFalse(args.verbose)
-    self.assertEqual(len(args.dates), 2)
-    self.assertEqual(args.dates[0], datetime.min)
-
-  def test_pick_time_offset_calculation(self):
-    """Test SSCC centisecond string conversion into absolute timestamp."""
-    base_time = datetime(2005, 1, 1, 14, 22)
-    # "1018" -> 10.18 seconds offset
-    t1 = DataFileDAT._parse_pick_time(base_time, "1018")
-    self.assertEqual(t1, base_time + td(seconds=10.18))
-
-    # " 471" -> 4.71 seconds offset (spaces replaced by 0)
-    t2 = DataFileDAT._parse_pick_time(base_time, " 471")
-    self.assertEqual(t2, base_time + td(seconds=4.71))
-
-    # "  50" -> 0.50 seconds offset
-    t3 = DataFileDAT._parse_pick_time(base_time, "  50")
-    self.assertEqual(t3, base_time + td(seconds=0.50))
-
-  def test_hypo71_dataset_2005_schema_and_picks(self):
-    """Integration test with OnlyEqHypo71/onlyeq2005.dat: schema invariants and P/S phases."""
-    if not self.dat_hypo_2005.is_file():
-      self.skipTest(f"Dataset file {self.dat_hypo_2005} not found")
-
-    start = datetime(2005, 1, 1)
-    end = datetime(2005, 1, 5)
-    parser = DataFileDAT(self.dat_hypo_2005, start=start, end=end)
-    parser.read()
-
-    # Schema invariants: 11 columns
-    self.assertEqual(len(parser.PICKS.columns), 11)
-    self.assertEqual(list(parser.PICKS.columns), OGSDataFile._PICK_COLUMNS)
-
-    # Both P and S arrivals must be present
-    phases = set(parser.PICKS[OGS_C.PHASE_STR].unique())
-    self.assertEqual(phases, {OGS_C.PWAVE, OGS_C.SWAVE})
-
-    # Station codes must follow '.STATION.' format
-    for station in parser.PICKS[OGS_C.STATION_STR]:
-      self.assertTrue(station.startswith("."))
-      self.assertTrue(station.endswith("."))
-
-    # Groups column must contain valid ISO date strings
-    for grp in parser.PICKS[OGS_C.GROUPS_STR]:
-      datetime.strptime(grp, OGS_C.DATE_FMT)
-
-  def test_rsfvg_1977_dataset_legacy_marker_and_picks(self):
-    """Integration test with RSFVG/RSFVG-1977.dat: legacy space marker and picks extraction."""
-    if not self.dat_rsfvg_1977.is_file():
-      self.skipTest(f"Dataset file {self.dat_rsfvg_1977} not found")
-
-    start = datetime(1977, 5, 1)
-    end = datetime(1977, 5, 10)
-    parser = DataFileDAT(self.dat_rsfvg_1977, start=start, end=end)
-    parser.read()
-
-    # Schema invariants
-    self.assertEqual(len(parser.PICKS.columns), 11)
-    self.assertEqual(list(parser.PICKS.columns), OGSDataFile._PICK_COLUMNS)
-    self.assertGreater(len(parser.PICKS), 0)
-
-    # Legacy 1977 RSFVG data contains both P and S picks
-    counts = parser.PICKS[OGS_C.PHASE_STR].value_counts()
-    self.assertIn(OGS_C.PWAVE, counts)
-    self.assertIn(OGS_C.SWAVE, counts)
-
-  def test_rsfvg_2004_dataset(self):
-    """Integration test with RSFVG/RSFVG-2004.dat."""
-    if not self.dat_rsfvg_2004.is_file():
-      self.skipTest(f"Dataset file {self.dat_rsfvg_2004} not found")
-
-    start = datetime(2004, 1, 1)
-    end = datetime(2004, 1, 3)
-    parser = DataFileDAT(self.dat_rsfvg_2004, start=start, end=end)
-    parser.read()
-
-    self.assertEqual(len(parser.PICKS.columns), 11)
-    self.assertGreater(len(parser.PICKS), 0)
-
-  def test_date_range_filtering(self):
-    """Test start and end date filtering on DAT pick records."""
-    if not self.dat_hypo_2005.is_file():
-      self.skipTest(f"Dataset file {self.dat_hypo_2005} not found")
-
-    parser_day1 = DataFileDAT(
-        self.dat_hypo_2005,
-        start=datetime(2005, 1, 1),
-        end=datetime(2005, 1, 1),
-    )
-    parser_day1.read()
-    picks_day1_len = len(parser_day1.PICKS)
-    self.assertGreater(picks_day1_len, 0)
-
-    parser_day3 = DataFileDAT(
-        self.dat_hypo_2005,
-        start=datetime(2005, 1, 1),
-        end=datetime(2005, 1, 3),
-    )
-    parser_day3.read()
-    self.assertGreater(len(parser_day3.PICKS), picks_day1_len)
-
-  def test_synthetic_dat_modern_and_legacy_markers(self):
-    """Test synthetic DAT records testing '1' vs space century markers and P+S vs P-only picks."""
-    synthetic_dat = (
-        # Line 1: Modern 2005 style with '1' marker and both P and S picks
-        "BOO iPC010501011422 1018        1095iS 2                      FLD       480   3 gg                                      \n"
-        # Line 2: Modern 2005 style with '1' marker and P-only pick (empty S block)
-        "ROBSiP 210501011422 1459                                      FLD             3 g                                       \n"
-        # Line 3: Event separator marker line (must be skipped)
-        "                 1                                              D                                                       \n"
-        # Line 4: Legacy 1977 style with space ' ' marker, empty weights (defaults to 0), and P+S
-        "BUA eP   7705061140 5400        5650eS                        FL         70   1 gg                                      \n"
-        # Line 5: Filtered event type (quarry explosion 'Q' with local localization should be skipped by default)
-        "BAD eP 010501011422 1210        1478iS 2                      FQ        586   4 gg                                      \n"
-    )
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".dat", delete=False) as tmp:
-      tmp.write(synthetic_dat)
-      tmp_path = Path(tmp.name)
-
-    try:
-      # Use broad date range to capture both 1977 and 2005 records
-      parser = DataFileDAT(tmp_path, start=datetime(
-          1970, 1, 1), end=datetime(2010, 1, 1))
-      parser.read()
-
-      # Line 1 produces 2 picks (BOO P + S)
-      # Line 2 produces 1 pick (ROBS P only)
-      # Line 3 is event summary line (skipped)
-      # Line 4 produces 2 picks (BUA P + S with legacy marker)
-      # Line 5 is type Q (skipped)
-      # Total expected picks: 2 + 1 + 2 = 5 picks
-      self.assertEqual(len(parser.PICKS), 5)
-
-      # Check phases
-      phases = list(parser.PICKS[OGS_C.PHASE_STR])
-      self.assertEqual(
-          phases, [OGS_C.PWAVE, OGS_C.SWAVE, OGS_C.PWAVE, OGS_C.PWAVE, OGS_C.SWAVE])
-
-      # Check station names normalized with surrounding dots
-      stations = list(parser.PICKS[OGS_C.STATION_STR])
-      self.assertEqual(stations, [".BOO.", ".BOO.",
-                       ".ROBS.", ".BUA.", ".BUA."])
-
-      # Check weights: line 4 had spaces -> parsed with default weight 0
-      weights = list(parser.PICKS[OGS_C.WEIGHT_STR])
-      self.assertEqual(weights, [0, 2, 2, 0, 0])
-
-      # Check event indexes normalized with year stride
-      idxs = list(parser.PICKS[OGS_C.IDX_PICKS_STR])
-      # 2005 event 3 -> 2005000003
-      self.assertEqual(idxs[:3], [2005000003, 2005000003, 2005000003])
-      # 1977 event 1 -> 1977000001
-      self.assertEqual(idxs[3:], [1977000001, 1977000001])
-
-    finally:
-      if tmp_path.exists():
-        tmp_path.unlink()
-
-  def test_minute_rollover_datetime_parsing(self):
-    """Test DAT date parsing when minute field is >= 60 (rollover handling)."""
-    # Test valid date without rollover
-    dt1 = DataFileDAT._parse_event_datetime("0501011422")
-    self.assertEqual(dt1, datetime(2005, 1, 1, 14, 22))
-
-    # Test rollover when minute is 60: "0501011460" -> 14:00 + 1 hour = 15:00
-    dt2 = DataFileDAT._parse_event_datetime("0501011460")
-    self.assertEqual(dt2, datetime(2005, 1, 1, 15, 0))
+@pytest.mark.parametrize("first,last,p_count,s_count", [
+    (1, 7, 4, 4),
+    (8, 11, 3, 3),
+    (12, 14, 2, 2),
+    (18, 22, 4, 4),
+    (23, 30, 7, 3),
+    (31, 42, 11, 10),
+    (43, 62, 17, 15),
+    (109, 114, 5, 5),
+])
+def test_complete_station_groups(reader_factory, first, last, p_count, s_count):
+  reader = reader_factory(
+      DataFileDAT, "picks.dat", segments=((first, last),)
+  )
+  picks = reader.PICKS
+  assert len(picks) == p_count + s_count
+  assert picks[C.PHASE_STR].value_counts().to_dict() == {
+      C.PWAVE: p_count, C.SWAVE: s_count,
+  }
+  assert picks[C.STATION_STR].str.fullmatch(r"\.[A-Z0-9]{1,4}\.").all()
+  assert pd.api.types.is_datetime64_any_dtype(picks[C.TIME_STR])
+  assert pd.api.types.is_integer_dtype(picks[C.IDX_PICKS_STR])
+  assert picks[C.PROBABILITY_STR].eq(1.0).all()
+  assert picks[C.GROUPS_STR].equals(picks[C.TIME_STR].dt.strftime("%Y-%m-%d"))
+  assert sum(map(len, reader.picks.values())) == len(picks)
+  assert not list(reader.output.rglob("*.parquet"))
 
 
-if __name__ == "__main__":
-  unittest.main()
+@pytest.mark.parametrize("station,phase,weight", [
+    ("PLRO", "P", 0), ("PLRO", "S", 0),
+    ("BAD", "P", 0), ("BAD", "S", 2),
+    ("BOO", "P", 0), ("BOO", "S", 1),
+    ("VOY", "P", 2), ("VOY", "S", 2),
+])
+def test_explicit_weights_stay_with_station_and_phase(
+    reader_factory, station, phase, weight,
+):
+  reader = reader_factory(DataFileDAT, "picks.dat", segments=((18, 22),))
+  rows = reader.PICKS.set_index([C.STATION_STR, C.PHASE_STR])
+  assert rows.loc[(f".{station}.", phase), C.WEIGHT_STR] == weight
+  assert set(reader.PICKS[C.IDX_PICKS_STR]) == {1997000001}
+
+
+@pytest.mark.parametrize("first,last,station,phase,expected", [
+    (8, 11, "BAD", "S", datetime(1977, 5, 7, 20, 11, 0, 200000)),
+    (8, 11, "BUA", "S", datetime(1977, 5, 7, 20, 11, 0, 900000)),
+    (8, 11, "COLI", "S", datetime(1977, 5, 7, 20, 11, 5, 300000)),
+    (12, 14, "BAD", "P", datetime(1977, 11, 2, 7, 0, 0, 600000)),
+    (12, 14, "BAD", "S", datetime(1977, 11, 2, 7, 0, 4, 100000)),
+    (12, 14, "RCL", "P", datetime(1977, 11, 2, 7, 0, 2)),
+    (12, 14, "RCL", "S", datetime(1977, 11, 2, 7, 0, 6, 400000)),
+    (31, 42, "LSR", "S", datetime(2004, 1, 1, 0, 19, 0, 510000)),
+    (43, 62, "DRE", "P", datetime(2005, 1, 1, 3, 22, 2, 940000)),
+    (43, 62, "DRE", "S", datetime(2005, 1, 1, 3, 22, 4, 710000)),
+])
+def test_centiseconds_and_distinct_rollover_cases(
+    reader_factory, first, last, station, phase, expected,
+):
+  reader = reader_factory(DataFileDAT, "picks.dat", segments=((first, last),))
+  event_id = {
+      8: 1977000008, 12: 1977000692, 31: 2004000001, 43: 2005000001,
+  }[first]
+  picks = reader.PICKS.set_index([
+      C.IDX_PICKS_STR, C.STATION_STR, C.PHASE_STR,
+  ])
+  assert picks.loc[(event_id, f".{station}.", phase), C.TIME_STR] == expected
+
+
+@pytest.mark.parametrize("start,end,ids,total,days", [
+    (datetime(2005, 1, 1), datetime(2005, 1, 1),
+     {2005000001, 2005000002, 2005000003}, 32, {date(2005, 1, 1)}),
+    (datetime(2005, 1, 2), datetime(2005, 1, 2),
+     {2005000008}, 44, {date(2005, 1, 2)}),
+    (datetime(2005, 1, 1), datetime(2005, 1, 2),
+     {2005000001, 2005000002, 2005000003, 2005000008}, 76,
+     {date(2005, 1, 1), date(2005, 1, 2)}),
+])
+def test_inclusive_date_windows(reader_factory, start, end, ids, total, days):
+  reader = reader_factory(DataFileDAT, "picks.dat", start, end)
+  assert set(reader.PICKS[C.IDX_PICKS_STR]) == ids
+  assert len(reader.PICKS) == total
+  assert set(reader.picks) == days
+
+
+def test_p_only_station_never_gets_an_s_pick(reader_factory):
+  reader = reader_factory(DataFileDAT, "picks.dat", segments=((23, 30),))
+  by_station = reader.PICKS.groupby(C.STATION_STR)[C.PHASE_STR].agg(set)
+  for station in ("CAE", "MPRI", "BUA", "COLI"):
+    assert by_station[f".{station}."] == {"P"}
+  assert by_station[".CLA1."] == {"P", "S"}
+  assert set(reader.PICKS[C.IDX_PICKS_STR]) == {2000000004}
+
+
+def test_no_matching_dates_returns_empty_pick_schema(reader_factory):
+  reader = reader_factory(
+      DataFileDAT, "picks.dat", datetime(2022, 1, 1), datetime(2022, 12, 31)
+  )
+  assert reader.PICKS.empty
+  assert list(reader.PICKS.columns) == DataFileDAT._PICK_COLUMNS
+  assert reader.picks == {}
+
+
+def test_non_earthquake_without_distant_flag_is_excluded(reader_factory):
+  reader = reader_factory(DataFileDAT, "picks.dat", segments=((105, 108),))
+  assert reader.PICKS.empty
+  assert reader.picks == {}
+
+
+def test_input_validation(tmp_path):
+  with pytest.raises(FileNotFoundError, match="does not exist"):
+    DataFileDAT(tmp_path / "missing.dat", output=tmp_path / "out")
+  wrong = tmp_path / "wrong.txt"
+  wrong.touch()
+  reader = DataFileDAT(wrong, output=tmp_path / "out")
+  with pytest.raises(ValueError, match=r"\.dat"):
+    reader.read()
+
+
+def test_cli_uses_existing_fixture_and_sorts_dates():
+  source = Path(__file__).parent / "data" / "picks.dat"
+  args = parse_dat_args(
+      ["-f", str(source), "-D", "20240102", "20240101", "-v"])
+  assert args.file == [source]
+  assert args.dates == [datetime(2024, 1, 1), datetime(2024, 1, 2)]
+  assert args.verbose

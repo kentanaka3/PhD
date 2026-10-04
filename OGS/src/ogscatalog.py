@@ -7,12 +7,12 @@ OVERVIEW:
 This module implements ``OGSCatalog``, a single-class container that lazily
 indexes daily seismic event and pick files produced by the OGS processing
 pipeline, exposes aggregate ``EVENTS`` and ``PICKS`` DataFrames, and drives
-the BGMA (Base/Ground-truth vs. Model Assessment) review workflow used to
-compare two catalogs day-by-day.
+the BGMA (Base vs. Model Assessment) review workflow used to compare two
+catalogs day-by-day.
 
-The class is intentionally large because it bundles four conceptually
-distinct responsibilities that all share the same on-disk daily layout and
-in-memory DataFrame schemas:
+The class is intentionally large because it bundles five conceptually distinct
+responsibilities that all share the same on-disk daily layout and in-memory
+DataFrame schemas:
 
 1. CATALOG INDEXING & DAILY I/O
    - ``preload``, ``load_``, ``_load_day``, ``load``, ``postload``, ``get``
@@ -44,13 +44,13 @@ in-memory DataFrame schemas:
               ``_plot_picks_confmtx`` / ``_plot_picks_time_diff`` /
               ``_plot_picks_confidence``.
    - Same per-day cadence as event matching but resolves matches by
-     ``(station, phase, time)`` and reports a 3x3 phase confusion matrix.
-
+     ``(station, phase, time)`` contributing to the score, and reports a
+     ``3x3`` phase confusion matrix.
 5. COMBINED WORKFLOW & SET OPERATIONS
    - ``bpgma`` runs the events- and picks-side BGMA reviews back-to-back
-     (and optionally per-event waveform diagnostics) for the same target.
-   - ``__iadd__`` / ``__isub__`` provide in-place catalog merge/subtract,
-     used by the review workflow when materializing review-only subsets.
+     for the same target, optionally loading waveform/station context.
+   - ``__iadd__`` / ``__isub__`` provide in-place catalog merge/subtract;
+     they are not invoked by ``bpgma``.
 
 ARCHITECTURE:
   ┌─────────────────────────────────────────────────────────────────────────┐
@@ -68,21 +68,24 @@ ARCHITECTURE:
   │  plot / plot_events    bgmaEvents                       bgmaPicks       │
   │  plot_cumulative_*     ─ shared & extra dates           ─ load+clean    │
   │  plot_*_histogram      ─ feasible-position matching     ─ time-window   │
-  │                        ─ matched/missed/proposed         match by S/P   │
+  │                        ─ matched/missed/proposed         same station   │
   │                        ─ CSV + diagnostic figures       ─ CSV + figs    │
   │                                                                         │
   │                                  ▼                                      │
   │                          bpgma orchestrator                             │
-  │                  (events ➜ picks ➜ waveform review)                     │
+  │                (context loading ➜ events ➜ picks)                       │
   └─────────────────────────────────────────────────────────────────────────┘
 
 ON-DISK LAYOUT EXPECTED:
   <input>/
     events/        YYYY-MM-DD.{csv,parquet}     ← event-level rows
     assignments/   YYYY-MM-DD.{csv,parquet}     ← pick-level rows
-    picks/         YYYY-MM-DD.{csv,parquet}     ← additional pick rows
+    picks/         YYYY-MM-DD.{csv,parquet}     ← alternative pick rows
   Non-date / hidden stems are silently skipped at index time. Both
   ``assignments`` and ``picks`` feed the same ``picks_`` path cache.
+  A ``picks`` path overrides an ``assignments`` path for the same date; files
+  are not merged.
+  Indexing does not restrict extensions: CSV is read as CSV, others as parquet.
 
 SCHEMA NOTES:
   ``_EVENTS_COLUMNS`` / ``_PICKS_COLUMNS`` define the canonical columns of
@@ -99,10 +102,11 @@ SEISMIC APPLICATIONS:
   - Waveform-level inspection of missed / proposed events.
 
 USAGE:
-  cat = OGSCatalog(input=Path(".../catalog"), start=t0, end=t1, name="OGS")
+  from OGS.src.ogscatalog import OGSCatalog
+  cat = OGSCatalog(input=Path("catalog"), start=t0, end=t1, name="OGS")
   events = cat.get("EVENTS")
   cat.plot(targets=[other_catalog])
-  cat.bpgma(other_catalog, stations=Path(".../station"))
+  cat.bpgma(other_catalog, stations=Path("station"))
 
 DEPENDENCIES:
   - numpy, pandas      : array + DataFrame operations
@@ -110,7 +114,7 @@ DEPENDENCIES:
   - obspy.UTCDateTime  : robust date parsing of file stems
   - ogsconstants       : shared column names and configuration constants
   - ogsutils           : logger + ``contains_points`` polygon kernel
-  - ogsplotter         : (lazy import) waveform / map / histogram renderers
+  - ogsplotter         : eagerly imported waveform / map / histogram renderers
 
 AUTHORS:
   - 健
@@ -142,27 +146,27 @@ from typing import (
 import numpy as np                              # Array ops + boolean masks
 import pandas as pd                             # All catalog frames
 from obspy import UTCDateTime                   # Tolerant date-stem parsing
+from matplotlib import pyplot as plt
 from matplotlib.path import Path as mplPath     # Polygon containment tests
 
 # =============================================================================
 # LOCAL PACKAGE IMPORTS
 # =============================================================================
-import ogsconstants as OGS_C
-import ogsutils as OGS_U
+from . import ogsconstants as OGS_C, ogsutils as OGS_U, ogsplotter as OGS_P
 
 # =============================================================================
 # MODULE-LEVEL CONSTANTS — frame layouts and BGMA review schemas
 # =============================================================================
 # Image extension used everywhere in this module for figure output. Switching
 # this single alias propagates to every plotting helper below.
-IMAGE_EXT = OGS_C.PDF_EXT
+IMAGE_EXT = OGS_C.PNG_EXT
 
 # BGMA output-frame column layouts (hoisted out of bgmaEvents/bgmaPicks; pure
 # `OGS_C.*` constants, so safe to build once at module load).
 _EVENTS_MH_COLUMNS: list[str] = [
-    OGS_C.IDX_EVENTS_STR, OGS_C.TIME_STR, OGS_C.LATITUDE_STR, OGS_C.LONGITUDE_STR,
-    OGS_C.DEPTH_STR, OGS_C.ERH_STR, OGS_C.ERZ_STR, OGS_C.GAP_STR,
-    OGS_C.MAGNITUDE_L_STR, OGS_C.GROUPS_STR,
+    OGS_C.IDX_EVENTS_STR, OGS_C.TIME_STR, OGS_C.LATITUDE_STR,
+    OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR, OGS_C.ERH_STR, OGS_C.ERZ_STR,
+    OGS_C.GAP_STR, OGS_C.MAGNITUDE_L_STR, OGS_C.GROUPS_STR,
 ]
 # Wide-form variant: ``{col}_base`` / ``{col}_target`` columns built from
 # ``_EVENTS_MH_COLUMNS`` for matched-event review tables.
@@ -180,17 +184,16 @@ _PICKS_PHASES: tuple[str, ...] = (OGS_C.PWAVE, OGS_C.SWAVE, OGS_C.NONE_STR)
 # Row/column labels for `bgmaEvents`'s 2x2 confusion matrix (matched event vs
 # missed/proposed on the `NONE_STR` axis).
 _EVENTS_PHASES: tuple[str, ...] = (OGS_C.EVENT_STR, OGS_C.NONE_STR)
-# Source-label discriminants yielded by `_iter_shared_and_extra_dates`; typed
-# as `Literal` so branch sites in `bgmaEvents`/`bgmaPicks` get static
-# exhaustiveness coverage instead of free-form strings.
+# Source-label discriminants yielded by `_iter_shared_and_extra_dates`;
+# `Literal` restricts the annotated labels to these three branches.
 _DateSource = Literal["both", "base_only", "target_only"]
 _BOTH: _DateSource = "both"
 _BASE_ONLY: _DateSource = "base_only"
 _TARGET_ONLY: _DateSource = "target_only"
 
 # Column layouts for the catalog-wide PICKS/EVENTS frames built in __init__.
-# These define the canonical schema returned by ``OGSCatalog.get("PICKS")``
-# and ``OGSCatalog.get("EVENTS")``.
+# Loaded aggregate frames retain the source schema instead of being reindexed
+# to these initial column lists.
 _PICKS_COLUMNS: list[str] = [
     OGS_C.IDX_PICKS_STR, OGS_C.GROUPS_STR, OGS_C.TIME_STR,
     OGS_C.STATION_STR, OGS_C.PHASE_STR, OGS_C.PROBABILITY_STR,
@@ -212,14 +215,14 @@ _EVENTS_COLUMNS: list[str] = [
     OGS_C.NUMBER_P_PICKS_STR,        # 11: number_p_picks
     OGS_C.NUMBER_S_PICKS_STR,        # 12: number_s_picks
     OGS_C.NUMBER_P_AND_S_PICKS_STR,  # 13: number_p_and_s_picks
-    OGS_C.MAGNITUDE_D_STR,           # 14: MD
-    OGS_C.MAGNITUDE_L_STR,           # 15: ML
+    OGS_C.MAGNITUDE_D_STR,           # 14: magnitude duration
+    OGS_C.MAGNITUDE_L_STR,           # 15: local magnitude
     OGS_C.ML_MEDIAN_STR,             # 16: ML_median
     OGS_C.ML_UNC_STR,                # 17: ML_unc
     OGS_C.ML_STATIONS_STR,           # 18: ML_stations
-    OGS_C.DMIN_STR,                  # 19: DMIN
-    OGS_C.RMS_STR,                   # 20: RMS
-    OGS_C.QM_STR,                    # 21: QM
+    OGS_C.DMIN_STR,                  # 19: minimum distance
+    OGS_C.RMS_STR,                   # 20: root mean square
+    OGS_C.QM_STR,                    # 21: quality metric
     OGS_C.LOC_NAME_STR,              # 22: LOC_NAME
     OGS_C.EVENT_TYPE_STR,            # 23: E_TYPE
     OGS_C.NOTES_STR,                 # 24: NOTES
@@ -247,14 +250,15 @@ class OGSCatalog:
     Root directory containing dated files in ``events`` and either
     ``assignments`` or ``picks``.
   start : datetime, optional
-    Inclusive lower bound used while indexing dated files.
+    Inclusive lower date bound for indexing; defaults to datetime.max.
   end : datetime, optional
-    Inclusive upper bound used while indexing dated files.
+    Inclusive upper date bound for indexing; defaults to datetime.min.
+    Supply an ascending start/end window to index days.
   verbose : bool, optional
     Enable verbose logger output.
   polygon : mplPath, optional
-    Polygon applied to loaded event days. If None, no spatial filtering is
-    performed.
+    Polygon applied to loaded event days; defaults to OGS_C.OGS_POLY_REGION
+    wrapped in mplPath. If None, no spatial filtering is performed.
   output : Path, optional
     Directory used for derived artifacts such as plots and BGMA review files.
   name : str, optional
@@ -315,8 +319,7 @@ class OGSCatalog:
         stations: Optional[Path] = None,
         waveforms: Optional[Path] = None,
         vlines: list[tuple[datetime, str, str]] = []) -> None
-    Run the combined BGMA workflow for events, picks, and optional waveform
-    review.
+    Load optional waveform/station context and run events then picks BPGMA.
   """
 
   def __init__(
@@ -325,8 +328,7 @@ class OGSCatalog:
       start: datetime = datetime.max,
       end: datetime = datetime.min,
       verbose: bool = False,
-      polygon: Optional[mplPath] = mplPath(OGS_C.OGS_POLY_REGION,
-                                           closed=True),
+      polygon: Optional[mplPath] = mplPath(OGS_C.OGS_POLY_REGION, closed=True),
       output: Path = OGS_C.THIS_FILE.parent / "data" / "OGSCatalog",
       name: str = OGS_C.EMPTY_STR
   ) -> None:
@@ -338,14 +340,15 @@ class OGSCatalog:
       Root directory containing dated files in ``events`` and either
       ``assignments`` or ``picks``.
     start : datetime, optional
-      Inclusive lower date bound used by :meth:`preload`.
+      Inclusive lower date bound used by :meth:`preload`; default datetime.max.
     end : datetime, optional
-      Inclusive upper date bound used by :meth:`preload`.
+      Inclusive upper date bound used by :meth:`preload`; default datetime.min.
+      The default inverted window indexes no days.
     verbose : bool, optional
       Enable verbose logger output.
     polygon : mplPath, optional
-      Polygon applied to loaded event days. If None, no spatial filtering is
-      performed.
+      Polygon applied to loaded event days; defaults to the OGS region polygon.
+      If None, no spatial filtering is performed.
     output : Path, optional
       Directory created for derived artifacts.
     name : str, optional
@@ -390,6 +393,8 @@ class OGSCatalog:
     Event files are collected from ``events``; pick-like files from both
     ``assignments`` and ``picks`` share ``self.picks_``. Only stems that
     parse as dates within the inclusive ``[start, end]`` window are retained.
+    ``picks`` overrides ``assignments`` on a duplicate date. Within each
+    directory category, the last discovered file wins; discovery is not sorted.
     """
     start_d, end_d = self.start.date(), self.end.date()
     if self._preload_index is None:
@@ -445,7 +450,7 @@ class OGSCatalog:
   # -------------------------------------------------------------------------
   # CONFUSION-MATRIX & METRIC HELPERS
   # -------------------------------------------------------------------------
-  # Small, side-effect-free utilities shared by BGMA events and picks. They
+  # Small utilities shared by BPGMA events and picks. They
   # build square confusion frames, accumulate counts safely with ``int``
   # coercion, and log recall / false-discovery rates under consistent names.
   # -------------------------------------------------------------------------
@@ -567,7 +572,7 @@ class OGSCatalog:
   # -------------------------------------------------------------------------
   # PAIRED-COLUMN SCHEMA HELPERS (wide vs. legacy tuple representation)
   # -------------------------------------------------------------------------
-  # BGMA review tables can live in two schemas: wide
+  # BPGMA review tables can live in two schemas: wide
   # (``{col}_base`` / ``{col}_target``) or legacy (tuple-valued ``col``).
   # ``_tcol`` is the single entry point used by every downstream plotter.
   # -------------------------------------------------------------------------
@@ -603,7 +608,9 @@ class OGSCatalog:
     return self._legacy_tcols(df, col)[idx]
 
   def _magnitude_or_none(self, df: pd.DataFrame) -> Optional[pd.Series]:
-    """Return scalar ``MAGNITUDE_L`` values when present and not all-null."""
+    """
+    Return scalar ``ML`` (MAGNITUDE_L_STR) values if present and not all-null.
+    """
     if OGS_C.MAGNITUDE_L_STR not in df.columns:
       return None
     series = df[OGS_C.MAGNITUDE_L_STR]
@@ -612,11 +619,11 @@ class OGSCatalog:
   def _magnitude_tuple_or_none(
       self, df: pd.DataFrame, idx: Literal[0, 1],
   ) -> Optional[pd.Series]:
-    """Return one side of paired ``MAGNITUDE_L`` data when available.
+    """Return one side of paired ``ML`` (MAGNITUDE_L_STR) data when available.
 
     Supports both wide-schema columns
-    ``MAGNITUDE_L_base`` / ``MAGNITUDE_L_target`` and the legacy tuple-valued
-    ``MAGNITUDE_L`` column. Returns ``None`` when the selected side is absent
+    ``ML_base`` / ``ML_target`` and the legacy tuple-valued
+    ``ML`` column. Returns ``None`` when the selected side is absent
     or entirely null.
     """
     suffix = "base" if idx == 0 else "target"
@@ -630,7 +637,7 @@ class OGSCatalog:
   # POLYGON / SPATIAL FILTERING
   # -------------------------------------------------------------------------
   # Optional containment filtering applied to events as they are loaded; the
-  # same polygon also constrains BGMA candidate pairs to a shared domain.
+  # same polygon also constrains BPGMA candidate pairs to a shared domain.
   # -------------------------------------------------------------------------
 
   def _polygon_vertices(self) -> Optional[np.ndarray[Any, Any]]:
@@ -648,10 +655,10 @@ class OGSCatalog:
       events: pd.DataFrame,
       polygon_vertices: Optional[np.ndarray[Any, Any]],
   ) -> np.ndarray[Any, Any]:
-    """Return the polygon-membership mask for BGMA event candidates.
+    """Return the polygon-membership mask for BPGMA event candidates.
 
     When ``polygon_vertices`` is ``None``, every row remains eligible.
-    Otherwise the mask selects events whose hypocenters lie inside the
+    Otherwise the mask selects events whose longitude/latitude lie inside the
     supplied polygon.
     """
     if polygon_vertices is None or events.empty:
@@ -669,11 +676,11 @@ class OGSCatalog:
       date: datetime,
       label: str,
   ) -> pd.DataFrame:
-    """Project one event day into the shared BGMA domain.
+    """Project one event day into the shared BPGMA domain.
 
     Rows outside ``polygon_vertices`` are diverted to ``filtered_frames`` as
     review-only partitions (``EventsSM`` for BASE, ``EventsSP`` for TARGET)
-    and never enter BGMA matching or the 2x2 event confusion matrix.
+    and never enter BPGMA matching or the 2x2 event confusion matrix.
     """
     if events.empty:
       return events.reset_index(drop=True)
@@ -754,8 +761,8 @@ class OGSCatalog:
 
     Returns
     -------
-    Dict[datetime, pd.DataFrame]
-      Mapping of indexed days to daily DataFrames currently held in cache.
+    dict[datetime.date, pd.DataFrame]
+      Daily cache, including any existing days not in the current path index.
     """
     if key not in ("events", "picks"):
       raise ValueError(f"Unknown key: {key}")
@@ -773,8 +780,9 @@ class OGSCatalog:
     """Populate a per-day cache from the aggregate in-memory DataFrame.
 
     When ``update`` is ``True`` and the aggregate frame is non-empty, rows are
-    grouped by ``GROUPS_STR`` and stored back into the daily cache. When
-    ``update`` is ``False``, the existing cache is returned unchanged.
+    grouped by ``GROUPS_STR`` and stored back into the daily cache, replacing
+    matching dates without clearing other cached dates. When ``update`` is
+    ``False``, the existing cache is returned unchanged.
 
     Parameters
     ----------
@@ -785,7 +793,7 @@ class OGSCatalog:
 
     Returns
     -------
-    Dict[datetime, pd.DataFrame]
+    dict[datetime.date, pd.DataFrame]
       Mapping of cached days to daily DataFrames.
     """
     if key not in ("events", "picks"):
@@ -801,7 +809,8 @@ class OGSCatalog:
     """Return the aggregate ``EVENTS`` or ``PICKS`` DataFrame.
 
     If the aggregate frame is empty, the corresponding daily cache is loaded on
-    demand and concatenated once. When no daily data are available, the empty
+    demand and concatenated. An empty result triggers this again on later
+    calls. When no daily data are available, the empty
     aggregate frame is returned after logging a warning.
 
     Parameters
@@ -897,7 +906,7 @@ class OGSCatalog:
     before and 30 seconds after the event origin time, writes the figure, and
     closes the Matplotlib figure before returning.
     """
-    import ogsplotter as OGS_P
+    from . import ogsplotter as OGS_P
     from matplotlib import pyplot as plt
     if self.stations is None:
       raise ValueError(
@@ -958,7 +967,7 @@ class OGSCatalog:
     :meth:`get`, logs and returns when a catalog has no events, writes the map,
     and closes the Matplotlib figure before returning.
     """
-    import ogsplotter as OGS_P
+    from . import ogsplotter as OGS_P
     from matplotlib import pyplot as plt
     events = self.get("EVENTS")
     if events.empty:
@@ -1036,7 +1045,7 @@ class OGSCatalog:
     self.plot_erh_histogram(targets=targets)
     self.plot_erz_histogram(targets=targets)
     self.plot_ert_histogram(targets=targets)
-    self.plot_magnitude_histogram(targets=targets)
+    self.plot_magnitude_l_histogram(targets=targets)
     self.plot_depth_histogram(targets=targets)
     self.plot_cumulative_events(targets=targets, vlines=vlines)
     self.plot_cumulative_picks(targets=targets, vlines=vlines)
@@ -1068,8 +1077,10 @@ class OGSCatalog:
     :meth:`_plot_event_waveforms` and is separate from the catalog-level matched
     or comparison plots produced by :meth:`plot` and :meth:`plot_events`.
     """
-    self._plot_event_waveforms(picks, event, waveforms,
-                               kind="MS", label="Missed", output=output)
+    self._plot_event_waveforms(
+        picks, event, waveforms, kind=OGS_C.MS_STR, label="Missed",
+        output=output
+    )
 
   def plot_events_ps_waveforms(
       self,
@@ -1098,8 +1109,10 @@ class OGSCatalog:
     :meth:`_plot_event_waveforms` and is separate from the catalog-level matched
     or comparison plots produced by :meth:`plot` and :meth:`plot_events`.
     """
-    self._plot_event_waveforms(picks, event, waveforms,
-                               kind="PS", label="Proposed", output=output)
+    self._plot_event_waveforms(
+        picks, event, waveforms, kind=OGS_C.PS_STR, label="Proposed",
+        output=output
+    )
 
   # -------------------------------------------------------------------------
   # Cumulative-count curves (events / picks over time)
@@ -1137,8 +1150,6 @@ class OGSCatalog:
     wrappers around this helper; they only fix the table key, title, and output
     suffix.
     """
-    import ogsplotter as OGS_P
-    from matplotlib import pyplot as plt
 
     def _path(name_extra=""):
       if output is not None:
@@ -1272,12 +1283,10 @@ class OGSCatalog:
     -----
     :meth:`plot_erz_histogram`, :meth:`plot_erh_histogram`,
     :meth:`plot_ert_histogram`, :meth:`plot_depth_histogram`, and
-    :meth:`plot_magnitude_histogram` are thin wrappers around this helper; they
-    select the column, labels, file suffix, and any plotter-specific kwargs.
+    :meth:`plot_magnitude_l_histogram` are thin wrappers around this helper;
+    they select the column, labels, file suffix, and any plotter-specific
+    kwargs.
     """
-    import ogsplotter as OGS_P
-    from matplotlib import pyplot as plt
-
     def _path(name_extra=""):
       if output is not None:
         return output
@@ -1335,7 +1344,7 @@ class OGSCatalog:
     )
 
   def plot_ert_histogram(self, targets=[], bins=OGS_C.NUM_BINS, output=None):
-    """Public wrapper around :meth:`_plot_histogram` for event ERT values.
+    """Histogram the ``weight`` column selected by OGS_C.ERT_STR.
 
     ``targets`` are overlaid as comparison histograms, ``bins`` is forwarded
     unchanged, and the default output name is ``<self.input.name>_ERT`` under
@@ -1358,7 +1367,7 @@ class OGSCatalog:
         targets=targets, bins=bins, output=output, xlim=(0, 50)
     )
 
-  def plot_magnitude_histogram(
+  def plot_magnitude_l_histogram(
       self, targets=[], bins=OGS_C.NUM_BINS, output=None
   ):
     """Public wrapper around :meth:`_plot_histogram` for event magnitudes.
@@ -1373,7 +1382,17 @@ class OGSCatalog:
         "MagL", targets=targets, bins=bins, output=output, yscale='log',
         xlim=(-1, 7)
     )
-    # MD histogram (new layer)
+
+  def plot_magnitude_d_histogram(
+      self, targets=[], bins=OGS_C.NUM_BINS, output=None
+  ):
+    """Public wrapper around :meth:`_plot_histogram` for event magnitudes.
+
+    Produces a histogram for $M_D$ when valid data exist.
+    ``targets`` are overlaid as comparison histograms, ``bins`` is forwarded
+    unchanged, and the default output name is ``<self.input.name>_MagD``
+    under ``self.output / "img"``.
+    """
     self._plot_histogram(
         OGS_C.MAGNITUDE_D_STR, "Magnitude ($M_D$)", "Magnitude$_D$ Histogram",
         "MagD", targets=targets, bins=bins, output=output, yscale='log',
@@ -1381,12 +1400,12 @@ class OGSCatalog:
     )
 
   # =========================================================================
-  # BGMA EVENT MATCHING & REVIEW
+  # BPGMA EVENT MATCHING & REVIEW
   # =========================================================================
-  # Day-by-day matching of base vs. target events into three partitions:
-  # matched (MH), base-only (SM = silenced/missed), and target-only
-  # (SP = surplus/proposed). Drives a 2x2 event confusion matrix and a set
-  # of comparison CSVs and figures.
+  # Day-by-day matching of eligible events into matched (MH), missed BASE (MS),
+  # and proposed TARGET (PS) partitions, counted in a 2x2 confusion matrix.
+  # Cross-catalog polygon filtering produces separate skimmed BASE (SM) and
+  # skipped TARGET (SP) review partitions excluded from that matrix.
   # =========================================================================
 
   def _log_review_checks(
@@ -1397,10 +1416,10 @@ class OGSCatalog:
     """Log aggregate review totals for each labeled partition.
 
     Each ``checks`` entry is expected to provide ``check_sum``,
-    ``expected_sum``, and a ``bgma`` mapping used for mismatch detail output.
-    The helper also stores the computed ``diff`` back into each review dict.
+    ``expected_sum``, and a ``BPGMA`` mapping used for mismatch detail output.
+    The helper also stores ``diff`` in each review dict and calls ``exit()``
+    after logging any mismatch; it does not merely warn.
     """
-    sep_pre, sep_diff = (",  ", "  ") if kind == "picks" else (", ", " ")
     mismatch_fmt = (
         f"[REVIEW] MISMATCH: %s {kind} total: %d{sep_pre}expected: %d{sep_diff}diff: %d"
     )
@@ -1420,14 +1439,15 @@ class OGSCatalog:
       else:
         self.logger.info(match_fmt, _label, _check_sum, _expected_sum)
 
-  def _bgma_events_review(
+  def _BPGMA_events_review(
       self, target: "OGSCatalog", EVENTS_CFN_MTX: pd.DataFrame,
   ) -> tuple[float, float]:
-    """Log event-level BGMA totals, persist review partitions, and return rates.
+    """Log event-level BPGMA totals, persist review partitions, and return rates.
 
     Counts are derived from ``EVENTS_CFN_MTX`` and checked against
     ``self.EVENTS`` and ``target.EVENTS`` before writing ``EventsMH``,
-    ``EventsMS``, and ``EventsPS`` CSV outputs. The returned ``(recall, fdr)``
+    ``EventsMS``, ``EventsPS``, and filtered ``EventsSM``/``EventsSP`` CSV
+    outputs. The returned ``(recall, fdr)``
     pair is used by the caller when titling the event confusion-matrix plot.
     """
     base_events = self.get("EVENTS")
@@ -1463,23 +1483,23 @@ class OGSCatalog:
     self.logger.info("\n%s", EVENTS_CFN_MTX)
     self.logger.info(
         "REVIEW " + "=" * 60 + "\n" +
-        "Matched    (MH): %d\n"
-        "Proposed   (PS): %d  [TARGET EVENTS NOT found in BASE]\n"
-        "Skipped    (SP): %d  [TARGET EVENTS FILTER by (LOCATION)]\n"
-        "Missed     (MS): %d  [BASE EVENTS NOT found in TARGET]\n"
-        "Skimmed    (SM): %d  [BASE EVENTS FILTER by (LOCATION)]\n"
-        "BASE total     : %d\n"
-        "TARGET total   : %d",
-        mh_n,
-        ps_n,
-        sp_n,
-        ms_n,
-        sm_n,
-        base_n,
-        target_n
+        "Matched  (%s): %d\n"
+        "Proposed (%s): %d  [%s EVENTS NOT found in %s]\n"
+        "Skipped  (%s): %d  [%s EVENTS FILTER by (LOCATION)]\n"
+        "Missed   (%s): %d  [%s EVENTS NOT found in %s]\n"
+        "Skimmed  (%s): %d  [%s EVENTS FILTER by (LOCATION)]\n"
+        "%s total   : %d\n"
+        "%s total : %d",
+        OGS_C.MH_STR, mh_n,
+        OGS_C.PS_STR, ps_n, OGS_C.TARGET_STR, OGS_C.BASE_STR,
+        OGS_C.SP_STR, sp_n, OGS_C.TARGET_STR,
+        OGS_C.MS_STR, ms_n, OGS_C.BASE_STR, OGS_C.TARGET_STR,
+        OGS_C.SM_STR, sm_n, OGS_C.BASE_STR,
+        OGS_C.BASE_STR, base_n,
+        OGS_C.TARGET_STR, target_n
     )
     event_review_checks = {
-        " BASE ": {
+        OGS_C.BASE_STR: {
             "bgma": {
                 OGS_C.EVENT_STR: matched_count,
                 OGS_C.NONE_STR: missed_count,
@@ -1488,7 +1508,7 @@ class OGSCatalog:
             "check_sum": matched_count + missed_count + sm_n,
             "expected_sum": base_n,
         },
-        "TARGET": {
+        OGS_C.TARGET_STR: {
             "bgma": {
                 OGS_C.EVENT_STR: matched_count,
                 OGS_C.NONE_STR: proposed_count,
@@ -1573,11 +1593,11 @@ class OGSCatalog:
   ) -> None:
     """Count unmatched rows and append them to the side-specific sink.
 
-    ``role=\"base\"`` writes BASE-only rows to ``EventsMS`` on the
-    ``EVENT/NONE`` axis. ``role=\"target\"`` writes TARGET-only rows to
-    ``EventsPS`` on the ``NONE/EVENT`` axis.
+    ``role=BASE_STR`` ("Base") writes base-only rows to ``EventsMS`` on the
+    ``EVENT/NONE`` axis. ``role=TARGET_STR`` ("Target") writes target-only
+    rows to ``EventsPS`` on the ``NONE/EVENT`` axis.
     """
-    if role == "base":
+    if role == OGS_C.BASE_STR:
       row_label, col_label = OGS_C.EVENT_STR, OGS_C.NONE_STR
     else:
       row_label, col_label = OGS_C.NONE_STR, OGS_C.EVENT_STR
@@ -1679,14 +1699,14 @@ class OGSCatalog:
         target._polygon_vertices(),
         EventsSM,
         date,
-        "BASE",
+        OGS_C.BASE_STR,
     )
     self.logger.debug(
-        "DATE %s NOT in TARGET CATALOG, counting BASE EVENTS as MS.",
-        date
+        "DATE %s NOT in %s CATALOG, counting %s EVENTS as %s.",
+        date, OGS_C.TARGET_STR, OGS_C.BASE_STR, OGS_C.MS_STR,
     )
     self._bgma_events_record_unmatched(
-        BASE, EVENTS_CFN_MTX, EventsMS, role="base",
+        BASE, EVENTS_CFN_MTX, EventsMS, role=OGS_C.BASE_STR,
     )
 
   def _matched_events_frame(
@@ -1720,26 +1740,30 @@ class OGSCatalog:
         target._polygon_vertices(),
         EventsSM,
         date,
-        "BASE",
+        OGS_C.BASE_STR,
     )
     TARGET = self._prefilter_events(
         target._load_day("events", date).reset_index(drop=True),
         self._polygon_vertices(),
         EventsSP,
         date,
-        "TARGET",
+        OGS_C.TARGET_STR,
     )
     I, J = len(BASE), len(TARGET)
-    self.logger.debug("DATE %s: BASE=%d EVENTS, TARGET=%d EVENTS.", date, I, J)
+    self.logger.debug(
+        "DATE %s: %s=%d EVENTS, %s=%d EVENTS.",
+        date, OGS_C.BASE_STR, I, OGS_C.TARGET_STR, J,
+    )
     feasible_base_pos, feasible_target_pos = self._event_feasible_positions(
         BASE, TARGET
     )
     if (len(feasible_base_pos) != I or len(feasible_target_pos) != J):
       self.logger.debug(
-          "DATE %s: pre-pruned BGMA candidates BASE=%d/%d TARGET=%d/%d.",
-          date, len(feasible_base_pos), I, len(feasible_target_pos), J,
+          "DATE %s: pre-pruned BGMA candidates %s=%d/%d %s=%d/%d.",
+          date, OGS_C.BASE_STR, len(feasible_base_pos), I,
+          OGS_C.TARGET_STR, len(feasible_target_pos), J,
       )
-    if len(feasible_base_pos) and len(feasible_target_pos):
+    if len(feasible_base_pos) > 0 and len(feasible_target_pos) > 0:
       BASE_FEASIBLE = BASE.iloc[feasible_base_pos].reset_index(drop=True)
       TARGET_FEASIBLE = TARGET.iloc[feasible_target_pos].reset_index(drop=True)
       pairs = OGS_U.OGSBPGraphEvents(
@@ -1764,14 +1788,16 @@ class OGSCatalog:
       unmatched_target_idx = np.arange(J)
     self._add(EVENTS_CFN_MTX, OGS_C.EVENT_STR, OGS_C.EVENT_STR, n_matched)
     self.logger.debug(
-        "Matched events: %d (BASE <-> TARGET)", n_matched,
+        "%s events: %d (%s <-> %s)",
+        OGS_C.MH_STR, n_matched, OGS_C.BASE_STR, OGS_C.TARGET_STR
     )
     self._bgma_events_record_unmatched(
-        BASE.iloc[unmatched_base_idx], EVENTS_CFN_MTX, EventsMS, role="base",
+        BASE.iloc[unmatched_base_idx], EVENTS_CFN_MTX, EventsMS,
+        role=OGS_C.BASE_STR,
     )
     self._bgma_events_record_unmatched(
         TARGET.iloc[unmatched_target_idx], EVENTS_CFN_MTX, EventsPS,
-        role="target",
+        role=OGS_C.TARGET_STR,
     )
 
   def _bgma_events_target_only(
@@ -1784,16 +1810,20 @@ class OGSCatalog:
         self._polygon_vertices(),
         EventsSP,
         date,
-        "TARGET",
+        OGS_C.TARGET_STR,
     )
     if TARGET.empty:
-      self.logger.debug("DATE %s in TARGET catalog does NOT have EVENTS", date)
+      self.logger.debug(
+          "DATE %s in %s catalog does NOT have EVENTS",
+          date, OGS_C.TARGET_STR
+      )
       return
     self.logger.warning(
-        "DATE %s in TARGET EVENTS catalog but NOT in BASE", date
+        "DATE %s in %s EVENTS catalog but NOT in %s",
+        date, OGS_C.TARGET_STR, OGS_C.BASE_STR
     )
     self._bgma_events_record_unmatched(
-        TARGET, EVENTS_CFN_MTX, EventsPS, role="target",
+        TARGET, EVENTS_CFN_MTX, EventsPS, role=OGS_C.TARGET_STR,
     )
 
   def bgmaEvents(self, target: "OGSCatalog", output=None) -> None:
@@ -1822,7 +1852,7 @@ class OGSCatalog:
     self_name = self.name
     target_name = target.name
     self.logger.info("Starting bgmaEvents: %s vs %s", self_name, target_name)
-    import ogsplotter as OGS_P
+    from . import ogsplotter as OGS_P
     from matplotlib import pyplot as plt
 
     EVENTS_CFN_MTX = self._empty_cfn_mtx(_EVENTS_PHASES)
@@ -1926,8 +1956,6 @@ class OGSCatalog:
     Expects ``self.EventsMH`` from ``bgmaEvents`` for ``self`` and ``target``.
     Writes the ``EventsTimeDiff`` histogram image through ``_plot_output``.
     """
-    from matplotlib import pyplot as plt
-    import ogsplotter as OGS_P
     data = cast(pd.Series, self._mh_diff(OGS_C.TIME_STR).dropna())
     if data.empty:
       self.logger.warning(
@@ -1958,8 +1986,6 @@ class OGSCatalog:
     and TARGET event coordinates are stored side by side. Writes the
     ``EventsMH`` map image through ``_plot_output``.
     """
-    from matplotlib import pyplot as plt
-    import ogsplotter as OGS_P
     magnitude = self._magnitude_tuple_or_none(self.EventsMH, 0)
     myplot = OGS_P.map_plotter(
         domain=OGS_C.OGS_STUDY_REGION,
@@ -1989,8 +2015,6 @@ class OGSCatalog:
     ``bgmaEvents`` for the ``self``/``target`` comparison. Writes the
     ``EventsFalse`` map image through ``_plot_output``.
     """
-    from matplotlib import pyplot as plt
-    import ogsplotter as OGS_P
     magnitude = self._magnitude_or_none(self.EventsMS)
     myplot = OGS_P.map_plotter(
         domain=OGS_C.OGS_STUDY_REGION,
@@ -2015,11 +2039,9 @@ class OGSCatalog:
   ) -> None:
     """Plot matched-event depth residuals derived from ``EventsMH``.
 
-    Expects ``self.EventsMH`` from ``bgmaEvents`` for ``self`` and ``target``.
+    Expects ``self.EventsMH`` from ``BPGMAEvents`` for ``self`` and ``target``.
     Writes the ``DepthDiff`` histogram image through ``_plot_output``.
     """
-    from matplotlib import pyplot as plt
-    import ogsplotter as OGS_P
     OGS_P.histogram_plotter(
         self._mh_diff(OGS_C.DEPTH_STR),
         xlabel=f"Depth Difference (km) [{self.name} - {target.name}]",
@@ -2035,12 +2057,10 @@ class OGSCatalog:
   ) -> None:
     """Plot matched-event epicentral-distance residuals from ``EventsMH``.
 
-    Expects ``self.EventsMH`` produced by ``bgmaEvents`` so matched BASE and
+    Expects ``self.EventsMH`` produced by ``BPGMAEvents`` so matched BASE and
     TARGET hypocenters are available in paired columns. Writes the
     ``EpiDistDiff`` histogram image through ``_plot_output``.
     """
-    from matplotlib import pyplot as plt
-    import ogsplotter as OGS_P
     OGS_P.histogram_plotter(
         OGS_P.v_lat_long_to_distance(
             self._tcol(self.EventsMH, OGS_C.LONGITUDE_STR, 0),
@@ -2065,16 +2085,14 @@ class OGSCatalog:
   def _plot_events_magnitude(
       self, target: "OGSCatalog", output: Optional[Path] = None
   ) -> None:
-    """Plot matched and unmatched magnitude diagnostics from BGMA outputs.
+    """Plot matched and unmatched magnitude diagnostics from BPGMA outputs.
 
     Expects ``self.EventsMH``, ``self.EventsMS``, and ``self.EventsPS``
-    produced by ``bgmaEvents`` for the ``self``/``target`` comparison. Writes
+    produced by ``BPGMAEvents`` for the ``self``/``target`` comparison. Writes
     ``MagLDist`` for matched-event scatter, optionally ``MagLDiff`` for the
     overlay case, and either ``MSPSMagLDist`` or ``PSMagLDist`` for unmatched
     magnitudes through ``_plot_output``.
     """
-    from matplotlib import pyplot as plt
-    import ogsplotter as OGS_P
     # Read the matched magnitudes once before the scatter and histogram steps.
     mag0 = self._magnitude_tuple_or_none(self.EventsMH, 0)
     mag1 = self._magnitude_tuple_or_none(self.EventsMH, 1)
@@ -2084,8 +2102,7 @@ class OGSCatalog:
     ps_mag = self.EventsPS[OGS_C.MAGNITUDE_L_STR].dropna()
     ms_mag = self.EventsMS[OGS_C.MAGNITUDE_L_STR].dropna()
     mymags = OGS_P.scatter_plotter(
-        mag1,
-        mag0,
+        mag1, mag0,
         xlabel=f"{target.name} Magnitude ($M_L$)",
         ylabel=f"{self.name} Magnitude ($M_L$)",
         title="Magnitude Prediction",
@@ -2094,8 +2111,9 @@ class OGSCatalog:
     )
     x_min = min(mag0.min(), mag1.min())
     x_max = max(mag0.max(), mag1.max())
-    mymags.ax.plot([x_min, x_max], [x_min, x_max], color=OGS_C.MEX_PINK,
-                   linestyle='--')
+    mymags.ax.plot(
+        [x_min, x_max], [x_min, x_max], color=OGS_C.MEX_PINK, linestyle='--'
+    )
     mymags.ax.set_aspect('equal', adjustable='box')
     mymags.ax.grid(True)
     mymags.savefig(self._plot_output(target, "MagLDist", output))
@@ -2126,7 +2144,7 @@ class OGSCatalog:
         "xlabel": "Magnitude ($M_L$)",
         "title": "Event Magnitude",
         "color": OGS_C.MEX_PINK,
-        "label": f"Proposed (PS) [{target.name}]",
+        "label": f"Proposed ({OGS_C.PS_STR}) [{target.name}]",
     }
     if overlay:
       mymags = OGS_P.histogram_plotter(
@@ -2134,7 +2152,7 @@ class OGSCatalog:
       )
       mymags.add_plot(
           ms_mag,
-          label=f"Missed (MS) [{self.name}]",
+          label=f"Missed ({OGS_C.MS_STR}) [{self.name}]",
           color=OGS_C.OGS_BLUE,
           legend=True,
           output=self._plot_output(target, "MSPSMagLDist", output),
@@ -2150,12 +2168,12 @@ class OGSCatalog:
     plt.close()
 
   # =========================================================================
-  # BGMA PICK MATCHING & REVIEW
+  # BPGMA PICK MATCHING & REVIEW
   # =========================================================================
-  # Same per-day cadence as the event flow, but matching is by
-  # ``(station, phase, time)`` with a tolerance window. Builds the 3x3 phase
-  # confusion matrix (P / S / NONE) and the matched (MH) / missed (SM) /
-  # proposed (SP) pick partitions.
+  # Same per-day cadence as the event flow, but matching is by station equality
+  # and time proximity, with phase preference in the score. Builds a 3x3 phase
+  # matrix (P / S / NONE_STR="None"), matched (MH), swapped (SW), missed (MS),
+  # proposed (PS), and inventory-filtered (SM/SP) partitions.
   # =========================================================================
 
   def _record_unmatched_picks(
@@ -2168,7 +2186,7 @@ class OGSCatalog:
   ) -> None:
     """Record one-sided residual picks in both review outputs and the matrix.
 
-    ``frame`` contains picks that survived inventory cleaning but have no BGMA
+    ``frame`` contains picks that survived inventory cleaning but have no BPGMA
     partner on the opposite side. ``axis=0`` writes BASE-phase counts into the
     ``NONE`` target column for Missed picks (``PicksMS``). ``axis=1`` writes
     TARGET-phase counts into the ``NONE`` base row for Proposed picks
@@ -2192,7 +2210,7 @@ class OGSCatalog:
       ski_list: list,
       label: str,
   ) -> pd.DataFrame:
-    """Load one day of picks and apply the shared BGMA pre-filtering step.
+    """Load one day of picks and apply the shared BPGMA pre-filtering step.
 
     The returned frame is normalized for matching, while any out-of-inventory
     rows are diverted to the caller-provided filtered review list:
@@ -2210,19 +2228,19 @@ class OGSCatalog:
       date: datetime,
       label: str,
   ) -> pd.DataFrame:
-    """Normalize station ids and peel out picks excluded from BGMA.
+    """Normalize station ids and peel out picks excluded from BPGMA.
 
-    Picks may arrive with FDSN station identifiers in
-    ``NET.STA.LOC.CHAN`` form. This helper copies the network into
-    ``NETWORK`` and reduces ``STATION`` to the station code before testing the
-    station against ``inventory``. Rows filtered out here never enter BGMA
+    Picks may arrive with FDSN station identifiers in ``NET.STA.LOC.CHAN``
+    form. This helper copies the network into ``NETWORK_STR`` ("NETWORK") and
+    reduces ``STATION_STR`` ("station") to the station code before testing the
+    station against ``inventory``. Rows filtered out here never enter BPGMA
     phase accounting; instead they are logged and appended to the filtered
     review bucket passed in ``ski_list``.
 
     Parameters
     ----------
     picks : pd.DataFrame
-      One day's picks to prepare for BGMA.
+      One day's picks to prepare for BPGMA.
     inventory : np.ndarray
       Known station codes eligible for matching.
     columns : Sequence[str]
@@ -2233,17 +2251,19 @@ class OGSCatalog:
     date : datetime
       Day being processed, used in warning messages.
     label : str
-      Side label included in warnings, typically ``"BASE"`` or ``"TARGET"``.
+      Side label included in warnings, typically ``"Base"`` or ``"Target"``,
+      supplied by ``BASE_STR`` or ``TARGET_STR``.
 
     Returns
     -------
     pd.DataFrame
-      Cleaned picks that remain eligible for BGMA matching and confusion-
-      matrix accounting.
+      Cleaned picks eligible for matching; the input frame's dotted station
+      values are normalized in place. Empty input or a missing station column
+      returns an empty slice without recording filtered rows.
     """
     if picks.empty or OGS_C.STATION_STR not in picks.columns:
       return picks.iloc[0:0]
-    split = picks[OGS_C.STATION_STR].str.split(".", expand=False)
+    split = picks[OGS_C.STATION_STR].str.split(OGS_C.PERIOD_STR, expand=False)
     fsdn_split = split.str.len().ge(2)
     if not picks[fsdn_split].empty:
       picks.loc[fsdn_split, OGS_C.NETWORK_STR] = split.str[0]
@@ -2251,9 +2271,9 @@ class OGSCatalog:
 
     in_inventory = picks[OGS_C.STATION_STR].isin(inventory)
     if any(~in_inventory):
-      missing_stations = cast(
+      missing_stations = [str(station) for station in cast(
           pd.Series, picks.loc[~in_inventory, OGS_C.STATION_STR]
-      ).astype(str).unique().tolist()
+      ).unique()]
       missing_rows = cast(pd.DataFrame, picks.loc[~in_inventory, columns])
       self.logger.warning(
           "DATE %s: %s picks with STATION (%s) not in INVENTORY:",
@@ -2263,7 +2283,7 @@ class OGSCatalog:
       ski_list.extend(missing_rows.values.tolist())
     return cast(pd.DataFrame, picks.loc[in_inventory, :]).reset_index(drop=True)
 
-  def _bgma_picks_base_only(
+  def _BPGMA_picks_base_only(
       self, target: "OGSCatalog", date, INVENTORY, columns, PICKS_CFN_MTX,
   ) -> None:
     """Account for a BASE-only day in the pick review.
@@ -2273,21 +2293,23 @@ class OGSCatalog:
     confusion matrix. BASE rows removed during cleaning are tracked separately
     in ``PicksSM``.
     """
-    self.logger.debug("DATE %s in TARGET catalog has no PICKS, skipping.",
-                      date)
+    self.logger.debug(
+        "DATE %s in %s catalog has no PICKS, skipping.",
+        date, OGS_C.TARGET_STR
+    )
     BASE = self._load_and_clean_picks(
-        self, date, INVENTORY, columns, self.PicksSM, "BASE"
+        self, date, INVENTORY, columns, self.PicksSM, OGS_C.BASE_STR
     )
     self._record_unmatched_picks(
         BASE, columns, 0, self.PicksMS, PICKS_CFN_MTX
     )
 
-  def _bgma_picks_both(
+  def _BPGMA_picks_both(
       self, target: "OGSCatalog", date, INVENTORY, columns, PICKS_CFN_MTX,
   ) -> None:
-    """Run pick-level BGMA for a date shared by both catalogs.
+    """Run pick-level BPGMA for a date shared by both catalogs.
 
-    Cleaned BASE and TARGET picks are connected through the BGMA graph.
+    Cleaned BASE and TARGET picks are connected through the BPGMA graph.
     Same-phase edges become Matched picks (``PicksMH``) on the confusion-
     matrix diagonal, phase-mismatched edges become Swapped picks
     (``PicksSW``) on the off-diagonal, unmatched BASE residues become Missed
@@ -2299,10 +2321,10 @@ class OGSCatalog:
     # Normalize NET.STA.LOC.CHAN station ids and divert out-of-inventory rows
     # to the filtered review buckets before graph matching.
     BASE = self._load_and_clean_picks(
-        self, date, INVENTORY, columns, self.PicksSM, "BASE"
+        self, date, INVENTORY, columns, self.PicksSM, OGS_C.BASE_STR
     )
     TARGET = self._load_and_clean_picks(
-        target, date, INVENTORY, columns, self.PicksSP, "TARGET"
+        target, date, INVENTORY, columns, self.PicksSP, OGS_C.TARGET_STR
     )
     I, J = len(BASE), len(TARGET)
     base_mask = np.ones(I, dtype=bool)
@@ -2355,16 +2377,16 @@ class OGSCatalog:
       base_mask[base_pos] = False
       target_mask[target_pos] = False
 
-    # Missed (MS): cleaned BASE picks that have no BGMA match in TARGET.
+    # Missed (MS): cleaned BASE picks that have no BPGMA match in TARGET.
     self._record_unmatched_picks(
         BASE.iloc[base_mask], columns, 0, self.PicksMS, PICKS_CFN_MTX
     )
-    # Proposed (PS): cleaned TARGET picks that have no BGMA match in BASE.
+    # Proposed (PS): cleaned TARGET picks that have no BPGMA match in BASE.
     self._record_unmatched_picks(
         TARGET.iloc[target_mask], columns, 1, self.PicksPS, PICKS_CFN_MTX
     )
 
-  def _bgma_picks_target_only(
+  def _BPGMA_picks_target_only(
       self, target: "OGSCatalog", date, INVENTORY, columns, PICKS_CFN_MTX,
   ) -> None:
     """Account for a TARGET-only day in the pick review.
@@ -2375,24 +2397,24 @@ class OGSCatalog:
     separately in ``PicksSP``.
     """
     self.logger.warning(
-        "DATE %s in TARGET PICKS catalog but NOT in BASE",
-        date
+        "DATE %s in %s PICKS catalog but NOT in %s",
+        date, OGS_C.TARGET_STR, OGS_C.BASE_STR
     )
     TARGET = self._load_and_clean_picks(
-        target, date, INVENTORY, columns, self.PicksSP, "TARGET"
+        target, date, INVENTORY, columns, self.PicksSP, OGS_C.TARGET_STR
     )
     if TARGET.empty:
       self.logger.warning(
-          "DATE %s in TARGET catalog has no picks, skipping.",
-          date
+          "DATE %s in %s catalog has no picks, skipping.",
+          date, OGS_C.TARGET_STR
       )
       return
     self._record_unmatched_picks(
         TARGET, columns, 1, self.PicksPS, PICKS_CFN_MTX
     )
 
-  def bgmaPicks(self, target: "OGSCatalog", output=None) -> None:
-    """Match picks between catalogs and build BGMA review artifacts.
+  def BPGMAPicks(self, target: "OGSCatalog", output=None) -> None:
+    """Match picks between catalogs and build BPGMA review artifacts.
 
     Rows in ``PICKS_CFN_MTX`` represent BASE phases and columns represent
     TARGET phases. The diagonal counts same-phase matches (``PicksMH``), the
@@ -2411,36 +2433,33 @@ class OGSCatalog:
       Output path for the results. If None, defaults to a file in the output
       directory named "{self.input.name}_{target.input.name}_PicksMH.csv".
     """
-    import ogsplotter as OGS_P
-    from matplotlib import pyplot as plt
     if not isinstance(target, OGSCatalog):
-      raise ValueError("Can only perform bgmaPicks on OGSCatalog")
+      raise ValueError("Can only perform BPGMAPicks on OGSCatalog")
     if self.stations is None:
-      raise ValueError("Station inventory is required for bgmaPicks")
+      raise ValueError("Station inventory is required for BPGMAPicks")
     PICKS_CFN_MTX = self._empty_cfn_mtx(_PICKS_PHASES)
     stations = cast(pd.DataFrame, self.stations)
     INVENTORY = stations[OGS_C.STATION_STR].unique()
     self.PicksMH = list()   # Same-phase BASE/TARGET matches.
-    self.PicksMS = list()   # BASE picks with no BGMA match in TARGET.
-    self.PicksSM = list()   # BASE picks filtered out before BGMA by inventory.
-    self.PicksPS = list()   # TARGET picks with no BGMA match in BASE.
-    # TARGET picks filtered out before BGMA by inventory.
-    self.PicksSP = list()
+    self.PicksMS = list()   # BASE picks with no BPGMA match in TARGET.
+    self.PicksSM = list()   # BASE picks filtered before BPGMA by inventory.
+    self.PicksPS = list()   # TARGET picks with no BPGMA match in BASE.
+    self.PicksSP = list()   # TARGET picks filtered before BPGMA by inventory.
     self.PicksSW = list()   # Matched BASE/TARGET edges whose phases disagree.
     columns = _PICKS_MH_COLUMNS
 
     # Walk every shared, BASE-only, and TARGET-only pick day once.
     for date, source in self._iter_shared_and_extra_dates(target, "picks"):
       if source == _BASE_ONLY:
-        self._bgma_picks_base_only(
+        self._BPGMA_picks_base_only(
             target, date, INVENTORY, columns, PICKS_CFN_MTX
         )
       elif source == _BOTH:
-        self._bgma_picks_both(
+        self._BPGMA_picks_both(
             target, date, INVENTORY, columns, PICKS_CFN_MTX
         )
       else:
-        self._bgma_picks_target_only(
+        self._BPGMA_picks_target_only(
             target, date, INVENTORY, columns, PICKS_CFN_MTX
         )
 
@@ -2467,22 +2486,22 @@ class OGSCatalog:
     self.logger.info("\n%s", PICKS_CFN_MTX)
     self.logger.info(
         "REVIEW " + "=" * 60 + "\n" +
-        "Matched    (MH): %d\n"
-        "Swapped    (SW): %d  [BASE PICKS FOUND in TARGET but PHASE MISMATCH]\n"
-        "Proposed   (PS): %d  [TARGET PICKS NOT found in BASE]\n"
-        "Skipped    (SP): %d  [TARGET PICKS FILTER by (INVENTORY)]\n"
-        "Missed     (MS): %d  [BASE PICKS NOT found in TARGET]\n"
-        "Skimmed    (SM): %d  [BASE PICKS FILTER by (INVENTORY)]\n"
-        "BASE total     : %d\n"
-        "TARGET total   : %d",
-        len(self.PicksMH),
-        len(self.PicksSW),
-        len(self.PicksPS),
-        len(self.PicksSP),
-        len(self.PicksMS),
-        len(self.PicksSM),
-        len(self.get("PICKS").index),
-        len(target.get("PICKS").index)
+        "Matched  (%s): %d\n"
+        "Swapped  (%s): %d  [%s PICKS FOUND in %s but PHASE MISMATCH]\n"
+        "Proposed (%s): %d  [%s PICKS NOT found in %s]\n"
+        "Skipped  (%s): %d  [%s PICKS FILTER by (INVENTORY)]\n"
+        "Missed   (%s): %d  [%s PICKS NOT found in %s]\n"
+        "Skimmed  (%s): %d  [%s PICKS FILTER by (INVENTORY)]\n"
+        "%s total   : %d\n"
+        "%s total : %d",
+        OGS_C.MH_STR, len(self.PicksMH),
+        OGS_C.SW_STR, len(self.PicksSW), OGS_C.BASE_STR, OGS_C.TARGET_STR,
+        OGS_C.PS_STR, len(self.PicksPS), OGS_C.TARGET_STR, OGS_C.BASE_STR,
+        OGS_C.SP_STR, len(self.PicksSP), OGS_C.TARGET_STR,
+        OGS_C.MS_STR, len(self.PicksMS), OGS_C.BASE_STR, OGS_C.TARGET_STR,
+        OGS_C.SM_STR, len(self.PicksSM), OGS_C.BASE_STR,
+        OGS_C.BASE_STR, len(self.get("PICKS").index),
+        OGS_C.TARGET_STR, len(target.get("PICKS").index)
     )
     # Per-phase review accounting ignores the NONE axis and instead checks that
     # each physical wave total is conserved. For BASE this is row sum
@@ -2504,47 +2523,46 @@ class OGSCatalog:
 
     def _build_review_checks(
         prefix: str,
-        bgma: pd.DataFrame,
+        BPGMA: pd.DataFrame,
         filtered: pd.Series,
         expected: pd.Series,
         axis: Literal[0, 1],
     ) -> dict[str, dict[str, object]]:
-      """Build one catalog side's per-phase BGMA review checks.
+      """Build one catalog side's per-phase BPGMA review checks.
 
       ``axis=1`` sums rows because BASE phases live on matrix rows; ``axis=0``
       sums columns because TARGET phases live on matrix columns. Each review
-      entry captures the BGMA phase breakdown, the side's filtered count
+      entry captures the BPGMA phase breakdown, the side's filtered count
       (``PicksSM`` or ``PicksSP``), and the expected catalog total for that
       phase.
       """
-      totals = bgma.sum(axis=axis).reindex(base_wave_rows, fill_value=0)
+      totals = BPGMA.sum(axis=axis).reindex(base_wave_rows, fill_value=0)
       return {
           f"{prefix} {phase}": {
-              "bgma": (
-                  bgma.loc[phase].to_dict()
-                  if axis == 1 else bgma[phase].to_dict()
+              OGS_C.BPGMA_STR: (
+                  BPGMA.loc[phase].to_dict()
+                  if axis == 1 else BPGMA[phase].to_dict()
               ),
               "filtered": cast(int, filtered.at[phase]),
               "check_sum": (
                   cast(int, totals.at[phase]) + cast(int, filtered.at[phase])
               ),
               "expected_sum": cast(int, expected.at[phase]),
-          }
-          for phase in base_wave_rows
+          } for phase in base_wave_rows
       }
 
-    base_bgma = cast(pd.DataFrame, PICKS_CFN_MTX.loc[base_wave_rows, :])
-    target_bgma = cast(pd.DataFrame, PICKS_CFN_MTX.loc[:, base_wave_rows])
+    base_BPGMA = cast(pd.DataFrame, PICKS_CFN_MTX.loc[base_wave_rows, :])
+    target_BPGMA = cast(pd.DataFrame, PICKS_CFN_MTX.loc[:, base_wave_rows])
     _review_checks: dict[str, dict[str, object]] = {}
     review_specs: list[
         tuple[str, pd.DataFrame, list[Any], pd.DataFrame, Literal[0, 1]]
     ] = [
-        (" BASE ", base_bgma, self.PicksSM, self.get("PICKS"), 1),
-        ("TARGET", target_bgma, self.PicksSP, target.get("PICKS"), 0),
+        (OGS_C.BASE_STR, base_BPGMA, self.PicksSM, self.get("PICKS"), 1),
+        (OGS_C.TARGET_STR, target_BPGMA, self.PicksSP, target.get("PICKS"), 0),
     ]
-    for prefix, bgma, filtered_rows, expected_frame, axis in review_specs:
+    for prefix, BPGMA, filtered_rows, expected_frame, axis in review_specs:
       _review_checks.update(_build_review_checks(
-          prefix, bgma,
+          prefix, BPGMA,
           _phase_counts(pd.DataFrame(filtered_rows, columns=columns)),
           _phase_counts(expected_frame),
           axis=axis,
@@ -2580,23 +2598,22 @@ class OGSCatalog:
   # =========================================================================
   # CATALOG SET OPERATIONS (in-place union / subtraction)
   # =========================================================================
-  # Used both by ``__iadd__`` / ``__isub__`` and by the BGMA workflow when
-  # building review-only catalogs that exclude already-matched rows.
+  # Exposed through ``__iadd__`` / ``__isub__``; BPGMA does not call these
+  # helpers.
   # =========================================================================
 
   def _inplace_set_op(self, target: "OGSCatalog", add: bool) -> None:
     """Mutate this catalog's aggregate state by union or subtraction.
 
     Only ``self`` is updated; ``target`` is treated as read-only input.
-    For each of the date-to-path caches (``picks_`` and ``events_``), add
-    mode performs ``self <- self union target`` with ``target`` winning on
-    duplicate dates, while subtract mode removes any dates also present in
-    ``target``. The corresponding aggregate DataFrames (``PICKS`` and
-    ``EVENTS``) are then updated in place: add mode concatenates populated
-    frames or copies ``target`` when ``self`` is empty, and subtract mode
-    drops rows whose shared identifier values appear in the matching target
-    frame. The loaded per-day caches (``picks`` and ``events``) are not
-    rebuilt here.
+    For each of the date-to-path caches (``picks_`` and ``events_``), add mode
+    performs ``self <- self union target`` with ``target`` winning on duplicate
+    dates, while subtract mode removes any dates also present in ``target``.
+    The corresponding aggregate DataFrames (``PICKS`` and ``EVENTS``) are then
+    updated in place: add mode concatenates populated frames or copies
+    ``target`` when ``self`` is empty, and subtract mode drops rows whose
+    shared identifier values appear in the matching target frame. The loaded
+    per-day caches (``picks`` and ``events``) are not rebuilt here.
     """
     for cache_attr, df_attr, id_col in (
         ("picks_", "PICKS", OGS_C.IDX_PICKS_STR),
@@ -2615,11 +2632,13 @@ class OGSCatalog:
       else:
         setattr(self, cache_attr,
                 {k: v for k, v in cache.items() if k not in tcache})
-        setattr(self, df_attr,
-                df[~df[OGS_C.INDEX_STR].isin(tdf[OGS_C.INDEX_STR])])
+        if id_col in df.columns and id_col in tdf.columns:
+          setattr(self, df_attr, df[~df[id_col].isin(tdf[id_col])])
+        else:
+          setattr(self, df_attr, df)
 
   # -------------------------------------------------------------------------
-  # BGMA pick diagnostic plotters
+  # BPGMA pick diagnostic plotters
   # -------------------------------------------------------------------------
 
   def _plot_picks_confmtx(
@@ -2629,15 +2648,13 @@ class OGSCatalog:
   ) -> None:
     """Render the pick confusion-matrix summary figure.
 
-    ``mtx`` is the 3x3 BGMA picks matrix with BASE phases on rows and TARGET
+    ``mtx`` is the 3x3 BPGMA picks matrix with BASE phases on rows and TARGET
     phases on columns. ``recall_stats`` and ``fdr_stats`` are the
     ``(overall, P, S)`` metrics already computed from that matrix. When
     ``output`` is ``None``, the figure is written to the default artifact
     ``<base>_<target>_PicksConfMtx{IMAGE_EXT}`` under ``self.output / "img"``;
     otherwise the supplied path is used unchanged.
     """
-    from matplotlib import pyplot as plt
-    import ogsplotter as OGS_P
     assert isinstance(self.PicksMH, pd.DataFrame)
     assert isinstance(self.PicksPS, pd.DataFrame)
     recall, p_recall, s_recall = recall_stats
@@ -2663,7 +2680,7 @@ class OGSCatalog:
   ) -> bool:
     """Plot matched-pick time deltas from the paired ``PicksMH`` rows.
 
-    This helper assumes ``self.PicksMH`` came from :meth:`bgmaPicks`, where
+    This helper assumes ``self.PicksMH`` came from :meth:`BPGMAPicks`, where
     ``TIME_STR`` stores ``(base_time, target_time)`` tuples as stringified
     UTC timestamps and ``PHASE_STR`` stores the shared scalar phase used for
     the P/S overlays. When ``output`` is ``None``, the histogram is written to
@@ -2671,18 +2688,18 @@ class OGSCatalog:
     otherwise the supplied path is used unchanged. Returns ``False`` only when
     there are no matched rows to histogram.
     """
-    from matplotlib import pyplot as plt
-    import ogsplotter as OGS_P
     assert isinstance(self.PicksMH, pd.DataFrame)
     picks_mh = cast(pd.DataFrame, self.PicksMH)
     # ``PicksMH[TIME_STR]`` holds ``(base_time, target_time)`` tuples, so we
     # bulk-parse both sides once and reuse the resulting delta series for the
     # combined, P-wave, and S-wave histograms.
     times = cast(pd.Series, picks_mh[OGS_C.TIME_STR])
-    t0 = cast(pd.Series, pd.to_datetime(times.str[0], utc=True,
-                                        errors="coerce"))
-    t1 = cast(pd.Series, pd.to_datetime(times.str[1], utc=True,
-                                        errors="coerce"))
+    t0 = cast(
+        pd.Series, pd.to_datetime(times.str[0], utc=True, errors="coerce")
+    )
+    t1 = cast(
+        pd.Series, pd.to_datetime(times.str[1], utc=True, errors="coerce")
+    )
     delta = cast(pd.Series, t1 - t0)
     data = cast(pd.Series, delta.dt.total_seconds())
     if data.empty:
@@ -2737,7 +2754,7 @@ class OGSCatalog:
   ) -> None:
     """Plot confidence histograms for matched and proposed pick diagnostics.
 
-    ``self.PicksMH`` is expected to use the BGMA matched-pick schema, where
+    ``self.PicksMH`` is expected to use the BPGMA matched-pick schema, where
     ``PROBABILITY_STR`` stores ``(base_confidence, target_confidence)`` tuples
     and ``PHASE_STR`` stores the matched scalar phase for P/S masks.
     ``self.PicksPS`` contributes proposed TARGET-only picks with scalar
@@ -2745,8 +2762,6 @@ class OGSCatalog:
     written to ``<base>_<target>_PicksConfDist{IMAGE_EXT}`` under
     ``self.output / "img"``; otherwise the supplied path is used unchanged.
     """
-    from matplotlib import pyplot as plt
-    import ogsplotter as OGS_P
     assert isinstance(self.PicksMH, pd.DataFrame)
     assert isinstance(self.PicksPS, pd.DataFrame)
     picks_mh = cast(pd.DataFrame, self.PicksMH)
@@ -2765,7 +2780,7 @@ class OGSCatalog:
         conf_all,
         xlabel="Pick Confidence",
         title="Pick Confidence Distribution",
-        label="Matched (MH)",
+        label=f"Matched ({OGS_C.MH_STR})",
         xlim=(0, 1),
     )
     myconf.add_plot(
@@ -2773,21 +2788,21 @@ class OGSCatalog:
         alpha=1,
         step=True,
         color=OGS_C.MEX_PINK,
-        label="MH P Picks",
+        label=f"{OGS_C.MH_STR} P Picks",
     )
     myconf.add_plot(
         conf_all[s_mask],
         alpha=1,
         color=OGS_C.ALN_GREEN,
         step=True,
-        label="MH S Picks",
+        label=f"{OGS_C.MH_STR} S Picks",
     )
     myconf.add_plot(
         cast(pd.Series, picks_ps[OGS_C.PROBABILITY_STR]),
         alpha=1,
         color=OGS_C.LIP_ORANGE,
         step=True,
-        label="Proposed (PS)",
+        label=f"Proposed ({OGS_C.PS_STR})",
         legend=True,
         yscale='log',
         output=self._plot_output(target, "PicksConfDist", output),
@@ -2797,12 +2812,14 @@ class OGSCatalog:
   # =========================================================================
   # COMBINED WORKFLOW & OPERATOR OVERLOADS
   # =========================================================================
-  # ``bpgma`` runs the full event ➜ pick ➜ (optional) waveform review back
-  # to back. The ``__iadd__`` / ``__isub__`` operators expose the catalog
-  # set-operation primitive for ad hoc composition outside the workflow.
+  # ``bpgma`` loads optional context then runs event ➜ pick review back to
+  # back.
+  # It does not automatically render per-event waveforms. The operators expose
+  # the catalog set-operation primitive for ad hoc composition outside the
+  # workflow.
   # =========================================================================
 
-  def _run_bgma_if_ready(
+  def _run_BPGMA_if_ready(
       self,
       target: "OGSCatalog",
       *,
@@ -2812,26 +2829,26 @@ class OGSCatalog:
       kind: str,
       runner,
   ) -> None:
-    """Run one BGMA pass only when both catalogs expose the needed data.
+    """Gate a BPGMA pass by path indexes, with lazy TARGET data fallback.
 
-    This helper is the narrow orchestration gate used by ``bpgma``. It first
-    not, there is no BASE data to compare and the pass is skipped silently.
-    It then accepts either an already-populated TARGET cache or any data that
-    can be resolved lazily via
+    This helper is the narrow orchestration gate used by ``bpgma``. If BASE's
+    ``cache_attr`` path dictionary is empty, it skips silently. A non-empty
+    TARGET path dictionary suffices to run, even if its files yield no rows.
+    Otherwise it tries the daily cache and aggregate via
     ``target.load(load_key)`` / ``target.get(get_key)``. When TARGET still
-    resolves to no rows, the skip is logged and ``runner`` is not invoked.
+    has neither cached days nor aggregate rows, the skip is logged and
+    ``runner`` is not invoked.
 
     Side Effects
     ------------
     Emits info-level logging for skip/start decisions and, on success, calls
-    ``runner(target)``, which populates the corresponding BGMA review artifacts
-    on ``self``.
+    ``runner(target)``, which populates the corresponding BPGMA review
+    artifacts on ``self``.
     """
     if not getattr(self, cache_attr):
       return
     target_cache = getattr(target, cache_attr)
-    # Accept either an already-loaded TARGET day cache or a lazily loaded
-    # aggregate frame before deciding that this comparison slice is empty.
+    # A TARGET path index suffices; otherwise try daily cache and aggregate.
     if (
         target_cache == {}
         and target.load(load_key) == {}
@@ -2840,7 +2857,7 @@ class OGSCatalog:
       self.logger.info("%s catalog has no %ss to compare.", target.name, kind)
       return
     self.logger.info(
-        "Starting BGMA %s comparison between %s and %s.",
+        "Starting BPGMA %s comparison between %s and %s.",
         kind, self.name, target.name,
     )
     runner(target)
@@ -2852,45 +2869,50 @@ class OGSCatalog:
       waveforms: Optional[Path] = None,
       vlines: list[tuple[datetime, str, str]] = []
   ) -> None:
-    """Orchestrate BGMA event and pick review for one target catalog.
+    """Orchestrate BPGMA event and pick review for one target catalog.
 
-    Optional context data is loaded before any BGMA pass runs. When both
-    ``waveforms`` and ``stations`` are provided, ``OGS_U.waveforms(...)``
-    loads waveform metadata and the derived station inventory for the current
+    Optional context data is loaded before any BPGMA pass runs. When both
+    ``waveforms`` and ``stations`` are provided, ``OGS_U.waveforms(...)`` loads
+    waveform metadata and the derived station inventory for the current
     ``self.start`` / ``self.end`` window. When only ``stations`` is provided,
     ``self.waveforms`` is cleared and ``self.stations`` is loaded from that
-    inventory file. When ``stations`` is missing, no waveform metadata is
-    loaded for this run, even if ``waveforms`` was supplied.
+    StationXML directory. When ``stations`` is missing, both context attributes
+    are cleared and no waveform metadata is loaded for this run, even if
+    ``waveforms`` was supplied.
 
-    After those optional loads, BGMA passes are attempted in fixed order:
-    events first, then picks. Each pass is gated by ``_run_bgma_if_ready`` and
-    therefore runs only when ``self`` already has the relevant cache populated
-    and ``target`` resolves to non-empty data. Pick comparison still requires a
-    station inventory, so provide ``stations`` whenever pick caches are present.
+    After those optional loads, BPGMA passes are attempted in fixed order:
+    events first, then picks. Each pass is gated by ``_run_BPGMA_if_ready`` and
+    therefore requires a non-empty BASE path index; TARGET passes with a path
+    index, cached daily frames, or aggregate rows. No prior ``load`` call is
+    required for indexed catalogs. Pick comparison still requires a station
+    inventory, so provide ``stations`` whenever a pick pass can run. Context
+    results are cached by paths and options; unchanged keys reuse copies rather
+    than rescanning. This method does not call per-event waveform plotters.
 
     Side Effects
     ------------
     Updates ``self.waveforms`` and ``self.stations`` for the current run.
-    Successful BGMA passes overwrite the matching review attributes on ``self``
-    (for example ``EventsMH`` / ``EventsMS`` / ``EventsPS`` and the ``Picks*``
-    outputs) and may write plots or CSV artifacts under ``self.output``.
+    Successful BPGMA passes overwrite the matching review attributes on
+    ``self`` (for example ``EventsMH`` / ``EventsMS`` / ``EventsPS`` and the
+    ``Picks*`` outputs) and may write plots or CSV artifacts under
+    ``self.output``.
 
     Parameters
     ----------
     target : OGSCatalog
       Catalog to compare against.
     stations : Optional[Path]
-      Path to station metadata file.
+      Directory containing StationXML files.
     waveforms : Optional[Path]
-      Path to waveform metadata with ``NETWORK``, ``STATION``, ``DATE``, and
-      ``FILENAME`` columns. It is used only when ``stations`` is also given.
+      Root of daily ``YYYY/MM/DD`` MiniSEED directories, scanned only when
+      ``stations`` is also given.
     vlines : list[tuple[datetime, str, str]]
       Vertical marker lines forwarded to ``OGS_U.waveforms`` when waveform
       metadata is loaded.
 
     Examples
     --------
-    Compare only events after loading event caches on both catalogs::
+    Compare only events using catalogs whose pick path indexes are empty:
 
       base.load("events")
       target.load("events")
@@ -2902,14 +2924,14 @@ class OGSCatalog:
       base.load("picks")
       target.load("events")
       target.load("picks")
-      base.bpgma(target, stations=Path("/path/to/stations"))
+      base.bpgma(target, stations=Path("station"))
 
     Add waveform lookup data used by downstream review helpers::
 
       base.bpgma(
         target,
-        stations=Path("/path/to/stations"),
-        waveforms=Path("/path/to/waveforms.csv"),
+        stations=Path("station"),
+        waveforms=Path("waveform"),
       )
     """
     if not isinstance(target, OGSCatalog):
@@ -2959,21 +2981,21 @@ class OGSCatalog:
         else:
           self.stations = cast(pd.DataFrame, cache[cache_key]).copy()
     # Run the broader event pass first, then the station-aware pick review.
-    self._run_bgma_if_ready(
+    self._run_BPGMA_if_ready(
         target,
         cache_attr="events_",
         load_key="events",
         get_key="EVENTS",
         kind="event",
-        runner=self.bgmaEvents,
+        runner=self.BPGMAEvents,
     )
-    self._run_bgma_if_ready(
+    self._run_BPGMA_if_ready(
         target,
         cache_attr="picks_",
         load_key="picks",
         get_key="PICKS",
         kind="pick",
-        runner=self.bgmaPicks,
+        runner=self.BPGMAPicks,
     )
 
   def __iadd__(self, target):
@@ -3045,19 +3067,21 @@ def main():
   The paths below are hard-coded for one workstation-specific smoke test. The
   helper builds two catalogs over a shared date range, renders the overview
   plot, and then runs ``bpgma`` with station metadata. Update the paths below
-  before running this file directly.
+  before running it via the package module entry point; direct file execution
+  does not provide the package context required by its relative imports.
   """
-  start = datetime(2024, 3, 20)
-  end = datetime(2024, 6, 20)
-  stations = Path("/Users/admin/Desktop/OGS_Catalog/station")
+  start = datetime(2005, 1, 1)
+  end = datetime(2024, 12, 31)
+  stations = Path("/leonardo_work/IscrC_AISeism/WORK/station")
   output = Path(
-      "/Users/admin/Desktop/Monica/PhD/comparison/OGSCatalog/OGSBackup"
+      "/leonardo_work/IscrC_AISeism/PhD/doc/imgs/OnlyEqNLL1D"
   )
   # Tiny local factory to keep this ad hoc entrypoint readable.
 
   def _cat(path: Path, name: str) -> OGSCatalog:
-    return OGSCatalog(path, start=start, end=end, name=name,
-                      verbose=True, output=output)
+    return OGSCatalog(
+        path, start=start, end=end, name=name, verbose=True, output=output
+    )
   BaseCatalog = _cat(
       Path("/Users/admin/Desktop/Monica/PhD/catalog/OGSCatalog/.all"),
       "OGS Catalog"

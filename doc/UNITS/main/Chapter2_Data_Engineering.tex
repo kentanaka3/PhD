@@ -142,9 +142,6 @@ The primary configuration domains governed by \texttt{ogsconstants} include:
     \begin{itemize}
       \item \texttt{PWAVE = "P"}, \texttt{SWAVE = "S"}: Authoritative phase
         type string literals.
-      \item \texttt{THRESHOLDS}: Systematic confidence threshold array spanning
-        \numrange{0.1}{0.9} in increments of \num{0.1}, constructed via
-        \texttt{np.linspace(0.1, 0.9, 9)}.
       \item \texttt{PWAVE\_THRESHOLD = SWAVE\_THRESHOLD = 0.1}: Default minimum
         model probability threshold (\num{0.1}) for accepting
         \ac{ML} phase candidates.
@@ -192,19 +189,6 @@ The primary configuration domains governed by \texttt{ogsconstants} include:
         unclassified sources (\texttt{'U'} $\to$ \texttt{UNKNOWN}).
     \end{itemize}
 
-  \item \textbf{Canonical DataFrame Schema Headers}:
-    Predefined column tuples ensuring schema congruence across parquet storage:
-    \begin{itemize}
-      \item \texttt{HEADER\_EVENTS = [idx, time, latitude,
-        longitude, depth, ERH, ERZ, GAP]}: Historical 8-column event
-        header used in minimal exports, superseded in
-        \texttt{OGSDataFile} by the unified 28-column catalog schema
-        (\cref{subsubsec:unified_catalog_schema}).
-      \item \texttt{HEADER\_PICKS = [idx, time, phase, station,
-        onset, polarity, weight]}
-      \item \texttt{HEADER\_MODL = [MODEL, WEIGHT, THRESHOLD]}
-      \item \texttt{HEADER\_PRED = HEADER\_MODL + HEADER\_MANL}
-    \end{itemize}
 \end{enumerate}
 
 \section{Pick Quality Weight and Timing Uncertainty Conversion}
@@ -586,13 +570,11 @@ When merging is requested (\texttt{--merge} CLI flag),
 heterogeneous file types into unified \texttt{EVENTS} and
 \texttt{PICKS} DataFrames:
 \begin{enumerate}
-  \item \textbf{Pick Normalization and Concatenation}: Pick
-    records across all parsed files are concatenated. Column names
-    are mapped to standardized schema identifiers
-    (\texttt{HEADER\_PICKS}), timestamps are parsed to
-    UTCDateTime, and calendar dates are coerced using
-    \texttt{normalize\_groups()} to ensure consistent join
-    keys across HPL, DAT, and PUN files.
+  \item \textbf{Pick Normalization and Concatenation}: Pick records across all
+    parsed files are concatenated. Column names are mapped to standardized
+    pick-schema identifiers, timestamps are parsed to UTCDateTime, and calendar
+    dates are coerced using \texttt{normalize\_groups()} to ensure consistent
+    join keys across \texttt{HPL}, \texttt{DAT}, and \texttt{PUN} files.
   \item \textbf{Event Attribute Outer Joins}: Merging events across
     heterogeneous legacy files consolidates attributes into the unified
     28-column catalog schema (\cref{subsubsec:unified_catalog_schema}):

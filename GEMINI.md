@@ -17,48 +17,6 @@ PhD/
 └── LLM/      # LLM knowledge, prompts, workflows, experiments, and reviews
 ```
 
-## Key commands
-
-```bash
-# Pre-flight — always run before editing
-git status --short
-
-# Repository navigation (Tier 1 Context Manifest)
-bash LLM/scripts/handler.sh navigate --root "$PWD"
-
-# Scoped navigation with symbol index (Tier 2)
-bash LLM/scripts/handler.sh navigate --module PATH --scripts
-
-# Post-edit validation
-bash LLM/scripts/handler.sh validate --root "$PWD"
-git diff --check
-git status --short
-
-# Single-file Bash or Markdown validation
-bash LLM/scripts/handler.sh validate --file path/to/script.sh
-bash LLM/scripts/handler.sh validate --file path/to/document.md
-
-# Agent/skill schema validation
-bash .agents/skills/agent-creator/scripts/validate-agent.sh gemini path/to/SKILL.md
-
-# OGS dry-run (never run real downloads, inference, or SLURM jobs)
-make -n TARGET -C OGS/utils/Leonardo
-```
-
-## Navigation contract
-
-Treat executable files as the source of truth. Begin with `git status --short`, inspect [`LLM/README.md`](LLM/README.md), and use the safe documentation handler:
-
-```bash
-bash LLM/scripts/handler.sh navigate --root "$PWD"
-```
-
-The navigation command emits the deterministic, token-dense YAML Context Manifest used to route an LLM subagent. The root command produces Tier 1; append the sorted Make, Bash, and Python symbol index only for a scoped Tier 2 manifest:
-
-```bash
-bash LLM/scripts/handler.sh navigate --module PATH --scripts
-```
-
 ## Python environment
 
 Activate the project Conda environment before any Python or `SBC_RUN_BIN` command. Derive the prefix from [`OGS/utils/Leonardo/Makefile`](OGS/utils/Leonardo/Makefile) variables:
@@ -86,7 +44,6 @@ Antigravity uses hierarchical discovery (`AGENTS.md`, `GEMINI.md`,  `.github/age
 ## Planning mode, artifacts, and subagents
 
 - **Planning Mode**: Before executing non-trivial architectural refactors, pipeline adjustments, or complex workflows, create an implementation plan artifact and seek user approval before changing code.
-- **Documentation validation**: Before completing documentation or script-navigation work, run `bash LLM/scripts/handler.sh validate --root "$PWD"`. Do not run `init` unless workspace creation is explicitly requested.
 - **Artifact Hygiene**:
   - Present multi-step summaries, reports, and walkthroughs via markdown artifacts (`implementation_plan.md`, `walkthrough.md`).
   - Store temporary data, ad-hoc test scripts, or ephemeral debug logs in the artifact scratch directory (`<appDataDir>/brain/<conversation-id>/scratch/`), never in the Git repository tree.

@@ -2,31 +2,30 @@
 
 """
 ===============================================================================
-OGS Downloader - Multi-Backend FDSN Waveform Retrieval CLI
+OGS Downloader - ObsPy FDSN Waveform Retrieval CLI
 ===============================================================================
 
 OVERVIEW:
 Command-line tool that downloads waveform data (and associated station
-metadata) from FDSN-compatible data centers, supporting both Pyrocko and
-ObsPy backends with the same arguments. Designed to populate the OGS waveform
-archive used by the rest of the pipeline.
+metadata) from FDSN-compatible data centers with ObsPy MassDownloader.
+The --pyrocko option selects an unimplemented backend and raises
+NotImplementedError. Downloads populate the daily OGS waveform archive.
 
 USAGE:
-  python ogsdownloader.py --client INGV ETH \
-                          --network OX NI \
-                          --station "* -SP -OL -ED" \
-                          --dates 20240320 20240620 \
-                          -W /path/to/waveforms
+  python -m OGS.src.ogsdownloader --client INGV ETH \
+                                  --network OX NI \
+                                  --station "* -SP -OL -ED" \
+                                  --dates 20240320 20240620 \
+                                  -W /path/to/waveforms
 
-  python ogsdownloader.py --pyrocko \
-                          --client INGV ETH \
-                          --network OX NI \
-                          --station "* -SP -OL -ED" \
-                          --dates 20240320 20240620 \
-                          -W /path/to/waveforms
+  MiniSEED paths:
+    <waveforms>/YYYY/MM/DD/NET.STA.LOC.CHA__BEGDT__ENDDT.mseed
+  Timestamps use YYYYMMDDTHHMMSSZ; LOC may be empty. The start time selects
+  the day directory. StationXML storage is delegated to MassDownloader
+  under the configured stations directory.
 
 DEPENDENCIES:
-  - Pyrocko (squirrel + fdsn) and/or ObsPy (clients.fdsn): waveform IO
+  - ObsPy (clients.fdsn + mass_downloader): waveform and metadata retrieval
   - ThreadPoolExecutor: per-day parallelism within a single backend run
   - ogsconstants: client name strings, separators, wildcard tokens
   - ogsutils: shared logging and validation helpers
@@ -62,10 +61,9 @@ from obspy.clients.fdsn.mass_downloader import (
     Restrictions,
 )
 
-import ogsutils as OGS_U
-import ogsconstants as OGS_C
+from . import ogsconstants as OGS_C, ogsutils as OGS_U
 
-# Each inner list contains the preferred channel codes for one component.
+# Ordered channel-family patterns, each accepting Z/N/E components.
 CHANNEL_PRIORITIES = ["HH[ZNE]", "EH[ZNE]", "HN[ZNE]", "HG[ZNE]"]
 # Empty location codes are preferred over the common numbered alternatives.
 LOCATION_PRIORITIES = ("", "00", "01", "02", "10")
@@ -103,8 +101,8 @@ class BaseDownloader(ABC):
             self.start + (index + 1) * OGS_C.ONE_DAY
         ) for index in range((self.end - self.start).days + 1)]
     )
-    # Preserve the order in which providers were requested while removing
-    # duplicate names before probing them.
+    # Store successfully probed providers in requested order; names are not
+    # deduplicated by this class.
     self.clients: list[ObsPyFDSNClient] = []
     self.main_workers = min(4, args.threads)
     self.sub_workers = args.threads - self.main_workers
@@ -132,16 +130,17 @@ class BaseDownloader(ABC):
     }
 
   def waveform_path(self, selection: Selection) -> Path:
-    """Build the destination path for one channel's waveform interval."""
+    """Build YYYY/MM/DD/NET.STA.LOC.CHA__BEGDT__ENDDT.mseed from the start."""
     network, station, location, channel, starttime, endtime = selection
     day_path = Path(
         OGS_U.day_directory(self.args.waveforms, starttime)
     )
-    filename = (
-        f"{network}.{station}.{location}.{channel}__"
-        f"{starttime.strftime(f'{OGS_C.YYYYMMDD_FMT}T{OGS_C.TIME_FMT}Z')}__"
-        f"{endtime.strftime(f'{OGS_C.YYYYMMDD_FMT}T{OGS_C.TIME_FMT}Z')}"
-        f"{OGS_C.MSEED_EXT}"
+    timestamp_fmt = f"{OGS_C.YYYYMMDD_FMT}T{OGS_C.TIME_FMT}Z"
+    filename = OGS_C.PRC_FMT.format(
+        NETWORK=network, STATION=station, LOCATION=location, CHANNEL=channel,
+        BEGDT=starttime.strftime(timestamp_fmt),
+        ENDDT=endtime.strftime(timestamp_fmt),
+        EXT=OGS_C.MSEED_STR,
     )
     return day_path / filename
 
@@ -196,8 +195,8 @@ class BaseDownloader(ABC):
     return {
         "starttime": UTCDateTime(start),
         "endtime": UTCDateTime(end),
-        "network": ",".join(self.networks),
-        "station": ",".join(self.stations),
+        "network": OGS_C.COMMA_STR.join(self.networks),
+        "station": OGS_C.COMMA_STR.join(self.stations),
     }
 
   def station_kwargs(
@@ -205,9 +204,10 @@ class BaseDownloader(ABC):
   ) -> dict[str, Any]:
     """Build common station-service query arguments for a time window.
 
-    The domain constraints are appended only when supplied by the CLI. The
-    returned dictionary is also reused by the waveform download options, with
-    the service ``level`` changed from ``station`` to ``channel``.
+    Domain constraints come from the argument namespace (including parser
+    defaults). The level defaults to "channel". Waveform restriction options
+    are built separately by download_kwargs(); the domain is passed as an
+    ObsPy domain object.
     """
     return {
         **self.selection_kwargs(window),
@@ -217,7 +217,7 @@ class BaseDownloader(ABC):
 
   @property
   def _selection_kwargs(self) -> dict[str, Any]:
-    """Return channel and waveform-selection options shared by backends."""
+    """Return channel/location priorities and ObsPy restriction options."""
     return {
         "channel_priorities": CHANNEL_PRIORITIES,
         "chunklength_in_sec": 86400,
@@ -263,7 +263,11 @@ class BaseDownloader(ABC):
     return False
 
   def download(self) -> None:
-    """Download waveform and station metadata for the configured domain."""
+    """Probe providers for eligible channels and retain usable ObsPy clients.
+
+    No waveform download occurs in this base method. Provider/query failures
+    are logged and skipped; ValueError is raised if none has eligible channels.
+    """
     query_window: TimeWindow = (self.ranges[0][0], self.ranges[-1][1])
     for name in self.args.client:
       self.logger.info("Initializing FDSN client for provider '%s'.", name)
@@ -376,5 +380,5 @@ def data_downloader(args: Namespace) -> None:
 
 
 if __name__ == "__main__":
-  # Keep direct script execution equivalent to the installed CLI entry point.
+  # Package-module entry point using the shared downloader argument parser.
   data_downloader(OGS_U.parse_downloader_args())

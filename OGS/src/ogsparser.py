@@ -22,10 +22,10 @@ SUPPORTED FILE FORMATS:
   ┌───────────┬──────────────┬────────────────────────────────────┐
   │ Extension │ Parser Class │ Content Description                │
   ├───────────┼──────────────┼────────────────────────────────────┤
-  │ .hpl      │ DataFileHPL  │ Hypocenter locations (recommended) │
+  │ .hpl      │ DataFileHPL  │ Event summaries and P/S picks      │
   │ .dat      │ DataFileDAT  │ Phase picks (P/S arrivals)         │
-  │ .txt      │ DataFileTXT  │ Local magnitude (ML) information   │
-  │ .pun      │ DataFilePUN  │ Event punch cards                  │
+  │ .txt      │ DataFileTXT  │ Events, ML/MD, locality and type   │
+  │ .pun      │ DataFilePUN  │ Hypo71 event summaries             │
   └───────────┴──────────────┴────────────────────────────────────┘
 
 ARCHITECTURE:
@@ -47,7 +47,7 @@ USAGE:
     python ogsparser.py -f file1.hpl file2.dat -D 20220101 20221231 --merge
 
   Command line - Process all files in directory:
-    python ogsparser.py -d /path/to/catalog/ -x .hpl .dat --merge
+    python -m OGS.src.ogsparser -d /path/to/catalog/ -x .hpl .dat --merge
 
   Programmatic:
     from ogsparser import DataCatalog
@@ -99,20 +99,12 @@ import pandas as pd
 # Standard library: Filesystem path handling
 from pathlib import Path
 
-# Local module: OGS-specific constants (extensions, column names, formats)
-import ogsconstants as OGS_C
-
-# Local module: Utility functions for date parsing, path validation, etc.
-import ogsutils as OGS_U
-
-# Local module: Base class providing file I/O and logging
-from ogsdatafile import OGSDataFile
-
-# Local modules: Format-specific parsers
-from ogshpl import DataFileHPL  # Hypocenter location files
-from ogsdat import DataFileDAT  # Phase pick files
-from ogspun import DataFilePUN  # Punch card format files
-from ogstxt import DataFileTXT  # Text format magnitude files
+from . import ogsconstants as OGS_C, ogsutils as OGS_U
+from .ogsdatafile import OGSDataFile
+from .ogshpl import DataFileHPL  # Hypocenter location files
+from .ogsdat import DataFileDAT  # Phase picks files
+from .ogspun import DataFilePUN  # Punch card format files
+from .ogstxt import DataFileTXT  # Text format magnitude files
 
 # -----------------------------------------------------------------------------
 # CONSTANTS

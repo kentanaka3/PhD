@@ -42,21 +42,19 @@ AUTHORS:
 =============================================================================
 """
 
-import ogsclustering as OGSCL
+from OGS.src import ogsclustering as OGSCL
 from sklearn.datasets import make_blobs
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 import matplotlib.pyplot as plt
-import os
-import sys
-import unittest
-import warnings
-import time
-import tempfile
 from pathlib import Path
+import unittest
+from unittest.mock import patch
+import warnings
+import tempfile
+from functools import cache
 
 import numpy as np
-from scipy.special import gammaln
 
 import matplotlib
 matplotlib.use("Agg")
@@ -65,10 +63,6 @@ matplotlib.use("Agg")
 # Silence warnings during tests
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 warnings.filterwarnings('ignore', category=FutureWarning)
-
-# Check if SilhouetteScore is available
-HAS_SILHOUETTE = hasattr(OGSCL, 'SilhouetteScore')
-
 
 # =============================================================================
 # MODULE-LEVEL HELPERS
@@ -80,35 +74,6 @@ def _make_3blob_data():
   return make_blobs(
       n_samples=600, centers=3, n_features=2, cluster_std=0.6, random_state=42,
   )
-
-
-# =============================================================================
-# MANIFOLD GENERATORS REGISTRY (references ManifoldBenchmark)
-# =============================================================================
-
-MANIFOLD_GENERATORS = {
-    'M1':    (OGSCL.ManifoldBenchmark.gen_M1,    10),
-    'M2':    (OGSCL.ManifoldBenchmark.gen_M2,     3),
-    'M3':    (OGSCL.ManifoldBenchmark.gen_M3,     4),
-    'M4':    (OGSCL.ManifoldBenchmark.gen_M4,     4),
-    'M5':    (OGSCL.ManifoldBenchmark.gen_M5,     2),
-    'M6':    (OGSCL.ManifoldBenchmark.gen_M6,     6),
-    'M7':    (OGSCL.ManifoldBenchmark.gen_M7,     2),
-    'M9':    (OGSCL.ManifoldBenchmark.gen_M9,    20),
-    'M10a':  (OGSCL.ManifoldBenchmark.gen_M10a,  10),
-    'M10b':  (OGSCL.ManifoldBenchmark.gen_M10b,  17),
-    'M10c':  (OGSCL.ManifoldBenchmark.gen_M10c,  24),
-    'M10d':  (OGSCL.ManifoldBenchmark.gen_M10d,  70),
-    'M11':   (OGSCL.ManifoldBenchmark.gen_M11,    2),
-    'M12':   (OGSCL.ManifoldBenchmark.gen_M12,   20),
-    'M13':   (OGSCL.ManifoldBenchmark.gen_M13,    1),
-    'MN1':   (OGSCL.ManifoldBenchmark.gen_MN1,   18),
-    'MN2':   (OGSCL.ManifoldBenchmark.gen_MN2,   24),
-    'Mbeta': (OGSCL.ManifoldBenchmark.gen_Mbeta, 10),
-    'MP3':   (OGSCL.ManifoldBenchmark.gen_MP3,    3),
-    'MP6':   (OGSCL.ManifoldBenchmark.gen_MP6,    6),
-    'MP9':   (OGSCL.ManifoldBenchmark.gen_MP9,    9),
-}
 
 
 # =============================================================================
@@ -146,47 +111,30 @@ def make_well_separated(
   return X, labels, d_true
 
 
-def make_overlapping(
-    gen_func, N_per_cluster: int = 500, n_clusters: int = 2,
-    separation: float = 0.01, seed: int = 42
-):
-  """
-  Create heavily overlapping clusters (nearly coincident manifold copies).
-  """
-  return make_well_separated(
-      gen_func, N_per_cluster, n_clusters, separation=separation, seed=seed
-  )
-
-
 # =============================================================================
 # DADAPY TUTORIAL DATA HELPERS
 # =============================================================================
 
 DATA_URL_DIHEDRALS = "https://figshare.com/ndownloader/files/36359700"
 DATA_URL_DISTANCES = "https://figshare.com/ndownloader/files/36359697"
+TUTORIAL_DATA_DIR = Path(__file__).resolve().parent / "data"
 
-_REAL_DATA = True  # True if CLN025 data was successfully downloaded
-_DATA_ERROR = ""
-
-
-def _download_data(url, filename):
-  """Download data file from figshare if not already cached."""
-  cache_dir = os.path.join(tempfile.gettempdir(), 'ogsclustering_test_cache')
-  os.makedirs(cache_dir, exist_ok=True)
-  filepath = os.path.join(cache_dir, filename)
-  if not os.path.exists(filepath):
-    from urllib.request import urlretrieve
-    urlretrieve(url, filepath)
-  # Validate that we actually got data (figshare may return 0 bytes)
-  if os.path.getsize(filepath) == 0:
-    os.remove(filepath)
-    raise RuntimeError(f"Downloaded file is empty (likely WAF challenge)")
+def _tutorial_file(url: str, filename: str) -> Path:
+  """Require a local tutorial dataset; never download or replace files."""
+  filepath = TUTORIAL_DATA_DIR / filename
+  instructions = (
+      f"Download manually from {url} and save as OGS/test/data/{filename}."
+  )
+  if not filepath.is_file():
+    raise FileNotFoundError(f"Tutorial dataset is missing: {filepath}. {instructions}")
+  if filepath.stat().st_size == 0:
+    raise ValueError(f"Tutorial dataset is empty: {filepath}. {instructions}")
   return filepath
 
 
 def _load_dihedrals():
   """Load and select 15 dihedral angles from CLN025 trajectory."""
-  path = _download_data(
+  path = _tutorial_file(
       DATA_URL_DIHEDRALS,
       'cln025traj_dihedrals_decimated_equilibrated.npy',
   )
@@ -198,50 +146,17 @@ def _load_dihedrals():
 
 def _load_distances():
   """Load heavy atom distances from CLN025 trajectory."""
-  path = _download_data(
+  path = _tutorial_file(
       DATA_URL_DISTANCES,
       'cln025traj_distances_decimated_equilibrated.npy',
   )
   return np.load(path)
 
 
-def _generate_synthetic_data():
-  """
-  Generate synthetic data mimicking the CLN025 tutorial structure:
-  - 'dihedrals': 3 Gaussian clusters in 15-D (N=800, d=15)
-  - 'distances': the same clusters re-embedded in 30-D (N=800, d=30)
-  Both representations share the same underlying cluster assignments so
-  cross-representation consistency tests remain meaningful.
-  """
-  rng = np.random.RandomState(2025)
-  N_per = 1000  # ~900 total, keeps tests fast
-  d_dih = 15
-  d_dist = 30
-
-  # Three well-separated clusters in 15-D
-  centers_dih = rng.randn(3, d_dih) * 6
-  blobs_dih = np.vstack([
-      rng.randn(N_per, d_dih) * 0.8 + centers_dih[i] for i in range(3)
-  ])
-
-  # Map to 30-D via a random linear projection + cluster shift
-  proj = rng.randn(d_dih, d_dist) * 0.3
-  blobs_dist = blobs_dih @ proj
-  # Add cluster-specific shifts to preserve separability
-  for i in range(3):
-    blobs_dist[i * N_per:(i + 1) * N_per] += rng.randn(d_dist) * 4
-
-  return blobs_dih, blobs_dist
-
-
-# Pre-flight: try to load real data; fall back to synthetic if unavailable
-try:
-  _dihedrals_cache = _load_dihedrals()
-  _distances_cache = _load_distances()
-except Exception as exc:
-  _REAL_DATA = False
-  _DATA_ERROR = str(exc)
-  _dihedrals_cache, _distances_cache = _generate_synthetic_data()
+@cache
+def _tutorial_data():
+  """Load tutorial arrays once per process, only when requested by a test."""
+  return _load_dihedrals(), _load_distances()
 
 
 # =========================================================================
@@ -269,6 +184,9 @@ class TestOGSClusteringUtils(unittest.TestCase):
     self.assertTrue(np.array_equal(encoded, np.array([1, 1, 0, 2])))
     self.assertIsNotNone(cmap)
     self.assertIsNotNone(norm)
+    self.assertEqual(cmap.N, 3)
+    np.testing.assert_array_equal(norm.boundaries, [-0.5, 0.5, 1.5, 2.5])
+    np.testing.assert_array_equal(norm(encoded), encoded)
 
   def test_labels_to_colormap_no_noise(self):
     labels = np.array([0, 1, 1])
@@ -277,6 +195,8 @@ class TestOGSClusteringUtils(unittest.TestCase):
     self.assertTrue(np.array_equal(encoded, np.array([0, 1, 1])))
     self.assertIsNotNone(cmap)
     self.assertIsNotNone(norm)
+    self.assertEqual(cmap.N, 2)
+    np.testing.assert_array_equal(norm.boundaries, [-0.5, 0.5, 1.5])
 
   def test_labels_to_colormap_all_noise(self):
     labels = np.array([-1, -1, -1])
@@ -285,6 +205,12 @@ class TestOGSClusteringUtils(unittest.TestCase):
     self.assertTrue(np.array_equal(encoded, np.array([0, 0, 0])))
     self.assertIsNotNone(cmap)
     self.assertIsNotNone(norm)
+    self.assertEqual(cmap.N, 1)
+    np.testing.assert_array_equal(norm.boundaries, [-0.5, 0.5])
+
+  def test_labels_to_colormap_empty_input_is_rejected(self):
+    with self.assertRaisesRegex(ValueError, "empty labels array"):
+      OGSCL.labels_to_colormap(np.array([], dtype=int))
 
 
 class TestOGSClusteringModels(unittest.TestCase):
@@ -1456,168 +1382,101 @@ class TestPAkScoreDthr(unittest.TestCase):
     self.assertGreater(mean_k_lo, 2)
 
 
-class TestPAkScoreFullBenchmark(unittest.TestCase):
-  """
-  Run the scorer on ALL manifold datasets with well-separated clusters and
-  print a summary table to stdout.
-  """
-
-  @classmethod
-  def setUpClass(cls):
-    """Pre-generate all clustered manifold datasets."""
-    cls.results = {}
-
-  def _bench_one(self, name, gen_func, d_true):
-    """Benchmark a single manifold: compute score, time, and dim estimate."""
-    N_per = 400
-    maxk = min(80, N_per - 1)
-
-    X, labels_true, _ = make_well_separated(
-        gen_func, N_per_cluster=N_per, n_clusters=2, separation=20.0, seed=42,
-    )
-
-    t0 = time.time()
-    scorer = OGSCL.PAkDensitySeparationScore(X, labels_true, maxk=maxk)
-    score = scorer.compute()
-    dt = time.time() - t0
-
-    d_est = scorer.intrinsic_dim_
-
-    self.__class__.results[name] = {
-        'd_true': d_true,
-        'd_est': d_est,
-        'D': X.shape[1],
-        'N': X.shape[0],
-        'score': score,
-        'time_s': dt,
-        'n_pairs': len(scorer.saddle_densities_ or {}),
-    }
-
-    # Basic assertions
-    self.assertIsNotNone(score, f"{name}: score is None")
-    self.assertGreater(score, 0, f"{name}: score={score:.2f} should be > 0")
-    self.assertTrue(np.isfinite(score), f"{name}: score is not finite")
-
-  def test_bench_M1(self):
-    self._bench_one('M1', OGSCL.ManifoldBenchmark.gen_M1, 10)
-
-  def test_bench_M2(self):
-    self._bench_one('M2', OGSCL.ManifoldBenchmark.gen_M2, 3)
-
-  def test_bench_M3(self):
-    self._bench_one('M3', OGSCL.ManifoldBenchmark.gen_M3, 4)
-
-  def test_bench_M4(self):
-    self._bench_one('M4', OGSCL.ManifoldBenchmark.gen_M4, 4)
-
-  def test_bench_M5(self):
-    self._bench_one('M5', OGSCL.ManifoldBenchmark.gen_M5, 2)
-
-  def test_bench_M6(self):
-    self._bench_one('M6', OGSCL.ManifoldBenchmark.gen_M6, 6)
-
-  def test_bench_M7(self):
-    self._bench_one('M7', OGSCL.ManifoldBenchmark.gen_M7, 2)
-
-  def test_bench_M9(self):
-    self._bench_one('M9', OGSCL.ManifoldBenchmark.gen_M9, 20)
-
-  def test_bench_M10a(self):
-    self._bench_one('M10a', OGSCL.ManifoldBenchmark.gen_M10a, 10)
-
-  def test_bench_M10b(self):
-    self._bench_one('M10b', OGSCL.ManifoldBenchmark.gen_M10b, 17)
-
-  def test_bench_M10c(self):
-    self._bench_one('M10c', OGSCL.ManifoldBenchmark.gen_M10c, 24)
-
-  def test_bench_M10d(self):
-    self._bench_one('M10d', OGSCL.ManifoldBenchmark.gen_M10d, 70)
-
-  def test_bench_M11(self):
-    self._bench_one('M11',  OGSCL.ManifoldBenchmark.gen_M11, 2)
-
-  def test_bench_M12(self):
-    self._bench_one('M12',  OGSCL.ManifoldBenchmark.gen_M12, 20)
-
-  def test_bench_M13(self):
-    self._bench_one('M13',  OGSCL.ManifoldBenchmark.gen_M13, 1)
-
-  def test_bench_MN1(self):
-    self._bench_one('MN1',  OGSCL.ManifoldBenchmark.gen_MN1, 18)
-
-  def test_bench_MN2(self):
-    self._bench_one('MN2',  OGSCL.ManifoldBenchmark.gen_MN2, 24)
-
-  def test_bench_Mbeta(self):
-    self._bench_one('Mbeta', OGSCL.ManifoldBenchmark.gen_Mbeta, 10)
-
-  def test_bench_MP3(self):
-    self._bench_one('MP3',  OGSCL.ManifoldBenchmark.gen_MP3, 3)
-
-  def test_bench_MP6(self):
-    self._bench_one('MP6',  OGSCL.ManifoldBenchmark.gen_MP6, 6)
-
-  def test_bench_MP9(self):
-    self._bench_one('MP9',  OGSCL.ManifoldBenchmark.gen_MP9, 9)
-
-  @classmethod
-  def tearDownClass(cls):
-    """Print summary benchmark table."""
-    if not cls.results:
-      return
-    print("\n" + "=" * 82)
-    print("PAkDensitySeparationScore -- Full Manifold Benchmark")
-    print("=" * 82)
-    header = (f"{'Name':<8} {'N':>5} {'D':>4} {'d_true':>6} "
-              f"{'d_est':>6} {'Z-score':>8} {'Pairs':>5} {'Time(s)':>8}")
-    print(header)
-    print("-" * 82)
-    for name in sorted(cls.results.keys(),
-                       key=lambda x: (len(x), x)):
-      r = cls.results[name]
-      d_est_str = f"{r['d_est']:.1f}" if r['d_est'] is not None else "N/A"
-      score_str = f"{r['score']:.2f}" if r['score'] is not None else "None"
-      print(f"{name:<8} {r['N']:>5} {r['D']:>4} {r['d_true']:>6} "
-            f"{d_est_str:>6} {score_str:>8} {r['n_pairs']:>5} "
-            f"{r['time_s']:>8.2f}")
-    print("=" * 82)
-
-
 # =========================================================================
 # DADApy Tutorial Tests
 # =========================================================================
 
 
+class TestTutorialFiles(unittest.TestCase):
+  def test_missing_dataset_reports_manual_download_instructions(self):
+    with tempfile.TemporaryDirectory() as directory, \
+        patch(__name__ + ".TUTORIAL_DATA_DIR", Path(directory)):
+      with self.assertRaises(FileNotFoundError) as error:
+        _tutorial_file(DATA_URL_DIHEDRALS, "missing.npy")
+      self.assertIn(DATA_URL_DIHEDRALS, str(error.exception))
+      self.assertIn("OGS/test/data/missing.npy", str(error.exception))
+      self.assertEqual(list(Path(directory).iterdir()), [])
+
+  def test_empty_dataset_is_reported_and_preserved(self):
+    with tempfile.TemporaryDirectory() as directory, \
+        patch(__name__ + ".TUTORIAL_DATA_DIR", Path(directory)):
+      path = Path(directory) / "empty.npy"
+      path.touch()
+      with self.assertRaises(ValueError) as error:
+        _tutorial_file(DATA_URL_DISTANCES, path.name)
+      self.assertIn(DATA_URL_DISTANCES, str(error.exception))
+      self.assertIn("OGS/test/data/empty.npy", str(error.exception))
+      self.assertTrue(path.is_file())
+
+  def test_existing_dataset_is_returned_without_modification(self):
+    with tempfile.TemporaryDirectory() as directory, \
+        patch(__name__ + ".TUTORIAL_DATA_DIR", Path(directory)):
+      path = Path(directory) / "existing.npy"
+      path.write_bytes(b"fixture marker")
+      self.assertEqual(_tutorial_file(DATA_URL_DIHEDRALS, path.name), path)
+      self.assertEqual(path.read_bytes(), b"fixture marker")
+
+
+class TestTutorialDataCache(unittest.TestCase):
+  def setUp(self):
+    _tutorial_data.cache_clear()
+    self.addCleanup(_tutorial_data.cache_clear)
+
+  def test_successful_load_is_shared_between_callers(self):
+    dihedrals = np.zeros((2, 15))
+    distances = np.zeros((2, 3))
+    with patch(__name__ + "._load_dihedrals", return_value=dihedrals) as load_dih, \
+        patch(__name__ + "._load_distances", return_value=distances) as load_dist:
+      first = _tutorial_data()
+      second = _tutorial_data()
+    self.assertIs(first, second)
+    self.assertIs(first[0], dihedrals)
+    self.assertIs(first[1], distances)
+    load_dih.assert_called_once_with()
+    load_dist.assert_called_once_with()
+
+  def test_loading_failure_propagates_without_caching_a_fallback(self):
+    with patch(__name__ + "._load_dihedrals", return_value=np.zeros((2, 15))), \
+        patch(__name__ + "._load_distances",
+              side_effect=OSError("tutorial load failed")) as load_dist:
+      for _ in range(2):
+        with self.assertRaisesRegex(OSError, "tutorial load failed"):
+          _tutorial_data()
+    self.assertEqual(load_dist.call_count, 2)
+    self.assertEqual(_tutorial_data.cache_info().currsize, 0)
+
+
 class TestDataLoading(unittest.TestCase):
   """Verify that the datasets have expected shapes and are finite."""
 
-  @unittest.skipIf(not _REAL_DATA, 'Using synthetic data')
+  @classmethod
+  def setUpClass(cls):
+    cls.dihedrals, cls.distances = _tutorial_data()
+
   def test_dihedrals_shape_real(self):
     """Selected dihedral angles should be (3758, 15) for real data."""
-    self.assertEqual(_dihedrals_cache.shape, (3758, 15))
+    self.assertEqual(self.dihedrals.shape, (3758, 15))
 
-  @unittest.skipIf(not _REAL_DATA, 'Using synthetic data')
   def test_distances_shape_real(self):
     """Heavy atom distances should be (3758, 4278) for real data."""
-    self.assertEqual(_distances_cache.shape, (3758, 4278))
+    self.assertEqual(self.distances.shape, (3758, 4278))
 
   def test_dihedrals_2d(self):
     """Dihedral data should be 2-D with >= 10 features."""
-    self.assertEqual(_dihedrals_cache.ndim, 2)
-    self.assertGreaterEqual(_dihedrals_cache.shape[1], 10)
+    self.assertEqual(self.dihedrals.ndim, 2)
+    self.assertGreaterEqual(self.dihedrals.shape[1], 10)
 
   def test_distances_2d(self):
     """Distance data should be 2-D."""
-    self.assertEqual(_distances_cache.ndim, 2)
+    self.assertEqual(self.distances.ndim, 2)
 
   def test_dihedrals_finite(self):
     """All dihedral values must be finite."""
-    self.assertTrue(np.all(np.isfinite(_dihedrals_cache)))
+    self.assertTrue(np.all(np.isfinite(self.dihedrals)))
 
   def test_distances_finite(self):
     """All distance values must be finite."""
-    self.assertTrue(np.all(np.isfinite(_distances_cache)))
+    self.assertTrue(np.all(np.isfinite(self.distances)))
 
 
 class TestIntrinsicDimensionDihedrals(unittest.TestCase):
@@ -1630,9 +1489,9 @@ class TestIntrinsicDimensionDihedrals(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls):
-    data = _dihedrals_cache.copy()
-    if _REAL_DATA:
-      data = data + np.pi  # shift as in tutorial
+    dihedrals, _ = _tutorial_data()
+    data = dihedrals.copy() + np.pi
+    cls._n_features = data.shape[1]
     N = data.shape[0]
     labels = np.zeros(N, dtype=np.int64)
     labels[N // 2:] = 1
@@ -1652,7 +1511,7 @@ class TestIntrinsicDimensionDihedrals(unittest.TestCase):
   def test_intrinsic_dim_reasonable(self):
     """ID should be within a sensible range for the data dimensionality."""
     self.assertGreater(self._id, 0.5)
-    self.assertLess(self._id, _dihedrals_cache.shape[1] + 5)
+    self.assertLess(self._id, self._n_features + 5)
 
 
 class TestIntrinsicDimensionDistances(unittest.TestCase):
@@ -1664,7 +1523,9 @@ class TestIntrinsicDimensionDistances(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls):
-    data = _distances_cache.copy()
+    _, distances = _tutorial_data()
+    data = distances.copy()
+    cls._n_features = data.shape[1]
     N = data.shape[0]
     labels = np.zeros(N, dtype=np.int64)
     labels[N // 2:] = 1
@@ -1676,7 +1537,7 @@ class TestIntrinsicDimensionDistances(unittest.TestCase):
     """ID should be within a sensible range for the data dimensionality."""
     self.assertIsNotNone(self._id)
     self.assertGreater(self._id, 0.5)
-    self.assertLess(self._id, _distances_cache.shape[1] + 5)
+    self.assertLess(self._id, self._n_features + 5)
 
 
 class TestADPClusteringDihedrals(unittest.TestCase):
@@ -1691,9 +1552,8 @@ class TestADPClusteringDihedrals(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls):
-    data = _dihedrals_cache.copy()
-    if _REAL_DATA:
-      data = data + np.pi
+    dihedrals, _ = _tutorial_data()
+    data = dihedrals.copy() + np.pi
     cls._N = data.shape[0]
     cls._adp = OGSCL.OGSAdvancedDensityPeaks(
         Z=4.5, halo=False, density_method='PAk',
@@ -1752,7 +1612,8 @@ class TestADPClusteringDistances(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls):
-    data = _distances_cache.copy()
+    _, distances = _tutorial_data()
+    data = distances.copy()
     cls._N = data.shape[0]
     cls._adp = OGSCL.OGSAdvancedDensityPeaks(
         Z=3.5, halo=False, density_method='PAk',
@@ -1797,9 +1658,8 @@ class TestCrossRepresentationConsistency(unittest.TestCase):
   @classmethod
   def setUpClass(cls):
     # Dihedrals
-    data_dih = _dihedrals_cache.copy()
-    if _REAL_DATA:
-      data_dih = data_dih + np.pi
+    dihedrals, distances = _tutorial_data()
+    data_dih = dihedrals.copy() + np.pi
     adp_dih = OGSCL.OGSAdvancedDensityPeaks(
         Z=4.5, halo=False, density_method='PAk',
     )
@@ -1807,7 +1667,7 @@ class TestCrossRepresentationConsistency(unittest.TestCase):
     cls._n_clusters_dih = adp_dih.n_clusters_
 
     # Distances
-    data_dist = _distances_cache.copy()
+    data_dist = distances.copy()
     adp_dist = OGSCL.OGSAdvancedDensityPeaks(
         Z=3.5, halo=False, density_method='PAk',
     )
@@ -1890,9 +1750,8 @@ class TestPAkScoreOnADPClustering(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls):
-    data = _dihedrals_cache.copy()
-    if _REAL_DATA:
-      data = data + np.pi
+    dihedrals, _ = _tutorial_data()
+    data = dihedrals.copy() + np.pi
     adp = OGSCL.OGSAdvancedDensityPeaks(
         Z=4.5, halo=False, density_method='PAk',
     )
@@ -1951,9 +1810,8 @@ class TestPlottingMethods(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls):
-    data = _dihedrals_cache[:500].copy()
-    if _REAL_DATA:
-      data = data + np.pi
+    dihedrals, _ = _tutorial_data()
+    data = dihedrals[:500].copy() + np.pi
     adp = OGSCL.OGSAdvancedDensityPeaks(
         Z=4.5, halo=False, density_method='PAk',
     )
@@ -2019,9 +1877,8 @@ class TestDensityEstimation(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls):
-    data = _dihedrals_cache.copy()
-    if _REAL_DATA:
-      data = data + np.pi
+    dihedrals, _ = _tutorial_data()
+    data = dihedrals.copy() + np.pi
     cls._N = data.shape[0]
     cls._adp = OGSCL.OGSAdvancedDensityPeaks(
         Z=4.5, halo=False, density_method='PAk',

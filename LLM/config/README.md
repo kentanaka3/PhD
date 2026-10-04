@@ -1,4 +1,4 @@
-# Safe configuration
+# Safe Configuration
 
 ## Purpose and navigation
 

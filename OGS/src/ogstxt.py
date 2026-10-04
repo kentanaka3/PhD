@@ -5,7 +5,7 @@ OGS TXT File Parser - Catalog Event Summary Extractor
 
 OVERVIEW:
 This module parses OGS .txt catalog exports containing event-level summaries.
-Each data row represents one located event with origin time, hypocenter,
+Retained data rows represent located events with origin time, hypocenter,
 uncertainty estimates, magnitudes, locality name, and an event-type label.
 
 FILE FORMAT DESCRIPTION:
@@ -16,21 +16,23 @@ FILE FORMAT DESCRIPTION:
   - Local magnitude (ML) and duration magnitude (MD)
   - Human-readable locality name
   - Bracketed event type label used for downstream filtering
-  - A header line that is skipped before parsing begins
+  - The first line is unconditionally skipped as a header
 
 KEY FEATURES:
   - Regex-based extraction with named capture groups
   - Date range filtering for temporal subsetting
   - Post-processing of placeholder dashes into numeric NaN values
-  - Event type filtering for suspected explosions
+  - Exact-label filtering for suspected slides and chemical explosions
+  - Unlocated-row filtering by latitude placeholder or locality text
   - Parquet output via the shared OGSDataFile logging pipeline
 
 USAGE:
   Command line:
-    python ogstxt.py -f input.txt -D 20240320 20240620 -v
+    python -m OGS.src.ogstxt -f input.txt -D 20240320 20240620 -v
 
   Programmatic:
-    from ogstxt import DataFileTXT
+    from pathlib import Path
+    from OGS.src.ogstxt import DataFileTXT
     parser = DataFileTXT(Path("input.txt"), start_date, end_date)
     parser.read()
     parser.log()
@@ -61,25 +63,11 @@ AUTHORS:
 # -----------------------------------------------------------------------------
 # IMPORTS
 # -----------------------------------------------------------------------------
-
-
-# ObsPy: seismological time conversions
-from obspy import UTCDateTime
-
 # Standard library: date/time objects
 from datetime import datetime
 
-# Pandas: tabular data manipulation
-import pandas as pd
-
-# Local module: OGS-specific constants and formatting strings
-import ogsconstants as OGS_C
-
-# Local module: OGS-specific argument parsing helpers
-import ogsutils as OGS_U
-
-# Local module: base parser for extraction and logging
-from ogsdatafile import OGSDataFile
+from . import ogsconstants as OGS_C, ogsutils as OGS_U
+from .ogsdatafile import OGSDataFile
 
 
 DEFAULT_FILTERED_EVENT_TYPES = [
@@ -112,64 +100,22 @@ class DataFileTXT(OGSDataFile):
   # EVENT EXTRACTOR: fixed-width event summary line
   # -------------------------------------------------------------------------
   EVENT_EXTRACTOR_LIST = [
-      fr"^(?P<{OGS_C.IDX_EVENTS_STR}>\d{{5}})\s",                 # Index
-      fr"(?P<{OGS_C.LEGACY_ID_STR}>\d{{4}}_\d{{5}})\s",           # Legacy ID
-      fr"(?P<{OGS_C.TIME_STR}>\d{{4}}-\d{{2}}-\d{{2}}T",          # Date
-      fr"\d{{2}}:\d{{2}}:\d{{2}}\.\d{{3}})\s",                    # Time
-      fr"(?P<{OGS_C.RMS_STR}>[\s\d\.\-]{{5}})\s",                 # RMS
-      fr"(?P<{OGS_C.LATITUDE_STR}>[\s\d\-\.]{{7}})\s",            # Latitude
-      fr"(?P<{OGS_C.LONGITUDE_STR}>[\s\d\-\.]{{7}})\s",           # Longitude
-      fr"(?P<{OGS_C.ERH_STR}>[\s\d\.\-]{{5}})\s",                 # ERH
-      fr"(?P<{OGS_C.DEPTH_STR}>[\s\d\.\-]{{5}})\s",               # Depth
-      fr"(?P<{OGS_C.ERZ_STR}>[\s\d\.\-]{{5}})\s",                 # ERZ
-      fr"(?P<{OGS_C.GAP_STR}>([\s\d\-]{{3}}))\s",                 # GAP
-      fr"(?P<{OGS_C.MAGNITUDE_L_STR}>([\-\s\d\.]{{4}}))\s",       # ML
-      fr"(?P<{OGS_C.MAGNITUDE_D_STR}>([\-\s\d\.]{{4}}))\s",       # MD
-      fr"(?P<{OGS_C.LOC_NAME_STR}>['\.\-\w\s\(\)]+)\s",           # Place
-      fr"(?P<{OGS_C.EVENT_TYPE_STR}>\[.*\])$",                    # Event Type
+      fr"^(?P<{OGS_C.IDX_EVENTS_STR}>\d{{5}})\s",             # Index
+      fr"(?P<{OGS_C.LEGACY_ID_STR}>\d{{4}}_\d{{5}})\s",       # Legacy ID
+      fr"(?P<{OGS_C.TIME_STR}>\d{{4}}-\d{{2}}-\d{{2}}T",      # Date
+      fr"\d{{2}}:\d{{2}}:\d{{2}}\.\d{{3}})\s",                # Time
+      fr"(?P<{OGS_C.RMS_STR}>[\s\d\.\-]{{5}})\s",             # RMS
+      fr"(?P<{OGS_C.LATITUDE_STR}>[\s\d\-\.]{{7}})\s",        # Latitude
+      fr"(?P<{OGS_C.LONGITUDE_STR}>[\s\d\-\.]{{7}})\s",       # Longitude
+      fr"(?P<{OGS_C.ERH_STR}>[\s\d\.\-]{{5}})\s",             # ERH
+      fr"(?P<{OGS_C.DEPTH_STR}>[\s\d\.\-]{{5}})\s",           # Depth
+      fr"(?P<{OGS_C.ERZ_STR}>[\s\d\.\-]{{5}})\s",             # ERZ
+      fr"(?P<{OGS_C.GAP_STR}>([\s\d\-]{{3}}))\s",             # GAP
+      fr"(?P<{OGS_C.MAGNITUDE_L_STR}>([\-\s\d\.]{{4}}))\s",   # ML
+      fr"(?P<{OGS_C.MAGNITUDE_D_STR}>([\-\s\d\.]{{4}}))\s",   # MD
+      fr"(?P<{OGS_C.LOC_NAME_STR}>['\.\-\w\s\(\)]+)\s",       # Place
+      fr"(?P<{OGS_C.EVENT_TYPE_STR}>\[.*\])$",                # Event Type
   ]
-
-  def _build_event_row(
-      self,
-      result: dict,
-      event_index: int | None = None,
-  ) -> list:
-    """Create a standardized event row for the output DataFrame."""
-    event_time = result[OGS_C.TIME_STR]
-    if event_index is None:
-      event_index = self.normalize_index(
-          result[OGS_C.IDX_EVENTS_STR], event_time.year
-      )
-    return [
-        event_index,                            # 0: idx
-        event_time,                             # 1: time
-        result[OGS_C.LATITUDE_STR],             # 2: latitude
-        result[OGS_C.LONGITUDE_STR],            # 3: longitude
-        result[OGS_C.DEPTH_STR],                # 4: depth
-        result[OGS_C.GAP_STR],                  # 5: azimuthal_gap
-        result[OGS_C.ERZ_STR],                  # 6: max_vertical_uncertainty
-        result[OGS_C.ERH_STR],                  # 7: max_horizontal_uncertainty
-        None,                                   # 8: max_time_uncertainty
-        event_time.strftime(OGS_C.DATE_FMT),    # 9: group
-        None,                                   # 10: number_picks
-        0,                                      # 11: number_p_picks
-        0,                                      # 12: number_s_picks
-        0,                                      # 13: number_p_and_s_picks
-        result[OGS_C.MAGNITUDE_D_STR],          # 14: MD
-        result[OGS_C.MAGNITUDE_L_STR],          # 15: ML
-        None,                                   # 16: ML_median
-        None,                                   # 17: ML_unc
-        None,                                   # 18: ML_stations
-        None,                                   # 19: DMIN
-        result[OGS_C.RMS_STR],                  # 20: RMS
-        None,                                   # 21: QM
-        result[OGS_C.LOC_NAME_STR],             # 22: LOC_NAME
-        result[OGS_C.EVENT_TYPE_STR],           # 23: E_TYPE
-        None,                                   # 24: NOTES
-        None,                                   # 25: MD_unc
-        None,                                   # 26: MD_stations
-        None,                                   # 27: MD_median
-    ]
 
   def _parse_event_datetime(self, value: str) -> datetime:
     """Convert the TXT date field to a datetime."""
@@ -181,11 +127,22 @@ class DataFileTXT(OGSDataFile):
 
     The parser skips the header row, extracts one event per remaining line,
     filters by date range, normalizes placeholder values, and stores grouped
-    results in self.EVENTS and self.events.
+    results in self.EVENTS and self.events. The regex is end-anchored after
+    stripping whitespace. Exact labels in DEFAULT_FILTERED_EVENT_TYPES,
+    latitude "-------", and locality text containing "Not localized" are
+    excluded. The captured legacy identifier is not exported. If no events_data
+    remain, EVENTS is empty and postload is not called.
+
+    Returns:
+      None: Results are stored on the instance.
 
     Raises:
       FileNotFoundError: If the input file does not exist.
-      ValueError: If the input file does not use the .txt extension.
+      ValueError: If the suffix is not .txt or a field conversion fails.
+      OSError: If opening or reading the file fails.
+      UnicodeError: If UTF-8 decoding fails.
+      Other processing failures propagate; regex mismatches are logged and
+      skipped.
     """
     # -----------------------------------------------------------------------
     # INPUT VALIDATION
@@ -195,7 +152,7 @@ class DataFileTXT(OGSDataFile):
     # -----------------------------------------------------------------------
     # FILE READING & LINE-BY-LINE PARSING
     # -----------------------------------------------------------------------
-    records = list()
+    events_data: list[dict[str, object]] = []
 
     self.logger.info(f"Reading TXT file: {self.input}")
     # The first row is a header line, so parsing starts from the second line.
@@ -226,9 +183,7 @@ class DataFileTXT(OGSDataFile):
           continue
 
         if self._is_after_end(result[OGS_C.TIME_STR]):
-          self.logger.debug(
-              f"Skipping event after end date: {self.end}"
-          )
+          self.logger.debug(f"Skipping event after end date: {self.end}")
           self.logger.debug(line)
           continue
 
@@ -239,15 +194,15 @@ class DataFileTXT(OGSDataFile):
         # ---------------------------------------------------------------------
         # APPEND RAW EVENT SUMMARY TO RESULTS
         # ---------------------------------------------------------------------
-        records.append(self._build_event_row(result))
+        events_data.append(result)
 
     # -----------------------------------------------------------------------
     # BUILD OUTPUT DATAFRAME
     # -----------------------------------------------------------------------
-    self.EVENTS = self._build_events_dataframe(records)
+    self.EVENTS = self._build_events_dataframe(events_data)
 
     if self.EVENTS.empty:
-      self.logger.warning(f"No valid TXT records found in {self.input}")
+      self.logger.warning(f"No valid TXT events_data found in {self.input}")
       return
 
     self.EVENTS = self.normalize_time(self.EVENTS)
@@ -305,7 +260,7 @@ def main(args):
     3. Logs output through the shared OGS pipeline
 
   Args:
-    args: Parsed command-line arguments from parse_arguments()
+    args: Parsed command-line arguments from ogsutils.parse_txt_args()
   """
   for file in args.file:
     datafile = DataFileTXT(
