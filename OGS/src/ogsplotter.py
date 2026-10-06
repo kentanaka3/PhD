@@ -408,7 +408,7 @@ class event_plotter(plotter):
         x_ = \
             UTCDateTime(p[OGS_C.TIME_STR]) - \
             (UTCDateTime(self.t) - self.offset)
-        if p[OGS_C.PHASE_STR] == "P":
+        if p[OGS_C.PHASE_STR] == OGS_C.PWAVE:
           ls = '-'
           lc = "red"
         else:

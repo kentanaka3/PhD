@@ -66,6 +66,7 @@ import re
 
 # Standard library: date/time objects and time deltas
 from datetime import datetime, timedelta as td
+from typing import Optional
 
 from . import ogsconstants as OGS_C, ogsutils as OGS_U
 from .ogsdatafile import OGSDataFile
@@ -73,6 +74,7 @@ from .ogsdatafile import OGSDataFile
 # =============================================================================
 # DataFileHPL Class - HPL Format Parser
 # =============================================================================
+
 
 class DataFileHPL(OGSDataFile):
   """
@@ -151,20 +153,14 @@ class DataFileHPL(OGSDataFile):
       # Unknown field: five whitespace/digit/minus/period/asterisk characters
       fr"(?P<K>[\s\d\-\.\*]{{5}})\s",
       # Optional S-wave pick block (may be 33 spaces if no S pick)
-      [
-          # S-wave onset quality: e=emergent, i=impulsive, ?=uncertain, space=unknown
-          fr"(((?P<{OGS_C.S_ONSET_STR}>[ei\s\?]){OGS_C.SWAVE}\s",
-          # S-wave weight: digit 0-5 or whitespace (blank defaults to zero)
-          fr"(?P<{OGS_C.S_WEIGHT_STR}>[0-5\s])\s",
-          # S-wave seconds offset from the P-wave HHMM base: five characters
-          fr"(?P<{OGS_C.S_TIME_STR}>[\s\d\.]{{5}})",
-          # Unknown field: six whitespace/digit/minus/period characters
-          fr"(?P<P>[\s\d\-\.]{{6}})",
-          # Unknown field: six whitespace/digit/minus/period characters
-          fr"(?P<Q>[\s\d\-\.]{{6}})\s{{2}}",
-          # Unknown field: four whitespace/digit/period characters
+      (
+          fr"(((?P<{OGS_C.S_ONSET_STR}>[ei\s\?]){OGS_C.SWAVE}\s"
+          fr"(?P<{OGS_C.S_WEIGHT_STR}>[0-5\s])\s"
+          fr"(?P<{OGS_C.S_TIME_STR}>[\s\d\.]{{5}})"
+          fr"(?P<P>[\s\d\-\.]{{6}})"
+          fr"(?P<Q>[\s\d\-\.]{{6}})\s{{2}}"
           fr"(?P<R>[\s\d\.]{{4}})\s{{5}})|\s{{33}})\s"
-      ],
+      ),
       # Unknown field: four uppercase-letter/digit/whitespace characters
       fr"(?P<S>[A-Z0-9\s]{{4}})\s{{4}}"
       # Unknown suffix: one or more whitespace/g/n characters
@@ -212,14 +208,14 @@ class DataFileHPL(OGSDataFile):
       # 3rd magnitude uncertainty
       fr"(?P<{OGS_C.M3_UNC_STR}>[\s\d\.]{{4}})\s{{9}}",
       # Number of pick lines remaining
-      fr"(?P<{OGS_C.NO_STR}_picks>[\s\d]\d)",
+      fr"(?P<{OGS_C.METADATA_STR}>[\s\d]\d)",
   ]
 
   # -------------------------------------------------------------------------
   # OPTIONAL AUXILIARY LINES: location labels and analyst notes
   # -------------------------------------------------------------------------
   LOCATION_EXTRACTOR_LIST = [
-      fr"^\^(?P<{OGS_C.LOC_NAME_STR}>[A-Z\s\.']+(\s\([A-Z\-\s]+\))?)"
+      fr"^\^(?P<{OGS_C.LOC_NAME_STR}>[A-Z\s\.']+(?:\([A-Z\-\s]+\))?)"
   ]
   LOCATION_EXTRACTOR = re.compile(OGS_C.EMPTY_STR.join(
       list(OGSDataFile._flatten(LOCATION_EXTRACTOR_LIST))
@@ -261,18 +257,24 @@ class DataFileHPL(OGSDataFile):
   def _apply_metadata_line(
       self, line: str, events_data: list[dict[str, object]],
   ) -> bool:
-    if self.LOCATION_EXTRACTOR.match(line):
+    match = self.NOTES_EXTRACTOR.match(line)
+    if match:
+      note_text = match.groupdict()[OGS_C.NOTES_STR].rstrip(OGS_C.SPACE_STR)
+      if events_data:
+        existing = events_data[-1].get(OGS_C.NOTES_STR)
+        events_data[-1][OGS_C.NOTES_STR] = (
+            f"{existing}; {note_text}" if existing else note_text
+        )
       return True
 
-    match = self.NOTES_EXTRACTOR.match(line)
-    if not match:
-      return False
-
-    if events_data:
-      events_data[-1][OGS_C.NOTES_STR] = (
-          match.groupdict()[OGS_C.NOTES_STR].rstrip(OGS_C.SPACE_STR)
-      )
-    return True
+    if line.startswith("^"):
+      note_text = line.lstrip("^").strip()
+      if events_data:
+        existing = events_data[-1].get(OGS_C.NOTES_STR)
+        events_data[-1][OGS_C.NOTES_STR] = (
+            f"{existing}; {note_text}" if existing else note_text
+        )
+      return True
 
   def _build_events_dataframe(self, events_data: list) -> pd.DataFrame:
     dataframe = pd.DataFrame(events_data, columns=self._EVENT_COLUMNS)
@@ -365,14 +367,21 @@ class DataFileHPL(OGSDataFile):
 
     for raw_line in lines:
       line = raw_line.strip("\n")
+      if not line.strip():
+        continue
 
       if record_lines_remaining > 0:
-        record_lines_remaining -= 1
-        match = self.RECORD_EXTRACTOR.match(line)
-        if not match:
-          self.logger.error(f"ERROR: (HPL) Could not parse line: {line}")
-          self.debug(line, self.RECORD_EXTRACTOR_LIST)
-          continue
+        if line.startswith(("^", "*")):
+          record_lines_remaining = 0
+        elif self.EVENT_EXTRACTOR.match(line):
+          record_lines_remaining = 0
+        else:
+          record_lines_remaining -= 1
+          match = self.RECORD_EXTRACTOR.match(line)
+          if not match:
+            self.logger.error(f"ERROR: (HPL) Could not parse line: {line}")
+            self.debug(line, self.RECORD_EXTRACTOR_LIST)
+            continue
 
         result = match.groupdict()
         if not self._is_supported_event_record(result):
@@ -396,8 +405,8 @@ class DataFileHPL(OGSDataFile):
         result[OGS_C.SECONDS_STR] = self._parse_seconds(
             result[OGS_C.SECONDS_STR]
         )
-        result[OGS_C.P_WEIGHT_STR] = self._parse_weight(
-            result[OGS_C.P_WEIGHT_STR]
+        result[OGS_C.P_WEIGHT_STR] = self._parse_int(
+            result[OGS_C.P_WEIGHT_STR], default_value=0
         )
         result[OGS_C.IDX_EVENTS_STR] = self.normalize_index(
             result[OGS_C.IDX_EVENTS_STR], event_time.year
@@ -413,8 +422,8 @@ class DataFileHPL(OGSDataFile):
           result[OGS_C.S_TIME_STR] = self._parse_seconds(
               result[OGS_C.S_TIME_STR]
           )
-          result[OGS_C.S_WEIGHT_STR] = self._parse_weight(
-              result[OGS_C.S_WEIGHT_STR]
+          result[OGS_C.S_WEIGHT_STR] = self._parse_int(
+              result[OGS_C.S_WEIGHT_STR], default_value=0
           )
           picks_data.append(self._build_pick_row(
               result[OGS_C.IDX_EVENTS_STR],
@@ -444,16 +453,16 @@ class DataFileHPL(OGSDataFile):
         result[OGS_C.IDX_EVENTS_STR] = self.normalize_index(
             result[OGS_C.IDX_EVENTS_STR], event_time.year
         )
-        result[OGS_C.GAP_STR] = self._parse_zero_padded_int(
+        result[OGS_C.GAP_STR] = self._parse_int(
             result[OGS_C.GAP_STR]
         )
-        result[OGS_C.NO_STR] = self._parse_zero_padded_int(
+        result[OGS_C.NO_STR] = self._parse_int(
             result[OGS_C.NO_STR]
         )
-        result[OGS_C.ML_STATIONS_STR] = self._parse_zero_padded_int(
+        result[OGS_C.ML_STATIONS_STR] = self._parse_int(
             result[OGS_C.ML_STATIONS_STR]
         )
-        result[OGS_C.MD_STATIONS_STR] = self._parse_zero_padded_int(
+        result[OGS_C.MD_STATIONS_STR] = self._parse_int(
             result[OGS_C.MD_STATIONS_STR]
         )
         result[OGS_C.MD_UNC_STR] = (
@@ -471,7 +480,7 @@ class DataFileHPL(OGSDataFile):
             if result[OGS_C.MAGNITUDE_L_STR] is not None
             else None
         )
-        record_lines_remaining = int(result[f"{OGS_C.NO_STR}_picks"])
+        record_lines_remaining = int(result[OGS_C.METADATA_STR])
         events_data.append(result)
         continue
 
@@ -498,8 +507,9 @@ def main(args):
     args: Parsed command-line arguments from ogsutils.parse_hpl_args()
   """
   for file in args.file:
-    datafile = DataFileHPL(file, args.dates[0], args.dates[1],
-                           verbose=args.verbose)
+    datafile = DataFileHPL(
+        file, args.dates[0], args.dates[1], verbose=args.verbose
+    )
     datafile.read()
     datafile.log()
 

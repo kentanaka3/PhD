@@ -1,13 +1,13 @@
 """
 ===============================================================================
-OGS Catalog Module - Lazy-loading Seismic Event/Pick Catalog + BGMA Review
+OGS Catalog Module - Lazy-loading Seismic Event/Pick Catalog + BPGMA Review
 ===============================================================================
 
 OVERVIEW:
 This module implements ``OGSCatalog``, a single-class container that lazily
 indexes daily seismic event and pick files produced by the OGS processing
 pipeline, exposes aggregate ``EVENTS`` and ``PICKS`` DataFrames, and drives
-the BGMA (Base vs. Model Assessment) review workflow used to compare two
+the BPGMA (Base vs. Model Assessment) review workflow used to compare two
 catalogs day-by-day.
 
 The class is intentionally large because it bundles five conceptually distinct
@@ -26,20 +26,20 @@ DataFrame schemas:
    - Renders summary maps, cumulative-count curves, and parameter
      histograms with optional target overlays.
 
-3. BGMA EVENT MATCHING & REVIEW
-   - Public:  ``bgmaEvents``
-   - Private: ``_bgma_events_review``, ``_bgma_events_both``,
-              ``_bgma_events_base_only``, ``_bgma_events_target_only``,
+3. BPGMA EVENT MATCHING & REVIEW
+   - Public:  ``BPGMAEvents``
+   - Private: ``_BPGMA_events_review``, ``_BPGMA_events_both``,
+              ``_BPGMA_events_base_only``, ``_BPGMA_events_target_only``,
               ``_event_feasible_positions``, ``_iter_shared_and_extra_dates``,
               plus per-axis diagnostic plotters
               (``_plot_events_time_diff``, ``_plot_events_mh_map``, ...).
    - Walks every shared/extra date, builds matched / missed / proposed
      event partitions, writes review CSVs, and renders diagnostic figures.
 
-4. BGMA PICK MATCHING & REVIEW
-   - Public:  ``bgmaPicks``
-   - Private: ``_bgma_picks_both``, ``_bgma_picks_base_only``,
-              ``_bgma_picks_target_only``, ``_load_and_clean_picks``,
+4. BPGMA PICK MATCHING & REVIEW
+   - Public:  ``BPGMAPicks``
+   - Private: ``_BPGMA_picks_both``, ``_BPGMA_picks_base_only``,
+              ``_BPGMA_picks_target_only``, ``_load_and_clean_picks``,
               ``_clean_picks``, ``_record_unmatched_picks``, plus
               ``_plot_picks_confmtx`` / ``_plot_picks_time_diff`` /
               ``_plot_picks_confidence``.
@@ -47,7 +47,7 @@ DataFrame schemas:
      ``(station, phase, time)`` contributing to the score, and reports a
      ``3x3`` phase confusion matrix.
 5. COMBINED WORKFLOW & SET OPERATIONS
-   - ``bpgma`` runs the events- and picks-side BGMA reviews back-to-back
+   - ``bpgma`` runs the events- and picks-side BPGMA reviews back-to-back
      for the same target, optionally loading waveform/station context.
    - ``__iadd__`` / ``__isub__`` provide in-place catalog merge/subtract;
      they are not invoked by ``bpgma``.
@@ -64,8 +64,8 @@ ARCHITECTURE:
   │                              │                                          │
   │     ┌────────────────────────┼─────────────────────────────────┐        │
   │     ▼                        ▼                                 ▼        │
-  │  Plotting              BGMA (events)                    BGMA (picks)    │
-  │  plot / plot_events    bgmaEvents                       bgmaPicks       │
+  │  Plotting              BPGMA (events)                   BPGMA (picks)   │
+  │  plot / plot_events    BPGMAEvents                       BPGMAPicks     │
   │  plot_cumulative_*     ─ shared & extra dates           ─ load+clean    │
   │  plot_*_histogram      ─ feasible-position matching     ─ time-window   │
   │                        ─ matched/missed/proposed         same station   │
@@ -88,17 +88,18 @@ ON-DISK LAYOUT EXPECTED:
   Indexing does not restrict extensions: CSV is read as CSV, others as parquet.
 
 SCHEMA NOTES:
-  ``_EVENTS_COLUMNS`` / ``_PICKS_COLUMNS`` define the canonical columns of
-  the aggregate frames; ``_EVENTS_MH_COLUMNS`` / ``_EVENTS_MH_WIDE_COLUMNS``
-  / ``_PICKS_MH_COLUMNS`` are the BGMA review-frame layouts. Paired columns
+  ``_EVENT_COLUMNS`` / ``_PICK_COLUMNS`` initialize empty aggregate frames;
+  loaded frames retain their source columns without schema enforcement.
+  ``_EVENTS_MH_COLUMNS`` / ``_EVENTS_MH_WIDE_COLUMNS``
+  / ``_PICKS_MH_COLUMNS`` are the BPGMA review-frame layouts. Paired columns
   use either the wide layout (``{col}_base`` / ``{col}_target``) or the
   legacy tuple-valued representation; ``_tcol`` abstracts over both.
 
 SEISMIC APPLICATIONS:
   - Daily catalog QC across long date windows without loading everything.
-  - Side-by-side comparison of a baseline catalog with a model-produced
-    catalog (e.g. ML phase picker / associator output) for false-discovery
-    and recall analysis on both events and picks.
+  - Side-by-side comparison of reference and target catalogs (which may include
+    ML picker / associator output) for reference-relative false-discovery and
+    recall analysis. Matching alone does not establish scientific ground truth.
   - Waveform-level inspection of missed / proposed events.
 
 USAGE:
@@ -155,14 +156,14 @@ from matplotlib.path import Path as mplPath     # Polygon containment tests
 from . import ogsconstants as OGS_C, ogsutils as OGS_U, ogsplotter as OGS_P
 
 # =============================================================================
-# MODULE-LEVEL CONSTANTS — frame layouts and BGMA review schemas
+# MODULE-LEVEL CONSTANTS — frame layouts and BPGMA review schemas
 # =============================================================================
 # Image extension used everywhere in this module for figure output. Switching
 # this single alias propagates to every plotting helper below.
 IMAGE_EXT = OGS_C.PNG_EXT
 
-# BGMA output-frame column layouts (hoisted out of bgmaEvents/bgmaPicks; pure
-# `OGS_C.*` constants, so safe to build once at module load).
+# BPGMA output-frame column layouts (hoisted out of BPGMAEvents/BPGMAPicks;
+# pure `OGS_C.*` constants, so safe to build once at module load).
 _EVENTS_MH_COLUMNS: list[str] = [
     OGS_C.IDX_EVENTS_STR, OGS_C.TIME_STR, OGS_C.LATITUDE_STR,
     OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR, OGS_C.ERH_STR, OGS_C.ERZ_STR,
@@ -178,10 +179,10 @@ _PICKS_MH_COLUMNS: list[str] = [
     OGS_C.IDX_PICKS_STR, OGS_C.TIME_STR, OGS_C.PHASE_STR,
     OGS_C.STATION_STR, OGS_C.PROBABILITY_STR,
 ]
-# Phase labels used to shape `bgmaPicks`'s confusion matrix (P-wave row/col,
+# Phase labels used to shape `BPGMAPicks`'s confusion matrix (P-wave row/col,
 # S-wave row/col, plus the shared `NONE_STR` missed/proposed axis).
 _PICKS_PHASES: tuple[str, ...] = (OGS_C.PWAVE, OGS_C.SWAVE, OGS_C.NONE_STR)
-# Row/column labels for `bgmaEvents`'s 2x2 confusion matrix (matched event vs
+# Row/column labels for `BPGMAEvents`'s 2x2 confusion matrix (matched event vs
 # missed/proposed on the `NONE_STR` axis).
 _EVENTS_PHASES: tuple[str, ...] = (OGS_C.EVENT_STR, OGS_C.NONE_STR)
 # Source-label discriminants yielded by `_iter_shared_and_extra_dates`;
@@ -191,50 +192,11 @@ _BOTH: _DateSource = "both"
 _BASE_ONLY: _DateSource = "base_only"
 _TARGET_ONLY: _DateSource = "target_only"
 
-# Column layouts for the catalog-wide PICKS/EVENTS frames built in __init__.
-# Loaded aggregate frames retain the source schema instead of being reindexed
-# to these initial column lists.
-_PICKS_COLUMNS: list[str] = [
-    OGS_C.IDX_PICKS_STR, OGS_C.GROUPS_STR, OGS_C.TIME_STR,
-    OGS_C.STATION_STR, OGS_C.PHASE_STR, OGS_C.PROBABILITY_STR,
-    OGS_C.EPICENTRAL_DISTANCE_STR, OGS_C.DEPTH_STR,
-    OGS_C.AMPLITUDE_STR, OGS_C.STATION_ML_STR,
-]
-_EVENTS_COLUMNS: list[str] = [
-    OGS_C.IDX_EVENTS_STR,            # 0: idx
-    OGS_C.TIME_STR,                  # 1: time
-    OGS_C.LATITUDE_STR,              # 2: latitude
-    OGS_C.LONGITUDE_STR,             # 3: longitude
-    OGS_C.DEPTH_STR,                 # 4: depth
-    OGS_C.GAP_STR,                   # 5: azimuthal_gap
-    OGS_C.ERZ_STR,                   # 6: max_vertical_uncertainty
-    OGS_C.ERH_STR,                   # 7: max_horizontal_uncertainty
-    OGS_C.ERT_STR,                   # 8: max_time_uncertainty
-    OGS_C.GROUPS_STR,                # 9: group
-    OGS_C.NO_STR,                    # 10: number_picks
-    OGS_C.NUMBER_P_PICKS_STR,        # 11: number_p_picks
-    OGS_C.NUMBER_S_PICKS_STR,        # 12: number_s_picks
-    OGS_C.NUMBER_P_AND_S_PICKS_STR,  # 13: number_p_and_s_picks
-    OGS_C.MAGNITUDE_D_STR,           # 14: magnitude duration
-    OGS_C.MAGNITUDE_L_STR,           # 15: local magnitude
-    OGS_C.ML_MEDIAN_STR,             # 16: ML_median
-    OGS_C.ML_UNC_STR,                # 17: ML_unc
-    OGS_C.ML_STATIONS_STR,           # 18: ML_stations
-    OGS_C.DMIN_STR,                  # 19: minimum distance
-    OGS_C.RMS_STR,                   # 20: root mean square
-    OGS_C.QM_STR,                    # 21: quality metric
-    OGS_C.LOC_NAME_STR,              # 22: LOC_NAME
-    OGS_C.EVENT_TYPE_STR,            # 23: E_TYPE
-    OGS_C.NOTES_STR,                 # 24: NOTES
-    OGS_C.MD_UNC_STR,                # 25: MD_unc
-    OGS_C.MD_STATIONS_STR,           # 26: MD_stations
-    OGS_C.MD_MEDIAN_STR,             # 27: MD_median
-]
-
-
 # =============================================================================
 # OGSCatalog — main container class
 # =============================================================================
+
+
 class OGSCatalog:
   """
   Lazy-loading container for OGS daily event and pick catalogs.
@@ -260,7 +222,7 @@ class OGSCatalog:
     Polygon applied to loaded event days; defaults to OGS_C.OGS_POLY_REGION
     wrapped in mplPath. If None, no spatial filtering is performed.
   output : Path, optional
-    Directory used for derived artifacts such as plots and BGMA review files.
+    Directory used for derived artifacts such as plots and BPGMA review files.
   name : str, optional
     Catalog label used in logs and plots. When empty, ``output.name`` is used.
 
@@ -305,22 +267,72 @@ class OGSCatalog:
                            event: pd.Series,
                            waveforms: dict[str, list[Path]],
                            output: Optional[Path] = None) -> None
-    Plot missed-event waveforms for BGMA review output.
+    Plot missed-event waveforms for BPGMA review output.
   plot_events_ps_waveforms(picks: pd.DataFrame,
                            event: pd.Series,
                            waveforms: dict[str, list[Path]],
                            output: Optional[Path] = None) -> None
-    Plot proposed-event waveforms for BGMA review output.
-  bgmaEvents(target: OGSCatalog, output: Optional[Path] = None) -> None
-    Match events between catalogs and write BGMA review artifacts.
-  bgmaPicks(target: OGSCatalog, output: Optional[Path] = None) -> None
-    Match picks between catalogs and write BGMA review artifacts.
+    Plot proposed-event waveforms for BPGMA review output.
+  BPGMAEvents(target: OGSCatalog, output: Optional[Path] = None) -> None
+    Match events between catalogs and write BPGMA review artifacts.
+  BPGMAPicks(target: OGSCatalog, output: Optional[Path] = None) -> None
+    Match picks between catalogs and write BPGMA review artifacts.
   bpgma(target: OGSCatalog,
         stations: Optional[Path] = None,
         waveforms: Optional[Path] = None,
         vlines: list[tuple[datetime, str, str]] = []) -> None
     Load optional waveform/station context and run events then picks BPGMA.
   """
+
+  # Unified column layouts inherited by OGSDataFile and format subclasses
+  _PICK_COLUMNS: list[str] = [
+      OGS_C.IDX_PICKS_STR, OGS_C.GROUPS_STR, OGS_C.TIME_STR,
+      OGS_C.STATION_STR, OGS_C.PHASE_STR, OGS_C.WEIGHT_STR,
+      OGS_C.EPICENTRAL_DISTANCE_STR, OGS_C.DEPTH_STR,
+      OGS_C.AMPLITUDE_STR, OGS_C.STATION_ML_STR,
+      OGS_C.PROBABILITY_STR,
+  ]
+
+  _EVENT_COLUMNS: list[str] = [
+      OGS_C.IDX_EVENTS_STR,            # 0: idx
+      OGS_C.TIME_STR,                  # 1: time
+      OGS_C.LATITUDE_STR,              # 2: latitude
+      OGS_C.LONGITUDE_STR,             # 3: longitude
+      OGS_C.DEPTH_STR,                 # 4: depth
+      OGS_C.GAP_STR,                   # 5: azimuthal_gap
+      OGS_C.ERZ_STR,                   # 6: max_vertical_uncertainty
+      OGS_C.ERH_STR,                   # 7: max_horizontal_uncertainty
+      OGS_C.ERT_STR,                   # 8: max_time_uncertainty
+      OGS_C.GROUPS_STR,                # 9: group
+      OGS_C.NO_STR,                    # 10: number_picks
+      OGS_C.NUMBER_P_PICKS_STR,        # 11: number_p_picks
+      OGS_C.NUMBER_S_PICKS_STR,        # 12: number_s_picks
+      OGS_C.NUMBER_P_AND_S_PICKS_STR,  # 13: number_p_and_s_picks
+      OGS_C.MAGNITUDE_D_STR,           # 14: magnitude duration
+      OGS_C.MAGNITUDE_L_STR,           # 15: local magnitude
+      OGS_C.ML_MEDIAN_STR,             # 16: ML_median
+      OGS_C.ML_UNC_STR,                # 17: ML_unc
+      OGS_C.ML_STATIONS_STR,           # 18: ML_stations
+      OGS_C.DMIN_STR,                  # 19: minimum distance
+      OGS_C.RMS_STR,                   # 20: root mean square
+      OGS_C.QM_STR,                    # 21: quality metric
+      OGS_C.LOC_NAME_STR,              # 22: LOC_NAME
+      OGS_C.EVENT_TYPE_STR,            # 23: Event type
+      OGS_C.NOTES_STR,                 # 24: NOTES
+      OGS_C.MD_UNC_STR,                # 25: MD_unc
+      OGS_C.MD_STATIONS_STR,           # 26: MD_stations
+      OGS_C.MD_MEDIAN_STR,             # 27: MD_median
+  ]
+
+  _EVENT_DEFAULTS = {
+      OGS_C.NUMBER_P_PICKS_STR: 0,
+      OGS_C.NUMBER_S_PICKS_STR: 0,
+      OGS_C.NUMBER_P_AND_S_PICKS_STR: 0,
+  }
+
+  # Format capability flags (subclasses override when data type is absent)
+  HAS_PICKS: bool = True
+  HAS_EVENTS: bool = True
 
   def __init__(
       self,
@@ -375,8 +387,8 @@ class OGSCatalog:
     self.events: dict[datetime, pd.DataFrame] = {}
     self.waveforms: Optional[pd.DataFrame] = None
     self.stations: Optional[pd.DataFrame] = None
-    self.PICKS: pd.DataFrame = pd.DataFrame(columns=_PICKS_COLUMNS)
-    self.EVENTS: pd.DataFrame = pd.DataFrame(columns=_EVENTS_COLUMNS)
+    self.PICKS: pd.DataFrame = pd.DataFrame(columns=self._PICK_COLUMNS)
+    self.EVENTS: pd.DataFrame = pd.DataFrame(columns=self._EVENT_COLUMNS)
     self.preload()
 
   # -------------------------------------------------------------------------
@@ -825,6 +837,10 @@ class OGSCatalog:
     """
     if key not in ("EVENTS", "PICKS"):
       raise ValueError(f"Unknown key: {key}")
+    if key == "PICKS" and not getattr(self, "HAS_PICKS", True):
+      return self.PICKS
+    if key == "EVENTS" and not getattr(self, "HAS_EVENTS", True):
+      return self.EVENTS
     if getattr(self, key).empty:
       self.logger.info(f"Loading {self.name} {key} data...")
       daily = self.load(key.lower())
@@ -840,7 +856,7 @@ class OGSCatalog:
   # WAVEFORM DIAGNOSTICS (per-event missed/proposed plots)
   # =========================================================================
   # These helpers slice a small pick window around an event origin time and
-  # render single-event waveform figures used for BGMA review.
+  # render single-event waveform figures used for BPGMA review.
   # =========================================================================
 
   def _waveform_pick_window(self, event_time: Any) -> pd.DataFrame:
@@ -964,7 +980,8 @@ class OGSCatalog:
     This entrypoint produces catalog location maps, including optional matched
     or comparison catalog overlays supplied via ``targets``. It does not create
     waveform diagnostic plots. The method lazy-loads event tables through
-    :meth:`get`, logs and returns when a catalog has no events, writes the map,
+    :meth:`get`, returns if BASE has no events, skips empty TARGET overlays,
+    writes the map,
     and closes the Matplotlib figure before returning.
     """
     from . import ogsplotter as OGS_P
@@ -1037,14 +1054,14 @@ class OGSCatalog:
     Notes
     -----
     This is the main catalog plotting entrypoint for map, histogram, and
-    cumulative matched/comparison plots. It does not generate waveform
-    diagnostic figures. Each delegated plot writes its own output file when no
-    explicit path is provided by that lower-level method.
+    cumulative comparison plots. It does not itself perform matching or
+    generate waveform diagnostic figures. Each delegated plot writes its own
+    output file when no explicit path is provided by that lower-level method.
     """
     self.plot_events(targets=targets)
     self.plot_erh_histogram(targets=targets)
     self.plot_erz_histogram(targets=targets)
-    self.plot_ert_histogram(targets=targets)
+    self.plot_rms_histogram(targets=targets)
     self.plot_magnitude_l_histogram(targets=targets)
     self.plot_depth_histogram(targets=targets)
     self.plot_cumulative_events(targets=targets, vlines=vlines)
@@ -1282,7 +1299,7 @@ class OGSCatalog:
     Notes
     -----
     :meth:`plot_erz_histogram`, :meth:`plot_erh_histogram`,
-    :meth:`plot_ert_histogram`, :meth:`plot_depth_histogram`, and
+    :meth:`plot_rms_histogram`, :meth:`plot_depth_histogram`, and
     :meth:`plot_magnitude_l_histogram` are thin wrappers around this helper;
     they select the column, labels, file suffix, and any plotter-specific
     kwargs.
@@ -1343,16 +1360,18 @@ class OGSCatalog:
         xlim=(0, 40), yscale='log'
     )
 
-  def plot_ert_histogram(self, targets=[], bins=OGS_C.NUM_BINS, output=None):
-    """Histogram the ``weight`` column selected by OGS_C.ERT_STR.
+  def plot_rms_histogram(self, targets=[], bins=OGS_C.NUM_BINS, output=None):
+    """Histogram the ``weight`` column selected by OGS_C.RMS_STR.
 
     ``targets`` are overlaid as comparison histograms, ``bins`` is forwarded
-    unchanged, and the default output name is ``<self.input.name>_ERT`` under
-    ``self.output / "img"``.
+    unchanged, and the default output name is ``<self.input.name>_RMS`` under
+    ``self.output / "img"``. The plot labels this column RMS (s), but the
+    helper performs no conversion or validation of its interpretation as time
+    error.
     """
     self._plot_histogram(
-        OGS_C.ERT_STR, "ERT (s)", "ERT Histogram", "ERT",
-        targets=targets, bins=bins, output=output
+        OGS_C.RMS_STR, "RMS (s)", "RMS Histogram", "RMS",
+        targets=targets, bins=bins, output=output, xlim=(0, 5), yscale='log'
     )
 
   def plot_depth_histogram(self, targets=[], bins=OGS_C.NUM_BINS, output=None):
@@ -1372,10 +1391,10 @@ class OGSCatalog:
   ):
     """Public wrapper around :meth:`_plot_histogram` for event magnitudes.
 
-    Produces separate histograms for $M_L$ and $M_D$ when valid data exist.
+    Produces only the $M_L$ histogram when data exist; $M_D$ has its own wrapper.
     ``targets`` are overlaid as comparison histograms, ``bins`` is forwarded
-    unchanged, and the default output names are ``<self.input.name>_MagL`` and
-    ``<self.input.name>_MagD`` under ``self.output / "img"``.
+    unchanged, and the default output stem is ``<self.input.name>_MagL``
+    under ``self.output / "img"``.
     """
     self._plot_histogram(
         OGS_C.MAGNITUDE_L_STR, "Magnitude ($M_L$)", "Magnitude$_L$ Histogram",
@@ -1421,10 +1440,10 @@ class OGSCatalog:
     after logging any mismatch; it does not merely warn.
     """
     mismatch_fmt = (
-        f"[REVIEW] MISMATCH: %s {kind} total: %d{sep_pre}expected: %d{sep_diff}diff: %d"
+        f"[REVIEW] MISMATCH: %s {kind} total: %d, expected: %d diff: %d"
     )
     mismatch_detail_fmt = f"[REVIEW] MISMATCH: %s {kind}:\n%s"
-    match_fmt = f"[REVIEW]  MATCH  : %s {kind} total: %d{sep_pre}expected: %d"
+    match_fmt = f"[REVIEW]  MATCH  : %s {kind} total: %d, expected: %d"
     for _label, _review in checks.items():
       _check_sum = cast(int, _review["check_sum"])
       _expected_sum = cast(int, _review["expected_sum"])
@@ -1434,7 +1453,7 @@ class OGSCatalog:
             mismatch_fmt,
             _label, _check_sum, _expected_sum, _check_sum - _expected_sum,
         )
-        self.logger.error(mismatch_detail_fmt, _label, _review["bgma"])
+        self.logger.error(mismatch_detail_fmt, _label, _review["BPGMA"])
         exit()
       else:
         self.logger.info(match_fmt, _label, _check_sum, _expected_sum)
@@ -1500,7 +1519,7 @@ class OGSCatalog:
     )
     event_review_checks = {
         OGS_C.BASE_STR: {
-            "bgma": {
+            "BPGMA": {
                 OGS_C.EVENT_STR: matched_count,
                 OGS_C.NONE_STR: missed_count,
                 "FILTERED": sm_n,
@@ -1509,7 +1528,7 @@ class OGSCatalog:
             "expected_sum": base_n,
         },
         OGS_C.TARGET_STR: {
-            "bgma": {
+            "BPGMA": {
                 OGS_C.EVENT_STR: matched_count,
                 OGS_C.NONE_STR: proposed_count,
                 "FILTERED": sp_n,
@@ -1560,7 +1579,7 @@ class OGSCatalog:
       self, target: "OGSCatalog", label: str, output: Optional[Path] = None,
       *, include_self: bool = True,
   ) -> Path:
-    """Resolve the BGMA plot output path.
+    """Resolve the BPGMA plot output path.
 
     If ``output`` is supplied it is returned unchanged. Otherwise the default
     path is created under ``self.output / "img"`` using ``IMAGE_EXT`` and a
@@ -1587,15 +1606,15 @@ class OGSCatalog:
     phase_col = picks_mh[OGS_C.PHASE_STR]
     return (phase_col == OGS_C.PWAVE, phase_col == OGS_C.SWAVE)
 
-  def _bgma_events_record_unmatched(
+  def _BPGMA_events_record_unmatched(
       self, df: pd.DataFrame, cfn_mtx: pd.DataFrame,
       sink: list[pd.DataFrame], *, role: str,
   ) -> None:
     """Count unmatched rows and append them to the side-specific sink.
 
     ``role=BASE_STR`` ("Base") writes base-only rows to ``EventsMS`` on the
-    ``EVENT/NONE`` axis. ``role=TARGET_STR`` ("Target") writes target-only
-    rows to ``EventsPS`` on the ``NONE/EVENT`` axis.
+    ``EVENT/None`` axis. ``role=TARGET_STR`` ("Target") writes target-only rows
+    to ``EventsPS`` on the ``None/EVENT`` axis (``None`` is NONE_STR).
     """
     if role == OGS_C.BASE_STR:
       row_label, col_label = OGS_C.EVENT_STR, OGS_C.NONE_STR
@@ -1609,7 +1628,7 @@ class OGSCatalog:
       base: pd.DataFrame,
       target: pd.DataFrame,
   ) -> tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]]:
-    """Return row positions with at least one feasible BGMA event edge.
+    """Return row positions with at least one feasible BPGMA event edge.
 
     The feasibility test mirrors ``OGSBPGraphEvents`` edge creation: two
     events must fall within the configured time and distance thresholds.
@@ -1650,11 +1669,12 @@ class OGSCatalog:
       target: "OGSCatalog",
       key: str,
   ) -> Iterator[tuple[datetime, _DateSource]]:
-    """Yield dates plus the branch label used by BGMA comparison loops.
+    """Yield dates plus the branch label used by BPGMA comparison loops.
 
-    The iterator preserves ``self``'s calendar order: each BASE date is tagged
+    The iterator preserves path-dictionary insertion order, not sorted calendar
+    order: each BASE date is tagged
     as ``'both'`` or ``'base_only'`` first, then TARGET-only dates are emitted
-    as ``'target_only'``. ``bgmaEvents`` and ``bgmaPicks`` share this routing
+    as ``'target_only'``. ``BPGMAEvents`` and ``BPGMAPicks`` share this routing
     contract.
 
     Parameters
@@ -1666,7 +1686,7 @@ class OGSCatalog:
 
     Yields
     ------
-    tuple[datetime, _DateSource]
+    tuple[datetime.date, _DateSource]
       The date and the source label.
 
     Raises
@@ -1689,7 +1709,7 @@ class OGSCatalog:
       if date not in base_set:
         yield date, _TARGET_ONLY
 
-  def _bgma_events_base_only(
+  def _BPGMA_events_base_only(
       self, target: "OGSCatalog", date, EVENTS_CFN_MTX: pd.DataFrame,
       EventsMS: list[pd.DataFrame], EventsSM: list[pd.DataFrame],
   ) -> None:
@@ -1705,7 +1725,7 @@ class OGSCatalog:
         "DATE %s NOT in %s CATALOG, counting %s EVENTS as %s.",
         date, OGS_C.TARGET_STR, OGS_C.BASE_STR, OGS_C.MS_STR,
     )
-    self._bgma_events_record_unmatched(
+    self._BPGMA_events_record_unmatched(
         BASE, EVENTS_CFN_MTX, EventsMS, role=OGS_C.BASE_STR,
     )
 
@@ -1728,7 +1748,7 @@ class OGSCatalog:
         axis=1,
     )
 
-  def _bgma_events_both(
+  def _BPGMA_events_both(
       self, target: "OGSCatalog", date,
       EVENTS_CFN_MTX: pd.DataFrame, EventsMH_frames: list[pd.DataFrame],
       EventsMS: list[pd.DataFrame], EventsSM: list[pd.DataFrame],
@@ -1759,7 +1779,7 @@ class OGSCatalog:
     )
     if (len(feasible_base_pos) != I or len(feasible_target_pos) != J):
       self.logger.debug(
-          "DATE %s: pre-pruned BGMA candidates %s=%d/%d %s=%d/%d.",
+          "DATE %s: pre-pruned BPGMA candidates %s=%d/%d %s=%d/%d.",
           date, OGS_C.BASE_STR, len(feasible_base_pos), I,
           OGS_C.TARGET_STR, len(feasible_target_pos), J,
       )
@@ -1791,16 +1811,16 @@ class OGSCatalog:
         "%s events: %d (%s <-> %s)",
         OGS_C.MH_STR, n_matched, OGS_C.BASE_STR, OGS_C.TARGET_STR
     )
-    self._bgma_events_record_unmatched(
+    self._BPGMA_events_record_unmatched(
         BASE.iloc[unmatched_base_idx], EVENTS_CFN_MTX, EventsMS,
         role=OGS_C.BASE_STR,
     )
-    self._bgma_events_record_unmatched(
+    self._BPGMA_events_record_unmatched(
         TARGET.iloc[unmatched_target_idx], EVENTS_CFN_MTX, EventsPS,
         role=OGS_C.TARGET_STR,
     )
 
-  def _bgma_events_target_only(
+  def _BPGMA_events_target_only(
       self, target: "OGSCatalog", date, EVENTS_CFN_MTX: pd.DataFrame,
       EventsPS: list[pd.DataFrame], EventsSP: list[pd.DataFrame],
   ) -> None:
@@ -1822,20 +1842,20 @@ class OGSCatalog:
         "DATE %s in %s EVENTS catalog but NOT in %s",
         date, OGS_C.TARGET_STR, OGS_C.BASE_STR
     )
-    self._bgma_events_record_unmatched(
+    self._BPGMA_events_record_unmatched(
         TARGET, EVENTS_CFN_MTX, EventsPS, role=OGS_C.TARGET_STR,
     )
 
-  def bgmaEvents(self, target: "OGSCatalog", output=None) -> None:
-    """Run BGMA event matching and build matched, missed, and proposed outputs.
+  def BPGMAEvents(self, target: "OGSCatalog", output=None) -> None:
+    """Run BPGMA event matching and build matched, missed, and proposed outputs.
 
-    Shared dates are matched with BGMA and written to ``EventsMH`` as wide
+    Shared dates are matched with BPGMA and written to ``EventsMH`` as wide
     rows: every matched event pair contributes one row with ``{col}_base`` and
     ``{col}_target`` fields so downstream review plots can compare aligned
     attributes without another merge. Events filtered out before matching by
     the shared spatial review domain populate ``EventsSM`` for BASE and
-    ``EventsSP`` for TARGET. Unmatched BGMA-eligible BASE rows populate
-    ``EventsMS``; unmatched BGMA-eligible TARGET rows populate ``EventsPS``;
+    ``EventsSP`` for TARGET. Unmatched BPGMA-eligible BASE rows populate
+    ``EventsMS``; unmatched BPGMA-eligible TARGET rows populate ``EventsPS``;
     the event confusion matrix tracks only MH/MS/PS outcomes.
 
     Parameters
@@ -1848,10 +1868,10 @@ class OGSCatalog:
       "img"``.
     """
     if not isinstance(target, OGSCatalog):
-      raise ValueError("Can only perform bgmaEvents on OGSCatalog")
+      raise ValueError("Can only perform BPGMAEvents on OGSCatalog")
     self_name = self.name
     target_name = target.name
-    self.logger.info("Starting bgmaEvents: %s vs %s", self_name, target_name)
+    self.logger.info("Starting BPGMAEvents: %s vs %s", self_name, target_name)
     from . import ogsplotter as OGS_P
     from matplotlib import pyplot as plt
 
@@ -1863,16 +1883,16 @@ class OGSCatalog:
     EventsSP_frames: list[pd.DataFrame] = []
     for date, source in self._iter_shared_and_extra_dates(target, "events"):
       if source == _BASE_ONLY:
-        self._bgma_events_base_only(
+        self._BPGMA_events_base_only(
             target, date, EVENTS_CFN_MTX, EventsMS_frames, EventsSM_frames
         )
       elif source == _BOTH:
-        self._bgma_events_both(
+        self._BPGMA_events_both(
             target, date, EVENTS_CFN_MTX, EventsMH_frames,
             EventsMS_frames, EventsSM_frames, EventsPS_frames, EventsSP_frames
         )
       else:  # _TARGET_ONLY
-        self._bgma_events_target_only(
+        self._BPGMA_events_target_only(
             target, date, EVENTS_CFN_MTX, EventsPS_frames, EventsSP_frames
         )
     self.EventsMH = (
@@ -1895,7 +1915,7 @@ class OGSCatalog:
         pd.concat(EventsSP_frames, ignore_index=True)
         if EventsSP_frames else pd.DataFrame(columns=_EVENTS_MH_COLUMNS)
     )
-    recall, fdr = self._bgma_events_review(target, EVENTS_CFN_MTX)
+    recall, fdr = self._BPGMA_events_review(target, EVENTS_CFN_MTX)
     filepath = self._plot_output(target, "EventsConfMtx", output)
     OGS_P.ConfMtx_plotter(
         EVENTS_CFN_MTX.values,
@@ -1923,18 +1943,19 @@ class OGSCatalog:
     plt.close('all')
 
   # -------------------------------------------------------------------------
-  # BGMA event diagnostic plotters
+  # BPGMA event diagnostic plotters
   # -------------------------------------------------------------------------
   # One plotter per diagnostic axis (origin-time delta, hypocenter maps,
-  # depth/epi-distance/magnitude). All consume the matched-event review
-  # frame ``self.EventsMH`` produced above.
+  # depth/epi-distance/magnitude). Matched diagnostics consume
+  # ``self.EventsMH``; unmatched maps/magnitude plots also use
+  # ``self.EventsMS``/``self.EventsPS``.
   # -------------------------------------------------------------------------
 
   def _mh_diff(self, col: str) -> pd.Series:
-    """Return BASE-minus-TARGET differences from ``EventsMH`` for one field.
+    """Return TARGET-minus-BASE differences from ``EventsMH`` for one field.
 
-    Expects the wide matched-event frame ``self.EventsMH`` produced by
-    ``bgmaEvents``, with paired ``{col}_base`` and ``{col}_target`` columns.
+    Accepts wide ``{col}_base`` / ``{col}_target`` columns or legacy tuples
+    via ``_tcol``. ``BPGMAEvents`` produces the wide representation.
     For ``TIME_STR``, both sides are coerced onto a shared UTC timeline before
     subtraction so mixed tz-aware and tz-naive event timestamps remain
     comparable. The helper does not write output; event diagnostics reuse the
@@ -1953,7 +1974,7 @@ class OGSCatalog:
   ) -> None:
     """Plot matched-event origin-time residuals from ``EventsMH``.
 
-    Expects ``self.EventsMH`` from ``bgmaEvents`` for ``self`` and ``target``.
+    Expects ``self.EventsMH`` from ``BPGMAEvents`` for ``self`` and ``target``.
     Writes the ``EventsTimeDiff`` histogram image through ``_plot_output``.
     """
     data = cast(pd.Series, self._mh_diff(OGS_C.TIME_STR).dropna())
@@ -1982,7 +2003,7 @@ class OGSCatalog:
   ) -> None:
     """Plot matched-event locations from the wide ``EventsMH`` table.
 
-    Expects ``self.EventsMH`` produced by ``bgmaEvents``, where matched BASE
+    Expects ``self.EventsMH`` produced by ``BPGMAEvents``, where matched BASE
     and TARGET event coordinates are stored side by side. Writes the
     ``EventsMH`` map image through ``_plot_output``.
     """
@@ -2011,9 +2032,9 @@ class OGSCatalog:
   ) -> None:
     """Plot unmatched-event locations from ``EventsMS`` and ``EventsPS``.
 
-    Expects ``self.EventsMS`` and ``self.EventsPS`` produced by
-    ``bgmaEvents`` for the ``self``/``target`` comparison. Writes the
-    ``EventsFalse`` map image through ``_plot_output``.
+    Expects ``self.EventsMS`` and ``self.EventsPS`` produced by ``BPGMAEvents``
+    for the ``self``/``target`` comparison. Writes the ``EventsFalse`` map
+    image through ``_plot_output``.
     """
     magnitude = self._magnitude_or_none(self.EventsMS)
     myplot = OGS_P.map_plotter(
@@ -2430,8 +2451,17 @@ class OGSCatalog:
     target : OGSCatalog
       Catalog to compare against.
     output : Optional[Path], optional
-      Output path for the results. If None, defaults to a file in the output
-      directory named "{self.input.name}_{target.input.name}_PicksMH.csv".
+      Override for diagnostic figure paths, not CSVs. All six review CSVs use
+      ``<base>_<target>_Picks*.csv`` under ``self.output`` regardless of
+      output.
+      Without an override, each plot uses its own default path under ``img``.
+
+    Notes
+    -----
+    Requires ``self.stations`` with station codes in ``STATION_STR``. MH and SW
+    rows store paired identifiers, stringified times, and probabilities as
+    tuples; MH phases are scalar, SW phases are paired. One-sided and filtered
+    rows retain scalar fields. CSV serialization writes tuples as text.
     """
     if not isinstance(target, OGSCatalog):
       raise ValueError("Can only perform BPGMAPicks on OGSCatalog")
@@ -2734,7 +2764,7 @@ class OGSCatalog:
         alpha=1,
         step=True,
         color=OGS_C.OGS_BLUE,
-        label=_label("P", p_data),
+        label=_label(OGS_C.PWAVE, p_data),
     )
     s_data = data[s_mask]
     pickdiff.add_plot(
@@ -2742,7 +2772,7 @@ class OGSCatalog:
         alpha=1,
         color=OGS_C.ALN_GREEN,
         step=True,
-        label=_label("S", s_data),
+        label=_label(OGS_C.SWAVE, s_data),
         legend=True,
         output=self._plot_output(target, "PicksTimeDiff", output),
     )
@@ -3090,7 +3120,7 @@ def main():
       Path("/Users/admin/Desktop/Monica/PhD/catalog/OGSBackup/OGSLocalMagnitude"),
       "SeisBench Catalog"
   )
-  # Plot the broad catalog comparison first, then build the BGMA review set.
+  # Plot the broad catalog comparison first, then build the BPGMA review set.
   BaseCatalog.plot(targets=[TargetCatalog])
   BaseCatalog.bpgma(
       TargetCatalog,

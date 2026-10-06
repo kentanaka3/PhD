@@ -105,14 +105,14 @@ MODEL_REGISTRY = {
 
 # OGS phase dictionary: maps SeisBench label columns to phase types.
 PHASE_DICT = {
-    "trace_p_arrival_sample": "P",
-    "trace_P_arrival_sample": "P",
-    "trace_Pg_arrival_sample": "P",
-    "trace_Pn_arrival_sample": "P",
-    "trace_s_arrival_sample": "S",
-    "trace_S_arrival_sample": "S",
-    "trace_Sg_arrival_sample": "S",
-    "trace_Sn_arrival_sample": "S",
+    "trace_p_arrival_sample": OGS_C.PWAVE,
+    "trace_P_arrival_sample": OGS_C.PWAVE,
+    "trace_Pg_arrival_sample": OGS_C.PWAVE,
+    "trace_Pn_arrival_sample": OGS_C.PWAVE,
+    "trace_s_arrival_sample": OGS_C.SWAVE,
+    "trace_S_arrival_sample": OGS_C.SWAVE,
+    "trace_Sg_arrival_sample": OGS_C.SWAVE,
+    "trace_Sn_arrival_sample": OGS_C.SWAVE,
 }
 
 # Hoisted flat dataset columnar schemas
@@ -180,8 +180,8 @@ def eqtransformer_loss(
   pred_det, pred_p, pred_s = y_pred[0], y_pred[1], y_pred[2]
   if isinstance(y_true, dict):
     true_det = y_true["detection"]
-    true_p = y_true["P"]
-    true_s = y_true["S"]
+    true_p = y_true[OGS_C.PWAVE]
+    true_s = y_true[OGS_C.SWAVE]
   else:
     true_det = y_true[:, 0, :]
     true_p = y_true[:, 1, :]
@@ -673,17 +673,19 @@ class OGSTrainer:
             pick_utc = op.UTCDateTime(pick_time_str)
             sample_offset = int(round((pick_utc - start_time) * 100.0))
             if 0 <= sample_offset < comp_data.shape[1]:
-              if phase.startswith("P"):
+              if phase.startswith(OGS_C.PWAVE):
                 meta["trace_p_arrival_sample"] = sample_offset
-              elif phase.startswith("S"):
+              elif phase.startswith(OGS_C.SWAVE):
                 meta["trace_s_arrival_sample"] = sample_offset
           except Exception:
             continue
 
         writer.add_trace(meta, comp_data)
 
-    self.logger.info("SeisBench dataset generated: %s, %s",
-                     self.metadata_path, self.waveforms_path)
+    self.logger.info(
+        "SeisBench dataset generated: %s, %s",
+        self.metadata_path, self.waveforms_path
+    )
     return self.metadata_path, self.waveforms_path
 
   def _build_augmentations(self) -> list[Any]:
@@ -728,7 +730,7 @@ class OGSTrainer:
       return augmentations
     else:
       windowlen = 3001
-      labels = getattr(model, "labels", ["P", "S", "N"])
+      labels = getattr(model, "labels", [OGS_C.PWAVE, OGS_C.SWAVE, "N"])
       augmentations = [
           sbg.WindowAroundSample(
               list(PHASE_DICT.keys()),

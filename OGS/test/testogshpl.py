@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import pandas as pd
 import pytest
 
-from OGS.src import ogsconstants as C
+from OGS.src import ogsconstants as OGS_C
 from OGS.src.ogshpl import DataFileHPL
 from OGS.src.ogsutils import parse_hpl_args
 
@@ -31,12 +31,30 @@ FIRST_EVENT_ARRIVALS = [
 ]
 
 
-@pytest.mark.parametrize("filename,segments,event_id,origin,lat,lon,depth,rms,erh,erz", [
-    ("hypo71.hpl", ((1, 22),), 2005000003,
-     datetime(2005, 1, 1, 14, 22, 9, 40000), 46.35, 13.0957, 7.0, .24, .5, 1.2),
-    ("nll1d.hpl", ((1, 18),), 2005000001,
-     datetime(2005, 1, 1, 14, 22, 8, 350000), 46.3527, 13.0963, 8.38, .27, 1.4, 1.6),
-])
+@pytest.mark.parametrize(
+    "filename,segments,event_id,origin,lat,lon,depth,rms,erh,erz", [(
+        "hypo71.hpl",
+        ((1, 22),),
+        2005000003,
+        datetime(2005, 1, 1, 14, 22, 9, 40000),
+        46.35,
+        13.0957,
+        7.0,
+        .24,
+        .5,
+        1.2
+    ), (
+        "nll1d.hpl",
+        ((1, 18),),
+        2005000001,
+        datetime(2005, 1, 1, 14, 22, 8, 350000),
+        46.3527,
+        13.0963,
+        8.38,
+        .27,
+        1.4,
+        1.6
+    ),])
 def test_first_located_event_and_every_arrival(
     reader_factory, filename, segments, event_id, origin, lat, lon, depth,
     rms, erh, erz,
@@ -45,29 +63,50 @@ def test_first_located_event_and_every_arrival(
   assert len(reader.EVENTS) == 1
   assert list(reader.EVENTS.columns) == DataFileHPL._EVENT_COLUMNS
   event = reader.EVENTS.iloc[0]
-  assert event[C.IDX_EVENTS_STR] == event_id
-  assert event[C.TIME_STR] == origin
+  assert event[OGS_C.IDX_EVENTS_STR] == event_id
+  assert event[OGS_C.TIME_STR] == origin
   for column, expected in [
-      (C.LATITUDE_STR, lat), (C.LONGITUDE_STR, lon), (C.DEPTH_STR, depth),
-      (C.RMS_STR, rms), (C.ERH_STR, erh), (C.ERZ_STR, erz), (C.GAP_STR, 59),
+      (OGS_C.LATITUDE_STR, lat),
+      (OGS_C.LONGITUDE_STR, lon),
+      (OGS_C.DEPTH_STR, depth),
+      (OGS_C.RMS_STR, rms),
+      (OGS_C.ERH_STR, erh),
+      (OGS_C.ERZ_STR, erz),
+      (OGS_C.GAP_STR, 59),
   ]:
     assert event[column] == pytest.approx(expected)
-  assert event[C.NUMBER_P_PICKS_STR] == 15
-  assert event[C.NUMBER_S_PICKS_STR] == 13
-  assert event[C.NUMBER_P_AND_S_PICKS_STR] == 13
-  assert pd.isna(event[C.MAGNITUDE_L_STR])
+  assert event[OGS_C.NUMBER_P_PICKS_STR] == 15
+  assert event[OGS_C.NUMBER_S_PICKS_STR] == 13
+  assert event[OGS_C.NUMBER_P_AND_S_PICKS_STR] == 13
+  assert pd.isna(event[OGS_C.MAGNITUDE_L_STR])
 
   expected_rows = []
   base = datetime(2005, 1, 1, 14, 22)
   for station, p_seconds, s_seconds, p_weight, s_weight in FIRST_EVENT_ARRIVALS:
-    expected_rows.append((f".{station}.", "P", base + timedelta(seconds=p_seconds), p_weight))
+    expected_rows.append((
+        f".{station}.",
+        OGS_C.PWAVE,
+        base + timedelta(seconds=p_seconds),
+        p_weight
+    ))
     if s_seconds is not None:
-      expected_rows.append((f".{station}.", "S", base + timedelta(seconds=s_seconds), s_weight))
-  columns = [C.STATION_STR, C.PHASE_STR, C.TIME_STR, C.WEIGHT_STR]
-  expected = pd.DataFrame(expected_rows, columns=columns).sort_values(columns[:2]).reset_index(drop=True)
-  actual = reader.PICKS[columns].sort_values(columns[:2]).reset_index(drop=True)
+      expected_rows.append((
+          f".{station}.",
+          OGS_C.SWAVE,
+          base + timedelta(seconds=s_seconds),
+          s_weight
+      ))
+  columns = [
+      OGS_C.STATION_STR, OGS_C.PHASE_STR, OGS_C.TIME_STR, OGS_C.WEIGHT_STR
+  ]
+  expected = pd.DataFrame(expected_rows, columns=columns).sort_values(
+      columns[:2]
+  ).reset_index(drop=True)
+  actual = reader.PICKS[columns].sort_values(
+      columns[:2]
+  ).reset_index(drop=True)
   pd.testing.assert_frame_equal(actual, expected, check_dtype=False)
-  assert set(reader.PICKS[C.IDX_PICKS_STR]) == {event_id}
+  assert set(reader.PICKS[OGS_C.IDX_PICKS_STR]) == {event_id}
   assert set(reader.events) == {date(2005, 1, 1)}
   assert sum(map(len, reader.picks.values())) == 28
   assert not list(reader.output.rglob("*.parquet"))
@@ -83,10 +122,10 @@ def test_complete_blocks_survive_inclusive_date_windows(
     reader_factory, start, end, ids, counts,
 ):
   reader = reader_factory(DataFileHPL, "hypo71.hpl", start, end)
-  assert set(reader.EVENTS[C.IDX_EVENTS_STR]) == ids
-  assert set(reader.PICKS[C.IDX_PICKS_STR]) == ids
-  assert reader.PICKS[C.PHASE_STR].value_counts().to_dict() == {
-      "P": counts[0], "S": counts[1],
+  assert set(reader.EVENTS[OGS_C.IDX_EVENTS_STR]) == ids
+  assert set(reader.PICKS[OGS_C.IDX_PICKS_STR]) == ids
+  assert reader.PICKS[OGS_C.PHASE_STR].value_counts().to_dict() == {
+      OGS_C.PWAVE: counts[0], OGS_C.SWAVE: counts[1],
   }
   assert set(reader.events) == set(reader.picks)
   assert sum(map(len, reader.events.values())) == len(ids)
@@ -104,12 +143,12 @@ def test_complete_year_specific_blocks(
     reader_factory, filename, first, last, event_id, p_count, s_count,
 ):
   reader = reader_factory(DataFileHPL, filename, segments=((first, last),))
-  assert reader.EVENTS[C.IDX_EVENTS_STR].tolist() == [event_id]
-  assert set(reader.PICKS[C.IDX_PICKS_STR]) == {event_id}
+  assert reader.EVENTS[OGS_C.IDX_EVENTS_STR].tolist() == [event_id]
+  assert set(reader.PICKS[OGS_C.IDX_PICKS_STR]) == {event_id}
   event = reader.EVENTS.iloc[0]
-  assert event[C.NUMBER_P_PICKS_STR] == p_count
-  assert event[C.NUMBER_S_PICKS_STR] == s_count
-  assert event[C.NUMBER_P_AND_S_PICKS_STR] == s_count
+  assert event[OGS_C.NUMBER_P_PICKS_STR] == p_count
+  assert event[OGS_C.NUMBER_S_PICKS_STR] == s_count
+  assert event[OGS_C.NUMBER_P_AND_S_PICKS_STR] == s_count
   assert len(reader.PICKS) == p_count + s_count
 
 
@@ -122,7 +161,9 @@ def test_header_ids_are_normalized_before_building(
     reader_factory, monkeypatch, header_id, pick_id, event_id,
 ):
   reader = reader_factory(DataFileHPL, "hypo71.hpl", segments=())
-  lines = (Path(__file__).parent / "data" / "hypo71.hpl").read_text().splitlines()
+  lines = (
+      Path(__file__).parent / "data" / "hypo71.hpl"
+  ).read_text().splitlines()
   records = []
   for line, extractor, value in (
       (lines[6], reader.EVENT_EXTRACTOR, header_id),
@@ -130,7 +171,7 @@ def test_header_ids_are_normalized_before_building(
   ):
     match = extractor.match(line)
     assert match is not None
-    start, end = match.span(C.IDX_EVENTS_STR)
+    start, end = match.span(OGS_C.IDX_EVENTS_STR)
     assert end - start == len(value)
     records.append(line[:start] + value + line[end:])
   reader.input.write_text("\n".join(records) + "\n")
@@ -139,16 +180,18 @@ def test_header_ids_are_normalized_before_building(
 
   reader.read()
 
-  assert build_events.call_args.args[0][0][C.IDX_EVENTS_STR] == event_id
-  assert reader.EVENTS[C.IDX_EVENTS_STR].tolist() == [
+  assert build_events.call_args.args[0][0][OGS_C.IDX_EVENTS_STR] == event_id
+  assert reader.EVENTS[OGS_C.IDX_EVENTS_STR].tolist() == [
       0 if event_id is None else event_id,
   ]
   expected_pick_id = 2005000003 if event_id is None else event_id
-  assert set(reader.PICKS[C.IDX_PICKS_STR]) == {expected_pick_id}
+  assert set(reader.PICKS[OGS_C.IDX_PICKS_STR]) == {expected_pick_id}
   event = reader.EVENTS.iloc[0]
-  assert event[C.NUMBER_P_PICKS_STR] == (0 if event_id is None else 1)
-  assert event[C.NUMBER_S_PICKS_STR] == (0 if event_id is None else 1)
-  assert event[C.NUMBER_P_AND_S_PICKS_STR] == (0 if event_id is None else 1)
+  assert event[OGS_C.NUMBER_P_PICKS_STR] == (0 if event_id is None else 1)
+  assert event[OGS_C.NUMBER_S_PICKS_STR] == (0 if event_id is None else 1)
+  assert event[OGS_C.NUMBER_P_AND_S_PICKS_STR] == (
+      0 if event_id is None else 1
+  )
 
 
 @pytest.mark.parametrize("filename,line,primary,tail,stations", [
@@ -163,22 +206,30 @@ def test_raw_md_fields_are_extracted_independently(
     reader_factory, filename, line, primary, tail, stations,
 ):
   reader = reader_factory(DataFileHPL, filename, segments=())
-  raw = (Path(__file__).parent / "data" / filename).read_text().splitlines()[line - 1]
+  raw = (
+      Path(__file__).parent / "data" / filename
+  ).read_text().splitlines()[line - 1]
   match = reader.EVENT_EXTRACTOR.match(raw)
   assert match is not None
   fields = match.groupdict()
-  assert float(fields[C.MAGNITUDE_D_STR]) == primary
-  assert float(fields[C.HYPO71_MAG_STR]) == tail
-  assert int(fields[C.MD_STATIONS_STR]) == stations
+  assert float(fields[OGS_C.MAGNITUDE_D_STR]) == primary
+  assert float(fields[OGS_C.HYPO71_MAG_STR]) == tail
+  assert int(fields[OGS_C.MD_STATIONS_STR]) == stations
 
 
 def test_station_clock_bases_and_seconds_rollover(reader_factory):
   reader = reader_factory(DataFileHPL, "hypo71.hpl", segments=((57, 68),))
-  picks = reader.PICKS.set_index([C.STATION_STR, C.PHASE_STR])
-  assert picks.loc[(".KOSI.", "S"), C.TIME_STR] == datetime(2023, 1, 1, 3, 36, 0, 680000)
-  assert picks.loc[(".ABTA.", "P"), C.TIME_STR] == datetime(2023, 1, 1, 3, 36, 5, 190000)
-  assert picks.loc[(".CSM.", "P"), C.TIME_STR] == datetime(2023, 1, 1, 3, 36, 8, 40000)
-  assert (".CSM.", "S") not in picks.index
+  picks = reader.PICKS.set_index([OGS_C.STATION_STR, OGS_C.PHASE_STR])
+  assert picks.loc[(".KOSI.", OGS_C.SWAVE), OGS_C.TIME_STR] == datetime(
+      2023, 1, 1, 3, 36, 0, 680000
+  )
+  assert picks.loc[(".ABTA.", OGS_C.PWAVE), OGS_C.TIME_STR] == datetime(
+      2023, 1, 1, 3, 36, 5, 190000
+  )
+  assert picks.loc[(".CSM.", OGS_C.PWAVE), OGS_C.TIME_STR] == datetime(
+      2023, 1, 1, 3, 36, 8, 40000
+  )
+  assert (".CSM.", OGS_C.SWAVE) not in picks.index
 
 
 def test_empty_window_and_empty_file_have_full_schemas(reader_factory):
@@ -206,13 +257,13 @@ def test_blank_and_unmatched_lines_outside_blocks_are_ignored(reader_factory):
 def test_note_metadata_updates_only_the_latest_named_record(reader_factory):
   reader = reader_factory(DataFileHPL, "hypo71.hpl", segments=())
   records = [
-      {C.IDX_EVENTS_STR: 1, C.NOTES_STR: None},
-      {C.IDX_EVENTS_STR: 2, C.NOTES_STR: None},
+      {OGS_C.IDX_EVENTS_STR: 1, OGS_C.NOTES_STR: None},
+      {OGS_C.IDX_EVENTS_STR: 2, OGS_C.NOTES_STR: None},
   ]
   assert reader._apply_metadata_line("* reviewed  ", records)
   assert records == [
-      {C.IDX_EVENTS_STR: 1, C.NOTES_STR: None},
-      {C.IDX_EVENTS_STR: 2, C.NOTES_STR: "reviewed"},
+      {OGS_C.IDX_EVENTS_STR: 1, OGS_C.NOTES_STR: None},
+      {OGS_C.IDX_EVENTS_STR: 2, OGS_C.NOTES_STR: "reviewed"},
   ]
   assert reader._apply_metadata_line("* no retained event", [])
   assert not reader._apply_metadata_line("not metadata", records)
@@ -234,7 +285,7 @@ def test_input_validation(tmp_path):
     reader.read()
 
 
-@pytest.mark.parametrize("column", [C.DEPTH_STR, C.RMS_STR])
+@pytest.mark.parametrize("column", [OGS_C.DEPTH_STR, OGS_C.RMS_STR])
 @pytest.mark.parametrize("value,expected", [
     (" 0.00", 0.0), ("     ", None), (".....", None),
 ])
@@ -242,7 +293,9 @@ def test_builder_converts_hpl_depth_and_rms(
     reader_factory, column, value, expected,
 ):
   reader = reader_factory(DataFileHPL, "hypo71.hpl", segments=())
-  line = (Path(__file__).parent / "data" / "hypo71.hpl").read_text().splitlines()[6]
+  line = (
+      Path(__file__).parent / "data" / "hypo71.hpl"
+  ).read_text().splitlines()[6]
   match = reader.EVENT_EXTRACTOR.match(line)
   assert match is not None
   start, end = match.span(column)

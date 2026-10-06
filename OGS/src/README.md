@@ -15,22 +15,25 @@ The modules are the implementation layer behind the repository entrypoints and L
 - **Assumptions:** optional dependencies and external data services are available for the selected path; file schemas and units follow the constants/configuration used by the current checkout.
 - **Side effects:** downloader and persistence helpers write files and may contact external services. Analysis drivers can process large datasets. Prefer focused tests or dry runs and keep raw data outside this source directory.
 
+Reference catalogs contain analyst labels; ML picks, associations, locations, magnitudes, and clustering assignments are derived outputs, not independent ground truth. Module availability and documented algorithms do not establish
+scientific validity for a dataset without provenance and review.
+
 ## Module Directory Index
 
-The 24 Python source modules (+ 1 package initializer) are organized functionally below:
+The directory contains 25 Python implementation modules and one package initializer. They are organized functionally below:
 
 ### 1. Configuration, Types, and Utilities
 
 | Module | Primary Class / Functions | Description | Key Dependencies |
 |---|---|---|---|
 | [`ogsconstants.py`](ogsconstants.py) | Constants, date formats, zone codes, FDSN clients | Central configuration hub (column names, geographic bounds, tolerances: `PICK_TIME_OFFSET=0.5s`, `EVENT_TIME_OFFSET=2s`, `EVENT_DIST_OFFSET=8km`). | standard library |
-| [`ogsutils.py`](ogsutils.py) | `OGSBPGraph`, `OGSBPGraphPicks`, `OGSBPGraphEvents` | Bipartite graph matching backend (BGMA) using NetworkX `max_weight_matching`; distance metrics (`dist_pick`, `dist_event`), coordinate projection, date parsing. | networkx, numpy, scipy |
+| [`ogsutils.py`](ogsutils.py) | `OGSBPGraph`, `OGSBPGraphPicks`, `OGSBPGraphEvents` | Logging, CLI parsers, waveform/metadata discovery, and weighted bipartite matching using NetworkX `max_weight_matching`; pick/event distance metrics and coordinate helpers. `OGSBPGraph` is abstract: subclasses must implement `makeMatch()`. Construction invokes the hook only for two non-empty inputs; initialize hook-dependent subclass state before the parent constructor. | networkx, numpy, scipy |
 
 ### 2. Legacy Catalog Ingestion and Parsing
 
 | Module | Primary Class | Extends | Format / Purpose |
 |---|---|---|---|
-| [`ogsdatafile.py`](ogsdatafile.py) | `OGSDataFile` | `OGSCatalog` | Abstract base class for regex-driven parsing of legacy OGS catalog formats; defines `read()`, `log()`, `debug()`. | re, pandas, pyarrow |
+| [`ogsdatafile.py`](ogsdatafile.py) | `OGSDataFile` | `OGSCatalog`, `ABC` | Shared normalization, diagnostics, and Parquet persistence for legacy readers; abstract `read()` must be implemented before a subclass can be instantiated. Shared static helpers remain callable on the base class. | re, pandas, pyarrow |
 | [`ogsdat.py`](ogsdat.py) | `DataFileDAT` | `OGSDataFile` | Parses legacy fixed-width `.dat` phase arrival files (station, onset, polarity, weight, P/S times, zone). | re, pandas |
 | [`ogshpl.py`](ogshpl.py) | `DataFileHPL` | `OGSDataFile` | Parses `.hpl` hypocenter files with embedded pick records and event headers. | re, pandas |
 | [`ogspun.py`](ogspun.py) | `DataFilePUN` | `OGSDataFile` | Parses `.pun` punch card event records (lat, lon, depth, magnitude, GAP, RMS, ERH, ERZ). | re, pandas |
@@ -47,7 +50,7 @@ The 24 Python source modules (+ 1 package initializer) are organized functionall
 
 | Module | Primary Class / Function | Description | Key Dependencies |
 |---|---|---|---|
-| [`ogsdownloader.py`](ogsdownloader.py) | `OGSDownloader` | Waveform downloader using ObsPy `MassDownloader` with rectangular/circular domain selection and EIDA token support. | obspy |
+| [`ogsdownloader.py`](ogsdownloader.py) | `BaseDownloader`, `ObsPyDownloader`, `PyrockoDownloader` | ObsPy FDSN downloads with rectangular, circular, or global domains and EIDA token support; `PyrockoDownloader.download()` is unimplemented. | obspy |
 | [`ogsdata.py`](ogsdata.py) | `OGSSquirrelDataSource` | Day-sharded waveform data access using Pyrocko Squirrel; provides lazy per-day database instances for the ML catalog pipeline. | pyrocko, ml_catalog, obspy |
 | [`ogsstation.py`](ogsstation.py) | CLI main | Station metadata and inventory extractor for waveform archives across date ranges. | ogsutils, obspy |
 

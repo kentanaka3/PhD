@@ -89,6 +89,9 @@ class DataFilePUN(OGSDataFile):
   # Expected file extension for format validation
   EXTENSION: str = OGS_C.PUN_EXT
 
+  # PUN format contains event hypocenters only, no pick records
+  HAS_PICKS: bool = False
+
   # -------------------------------------------------------------------------
   # EVENT EXTRACTOR: fixed-width event summary line
   # -------------------------------------------------------------------------
@@ -207,24 +210,12 @@ class DataFilePUN(OGSDataFile):
         # ---------------------------------------------------------------------
         # FIELD PROCESSING
         # ---------------------------------------------------------------------
-        result[OGS_C.NO_STR] = self._parse_zero_padded_int(
-            result[OGS_C.NO_STR]
-        )
-        result[OGS_C.GAP_STR] = self._parse_zero_padded_int(
-            result[OGS_C.GAP_STR]
-        )
-        result[OGS_C.DMIN_STR] = self._parse_zero_padded_float(
-            result[OGS_C.DMIN_STR]
-        )
-        result[OGS_C.RMS_STR] = self._parse_zero_padded_float(
-            result[OGS_C.RMS_STR]
-        )
-        result[OGS_C.ERH_STR] = self._parse_zero_padded_float(
-            result[OGS_C.ERH_STR]
-        )
-        result[OGS_C.ERZ_STR] = self._parse_zero_padded_float(
-            result[OGS_C.ERZ_STR]
-        )
+        result[OGS_C.NO_STR] = self._parse_int(result[OGS_C.NO_STR])
+        result[OGS_C.GAP_STR] = self._parse_int(result[OGS_C.GAP_STR])
+        result[OGS_C.DMIN_STR] = self._parse_float(result[OGS_C.DMIN_STR])
+        result[OGS_C.RMS_STR] = self._parse_float(result[OGS_C.RMS_STR])
+        result[OGS_C.ERH_STR] = self._parse_float(result[OGS_C.ERH_STR])
+        result[OGS_C.ERZ_STR] = self._parse_float(result[OGS_C.ERZ_STR])
         result[OGS_C.IDX_EVENTS_STR] = self.normalize_index(
             event_counter, result[OGS_C.DATE_STR].year
         )

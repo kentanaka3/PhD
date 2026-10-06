@@ -14,7 +14,8 @@ KEY FEATURES:
     based on file extension
   - Catalog merging: Combines picks and events from multiple files into a
     single consolidated catalog with proper cross-referencing
-  - Geographic filtering: Supports polygon-based spatial filtering
+  - Geographic filtering inherited for loaded Parquet event days; parsed
+    tables are not explicitly polygon-filtered here
   - Date range filtering: Temporal subsetting of catalog data
   - Optimized aggregation: Uses vectorized pandas operations for efficiency
 
@@ -44,13 +45,14 @@ ARCHITECTURE:
 
 USAGE:
   Command line - Parse and merge multiple files:
-    python ogsparser.py -f file1.hpl file2.dat -D 20220101 20221231 --merge
+    python -m OGS.src.ogsparser -f file1.hpl file2.dat -D 20220101 20221231 \
+      --merge
 
   Command line - Process all files in directory:
     python -m OGS.src.ogsparser -d /path/to/catalog/ -x .hpl .dat --merge
 
   Programmatic:
-    from ogsparser import DataCatalog
+    from OGS.src.ogsparser import DataCatalog
     catalog = DataCatalog(args)
     catalog.read()
     catalog.merge()
@@ -61,15 +63,17 @@ OUTPUT:
     - {output}/.all/events/YYYY-MM-DD       (merged events)
 
 MERGE LOGIC:
-  1. PICKS: Simple concatenation from all input files
-  2. EVENTS: Outer join on time/location, with format-specific handling:
-     - TXT files contribute magnitude data (ML, MD)
-     - PUN files contribute hypocenter locations
-     - HPL files provide primary event information
+  1. PICKS: Concatenate, then keep the first row per event ID/station/phase.
+  2. EVENTS: Process HPL, PUN, then TXT; existing non-null metadata wins.
+     - HPL rows are concatenated; overlapping year/event IDs raise ValueError.
+     - PUN rows combine on time/latitude/longitude/depth/group.
+     - TXT rows combine on year/event ID.
+     - Missing merge-key columns fall back to concatenation.
+  3. Compute phase statistics from the consolidated picks, write date
+     partitions, and generate plots.
 
 DEPENDENCIES:
   - pandas: DataFrame operations and merge logic
-  - matplotlib: Polygon path for geographic filtering
   - ogsdatafile: Base class for file parsing
   - Format-specific parsers: ogshpl, ogsdat, ogspun, ogstxt
 
@@ -104,15 +108,7 @@ from .ogsdatafile import OGSDataFile
 from .ogshpl import DataFileHPL  # Hypocenter location files
 from .ogsdat import DataFileDAT  # Phase picks files
 from .ogspun import DataFilePUN  # Punch card format files
-from .ogstxt import DataFileTXT  # Text format magnitude files
-
-# -----------------------------------------------------------------------------
-# CONSTANTS
-# -----------------------------------------------------------------------------
-
-# Base path for data files (two levels up from this script's location)
-DATA_PATH = Path(__file__).parent.parent.parent
-
+from .ogstxt import DataFileTXT  # Text catalog event summaries
 
 # =============================================================================
 # DataCatalog Class - Multi-Format Catalog Aggregator
@@ -141,7 +137,7 @@ class DataCatalog(OGSDataFile):
   DATAFILE_TYPES = {
       OGS_C.HPL_EXT: DataFileHPL,  # (Recommended) Hypocenter information
       OGS_C.DAT_EXT: DataFileDAT,  # (Recommended) Picks information
-      OGS_C.TXT_EXT: DataFileTXT,  # Local Magnitude information
+      OGS_C.TXT_EXT: DataFileTXT,  # Events, magnitudes, locality and type
       OGS_C.PUN_EXT: DataFilePUN,  # Events (punch card format)
   }
 
@@ -158,7 +154,9 @@ class DataCatalog(OGSDataFile):
         - output: Output directory path
         - dates: (start, end) date tuple
         - verbose: Debug output flag
-        - polygon: Geographic filter polygon
+        - file / directory: Explicit files or recursive discovery directory
+        - ext: Extension filters for directory mode
+      No CLI polygon argument is used; the inherited default is retained.
     """
     # Store arguments for later use in read() and merge()
     self.args = args
@@ -190,45 +188,30 @@ class DataCatalog(OGSDataFile):
       - Instantiates the appropriate parser based on extension
       - Calls parser.read() to parse the file
       - Calls parser.log() to write Parquet output
+
+    Unsupported suffixes are ignored. Parser/read failures propagate; log()
+    reports individual partition-write failures without re-raising them.
+    Returns None and retains parser instances in self.files.
     """
     # -------------------------------------------------------------------------
-    # FILE MODE: Process explicitly specified files
+    # DISCOVER AND INSTANTIATE PARSERS (FILE OR DIRECTORY MODE)
     # -------------------------------------------------------------------------
     if self.args.directory is None:
-      for fr in self.args.file:
-        # Get file extension to determine parser type
-        ext = Path(fr).suffix
-
-        # Only process files with known extensions
-        if ext in self.DATAFILE_TYPES:
-          # Instantiate appropriate parser and add to file list
-          self.files.append(self.DATAFILE_TYPES[ext](
-              fr, self.args.dates[0], self.args.dates[1],
-              verbose=self.args.verbose, output=Path(self.args.output)
-          ))
-
-    # -------------------------------------------------------------------------
-    # DIRECTORY MODE: Recursively find matching files
-    # -------------------------------------------------------------------------
+      input_paths = [Path(fr) for fr in self.args.file]
     else:
-      # Process each requested extension
+      input_paths = []
       for ext in self.args.ext:
-        # Recursively glob for files with this extension
         files = list(self.args.directory.rglob(f"*{ext}"))
-
-        # Warn if no files found (in verbose mode)
         if len(files) == 0 and self.args.verbose:
-          print(f"No *{ext} files found in {self.args.directory}")
+          self.logger.info(f"No *{ext} files found in {self.args.directory}")
+        input_paths.extend(files)
 
-        # Process each discovered file
-        for fr in files:
-          # Only process files with known extensions
-          if fr.suffix in self.DATAFILE_TYPES:
-            # Instantiate appropriate parser and add to file list
-            self.files.append(self.DATAFILE_TYPES[fr.suffix](
-                fr, self.args.dates[0], self.args.dates[1],
-                verbose=self.args.verbose, output=Path(self.args.output)
-            ))
+    for path in input_paths:
+      if path.suffix in self.DATAFILE_TYPES:
+        self.files.append(self.DATAFILE_TYPES[path.suffix](
+            path, self.args.dates[0], self.args.dates[1],
+            verbose=self.args.verbose, output=Path(self.args.output)
+        ))
 
     # -------------------------------------------------------------------------
     # PARSE AND LOG ALL FILES
@@ -245,26 +228,29 @@ class DataCatalog(OGSDataFile):
 
   def merge_events(self) -> pd.DataFrame:
     """
-    Merge event catalogs from all parsed files into a single DataFrame.
+    Consolidate events from all parsed files into a unified catalog.
 
-    Merge strategy varies by file type:
-      - First file: Initialize EVENTS DataFrame
-      - TXT files: Outer join on time/groups, contributes magnitude data
-      - PUN files: Outer join on time/location/depth
-
-    After merging, computes pick statistics per event:
-      - Number of P-wave picks
-      - Number of S-wave picks
-      - Number of stations with both P and S picks
+    Processes files in deterministic format order (HPL -> PUN -> TXT).
+    Validates per-file uniqueness on (__event_year, event_id), prevents
+    cross-file HPL collisions, and merges metadata via non-destructive
+    outer combine_first. Computes vectorized pick statistics per event.
+    Existing non-null values take precedence over later formats. PUN uses
+    time/location/depth/group keys; TXT uses year/event ID keys.
 
     Returns:
-      pd.DataFrame: Consolidated events with all available metadata
+      pd.DataFrame: Consolidated events with unified metadata
+
+    Raises:
+      ValueError: If event years cannot be determined, per-file year/ID
+        identities repeat, HPL identities overlap, or merge keys repeat.
+      TypeError: If the events time column is not a Series when rebuilding
+        groups without picks.
     """
     self.logger.info("Merging events from files...")
-    # -------------------------------------------------------------------------
-    # MERGE EVENTS FROM ALL FILES
-    # -------------------------------------------------------------------------
+    prepared = []
     for f in self.files:
+      if not f.HAS_EVENTS:
+        continue
       events = f.get("EVENTS").copy()
       if events.empty:
         continue
@@ -408,23 +394,34 @@ class DataCatalog(OGSDataFile):
     """
     Merge pick catalogs from all parsed files into a single DataFrame.
 
-    Uses simple concatenation since picks from different files are
-    independent (no deduplication or joining needed).
+    Combines picks from all parsed files and deduplicates overlapping arrivals
+    sharing the same event ID, station, and phase.
 
     Returns:
       pd.DataFrame: Consolidated picks from all input files
     """
     self.logger.info("Merging picks from files...")
+    pick_frames: list[pd.DataFrame] = []
     for f in self.files:
+      if not f.HAS_PICKS:
+        continue
       picks = f.get("PICKS").copy()
       if picks.empty:
         continue
-      if self.PICKS.empty:
-        self.PICKS = picks
-      else:
-        self.PICKS = pd.concat([self.PICKS, picks], ignore_index=True)
+      pick_frames.append(picks)
+
+    if pick_frames:
+      self.PICKS = pd.concat(pick_frames, ignore_index=True)
+    else:
+      self.PICKS = pd.DataFrame(columns=self._PICK_COLUMNS)
 
     self.PICKS = self.normalize_time(self.PICKS)
+    if OGS_C.PHASE_STR in self.PICKS.columns:
+      for pick in [OGS_C.PWAVE, OGS_C.SWAVE]:
+        self.logger.info(
+            f"Total merged {pick}-phase picks: "
+            f"{len(self.PICKS[self.PICKS[OGS_C.PHASE_STR] == pick])}"
+        )
     return self.PICKS
 
   # -------------------------------------------------------------------------
@@ -436,11 +433,12 @@ class DataCatalog(OGSDataFile):
     Perform full catalog merge: picks first, then events, then log output.
 
     Creates a merged catalog with:
-      - All picks from all input files (concatenated)
-      - All events with metadata from all files (joined)
+      - Concatenated picks deduplicated by event ID/station/phase
+      - Events combined with format-specific keys and non-null precedence
       - Pick count statistics computed per event
 
-    Output is written to {input}.all/ directory structure.
+    Sets self.input to {previous_input}/.all and writes Parquet partitions
+    under {output}/.all/. Calls inherited plot() after logging. Returns None.
     """
     self.logger.info("Starting full catalog merge...")
     # Merge picks first (events depend on pick statistics)
@@ -449,8 +447,9 @@ class DataCatalog(OGSDataFile):
     # Merge events and compute statistics
     self.logger.info(f"Total merged events: {len(self.merge_events())}")
 
-    # Append ".all" suffix to output path for merged catalog
-    self.input = Path(str(self.input)) / ".all"
+    # Append ".all" suffix to output path for merged catalog (idempotent)
+    if self.input.name != ".all":
+      self.input = self.input / ".all"
     self.logger.info(f"Output path for merged catalog: {self.input}")
 
     # Write merged catalog to Parquet files
@@ -472,7 +471,7 @@ def main(args: argparse.Namespace) -> None:
     3. Optionally merge into unified catalog (if --merge specified)
 
   Args:
-    args: Parsed command-line arguments from parse_arguments()
+    args: Parsed command-line arguments from ogsutils.parse_catalog_args()
   """
   # Create catalog aggregator with provided arguments
   OGS_Catalog = DataCatalog(args)
@@ -485,6 +484,6 @@ def main(args: argparse.Namespace) -> None:
     OGS_Catalog.merge()
 
 
-# Script entry point: parse arguments and run main
+# Package-module entry point: parse arguments and run main
 if __name__ == "__main__":
   main(OGS_U.parse_catalog_args())

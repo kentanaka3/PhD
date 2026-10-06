@@ -381,13 +381,13 @@ NUMBER_S_PICKS_STR = "number_s_picks"   # Count of S-wave picks
 NUMBER_P_AND_S_PICKS_STR = "number_p_and_s_picks"  # Count of P+S picks
 
 # Magnitude-related columns
-ML_STR = "ML"                           # Local magnitude
+MAGNITUDE_L_STR = "ML"                  # Local magnitude type
 ML_MEDIAN_STR = "ML_median"             # Median local magnitude
 ML_UNC_STR = "ML_unc"                   # Magnitude uncertainty
 ML_STATIONS_STR = "ML_stations"         # Number of stations for ML
 
 # Duration magnitude quality columns
-MD_STR = "MD"                           # Duration magnitude
+MAGNITUDE_D_STR = "MD"                  # Duration magnitude type
 MD_MEDIAN_STR = "MD_median"             # Median duration magnitude
 MD_UNC_STR = "MD_unc"                   # Duration magnitude uncertainty
 MD_STATIONS_STR = "MD_stations"         # Number of stations for MD
@@ -416,14 +416,11 @@ X_COORD_STR = "x(km)"                   # X coordinate in kilometers (local)
 Y_COORD_STR = "y(km)"                   # Y coordinate in kilometers (local)
 Z_COORD_STR = "z(km)"                   # Z coordinate in kilometers (depth)
 
-# Additional event attributes
-MAGNITUDE_L_STR = "ML"                  # Local magnitude type
-MAGNITUDE_D_STR = "MD"                  # Duration magnitude type
-VELOCITY_STR = "vel"                    # Velocity model reference
-
 # Clustering method identifiers
 GAUSS_MIX_MODEL_STR = "GMM"             # Gaussian Mixture Model
 BAYES_GAUSS_MIX_MODEL_STR = "B" + GAUSS_MIX_MODEL_STR  # Bayesian GMM
+
+BPGMA_STR = "BPGMA"                     # BPGMA method identifier
 
 # =============================================================================
 # CONFIGURATION AND PATH COLUMN NAMES
@@ -456,14 +453,12 @@ DATE_STR = "DATE"                       # Date column
 
 # P-wave pick attributes
 P_TIME_STR = "P_TIME"                   # P-wave arrival time
-P_TYPE_STR = "P_TYPE"                   # P-wave type (e.g., Pg, Pn)
 P_ONSET_STR = "P_ONSET"                 # P-wave onset quality (I/E)
 P_POLARITY_STR = "P_POLARITY"           # P-wave first motion (U/D)
 P_WEIGHT_STR = "P_WEIGHT"               # P-wave pick weight (0-4)
 
 # S-wave pick attributes
 S_TIME_STR = "S_TIME"                   # S-wave arrival time
-S_TYPE_STR = "S_TYPE"                   # S-wave type (e.g., Sg, Sn)
 S_ONSET_STR = "S_ONSET"                 # S-wave onset quality
 S_POLARITY_STR = "S_POLARITY"           # S-wave polarity (if measurable)
 S_WEIGHT_STR = "S_WEIGHT"               # S-wave pick weight

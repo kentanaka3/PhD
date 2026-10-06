@@ -56,10 +56,9 @@ AUTHORS:
 =============================================================================
 """
 
-import ogsconstants as OGS_C
-import ogstrainer
-from ogsutils import parse_trainer_args
-from ogstrainer import OGSTrainer, loss_fn
+from OGS.src import ogsconstants as OGS_C, ogstrainer, ogsutils
+from OGS.src.ogsutils import parse_trainer_args
+from OGS.src.ogstrainer import OGSTrainer, loss_fn
 import seisbench.generate as sbg
 import seisbench.models as sbm
 import obspy as op
@@ -125,7 +124,7 @@ class SyntheticPickerModel(torch.nn.Module):
     super().__init__()
     self.device = torch.device("cpu")
     self.conv = torch.nn.Conv1d(in_channels, out_classes, kernel_size=1)
-    self.labels = ["P", "S", "N"]
+    self.labels = [OGS_C.PWAVE, OGS_C.SWAVE, "N"]
 
   def annotate_batch_pre(self, x, _):
     return x
@@ -479,7 +478,7 @@ class TestOGSTrainerAugmentations(unittest.TestCase):
   def test_build_augmentations_phasenet(self):
     """Verifies PhaseNet augmentation chain configuration with windowlen=3001."""
     mock_model = unittest.mock.MagicMock(spec=sbm.PhaseNet)
-    mock_model.labels = ["P", "S", "N"]
+    mock_model.labels = [OGS_C.PWAVE, OGS_C.SWAVE, "N"]
     self.trainer.model = mock_model
 
     augmentations = self.trainer._build_augmentations()
@@ -499,7 +498,7 @@ class TestOGSTrainerAugmentations(unittest.TestCase):
   def test_build_augmentations_eqtransformer(self):
     """Verifies EQTransformer augmentation chain configuration with windowlen=6000."""
     mock_model = unittest.mock.MagicMock(spec=sbm.EQTransformer)
-    mock_model.labels = ["P", "S", "N"]
+    mock_model.labels = [OGS_C.PWAVE, OGS_C.SWAVE, "N"]
     self.trainer.model = mock_model
 
     augmentations = self.trainer._build_augmentations()
@@ -515,7 +514,7 @@ class TestOGSTrainerAugmentations(unittest.TestCase):
   def test_build_augmentations_fallback(self):
     """Verifies fallback window length is 3001 for non-standard model instances."""
     mock_model = unittest.mock.MagicMock(spec=torch.nn.Module)
-    mock_model.labels = ["P", "S", "N"]
+    mock_model.labels = [OGS_C.PWAVE, OGS_C.SWAVE, "N"]
     self.trainer.model = mock_model
 
     augmentations = self.trainer._build_augmentations()

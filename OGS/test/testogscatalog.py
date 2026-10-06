@@ -445,24 +445,8 @@ def test_constructor_empty_schemas_and_output_directories(make_catalog):
   assert catalog.events == catalog.picks == {}
   assert catalog.waveforms is None and catalog.stations is None
   assert catalog.EVENTS.empty and catalog.PICKS.empty
-  assert list(catalog.PICKS) == [
-      OGS_C.IDX_PICKS_STR, OGS_C.GROUPS_STR, OGS_C.TIME_STR,
-      OGS_C.STATION_STR, OGS_C.PHASE_STR, OGS_C.PROBABILITY_STR,
-      OGS_C.EPICENTRAL_DISTANCE_STR, OGS_C.DEPTH_STR,
-      OGS_C.AMPLITUDE_STR, OGS_C.STATION_ML_STR,
-  ]
-  assert list(catalog.EVENTS) == [
-      OGS_C.IDX_EVENTS_STR, OGS_C.TIME_STR, OGS_C.LATITUDE_STR,
-      OGS_C.LONGITUDE_STR, OGS_C.DEPTH_STR, OGS_C.GAP_STR,
-      OGS_C.ERZ_STR, OGS_C.ERH_STR, OGS_C.ERT_STR, OGS_C.GROUPS_STR,
-      OGS_C.NO_STR, OGS_C.NUMBER_P_PICKS_STR, OGS_C.NUMBER_S_PICKS_STR,
-      OGS_C.NUMBER_P_AND_S_PICKS_STR, OGS_C.MAGNITUDE_D_STR,
-      OGS_C.MAGNITUDE_L_STR, OGS_C.ML_MEDIAN_STR, OGS_C.ML_UNC_STR,
-      OGS_C.ML_STATIONS_STR, OGS_C.DMIN_STR, OGS_C.RMS_STR,
-      OGS_C.QM_STR, OGS_C.LOC_NAME_STR, OGS_C.EVENT_TYPE_STR,
-      OGS_C.NOTES_STR, OGS_C.MD_UNC_STR, OGS_C.MD_STATIONS_STR,
-      OGS_C.MD_MEDIAN_STR,
-  ]
+  assert list(catalog.PICKS) == OGSCatalog._PICK_COLUMNS
+  assert list(catalog.EVENTS) == OGSCatalog._EVENT_COLUMNS
 
 
 def test_indexing_is_lazy_date_inclusive_and_category_scoped(

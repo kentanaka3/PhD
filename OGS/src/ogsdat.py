@@ -109,6 +109,9 @@ class DataFileDAT(OGSDataFile):
   # Expected file extension for format validation
   EXTENSION: str = OGS_C.DAT_EXT
 
+  # DAT format contains phase arrivals only, no event hypocenters
+  HAS_EVENTS: bool = False
+
   # -------------------------------------------------------------------------
   # RECORD EXTRACTOR: Regex fragments for station pick records
   # -------------------------------------------------------------------------
@@ -133,16 +136,12 @@ class DataFileDAT(OGSDataFile):
       # Reserved/unknown field: 8 characters (ignored)
       fr".{{8}}",
       # Optional S-wave data block (may be 8 spaces if no S pick)
-      [
-          # S-wave seconds/centiseconds: four whitespace/digit characters
-          fr"(((?P<{OGS_C.S_TIME_STR}>[\s\d]{{4}})",
-          # S-wave onset quality: e=emergent, i=impulsive, ?=uncertain, space=unknown
-          fr"(?P<{OGS_C.S_ONSET_STR}>[ei\s\?]){OGS_C.SWAVE}",
-          # S-wave polarity: c/C/+=compression(up), d/D/-=dilatation(down), space=unknown
-          fr"(?P<{OGS_C.S_POLARITY_STR}>[cC\+dD\-\s])",
-          # S-wave weight: digit 0-5 or whitespace (blank defaults to zero)
+      (
+          fr"(((?P<{OGS_C.S_TIME_STR}>[\s\d]{{4}})"
+          fr"(?P<{OGS_C.S_ONSET_STR}>[ei\s\?]){OGS_C.SWAVE}"
+          fr"(?P<{OGS_C.S_POLARITY_STR}>[cC\+dD\-\s])"
           fr"(?P<{OGS_C.S_WEIGHT_STR}>[0-5\s]))|\s{{8}})"
-      ],
+      ),
       # Padding: 22 spaces to align with fixed-width format
       fr"\s{{22}}",
       # Geographic zone code
@@ -160,8 +159,7 @@ class DataFileDAT(OGSDataFile):
       # Duration: five whitespace/digit characters, captured but not exported
       fr"(?P<{OGS_C.DURATION_STR}>[\s\d]{{5}})",
       # Event index: four whitespace/digit characters, normalized with year
-      fr"(?P<{OGS_C.IDX_EVENTS_STR}>[\s\d]{{4}})",
-      fr""
+      fr"(?P<{OGS_C.IDX_EVENTS_STR}>[\s\d]{{4}})"
   ]
 
   # -------------------------------------------------------------------------
@@ -181,6 +179,8 @@ class DataFileDAT(OGSDataFile):
       # Event index: four whitespace/digit characters
       fr"(?P<{OGS_C.IDX_EVENTS_STR}>[\s\d]{{4}})",
   ]
+
+  _UNLOCATED_LINE_EXTRACTOR = re.compile(r"1\s*D?\s*.?$")
 
   @staticmethod
   def _parse_event_datetime(value: str) -> datetime:
@@ -229,18 +229,8 @@ class DataFileDAT(OGSDataFile):
     default_weight = 0
 
     self.logger.info(f"Reading DAT file: {self.input}")
-    try:
-      with open(self.input, 'r') as fr:
-        lines = fr.readlines()
-    except Exception as exc:
-      corrupt_path = self.input.with_suffix('.dat.corrupt')
-      self.logger.error(f"Failed to read file. Backing up to {corrupt_path}")
-      try:
-        import shutil
-        shutil.copy2(self.input, corrupt_path)
-      except Exception:
-        pass
-      raise RuntimeError(f"Parsing failed for {self.input}: {exc}") from exc
+    with open(self.input, 'r') as fr:
+      lines = fr.readlines()
 
     # -----------------------------------------------------------------------
     # LINE-BY-LINE PARSING
@@ -257,7 +247,7 @@ class DataFileDAT(OGSDataFile):
 
       match = self.RECORD_EXTRACTOR.match(line)
       if not match:
-        if re.match(r"1\s*D?\s*.?$", line):
+        if self._UNLOCATED_LINE_EXTRACTOR.match(line):
           continue
         self.logger.error(f"ERROR: (DAT) Could not parse line: {line}")
         self.debug(line, self.RECORD_EXTRACTOR_LIST)
@@ -270,12 +260,7 @@ class DataFileDAT(OGSDataFile):
       # -----------------------------------------------------------------------
       # Keep local earthquakes and distant events, mirroring the legacy
       # filtering behavior in the original parser.
-      if (
-          result[OGS_C.EVENT_LOCALIZATION_STR] != "D"
-          and result[OGS_C.EVENT_TYPE_STR] != OGS_C.SPACE_STR
-          and OGS_C.OGS_EVENT_TYPES[result[OGS_C.EVENT_TYPE_STR]] !=
-              OGS_C.EVENT_LOCAL_EQ_STR
-      ):
+      if not self._is_supported_event_record(result):
         continue
 
       try:
@@ -321,7 +306,7 @@ class DataFileDAT(OGSDataFile):
         continue
 
       try:
-        p_weight = self._parse_weight(
+        p_weight = self._parse_int(
             result[OGS_C.P_WEIGHT_STR], default_weight
         )
       except ValueError as exc:
@@ -344,7 +329,7 @@ class DataFileDAT(OGSDataFile):
       # ---------------------------------------------------------------------
       if result[OGS_C.S_TIME_STR]:
         try:
-          s_weight = self._parse_weight(
+          s_weight = self._parse_int(
               result[OGS_C.S_WEIGHT_STR], default_weight
           )
         except ValueError as exc:

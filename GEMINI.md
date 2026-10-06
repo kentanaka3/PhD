@@ -44,6 +44,7 @@ Antigravity uses hierarchical discovery (`AGENTS.md`, `GEMINI.md`,  `.github/age
 ## Planning mode, artifacts, and subagents
 
 - **Planning Mode**: Before executing non-trivial architectural refactors, pipeline adjustments, or complex workflows, create an implementation plan artifact and seek user approval before changing code.
+- **Mandatory Pre-Modification Presentation**: Before applying ANY code edit, file creation, deletion, or modification, the agent MUST ALWAYS present a full written description of the proposed change and the exact implementation code (diff/snippet) in chat, and obtain explicit user confirmation. Directional or sequential instructions ("proceed", "next") do not bypass this requirement.
 - **Artifact Hygiene**:
   - Present multi-step summaries, reports, and walkthroughs via markdown artifacts (`implementation_plan.md`, `walkthrough.md`).
   - Store temporary data, ad-hoc test scripts, or ephemeral debug logs in the artifact scratch directory (`<appDataDir>/brain/<conversation-id>/scratch/`), never in the Git repository tree.

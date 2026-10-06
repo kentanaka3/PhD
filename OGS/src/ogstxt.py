@@ -96,6 +96,9 @@ class DataFileTXT(OGSDataFile):
   # Expected file extension for format validation
   EXTENSION: str = OGS_C.TXT_EXT
 
+  # TXT format contains event summaries only, no pick records
+  HAS_PICKS: bool = False
+
   # -------------------------------------------------------------------------
   # EVENT EXTRACTOR: fixed-width event summary line
   # -------------------------------------------------------------------------
@@ -187,6 +190,13 @@ class DataFileTXT(OGSDataFile):
           self.logger.debug(line)
           continue
 
+        if (
+            result[OGS_C.LATITUDE_STR].strip() == OGS_C.DASH_STR * 7
+            or "Not localized" in result[OGS_C.LOC_NAME_STR]
+        ):
+          self.logger.warning(f"Skipping unlocated event: {line}")
+          continue
+
         if result.get(OGS_C.EVENT_TYPE_STR) in DEFAULT_FILTERED_EVENT_TYPES:
           self.logger.debug(f"Skipping filtered event type: {line}")
           continue
@@ -194,6 +204,9 @@ class DataFileTXT(OGSDataFile):
         # ---------------------------------------------------------------------
         # APPEND RAW EVENT SUMMARY TO RESULTS
         # ---------------------------------------------------------------------
+        result[OGS_C.IDX_EVENTS_STR] = self.normalize_index(
+            result[OGS_C.IDX_EVENTS_STR], result[OGS_C.TIME_STR].year
+        )
         events_data.append(result)
 
     # -----------------------------------------------------------------------

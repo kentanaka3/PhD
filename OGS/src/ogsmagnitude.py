@@ -58,6 +58,8 @@ import numpy as np
 import pandas as pd
 from ml_catalog.modules import LocalMagnitude
 
+from . import ogsconstants as OGS_C
+
 
 class OGSLocalMagnitude(LocalMagnitude):
   """
@@ -143,7 +145,7 @@ class OGSLocalMagnitude(LocalMagnitude):
     # Remove amplitude column to avoid confusion
     assignments.drop(columns="amplitude", inplace=True)
     # Step 1
-    mask_ = assignments["phase"] == self.phase
+    mask_ = assignments[OGS_C.PHASE_STR] == self.phase
     # We merge all P picks with S picks based on event_idx and station.
     # One row per event/station requires unique P and S picks; duplicates
     # produce multiple matches. Without both phases, no joined amplitude
@@ -151,16 +153,17 @@ class OGSLocalMagnitude(LocalMagnitude):
     merged = pd.merge(
         assignments[mask_], assignments[~mask_], how="inner",
         on=["event_idx", "station"], suffixes=[
-            f"_{self.phase}", f"_{'S' if self.phase == 'P' else 'P'}"
+            f"_{self.phase}",
+            f"_{OGS_C.SWAVE if self.phase == OGS_C.PWAVE else OGS_C.PWAVE}"
         ]
     )
     # Step 2
     # Compute the amplitude of the S pick for each component if the SNR of the
     # P pick is above the threshold
     for component in self.components:
-      mask_ = merged[f"snr_{component}_P"] >= SNR_THRESHOLD
+      mask_ = merged[f"snr_{component}_{OGS_C.PWAVE}"] >= SNR_THRESHOLD
       merged.loc[mask_, f"amplitude_{component}"] = merged.loc[
-          mask_, f"amplitude_{component}_S"
+          mask_, f"amplitude_{component}_{OGS_C.SWAVE}"
       ]
       if merged[~mask_].empty:
         continue

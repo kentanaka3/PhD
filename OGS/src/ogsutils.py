@@ -107,7 +107,7 @@ from typing import Any, Optional, Sequence, Tuple, cast  # Type hinting
 from . import ogsconstants as OGS_C
 
 # Fallback WORK directory under OGS; WORK_PATH overrides the data root.
-DATA_PATH = Path(__file__).parent.parent.parent / "WORK"
+DATA_PATH = Path(__file__).resolve().parents[3] / "WORK"
 DEFAULT_WAVE_PATH = Path(
     os.environ.get("WORK_PATH", DATA_PATH), OGS_C.WAVEFORM_STR
 )
@@ -1359,7 +1359,6 @@ def parse_catalog_args(
     args: Optional[Sequence[str]] = None
 ) -> argparse.Namespace:
   """Parse command-line arguments for catalog aggregation."""
-  data_path = Path(__file__).parent.parent.parent
   parser = argparse.ArgumentParser(description="Parse OGS Manual Catalogs")
   parser.add_argument(
       "-m", "--merge", action='store_true', default=False,
@@ -1377,7 +1376,7 @@ def parse_catalog_args(
   add_file_or_dir_arguments(parser, required=True)
   add_output_arguments(
       parser,
-      default=Path(data_path, "catalog", "OGSCatalog"),
+      default=DATA_PATH / "dataset" / "OGSCatalog",
       help="Name of the catalog"
   )
   add_verbosity_arguments(parser)

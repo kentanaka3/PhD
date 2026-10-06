@@ -62,10 +62,10 @@ def test_complete_station_groups(reader_factory, first, last, p_count, s_count):
 
 
 @pytest.mark.parametrize("station,phase,weight", [
-    ("PLRO", "P", 0), ("PLRO", "S", 0),
-    ("BAD", "P", 0), ("BAD", "S", 2),
-    ("BOO", "P", 0), ("BOO", "S", 1),
-    ("VOY", "P", 2), ("VOY", "S", 2),
+    ("PLRO", C.PWAVE, 0), ("PLRO", C.SWAVE, 0),
+    ("BAD", C.PWAVE, 0), ("BAD", C.SWAVE, 2),
+    ("BOO", C.PWAVE, 0), ("BOO", C.SWAVE, 1),
+    ("VOY", C.PWAVE, 2), ("VOY", C.SWAVE, 2),
 ])
 def test_explicit_weights_stay_with_station_and_phase(
     reader_factory, station, phase, weight,
@@ -77,16 +77,16 @@ def test_explicit_weights_stay_with_station_and_phase(
 
 
 @pytest.mark.parametrize("first,last,station,phase,expected", [
-    (8, 11, "BAD", "S", datetime(1977, 5, 7, 20, 11, 0, 200000)),
-    (8, 11, "BUA", "S", datetime(1977, 5, 7, 20, 11, 0, 900000)),
-    (8, 11, "COLI", "S", datetime(1977, 5, 7, 20, 11, 5, 300000)),
-    (12, 14, "BAD", "P", datetime(1977, 11, 2, 7, 0, 0, 600000)),
-    (12, 14, "BAD", "S", datetime(1977, 11, 2, 7, 0, 4, 100000)),
-    (12, 14, "RCL", "P", datetime(1977, 11, 2, 7, 0, 2)),
-    (12, 14, "RCL", "S", datetime(1977, 11, 2, 7, 0, 6, 400000)),
-    (31, 42, "LSR", "S", datetime(2004, 1, 1, 0, 19, 0, 510000)),
-    (43, 62, "DRE", "P", datetime(2005, 1, 1, 3, 22, 2, 940000)),
-    (43, 62, "DRE", "S", datetime(2005, 1, 1, 3, 22, 4, 710000)),
+    (8, 11, "BAD", C.SWAVE, datetime(1977, 5, 7, 20, 11, 0, 200000)),
+    (8, 11, "BUA", C.SWAVE, datetime(1977, 5, 7, 20, 11, 0, 900000)),
+    (8, 11, "COLI", C.SWAVE, datetime(1977, 5, 7, 20, 11, 5, 300000)),
+    (12, 14, "BAD", C.PWAVE, datetime(1977, 11, 2, 7, 0, 0, 600000)),
+    (12, 14, "BAD", C.SWAVE, datetime(1977, 11, 2, 7, 0, 4, 100000)),
+    (12, 14, "RCL", C.PWAVE, datetime(1977, 11, 2, 7, 0, 2)),
+    (12, 14, "RCL", C.SWAVE, datetime(1977, 11, 2, 7, 0, 6, 400000)),
+    (31, 42, "LSR", C.SWAVE, datetime(2004, 1, 1, 0, 19, 0, 510000)),
+    (43, 62, "DRE", C.PWAVE, datetime(2005, 1, 1, 3, 22, 2, 940000)),
+    (43, 62, "DRE", C.SWAVE, datetime(2005, 1, 1, 3, 22, 4, 710000)),
 ])
 def test_centiseconds_and_distinct_rollover_cases(
     reader_factory, first, last, station, phase, expected,
@@ -121,8 +121,8 @@ def test_p_only_station_never_gets_an_s_pick(reader_factory):
   reader = reader_factory(DataFileDAT, "picks.dat", segments=((23, 30),))
   by_station = reader.PICKS.groupby(C.STATION_STR)[C.PHASE_STR].agg(set)
   for station in ("CAE", "MPRI", "BUA", "COLI"):
-    assert by_station[f".{station}."] == {"P"}
-  assert by_station[".CLA1."] == {"P", "S"}
+    assert by_station[f".{station}."] == {C.PWAVE}
+  assert by_station[".CLA1."] == {C.PWAVE, C.SWAVE}
   assert set(reader.PICKS[C.IDX_PICKS_STR]) == {2000000004}
 
 

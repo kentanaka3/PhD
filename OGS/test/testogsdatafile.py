@@ -18,18 +18,21 @@ import unittest
 from datetime import datetime, timedelta as td
 import numpy as np
 import pandas as pd
-import ogsconstants as OGS_C
-from ogsdatafile import OGSDataFile
-from ogshpl import DataFileHPL
-from ogspun import DataFilePUN
-from ogsdat import DataFileDAT
+from OGS.src import ogsconstants as OGS_C
+from OGS.src.ogsdatafile import OGSDataFile
+from OGS.src.ogshpl import DataFileHPL
+from OGS.src.ogspun import DataFilePUN
+from OGS.src.ogsdat import DataFileDAT
 
 
 class TestOGSDataFile(unittest.TestCase):
   """Test suite for OGSDataFile optimizations."""
 
   def test_vectorized_to_decimal_various_formats(self):
-    """Test _vectorized_to_decimal with degrees-minutes, decimals, negatives, and invalid values."""
+    """
+    Test _vectorized_to_decimal with degrees-minutes, decimals, negatives, and
+    invalid values.
+    """
     s = pd.Series([
         "46-07.38",     # 46 + 7.38/60 = 46.123
         "-46-07.38",    # -46.123
@@ -55,7 +58,10 @@ class TestOGSDataFile(unittest.TestCase):
     self.assertTrue(pd.isna(result.iloc[9]))
 
   def test_normalize_coordinates(self):
-    """Test normalize_coordinates vectorization, bounds checking, and error metric coercion."""
+    """
+    Test normalize_coordinates vectorization, bounds checking, and error metric
+    coercion.
+    """
     df = pd.DataFrame({
         OGS_C.LATITUDE_STR: ["46-00.00", "95.0", "-95.0", "None"],
         OGS_C.LONGITUDE_STR: ["13-00.00", "190.0", "-190.0", ""],
@@ -94,7 +100,10 @@ class TestOGSDataFile(unittest.TestCase):
     self.assertEqual(norm[OGS_C.RMS_STR].iloc[3], 0.5)
 
   def test_build_picks_dataframe_groups_str(self):
-    """Test that _build_picks_dataframe derives vectorized GROUPS_STR from TIME_STR."""
+    """
+    Test that _build_picks_dataframe derives vectorized GROUPS_STR from
+    TIME_STR.
+    """
     test_file = Path(__file__).resolve()
     parser = DataFileHPL(test_file)
     picks_data = [
@@ -112,7 +121,10 @@ class TestOGSDataFile(unittest.TestCase):
     self.assertEqual(df[OGS_C.STATION_STR].iloc[1], ".TRI.")
 
   def test_build_events_dataframe_stride_and_magnitudes(self):
-    """Test _build_events_dataframe vectorized ID stride check and magnitude coercion."""
+    """
+    Test _build_events_dataframe vectorized ID stride check and magnitude
+    coercion.
+    """
     test_file = Path(__file__).resolve()
     parser = DataFilePUN(test_file)
     events_df = pd.DataFrame([
@@ -135,9 +147,12 @@ class TestOGSDataFile(unittest.TestCase):
             OGS_C.MAGNITUDE_D_STR: "---",
         },
     ])
-    df = parser._build_events_dataframe(events_df, columns=list(events_df.columns))
+    df = parser._build_events_dataframe(
+        events_df, columns=list(events_df.columns)
+    )
     self.assertEqual(df[OGS_C.IDX_EVENTS_STR].iloc[0], 2024000042)
-    self.assertEqual(df[OGS_C.IDX_EVENTS_STR].iloc[1], 2024000043)
+    self.assertEqual(df[OGS_C.IDX_EVENTS_STR].iloc[1], 43)
+    self.assertEqual(OGSDataFile.normalize_index(43, 2024), 2024000043)
     self.assertEqual(df[OGS_C.GROUPS_STR].iloc[0], "2024-05-10")
     self.assertEqual(df[OGS_C.GROUPS_STR].iloc[1], "2024-05-11")
     self.assertEqual(df[OGS_C.MAGNITUDE_D_STR].iloc[0], 2.1)
@@ -157,11 +172,13 @@ class TestOGSDataFile(unittest.TestCase):
     self.assertEqual(dt_hpl, expected_hpl)
 
     # PUN: date string is 'YYMMDDHHMM'
-    pun_dt = DataFilePUN._parse_origin_time("2403201234", td(seconds=56.78))
+    pun_dt = DataFilePUN._parse_event_datetime("2403201234", td(seconds=56.78))
     self.assertEqual(pun_dt, expected_hpl)
 
     # 1900s year century check (e.g. 98 -> 1998)
-    pun_90s = DataFilePUN._parse_origin_time("9806151015", td(seconds=12.34))
+    pun_90s = DataFilePUN._parse_event_datetime(
+        "9806151015", td(seconds=12.34)
+    )
     self.assertEqual(pun_90s, datetime(
         1998, 6, 15, 10, 15) + td(seconds=12.34))
 
@@ -171,66 +188,6 @@ class TestOGSDataFile(unittest.TestCase):
 
     dat_rollover = DataFileDAT._parse_event_datetime("2403201260")
     self.assertEqual(dat_rollover, datetime(2024, 3, 20, 12) + td(hours=1))
-
-  def test_parse_event_datetime_all_formats(self):
-    """Test all input forms of centralized _parse_event_datetime."""
-    # 1. Dict with OGS_C.TIME_STR (ISO string and datetime)
-    dt_target = datetime(2024, 3, 20, 12, 34, 56)
-    res_iso = {OGS_C.TIME_STR: "2024-03-20T12:34:56"}
-    self.assertEqual(OGSDataFile._parse_event_datetime(res_iso), dt_target)
-
-    res_dt = {OGS_C.TIME_STR: dt_target}
-    self.assertEqual(OGSDataFile._parse_event_datetime(res_dt), dt_target)
-
-    # String ISO format
-    self.assertEqual(
-        OGSDataFile._parse_event_datetime("2024-03-20T12:34:56"), dt_target
-    )
-
-    # 2. Dict with OGS_C.DATE_STR + OGS_C.SECONDS_STR (HPL format 'YYMMDD HHMM')
-    expected_hpl = datetime(2024, 3, 20, 12, 34) + td(seconds=56.78)
-    res_hpl = {
-        OGS_C.DATE_STR: "240320 1234",
-        OGS_C.SECONDS_STR: "56.78",
-    }
-    self.assertEqual(OGSDataFile._parse_event_datetime(res_hpl), expected_hpl)
-
-    # 3. Dict with OGS_C.DATE_STR + OGS_C.SECONDS_STR (PUN format 'YYMMDDHHMM')
-    res_pun = {
-        OGS_C.DATE_STR: "2403201234",
-        OGS_C.SECONDS_STR: "56.78",
-    }
-    self.assertEqual(OGSDataFile._parse_event_datetime(res_pun), expected_hpl)
-
-    # String PUN format with td seconds, float seconds, str seconds
-    self.assertEqual(
-        OGSDataFile._parse_event_datetime("2403201234", td(seconds=56.78)),
-        expected_hpl,
-    )
-    self.assertEqual(
-        OGSDataFile._parse_event_datetime("2403201234", 56.78),
-        expected_hpl,
-    )
-    self.assertEqual(
-        OGSDataFile._parse_event_datetime("2403201234", "56.78"),
-        expected_hpl,
-    )
-
-    # 4. String with rollover minute (DAT format 'YYMMDDHHMM')
-    dat_rollover = OGSDataFile._parse_event_datetime("2403201260")
-    self.assertEqual(dat_rollover, datetime(2024, 3, 20, 12) + td(hours=1))
-
-    # 5. Backwards compatibility of DataFilePUN._parse_origin_time
-    test_file = Path(__file__).resolve()
-    pun_parser = DataFilePUN(test_file)
-    self.assertEqual(
-        DataFilePUN._parse_origin_time("2403201234", td(seconds=56.78)),
-        expected_hpl,
-    )
-    self.assertEqual(
-        pun_parser._parse_origin_time("2403201234", td(seconds=56.78)),
-        expected_hpl,
-    )
 
 
 if __name__ == "__main__":

@@ -583,7 +583,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
     # Log summary statistics
     self.logger.info("Number of events = %s", len(myCatalog.EVENTS))
     self.logger.info("Max magnitude    = %s",
-                     myCatalog.EVENTS[OGS_C.ML_STR].max())
+                     myCatalog.EVENTS[OGS_C.MAGNITUDE_L_STR].max())
 
     return myCatalog
 
@@ -1029,7 +1029,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
         myCatalog.EVENTS,
         lon_col=OGS_C.LONGITUDE_STR,
         lat_col=OGS_C.LATITUDE_STR,
-        mag_col=OGS_C.ML_STR,
+        mag_col=OGS_C.MAGNITUDE_L_STR,
         range_idx=range_idx,
         center=(center_lon, center_lat),
         angle_rad=angle_rad
@@ -1040,7 +1040,7 @@ class OGSSequence(OGS_CL.OGSClusteringZoo):
         ax[1, range_idx],
         myCatalog.EVENTS,
         depth_col=OGS_C.DEPTH_STR,
-        mag_col=OGS_C.ML_STR,
+        mag_col=OGS_C.MAGNITUDE_L_STR,
         range_idx=range_idx,
         center=(center_x, center_y),
         angle_rad=angle_rad

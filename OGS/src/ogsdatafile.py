@@ -93,8 +93,8 @@ class OGSDataFile(OGSCatalog, ABC):
   Abstract base class for parsing OGS seismic data files.
 
   Provides regex-based extraction of seismic picks and events from various
-  text-based file formats. Subclasses define format-specific regex patterns
-  and implement the read() method.
+  text-based file formats. Subclasses define format-specific regex patterns and
+  implement the read() method.
 
   Attributes:
     RECORD_EXTRACTOR_LIST: Regex patterns for individual pick records
@@ -111,47 +111,6 @@ class OGSDataFile(OGSCatalog, ABC):
   # Expected file extension for format validation
   # (e.g. ".dat", ".hpl", ".pun", ".txt")
   EXTENSION: str = ""
-
-  # Default pick table schema columns
-  _PICK_COLUMNS = [
-      OGS_C.IDX_PICKS_STR, OGS_C.GROUPS_STR, OGS_C.TIME_STR, OGS_C.STATION_STR,
-      OGS_C.PHASE_STR, OGS_C.WEIGHT_STR, OGS_C.EPICENTRAL_DISTANCE_STR,
-      OGS_C.DEPTH_STR, OGS_C.AMPLITUDE_STR, OGS_C.STATION_ML_STR,
-      OGS_C.PROBABILITY_STR
-  ]
-
-  # Default event table schema columns
-  # (unified 28-column superset across all catalog formats)
-  _EVENT_COLUMNS = [
-      OGS_C.IDX_EVENTS_STR,            # 0: idx
-      OGS_C.TIME_STR,                  # 1: time
-      OGS_C.LATITUDE_STR,              # 2: latitude
-      OGS_C.LONGITUDE_STR,             # 3: longitude
-      OGS_C.DEPTH_STR,                 # 4: depth
-      OGS_C.GAP_STR,                   # 5: azimuthal_gap
-      OGS_C.ERZ_STR,                   # 6: max_vertical_uncertainty
-      OGS_C.ERH_STR,                   # 7: max_horizontal_uncertainty
-      OGS_C.ERT_STR,                   # 8: max_time_uncertainty
-      OGS_C.GROUPS_STR,                # 9: group
-      OGS_C.NO_STR,                    # 10: number_picks
-      OGS_C.NUMBER_P_PICKS_STR,        # 11: number_p_picks
-      OGS_C.NUMBER_S_PICKS_STR,        # 12: number_s_picks
-      OGS_C.NUMBER_P_AND_S_PICKS_STR,  # 13: number_p_and_s_picks
-      OGS_C.MAGNITUDE_D_STR,           # 14: Duration magnitude (MD)
-      OGS_C.MAGNITUDE_L_STR,           # 15: Local magnitude (ML)
-      OGS_C.ML_MEDIAN_STR,             # 16: ML_median
-      OGS_C.ML_UNC_STR,                # 17: ML_unc
-      OGS_C.ML_STATIONS_STR,           # 18: ML_stations
-      OGS_C.DMIN_STR,                  # 19: Minimum distance (D)
-      OGS_C.RMS_STR,                   # 20: Root mean square (RMS)
-      OGS_C.QM_STR,                    # 21: Quality measure (QM)
-      OGS_C.LOC_NAME_STR,              # 22: LOC_NAME
-      OGS_C.EVENT_TYPE_STR,            # 23: Event type
-      OGS_C.NOTES_STR,                 # 24: NOTES
-      OGS_C.MD_UNC_STR,                # 25: MD_unc
-      OGS_C.MD_STATIONS_STR,           # 26: MD_stations
-      OGS_C.MD_MEDIAN_STR,             # 27: MD_median
-  ]
 
   # List of regex pattern fragments for parsing individual pick/phase records
   # Subclasses populate this with format-specific patterns
@@ -387,6 +346,134 @@ class OGSDataFile(OGSCatalog, ABC):
       return dataframe
     dataframe[time_col] = pd.to_datetime(dataframe[time_col], errors='coerce')
     return dataframe
+
+  @staticmethod
+  def normalize_index(
+      value: str | int | None,
+      year: int,
+      year_stride: int | float = OGS_C.MAX_PICKS_YEAR,
+  ) -> int | None:
+    """
+    Combine a calendar year and local index using the configured stride.
+
+    Encodes the year into the most significant digits using a unified stride
+    (default: MAX_PICKS_YEAR = 1,000,000). Values already at or above
+    year * stride are returned unchanged; None/blank inputs return None.
+    Uniqueness depends on caller indices staying within their year's stride.
+    """
+    if value is None:
+      return None
+    if isinstance(value, str):
+      cleaned = value.strip()
+      if not cleaned:
+        return None
+      val_int = int(cleaned.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR))
+    else:
+      val_int = int(value)
+
+    year_stride_int = int(year_stride)
+    if year > 0 and val_int >= year * year_stride_int:
+      return val_int
+
+    return int(val_int + year * year_stride_int)
+
+  @staticmethod
+  def _vectorized_to_decimal(series: pd.Series) -> pd.Series:
+    """
+    Vectorized conversion of coordinates (degrees-minutes 'DD-MM.mm' or
+    decimal).
+    """
+    if series.empty or pd.api.types.is_numeric_dtype(series):
+      return pd.to_numeric(series, errors="coerce")
+
+    numeric = pd.to_numeric(series, errors="coerce")
+    unparsed_mask = numeric.isna() & series.notna()
+    if not unparsed_mask.any():
+      return numeric
+
+    s_unparsed = series[unparsed_mask].astype(str).str.strip()
+    valid_unparsed = s_unparsed[~s_unparsed.isin(("", "None", "nan", "NaN"))]
+    if valid_unparsed.empty:
+      return numeric
+
+    is_neg = valid_unparsed.str.startswith("-")
+    clean = valid_unparsed.str.lstrip("-")
+    parts = clean.str.split("-", n=1, expand=True)
+
+    if parts.shape[1] == 2:
+      deg = pd.to_numeric(parts[0], errors="coerce")
+      minutes = pd.to_numeric(parts[1], errors="coerce")
+      converted = deg + (minutes / 60.0)
+      converted = converted.where(~is_neg, -converted)
+      numeric = numeric.combine_first(converted)
+
+    return numeric
+
+  @staticmethod
+  def normalize_coordinates(
+      dataframe: pd.DataFrame,
+      lat_col: str = OGS_C.LATITUDE_STR,
+      lon_col: str = OGS_C.LONGITUDE_STR,
+      depth_col: str = OGS_C.DEPTH_STR,
+      round_decimals: int = 4,
+      error_cols: tuple[str, ...] = (
+          OGS_C.ERH_STR, OGS_C.ERZ_STR, OGS_C.ERT_STR,
+          OGS_C.RMS_STR, OGS_C.GAP_STR, OGS_C.DMIN_STR,
+      ),
+  ) -> pd.DataFrame:
+    """
+    Normalize hypocenter coordinates and error metrics to standard numeric
+    types.
+
+    Operations:
+      - Converts coordinates (handling degree-minute strings 'DD-MM.MM' or
+        decimal values) to numeric values, rounded to `round_decimals`
+        (default: 4).
+      - Validates physical bounds (-90 <= lat <= 90, -180 <= lon <= 180),
+        setting out-of-bounds to NaN.
+      - Coerces depth to a pandas numeric dtype.
+      - Coerces error metrics (ERH, ERZ, ERT, RMS, GAP, DMIN) to numeric
+        values, converting empty strings, dash sequences, and string 'None'
+        into np.nan.
+
+    Returns:
+      pd.DataFrame: The supplied frame, updated in place with normalized
+        coordinates and numeric errors.
+    """
+    if dataframe.empty:
+      return dataframe
+
+    # Normalize Latitude
+    if lat_col in dataframe.columns:
+      lat_series = OGSDataFile._vectorized_to_decimal(dataframe[lat_col])
+      # Bounds validation: [-90, 90]
+      lat_series = lat_series.where(
+          (lat_series >= -90.0) & (lat_series <= 90.0), np.nan
+      )
+      dataframe[lat_col] = lat_series.round(round_decimals)
+
+    # Normalize Longitude
+    if lon_col in dataframe.columns:
+      lon_series = OGSDataFile._vectorized_to_decimal(dataframe[lon_col])
+      # Bounds validation: [-180, 180]
+      lon_series = lon_series.where(
+          (lon_series >= -180.0) & (lon_series <= 180.0), np.nan
+      )
+      dataframe[lon_col] = lon_series.round(round_decimals)
+
+    # Normalize Depth
+    if depth_col in dataframe.columns:
+      dataframe[depth_col] = pd.to_numeric(
+          dataframe[depth_col], errors='coerce'
+      )
+
+    # Normalize Error Metrics
+    for col in error_cols:
+      if col in dataframe.columns:
+        dataframe[col] = pd.to_numeric(dataframe[col], errors='coerce')
+
+    return dataframe
+
   # -------------------------------------------------------------------------
   # SHARED PARSING UTILITIES
   # -------------------------------------------------------------------------
@@ -449,56 +536,17 @@ class OGSDataFile(OGSCatalog, ABC):
     """Convert to float; blank or invalid strings return default_value."""
     if not value or value.strip(OGS_C.SPACE_STR) == OGS_C.EMPTY_STR:
       return default_value
-    return float(value)
+    try:
+      return float(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR))
+    except ValueError:
+      return default_value
 
   @staticmethod
-  def _parse_zero_padded_float(value: str) -> float:
-    """Convert a numeric field, mapping placeholder-only values to NaN."""
-    normalized = value.strip()
-    if not any(character.isdigit() for character in normalized):
-      return float("nan")
-    return float(normalized.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR))
-
-  @staticmethod
-  def _parse_zero_padded_int(value: str, default_value: int | None = None):
-    """Convert a fixed-width integer field, preserving blank values as default."""
+  def _parse_int(value: str, default_value: int | None = None):
+    """Zero-fill spaces and parse int; blank/invalid strings return default."""
     if not value or value.strip(OGS_C.SPACE_STR) == OGS_C.EMPTY_STR:
       return default_value
-    return int(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR))
-
-  @staticmethod
-  def _parse_coordinate(value: str, round_decimals: int | None = None):
-    """Convert a degree-minute coordinate string (DD-MM.MM) to decimal degrees."""
-    if not value:
-      return OGS_C.NONE_STR
-
-    normalized = value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR)
-    if OGS_C.DASH_STR not in normalized:
-      return OGS_C.NONE_STR
-
-    degrees, minutes = normalized.split(OGS_C.DASH_STR, maxsplit=1)
-    coord = float(degrees) + float(minutes) / 60.0
-    if round_decimals is not None:
-      return float(f"{coord:.{round_decimals}f}")
-    return coord
-
-  @staticmethod
-  def _parse_weight(value: str, default_value: int = 0) -> int:
-    """Convert a weight field, using default_value for blanks."""
-    if not value or value.strip(OGS_C.SPACE_STR) == OGS_C.EMPTY_STR:
+    try:
+      return int(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR))
+    except ValueError:
       return default_value
-    return int(value)
-
-  @staticmethod
-  def _parse_index(
-      value: str,
-      year: int,
-      year_stride: int | float = OGS_C.MAX_PICKS_YEAR,
-  ):
-    """Build a globally unique index using the configured yearly stride."""
-    if not value:
-      return None
-    return (
-        int(value.replace(OGS_C.SPACE_STR, OGS_C.ZERO_STR)) +
-        year * year_stride
-    )
