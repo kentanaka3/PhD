@@ -27,13 +27,18 @@ library functions.
 ```text
 OGS/utils/Leonardo/
 ├── Makefile            # Main pipeline driver: orchestrates download, picking, association, location, and evaluation
-├── init.sh             # Workspace initializer: validates paths, verifies Git clones, installs Miniconda and dependencies
+├── init.sh             # Copies configuration, links data/source, prepares dependencies, builds NonLinLoc, submits smoke jobs
 ├── LAUNCHME.sh         # Dynamic SLURM submission wrapper: selects serial/MPI, sets cores/GPUs, handles template replacement
 ├── ACTIVATEME.sh       # Environment activator: loads CUDA/NVHPC modules and activates Conda SBC_3.12
 ├── LEONARDO.yml        # Conda environment definition with full CUDA, PyTorch, SeisBench, PyOcto, GaMMA, and ObsPy pins
 ├── download.sh         # SLURM batch script for serial waveform downloading
 ├── dummy.sh            # SLURM batch script for test execution and initialization smoke tests
 ├── ktanakah.sh         # Generic SLURM template for GPU/MPI jobs
+├── common.sh           # Shared logging, failures, and argument checks
+├── index.sh            # Index-job SLURM template
+├── station.sh          # Station-inventory SLURM template
+├── parse.sh            # Catalog-parser SLURM template
+├── nonlinloc.sh        # Location-job SLURM template
 └── test/
     └── dummy.py        # Smoke test script executed during make init
 ```
@@ -67,22 +72,36 @@ Compute Node Execution
    - `REAL` has a configuration file and appears in help text, but is not in
      the current `ASSOCS` registry and therefore is not a generated Make
      target.
-   - `make MHPC` / `make PhD`: Batch submission sweeps; the checked-in
-     recipes submit registered picker models and `NLL1D` jobs for their
-     hard-coded date windows, not every possible stage combination.
+   - `make MHPC` / `make PhD`: Submit picker combinations, registered
+     associators using PhaseNet/INSTANCE inputs, and corresponding NLL1D
+     jobs for hard-coded date windows. These are submission sweeps, not
+     every stage combination or dependency-managed end-to-end workflows.
 
-2. **`LAUNCHME.sh`**: SLURM template engine. Ensures
-   `tasks * cpus-per-task = 32` for the selected node configuration, uses
-   template-and-replace to configure `#SBATCH` directives, submits with
-   `sbatch`, and restores the template on exit.
+Generated stage recipes link upstream output folders but do not submit
+upstream stages as prerequisites or pass scheduler dependencies. The
+`all` target selects a locator recipe; it does not orchestrate a complete
+download-to-location run. Confirm upstream completion and output contents
+before submitting downstream work.
 
-3. **`init.sh`**: Validates required paths and commands, verifies the
-   configured `ml_catalog_main` checkout (it has no clone URL here), clones
-   `NonLinLoc` and the bulletin dataset when absent, installs Conda if
-   missing, creates the `SBC_3.12` environment, links OGS source/config
-   directories, and submits a smoke test job. `WORK_PATH` must already exist:
-   although the script later calls `mkdir -p`, it requires that directory
-   before setup begins.
+2. **`LAUNCHME.sh`**: `LAUNCHME.sh` defaults `CORE_COUNT` to 32 and selects configurations with
+   `tasks * cpus-per-task = CORE_COUNT`. When `OVERRIDE_CORES` is set it bypasses
+   that equality test; standalone Make recipes pass `CORES` through this
+   override. GPU/task and thread allocations still depend on the template.
+
+3. **`init.sh`**: Requires the configured `WORK_PATH`, `OGS_PATH`,
+   `NLL_PATH`, and `DATASET_PATH` directories before setup. Copies `conf`
+   into the workspace, extracts Leonardo utilities, links `data` and `src`,
+   checks external dependencies, loads modules, conditionally installs
+   Conda/creates the environment, builds NonLinLoc binaries when needed,
+   and submits dummy and `SBC_RUN_BIN --help` smoke jobs. Editable
+   `ml_catalog` installation occurs only when creating the environment.
+   This is neither read-only validation nor a safe automatic first step.
+
+   Dependency setup is not a reliable fresh-checkout bootstrap:
+   `SBC_PATH` has a placeholder Git URL, and `DATASET_PATH` is assigned a
+   Zenodo archive endpoint but processed by `git clone`. Existing nonempty
+   dependency directories bypass cloning. Prepare approved dependencies
+   separately and inspect this source before running initialization.
 
 ## Non-HPC workstation utilities (`OGS/utils/.local/`)
 
@@ -154,17 +173,29 @@ binding is deployment-dependent; the repository does not configure
 `dask_cuda`, so verify the cluster allocation and worker logs before relying
 on multi-GPU behavior.
 
+## Configuration ownership
+
+Initialization copies `conf` but symlinks `data` and `src`. Later edits to
+the checkout's YAML are therefore not automatically reflected in an
+existing copied workspace configuration. Record and review the configuration
+actually supplied to `SBC_RUN_BIN`, not only the repository defaults.
+
+For Hydra group composition and the distinction between the local
+`OGSNonLinLoc` wrapper and the external default target, see the
+[configuration guide](../conf/README.md). Package CLI invocations use
+`python -m OGS.src.<module>`; the Leonardo Makefile exports the repository
+root on `PYTHONPATH`.
+
 ## Known Caveats and Operational Notes
 
 - **Leonardo Makefile Python executable:** the current Leonardo Makefile
   defines `PYTHON_BIN` and uses it for the standalone `download`, `compress`,
   `decompress`, `station`, and `parse` recipes. The separate local Makefile
   uses `PYTHON_BIN` as a workstation override; see the local section above.
-- **Resource allocation:** `LAUNCHME.sh` strictly enforces
-  `tasks * cpus-per-task = 32` per selected node configuration. The exported
-  OpenMP/Numba thread count is additionally scaled by the requested node count;
-  verify the resulting allocation and scheduler policy before relying on
-  multi-node behavior.
+- **Resource allocation:** `CORE_COUNT` defaults to 32; `OVERRIDE_CORES`
+  bypasses the normal task/CPU product constraint. Inspect the selected
+  template's GPU and thread directives and confirm the actual allocation
+  rather than relying on a fixed-32-core description.
 - **SLURM template selection:** `SLURM_TEMPLATE` chooses a user-named
   `OGS/utils/Leonardo/<USER>.sh` when present. A user without a matching
   template must provide one or override `SLURM_TEMPLATE` before invoking

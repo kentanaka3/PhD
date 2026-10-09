@@ -75,9 +75,15 @@ class InitializedWorkspaceTests(unittest.TestCase):
         "LAUNCHME.sh",
         "LEONARDO.yml",
         "Makefile",
+        "common.sh",
         "download.sh",
         "dummy.sh",
+        "index.sh",
+        "init.sh",
         "ktanakah.sh",
+        "nonlinloc.sh",
+        "parse.sh",
+        "station.sh",
     )
     for relative_path in required_files:
       with self.subTest(relative_path=relative_path):
@@ -117,19 +123,16 @@ class InitializedWorkspaceTests(unittest.TestCase):
                         f"{directory_name} is not a directory")
 
   def test_external_repositories_are_git_checkouts(self) -> None:
-    """Verify that init prepared both repositories beside WORK_PATH.
+    """Verify that init prepared external git repositories beside WORK_PATH.
 
-    The Makefile exposes these locations as NLL_PATH and HYPO71_PATH and
-    passes them into this test through the environment. Checking the
-    .git directory confirms that init did not merely create an empty
-    placeholder directory or leave an unrelated directory in its place.
+    The Makefile exposes NonLinLoc as NLL_PATH and passes it into this test
+    through the environment. Checking the .git directory confirms that init
+    did not merely create an empty placeholder directory or leave an unrelated
+    directory in its place.
     """
     expected_paths = {
         "NonLinLoc": os.environ.get(
             "NLL_PATH", str(self.workspace.parent / "NonLinLoc")
-        ),
-        "bollettino_ogs_hypo71": os.environ.get(
-            "HYPO71_PATH", str(self.workspace.parent / "bollettino_ogs_hypo71")
         ),
     }
     for repository_name, repository_path in expected_paths.items():
@@ -138,6 +141,27 @@ class InitializedWorkspaceTests(unittest.TestCase):
         self.assertTrue(
             (checkout / ".git").exists(),
             f"{repository_name} is not a Git checkout: {checkout}",
+        )
+
+  def test_zenodo_dataset_is_available(self) -> None:
+    """Verify that the dataset archive (Zenodo record 22106548) is present.
+
+    The dataset archive from https://zenodo.org/records/22106548, unpacked by
+    init into DATASET_PATH (containing OnlyEqHypo71 and OnlyEqNLL1D).
+    """
+    dataset_path = Path(
+        os.environ.get("DATASET_PATH", str(self.workspace / "dataset"))
+    )
+    self.assertTrue(
+        dataset_path.is_dir(),
+        f"Zenodo dataset directory (record 22106548) is missing: {dataset_path}",
+    )
+    for expected_dir in ("OnlyEqHypo71", "OnlyEqNLL1D"):
+      with self.subTest(expected_dir=expected_dir):
+        target = dataset_path / expected_dir
+        self.assertTrue(
+            target.is_dir(),
+            f"{expected_dir} dataset is missing under {dataset_path} (from https://zenodo.org/records/22106548)",
         )
 
   def test_python_environment_is_usable(self) -> None:

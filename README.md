@@ -1,51 +1,6 @@
 # OGS Seismic Toolkit (AI2Seism)
 
-*A High-Performance Scientific Toolkit for Seismic Catalog Ingestion, Deep-Learning Phase Processing, Graph-Theoretic Association Verification, and Spatiotemporal Clustering in North-Eastern Italy.*
-
-[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
-[![Platform: CINECA Leonardo HPC](https://img.shields.io/badge/platform-CINECA%20Leonardo%20HPC-orange.svg)](https://wiki.u-gov.it/confluence/display/SCAIUS/UG3.1%3A+LEONARDO+UserGuide)
-[![Framework: ObsPy & SeisBench](https://img.shields.io/badge/seismology-ObsPy%20%7C%20SeisBench-green.svg)](https://github.com/seisbench/seisbench)
-[![Validation: Pass](https://img.shields.io/badge/validation-passing-brightgreen.svg)](LLM/scripts/README.md)
-
----
-
-## Table of Contents
-
-- [Executive Summary and Scientific Scope](#executive-summary-and-scientific-scope)
-- [Epistemic Data Hierarchy and Governance](#epistemic-data-hierarchy-and-governance)
-- [End-to-End Scientific Architecture](#end-to-end-scientific-architecture)
-- [Repository Layout and Navigation](#repository-layout-and-navigation)
-- [Core Modules and Capabilities](#core-modules-and-capabilities)
-  - [Core Catalog and Parsers](#core-catalog-and-parsers)
-  - [Bipartite Matching and Distance Engine](#bipartite-matching-and-distance-engine)
-  - [Clustering Zoo and Sequence Pipeline](#clustering-zoo-and-sequence-pipeline)
-  - [Supporting and Machine Learning Modules](#supporting-and-machine-learning-modules)
-- [Catalog Storage Architecture and Parquet Sharding](#catalog-storage-architecture-and-parquet-sharding)
-- [Bipartite Graph Matching Algorithm (BPGMA)](#bipartite-graph-matching-algorithm-BPGMA)
-  - [Graph Assignment Formulation](#graph-assignment-formulation)
-  - [Similarity and Distance Metrics](#similarity-and-distance-metrics)
-  - [Classification and Review Partitions](#classification-and-review-partitions)
-- [Spatiotemporal Clustering Framework](#spatiotemporal-clustering-framework)
-  - [Algorithm and Metric Registries](#algorithm-and-metric-registries)
-  - [Sequence Analysis Workflow](#sequence-analysis-workflow)
-  - [Density Clustering Computational Map](#density-clustering-computational-map)
-    - [Purpose](#purpose)
-    - [Current Execution Flow](#current-execution-flow)
-    - [Pseudocode and Mathematical Derivations](#pseudocode)
-    - [State and Responsibilities](#state-and-responsibilities)
-    - [Confirmed Problems](#confirmed-problems)
-    - [Condensed Target — Proposed Only](#condensed-target)
-    - [Tests and Evidence](#tests-and-evidence)
-    - [Open Decisions](#open-decisions)
-- [Object-Oriented Class Hierarchy](#object-oriented-class-hierarchy)
-- [High-Performance Computing (HPC) Execution Boundary](#high-performance-computing-hpc-execution-boundary)
-- [CLI and Programmatic Usage](#cli-and-programmatic-usage)
-  - [Environment Activation](#environment-activation)
-  - [CLI Workflows](#cli-workflows)
-  - [Python API Examples](#python-api-examples)
-- [Project Governance and Verification](#project-governance-and-verification)
-
----
+Research software for seismic catalog ingestion, waveform acquisition, ML-pipeline integration, catalog comparison, and event-sequence analysis, with applications in north-eastern Italy, and configurable research workflows for diverse seismic studies.
 
 ## Partners
 
@@ -95,699 +50,416 @@
 &nbsp;健                                        +++++      ++++++++
 </pink></pre></code>
 
+## Guide
 
+- [Documentation](#documentation)
+- [Repository and runtime layout](#repository-and-runtime-layout)
+- [Environment setup](#environment-setup)
+- [First checks](#first-checks)
+- [Ingestion workflows](#ingestion-workflows)
+- [ML processing on Leonardo](#ml-processing-on-leonardo)
+- [Catalog comparison and sequence analysis](#catalog-comparison-and-sequence-analysis)
+- [Validation](#validation)
+- [Scientific and operational boundaries](#scientific-and-operational-boundaries)
 
-## Table of Contents
+## Documentation
 
-- [Purpose and scope](#purpose-and-scope)
-- [Inputs, outputs, and operational boundary](#inputs-outputs-and-operational-boundary)
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Modules](#modules)
-  - [ogsconstants.py](#ogsconstantspy)
-  - [ogsdownloader.py](#ogsdownloaderpy)
-  - [ogscatalog.py](#ogscatalogpy)
-  - [ogsdatafile.py](#ogsdatafilepy)
-  - [Format Parsers](#format-parsers-ogsdatpy-ogshplpy-ogspunpy-ogstxtpy)
-  - [ogsparser.py](#ogsparserpy)
-  - [ogsclustering.py](#ogsclusteringpy)
-  - [ogssequence.py](#ogssequencepy)
-- [Catalog comparison](#catalog-comparison)
-- [Additional Modules](#additional-modules)
-- [Data Flow](#data-flow)
-- [Supported File Formats](#supported-file-formats)
-- [Installation and Dependencies](#installation-and-dependencies)
-- [CLI Usage](#cli-usage)
-- [Bipartite Graph Matching Algorithm (BGMA)](#bipartite-graph-matching-algorithm-bgma)
-- [Clustering Framework](#clustering-framework)
-- [Documentation and agent navigation](#documentation-and-agent-navigation)
+| Start here | Contents |
+|---|---|
+| [OGS toolkit](OGS/README.md) | Runtime prerequisites, entrypoints, catalog storage, comparison, and clustering |
+| [Source reference](OGS/src/README.md) | Module responsibilities and public Python API |
+| [Configuration](OGS/conf/README.md) | Hydra defaults, stage composition, and overrides |
+| [Tests](OGS/test/README.md) | Focused commands, fixtures, and integration boundaries |
+| [Utilities](OGS/utils/README.md) | Leonardo SLURM workflows and local workstation utilities |
+| [Local workstation guide](OGS/utils/.local/README.md) | Ubuntu/macOS boundaries and separately managed environments |
+| [Research documentation](doc/README.md) | Thesis, publications, figures, and reports |
+| [LLM workspace](LLM/README.md) | Context, prompts, experiments, evaluation, and human review |
+| [Repository contract](AGENTS.md) | Approval, provenance, and operational boundaries |
 
----
+## Repository and runtime layout
 
-## Executive Summary and Scientific Scope
+```text
+OGS/       Python source, Hydra configuration, tests, utilities, reference data
+doc/       research writing and publication sources
+LLM/       controlled context, prompts, experiments, and review records
+.agents/   skills and agent rules
+.claude/   Claude agent profiles
+.github/   Copilot profiles and repository automation
+```
 
-The OGS Seismic Toolkit provides an end-to-end pipeline for seismic catalog analysis:
+The source checkout and the runtime workspace are separate. Leonardo uses
+`WORK_PATH` for deployed configuration, waveform archives, station metadata,
+Squirrel databases, catalogs, and job artifacts. Paths and defaults are defined
+by the [Leonardo Makefile](OGS/utils/Leonardo/Makefile#L65).
 
-1. **Download** waveform data from FDSN data centers (INGV, GFZ, IRIS, ETH, ORFEUS)
-2. **Parse** legacy OGS catalog formats (.dat, .hpl, .pun, .txt) into unified DataFrames
-3. **Merge** multi-format catalogs with cross-referenced picks and events
-4. **Store** catalogs in Parquet format with date-partitioned directory structure
-5. **Compare** reference and ML-pipeline catalogs using bipartite graph matching
-6. **Cluster** seismic events using 14 registered algorithms with hyperparameter optimization
-7. **Visualize** results with map views, cross-sections, dendrograms, and diagnostic plots
+These are selectable workflows, not one automatically chained command:
 
-The source registry contains 14 algorithm wrappers and 11 metric wrappers
-(4 unsupervised plus 7 supervised). These are registry counts, not a claim
-that optional dependencies are installed or that every metric is valid for
-every catalog.
+| Workflow | Interface | Main output |
+|---|---|---|
+| Legacy catalog ingestion | `DataCatalog` / parser CLI | Daily Parquet event and pick tables |
+| Waveform acquisition | `ObsPyDownloader` / downloader CLI | MiniSEED waveforms and StationXML metadata |
+| ML integration | Hydra configuration and external `ml_catalog_run` | Configured pick, association, location, magnitude, and QC outputs |
+| Catalog comparison | `OGSCatalog` Python API | Matching review tables and diagnostic figures |
+| Sequence analysis | `OGSSequence` / sequence CLI | Cluster-member CSVs and configured figures |
 
-The study region covers north-eastern Italy: Friuli, Veneto, Trentino-Alto Adige, Venezia Giulia, Lombardia, Emilia-Romagna, and bordering areas of Austria, Slovenia, and Croatia (approximately 9.5-15.0 E, 44.3-47.5 N).
+## Environment setup
 
-## Documentation and agent navigation
+### Prerequisites
 
-The repository operating contract is [`AGENTS.md`](AGENTS.md),
-and the LLM review workspace is
-[`LLM/README.md`](LLM/README.md). To inspect all Markdown files with
-current line-numbered headings, run:
+The checked-in [Leonardo environment definition](OGS/utils/Leonardo/LEONARDO.yml)
+pins Python 3.12.13; the configured environment name is `SBC_3.12`.
+It is a site-specific environment definition, not a guarantee of portability
+or a tested Python-version support range.
+
+Dependencies depend on the selected workflow:
+
+- Catalog parsing/comparison: scientific Python packages, pandas, a Parquet
+  engine, plotting libraries, and NetworkX.
+- Waveform acquisition: ObsPy and access to an appropriate FDSN provider.
+- ML processing: a compatible external `ml_catalog` installation, Hydra,
+  SeisBench/PyTorch, waveform inputs, and the selected stage dependencies.
+- NonLinLoc processing: native binaries and prepared velocity/travel-time resources.
+- Sequence analysis: the selected clustering backends and existing event data.
+
+For a new environment, review the environment definition and prepare approved
+external dependencies first. The repository does not provide a reliable
+one-command fresh-checkout bootstrap.
+
+### Activate an existing Leonardo environment
+
+From the repository root, replace the workspace placeholder with an existing,
+approved runtime workspace. Mirror any `CONDA_ROOT` or `CONDA_ENV` overrides
+used with the Makefile:
 
 ```bash
-bash LLM/scripts/handler.sh navigate --root .
+export WORK_PATH="<existing-runtime-workspace>"
+CONDA_ROOT="${CONDA_ROOT:-$(cd "$WORK_PATH/.." && pwd)/.miniconda3}"
+CONDA_ENV="${CONDA_ENV:-SBC_3.12}"
+source "$CONDA_ROOT/etc/profile.d/conda.sh"
+conda activate "$CONDA_ROOT/envs/$CONDA_ENV"
 ```
 
-The report excludes Git internals and is the navigation index used by the
-sequential documentation cycle. Source code, tests, configuration, and the
-Makefile remain the authoritative implementation evidence.
+This activates an existing environment; it does not install software or
+initialize the workspace. Leonardo batch jobs additionally load site modules
+through [ACTIVATEME.sh](OGS/utils/Leonardo/ACTIVATEME.sh).
 
----
+**Do not use `make init` as a harmless first check.**
+The [initializer](OGS/utils/Leonardo/init.sh) can copy/link workspace files,
+clone dependencies, install Conda, create an environment, build NonLinLoc,
+and submit smoke-test jobs. Its dependency configuration includes a placeholder
+`ml_catalog` Git URL and a dataset archive endpoint passed to `git clone`.
+Review and approve setup separately.
 
-## Architecture
+Local workstations need a separately prepared compatible environment.
+Do not run Leonardo module-loading or SLURM helpers locally; use the
+[local workstation guide](OGS/utils/.local/README.md).
 
-```
-                        ogsconstants.py
-                    (constants and defaults)
-                              |
-        +---------------------+---------------------+
-        |                     |                     |
-ogsdownloader.py        ogscatalog.py        ogsclustering.py
-(FDSN download)         (core container)     (14 algorithms + metrics)
-                              |                     |
-                        ogsdatafile.py      OGSClusteringZoo
-                        (ABC for parsing)   (factory + optimization)
-                              |                     |
-              +-------+-------+-------+       ogssequence.py
-              |       |       |       |     (sequence pipeline)
-            ogsdat  ogshpl  ogspun  ogstxt
-            (.dat)  (.hpl)  (.pun)  (.txt)
-              |       |       |       |
-              +-------+-------+-------+
-                              |
-                        ogsparser.py
-                        (multi-format aggregator)
-                              |
-                    OGSCatalog.bgmaEvents
-                    OGSCatalog.bgmaPicks
-                    (catalog comparison)
-```
+## First checks
 
-### Class Hierarchy
+From the repository root:
 
-```
-OGSCatalog                          BaseClusterer (ABC)
-  |                                   |
-  +-- OGSDataFile (ABC)               +-- CentroidClusterer
-  |     |                             |     +-- OGSKMeans
-  |     +-- DataFileDAT (.dat)        |     +-- OGSMiniBatchKMeans
-  |     +-- DataFileHPL (.hpl)        |     +-- OGSBisectingKMeans
-  |     +-- DataFilePUN (.pun)        +-- OGSDBSCAN
-  |     +-- DataFileTXT (.txt)        +-- OGSHDBSCAN
-  |     +-- DataCatalog (aggregator)  +-- OGSOPTICS
-  |                                   +-- OGSAdvancedDensityPeaks
-  |                                   |     +-- OGSAdvancedDensityPeaksPP
-  +-- (uses ogsutils BGMA)            +-- OGSAgglomerative
-                                      +-- OGSFeatureAgglomeration
-BaseClusteringScores (ABC)            +-- OGSAffinityPropagation
-  |                                   +-- OGSMeanShift
-  +-- SilhouetteScore                 +-- OGSSpectralClustering
-  +-- CalinskiHarabaszScore           +-- OGSBirch
-  +-- DaviesBouldinScore
-  +-- PAkDensitySeparationScore   OGSClusteringZoo
-  +-- AdjustedRandScore             |
-  +-- NormalizedMutualInfoScore     +-- OGSSequence (pipeline)
-  +-- AdjustedMutualInfoScore
-  +-- HomogeneityScore
-  +-- CompletenessScore
-  +-- VMeasureScore
-  +-- FowlkesMallowsScore
-```
-
----
-
-## Modules
-
-### ogsconstants.py
-
-Central configuration hub for the entire project (851 lines in the current
-checkout).
-
-**Contains:**
-- **String constants**: Column names (`latitude`, `longitude`, `depth`, `time`, `ML`, `station`, `phase`, etc.)
-- **Date formats**: `DATE_FMT = "%Y-%m-%d"`, `YYYYMMDD_FMT = "%Y%m%d"`, `YYMMDD_FMT = "%y%m%d"`, and others
-- **File extensions**: `.dat`, `.hpl`, `.pun`, `.txt`
-- **OGS study region**: `[9.5, 15.0, 44.3, 47.5]` (lonW, lonE, latS, latN)
-- **Geographic zone codes**: A (Alto Adige), C (Croatia), E (Emilia), F (Friuli), G (Venezia Giulia), L (Lombardia), O (Austria), R (Romagna), S (Slovenia), T (Trentino), V (Veneto)
-- **FDSN clients**: OGS, INGV, GFZ, IRIS, ETH, ORFEUS, Collalto
-- **Matching tolerances**: `PICK_TIME_OFFSET = 0.5s`, `EVENT_TIME_OFFSET = 2s`, `EVENT_DIST_OFFSET = 8 km`
-
----
-
-### ogsutils.py
-
-**Contains:**
-- **Distance functions**: `dist_pick()` (weighted by 97% `time`, 2% `phase`, 1% `probability`), `dist_event()` (weighted by 50% `time`, 25% `location`, 25% `magnitude`)
-- **Utility functions**: `labels_to_colormap()`, `inventory()`, `waveforms()`, `is_date()`, `is_julian()`, `is_file_path()`, and `is_dir_path()`
-- **Bipartite graph matching**: `OGSBPGraph`, `OGSBPGraphPicks`, and `OGSBPGraphEvents` classes are implemented using NetworkX's `max_weight_matching`; `OGSCatalog.bgmaEvents()` and `bgmaPicks()` assemble review tables and plots.
-
----
-
-### ogsdownloader.py
-
-FDSN waveform data downloader using ObsPy's `MassDownloader`.
-
-**Features:**
-- Rectangular or circular geographic domain selection
-- Day-by-day download to `YYYY/MM/DD` directory structure
-- EIDA token authentication for restricted data access
-- Multiple FDSN client support; per-client failures are logged so other
-  configured clients can continue
-- Optional clip time for event-centered downloads
-- PyRocko integration option for multi-threaded downloads
-
-**Usage:**
 ```bash
-# Download waveforms for a region and date range
-python ogsdownloader.py -D 20240320 20240620 --rectdomain 9.5 15.0 44.3 47.5
-
-# With EIDA authentication token
-python ogsdownloader.py -D 20240320 20240620 -K /path/to/token --client INGV GFZ
-
-# Circular domain around a point
-python ogsdownloader.py -D 20240320 20240620 --circdomain 13.0 46.0 0.0 0.5
+make -C OGS/utils/Leonardo help
+make -C OGS/utils/Leonardo -n "PhaseNet[INSTANCE,0.1]" \
+  START_DATE=20220101 END_DATE=20220102
 ```
 
----
+The first command lists targets; the second prints a stage recipe without
+running it. Quote bracketed targets to prevent shell glob expansion.
 
-### ogscatalog.py
+After environment activation, inspect supported CLI arguments:
 
-Core catalog container class (2,988 lines in the current checkout). Manages
-EVENTS and PICKS DataFrames with lazy loading, geographic filtering, and
-Parquet/CSV/JSON I/O.
-
-**Key Features:**
-- **Lazy loading**: `preload()` scans file paths, `load()` reads on demand, `get()` aggregates into a single DataFrame
-- **Parquet and CSV I/O**: Date-partitioned directory structure (`events/YYYY-MM-DD`, `assignments/YYYY-MM-DD`)
-- **Geographic filtering**: Polygon-based containment via `matplotlib.path.Path`
-- **Date range filtering**: Temporal subsetting at load time
-- **Plotting methods**: `plot_events()`, `plot_cumulative_events()`, `plot_cumulative_picks()`, `plot_erh_histogram()`, `plot_erz_histogram()`, `plot_ert_histogram()`, `plot_magnitude_histogram()`, `plot_depth_histogram()`
-- **BGMA comparison**: `bgmaEvents()` and `bgmaPicks()` for catalog matching, with confusion matrices and TP/FN/FP computation
-- **Operator overloads**: `+=` (merge catalogs), `-=` (subtract catalogs)
-
-**Programmatic usage:**
-```python
-from ogscatalog import OGSCatalog
-from pathlib import Path
-from datetime import datetime
-
-catalog = OGSCatalog(
-    input=Path("/path/to/catalog"),
-    start=datetime(2022, 1, 1),
-    end=datetime(2022, 12, 31),
-    verbose=True
-)
-catalog.get("EVENTS")
-catalog.plot_events()
-```
-
----
-
-### ogsdatafile.py
-
-Abstract base class for regex-based parsing of OGS file formats (278 lines in
-the current checkout). Extends `OGSCatalog`.
-
-**Key Features:**
-- Configurable regex patterns: `RECORD_EXTRACTOR_LIST` (picks) and `EVENT_EXTRACTOR_LIST` (events), defined by subclasses
-- Compiled regex matching via `re.compile()`
-- `read()` abstract method for format-specific parsing
-- `log()` writes parsed picks and events to Parquet in date-based directory structure
-- `debug()` utility for diagnosing regex failures by progressively testing truncated patterns
-
----
-
-### Format Parsers (ogsdat.py, ogshpl.py, ogspun.py, ogstxt.py)
-
-Four format-specific parsers, each extending `OGSDataFile`:
-
-| Module | Class | Extension | Content |
-|--------|-------|-----------|---------|
-| `ogsdat.py` | `DataFileDAT` | `.dat` | Legacy fixed-width phase picks (P/S arrivals, station, onset, polarity, weight, zone) |
-| `ogshpl.py` | `DataFileHPL` | `.hpl` | Hypocenter locations with embedded pick records and event headers |
-| `ogspun.py` | `DataFilePUN` | `.pun` | Punch card event locations (lat, lon, depth, magnitude, GAP, RMS, ERH, ERZ) |
-| `ogstxt.py` | `DataFileTXT` | `.txt` | Text catalog with magnitudes (ML, MD), error estimates (ERH, ERZ, ERT, GAP), and location names |
-
-Each parser:
-1. Defines format-specific regex patterns in `RECORD_EXTRACTOR_LIST` / `EVENT_EXTRACTOR_LIST`
-2. Implements `read()` to parse the file line by line
-3. Populates `self.PICKS` and `self.EVENTS` DataFrames
-4. Uses `log()` (inherited) to write Parquet output
-
----
-
-### ogsparser.py
-
-Multi-format catalog aggregator (605 lines in the current checkout). Extends
-`OGSDataFile` to automatically dispatch parsing to format-specific handlers and
-merge results into a unified catalog.
-
-**File Type Registry:**
-```
-.hpl -> DataFileHPL  (recommended: hypocenter information)
-.dat -> DataFileDAT  (recommended: picks information)
-.txt -> DataFileTXT  (local magnitude information)
-.pun -> DataFilePUN  (punch card event locations)
-```
-
-**Merge Logic:**
-- **Picks**: Simple concatenation from all input files
-- **Events**: Outer join strategy:
-  - HPL files provide primary event information
-  - TXT files contribute magnitude data (ML, MD) and error estimates (ERH, ERZ, ERT, GAP)
-  - PUN files contribute hypocenter locations
-  - After merging, pick statistics are computed per event (P-pick count, S-pick count, stations with both P and S)
-
-**Usage:**
 ```bash
-# Parse and merge files from a directory
-python ogsparser.py -d /path/to/catalog/ -x .hpl .dat .txt --merge
-
-# Parse specific files
-python ogsparser.py -f file1.hpl file2.dat -D 20220101 20221231 --merge
-
-# With geographic filtering and custom output
-python ogsparser.py -d /path/to/catalog/ --merge -o /path/to/output/
+python -m OGS.src.ogsparser --help
+python -m OGS.src.ogsdownloader --help
+python -m OGS.src.ogssequence --help
 ```
 
-**Output structure:**
-```
-{output}/.all/assignments/YYYY-MM-DD  (merged picks)
-{output}/.all/events/YYYY-MM-DD       (merged events)
-```
+Use `python -m OGS.src.<module>` from the repository root, rather than running
+files with relative sibling imports directly.
 
----
+Root-level Python code uses `OGS` / `OGS.src.*`. Deployed Hydra configuration
+uses `src.*` targets and expects the corresponding runtime import layout.
+Do not mix these layouts in one application. The [public API](OGS/src/README.md#public-python-api)
+loads exported classes lazily; accessing a class still requires its dependencies.
 
-### ogsclustering.py
+## Ingestion workflows
 
-Clustering framework (6,685 lines) wrapping scikit-learn algorithms with integrated visualization and evaluation.
+**Observed source behavior:** catalog parsing and waveform downloading are
+independent entrypoints. Neither automatically invokes the other.
 
-**14 registered clustering algorithms:**
+```mermaid
+flowchart TD
+  P([Parser CLI: L427]) --> R[[Dispatch HPL / DAT / PUN / TXT: L179]]
+  R --> W[/Write per-format daily Parquet: L195/]
+  W --> Q{Merge requested? L446}
+  Q -->|yes| M[[Merge picks and events; write .all and plot: L394]]
+  Q -->|no| E([Done])
+  M --> E
 
-| Category | Class | Algorithm | Key Parameters |
-|----------|-------|-----------|----------------|
-| Centroid-based | `OGSKMeans` | K-Means | `n_clusters`, `init`, `n_init` |
-| Centroid-based | `OGSMiniBatchKMeans` | Mini-Batch K-Means | `n_clusters`, `batch_size` |
-| Centroid-based | `OGSBisectingKMeans` | Bisecting K-Means | `n_clusters` |
-| Density-based | `OGSDBSCAN` | DBSCAN | `eps`, `min_samples` |
-| Density-based | `OGSHDBSCAN` | HDBSCAN | `min_cluster_size`, `min_samples` |
-| Density-based | `OGSOPTICS` | OPTICS | `min_samples`, `max_eps`, `xi` |
-| Density-based | `OGSAdvancedDensityPeaks` | ADP (dadapy) | dadapy parameters |
-| Density-based | `OGSAdvancedDensityPeaksPP` | ADP post-processing variant | ADP parameters |
-| Connectivity | `OGSAgglomerative` | Agglomerative | `n_clusters`, `linkage` |
-| Connectivity | `OGSFeatureAgglomeration` | Feature Agglomeration | `n_clusters` |
-| Message-passing | `OGSAffinityPropagation` | Affinity Propagation | `damping`, `preference` |
-| Message-passing | `OGSMeanShift` | Mean Shift | `bandwidth` |
-| Spectral | `OGSSpectralClustering` | Spectral Clustering | `n_clusters`, `affinity` |
-| Tree-based | `OGSBirch` | BIRCH | `n_clusters`, `threshold` |
+  D([Downloader CLI: L368]) --> B{Pyrocko requested? L376}
+  B -->|yes| X[NotImplementedError: L363]
+  B -->|no| O[[ObsPy FDSN downloads: L320]]
+  O --> F[/MiniSEED and StationXML: L309/]
 
-**11 Evaluation Metrics:**
-
-| Type | Metric | Range | Interpretation |
-|------|--------|-------|----------------|
-| Unsupervised | SilhouetteScore | [-1, 1] | Higher = better separated |
-| Unsupervised | CalinskiHarabaszScore | [0, inf) | Higher = better defined |
-| Unsupervised | DaviesBouldinScore | [0, inf) | Lower = better separated |
-| Unsupervised | PAkDensitySeparationScore | implementation-defined | Density-separation score |
-| Supervised | AdjustedRandScore | [-1, 1] | 1 = perfect agreement |
-| Supervised | NormalizedMutualInfoScore | [0, 1] | 1 = perfect correlation |
-| Supervised | AdjustedMutualInfoScore | [-1, 1] | Higher = better |
-| Supervised | HomogeneityScore | [0, 1] | 1 = perfectly homogeneous |
-| Supervised | CompletenessScore | [0, 1] | 1 = perfectly complete |
-| Supervised | VMeasureScore | [0, 1] | Harmonic mean of above two |
-| Supervised | FowlkesMallowsScore | [0, 1] | Higher = better agreement |
-
-**OGSClusteringZoo** - Factory class for algorithm comparison and optimization:
-```python
-from ogsclustering import OGSClusteringZoo
-
-metadata = {
-    "algorithms": ["KMeans", "HDBSCAN", "DBSCAN"],
-    "eval_metrics": ["SilhouetteScore"],
-    "num_clusters_range": (2, 10, 1),
-    "cluster_size_range": (10, 100, 10),
-    "eps_range": (0.3, 1.0, 0.1),
-}
-zoo = OGSClusteringZoo(metadata=metadata, verbose=True)
-zoo.run(X)
+  click P "OGS/src/ogsparser.py#L427"
+  click R "OGS/src/ogsparser.py#L179"
+  click W "OGS/src/ogsdatafile.py#L195"
+  click Q "OGS/src/ogsparser.py#L446"
+  click M "OGS/src/ogsparser.py#L394"
+  click D "OGS/src/ogsdownloader.py#L368"
+  click B "OGS/src/ogsdownloader.py#L376"
+  click X "OGS/src/ogsdownloader.py#L363"
+  click O "OGS/src/ogsdownloader.py#L320"
+  click F "OGS/src/ogsdownloader.py#L309"
 ```
 
-See [Clustering Framework](#clustering-framework) for details.
+The examples below use illustrative relative paths. Replace them with approved
+input/output locations; keep production or restricted data outside the checkout.
+Use a fresh output directory when you need to preserve earlier results.
 
----
+### Parse existing legacy catalogs
 
-### ogssequence.py
+Requires existing input files. Dates use inclusive `YYYYMMDD` bounds.
 
-Seismic sequence clustering pipeline (1,126 lines). Extends `OGSClusteringZoo` for automated spatiotemporal analysis of earthquake catalogs.
-
-**Pipeline Stages:**
-1. **Load catalog**: Read events for each time window from Parquet
-2. **Prepare features**: Convert lat/lon to Cartesian (equirectangular projection), compute inter-event times
-3. **Standardize**: Scale features using `StandardScaler` (zero mean, unit variance)
-4. **Optimize**: Grid search for best hyperparameters per algorithm/metric
-5. **Cluster**: Assign events to clusters with optimized parameters
-6. **Save**: Export per-cluster CSV files
-7. **Visualize**: Map views and cross-section plots at configurable azimuths
-
-**Feature Set** (standardized via `StandardScaler`):
-- `X_KM`: East-West position in kilometers (from longitude via equirectangular projection)
-- `Y_KM`: North-South position in kilometers (from latitude)
-- `DEPTH`: Hypocenter depth in kilometers
-- `INTEREVENT_LOG`: Base-10 logarithm of the non-negative inter-event time
-  (seconds, with a 0.1-second floor) used for clustering; the raw
-  `INTEREVENT` column is retained for reference and starts at zero for the
-  first event.
-
-**Usage:**
 ```bash
-python ogssequence.py -i config.json -v
-```
-
-**Configuration (JSON):**
-```json
-{
-  "directory": "/path/to/catalog",
-  "ranges": [["2022-01-01", "2022-06-30"], ["2022-07-01", "2022-12-31"]],
-  "angles_deg": [0, 45, 90],
-  "map_deg": [13.09, 13.46, 42.44, 42.61],
-  "cross_km": [-10.0, 10.0, 15.0, 0.0],
-  "map_km": [30.0, 50.0],
-  "annotations": [[13.2, 42.5, "Norcia"]],
-  "algorithms": ["HDBSCAN", "DBSCAN"],
-  "eval_metrics": ["SilhouetteScore", "DaviesBouldinScore"],
-  "cluster_size_range": [10, 100, 10],
-  "eps_range": [0.3, 1.0, 0.1]
-}
-```
-
-**Output:**
-```
-Clusters/{algorithm}/{metric}/{start}_{end}/{cluster_id}.csv  (event rows)
-Clusters/{algorithm}_{metric}_{angle}.png                     (plot)
-```
-
-The CSV directory name is built from each configured date range, while the
-plot is written relative to the process working directory. This follows
-`OGS/src/ogssequence.py:569-600`, `:706-735`, and `:1047-1084`.
-
-Each plot contains:
-- **Top row**: Map view (longitude vs latitude) with cluster colors, high-magnitude stars (M > 3.5), projection line, and cluster labels
-- **Bottom row**: Cross-section (along-strike projection vs depth) at the specified azimuth angle
-
----
-
-### Catalog comparison
-
-Catalog comparison is exposed through `OGSCatalog.bgmaEvents()` and
-`OGSCatalog.bgmaPicks()`; their matching backend is in `ogsutils.py`. The
-supported in-tree interface verified for this documentation cycle is
-`OGSCatalog.bgmaEvents()` for events and `OGSCatalog.bgmaPicks()` for picks;
-their matching classes and distance functions are in `OGS/src/ogsutils.py`.
-
-**Inputs:**
-- **Base catalog**: Reference catalog (OGS data in .dat/.hpl/.txt/.pun format)
-- **Target catalog**: Pipeline outputs (SeisBench, Gamma, PyOcto, NonLinLoc, etc. in Parquet format)
-
-**Compares:**
-- **Picks**: Per-station P/S phase classifications
-- **Events**: Detected events and attributes (time, location, depth, magnitude)
-
-**Produces:**
-- Confusion matrices and review partitions (`MH`, `MS`, `SM`, `PS`, `SP`)
-- Recall and false-discovery-rate metrics; matched rows also support RMSE/MAE plots where applicable
-- Diagnostic plots (maps, histograms, scatter plots)
-
-See [Bipartite Graph Matching Algorithm](#bipartite-graph-matching-algorithm-bgma) for the matching methodology and `OGS/src/ogscatalog.py:1733-1808` for the event-comparison implementation.
-
----
-
-### Additional Modules
-
-The following modules are part of the `OGS/src/` codebase but serve
-supporting or specialized roles:
-
-| Module | Purpose | Key Dependencies |
-|--------|---------|-----------------|
-| `ogsdata.py` | Day-sharded Pyrocko/Squirrel waveform data access for the ml_catalog pipeline | pyrocko, ml_catalog |
-| `ogsplotter.py` | Reusable Matplotlib/Cartopy figure builders for maps, waveforms, metrics, and histograms | matplotlib, cartopy, obspy |
-| `ogsmagnitude.py` | OGS-calibrated local magnitude (M_L) with per-station corrections and MAD outlier rejection | ml_catalog |
-| `ogspicker.py` | Wood-Anderson amplitude extraction with SNR gating for magnitude estimation | obspy |
-| `ogsqc.py` | Region-aware quality control: pick-count thresholds and geographic polygon filtering | dask, ml_catalog |
-| `ogsstation.py` | CLI wrapper for station waveform inventory discovery | ogsutils |
-| `ogstrainer.py` | SeisBench model fine-tuning on OGS catalog data | torch, seisbench |
-| `ogsbuilderMPI.py` | MPI-parallel catalog builder extending ml_catalog's `CatalogBuilder` | dask_mpi, ml_catalog |
-| `real.py` | REAL phase associator wrapper with TauP travel-time integration | obspy.taup, ml_catalog |
-| `MHPCThesis.py` | Thesis driver script: BGMA comparison across picker/associator/locator configurations | (analysis script) |
-| `UNITSThesis.py` | Thesis driver script: catalog comparison for UNITS thesis | (analysis script) |
-
-Note: `MHPCThesis.py` and `UNITSThesis.py` contain hardcoded local paths and
-are intended as reproducible analysis scripts for specific thesis submissions,
-not as general-purpose tools.
-
----
-
-## Data Flow
-
-```
-      Raw Files (.dat, .hpl, .pun, .txt)
-                      |
-          ogsparser.py (parse + merge)
-                      |
-        Parquet Files (date-partitioned)
-                      |
-          ogscatalog.py (load + query)
-                      |
-          +-----------+-----------+
-          |                       |
-OGSCatalog.bgmaEvents       ogssequence.py
-  (compare catalogs)     (cluster + visualize)
-```
-
-**Parquet Directory Structure:**
-```
-{catalog}/
-  .dat/
-    assignments/YYYY-MM-DD   (picks)
-    events/YYYY-MM-DD        (events)
-  .hpl/
-    assignments/YYYY-MM-DD
-    events/YYYY-MM-DD
-  .txt/
-    events/YYYY-MM-DD
-  .pun/
-    events/YYYY-MM-DD
-  .all/                      (merged catalog)
-    assignments/YYYY-MM-DD
-    events/YYYY-MM-DD
-```
-
----
-
-## Supported File Formats
-
-### .dat (Phase Picks)
-Legacy fixed-width format containing P and S wave arrival times per station. Fields include station code (4 chars), onset indicator, polarity, weight, datetime, P/S times, geographic zone, event type, duration, and event index.
-
-### .hpl (Hypocenter Locations)
-Comprehensive format containing both pick records and event headers. Provides hypocenter locations with associated phase arrival data. Recommended primary format.
-
-### .pun (Punch Card Events)
-Single-line event records in punch card format. Each line contains: date, origin time seconds, latitude, longitude, depth, magnitude, number of observations, azimuthal gap, minimum distance, RMS residual, ERH, ERZ, and quality marker.
-
-### .txt (Text Catalog)
-Text-format event catalog with magnitudes and error estimates. Contains: event index, origin time, ERT (time error), latitude, longitude, ERH, depth, ERZ, GAP, ML (local magnitude), MD (duration magnitude), location name, and event type.
-
----
-
-## Installation and Dependencies
-
-### Required:
-- **numpy**: Numerical computing and array operations
-- **pandas**: DataFrame operations, Parquet I/O, catalog manipulation
-- **scikit-learn**: Clustering algorithms, evaluation metrics, feature scaling
-- **matplotlib**: Plotting, visualization, geographic polygon filtering
-- **obspy**: Seismological time handling (UTCDateTime), FDSN data access
-- **networkx**: Bipartite graph matching for catalog comparison
-
-### Optional:
-- **dadapy**: Advanced Density Peaks clustering algorithm
-- **scipy**: Dendrogram visualization for hierarchical clustering
-- **pyrocko**: Alternative multi-threaded waveform downloader
-
----
-
-## CLI Usage
-
-### Download Waveforms
-```bash
-python OGS/src/ogsdownloader.py \
-  -D 20240320 20240620 \
-  --rectdomain 9.5 15.0 44.3 47.5 \
-  --client INGV GFZ IRIS \
-  -v
-```
-
-#### 2. Ingest, Parse, and Merge Legacy Bulletins
-```bash
-python OGS/src/ogsparser.py \
-  -d /path/to/raw/bulletins/ \
-  -x .hpl .dat .txt .pun \
-  -D 20220101 20221231 \
+python -m OGS.src.ogsparser \
+  --file inputs/catalog/events.hpl inputs/catalog/picks.dat \
+  --dates 20220101 20221231 \
+  --output outputs/manual_catalog \
   --merge \
-  -o /path/to/output_catalog/ \
-  -v
+  --verbose
 ```
 
-### Compare Catalogs
-```python
-from pathlib import Path
-from ogscatalog import OGSCatalog
+Supported suffixes are `.dat`, `.hpl`, `.pun`, and `.txt`. Alternatively, use
+`--directory inputs/catalog --ext .hpl .dat` instead of `--file ...`;
+file and directory selection are mutually exclusive.
 
-base = OGSCatalog(input=Path("/path/to/base/.all"))
-target = OGSCatalog(input=Path("/path/to/target/.all"))
-base.bgmaEvents(target, output=Path("/path/to/review"))
-# Pick comparison additionally requires a station inventory on `base`.
-# See OGS/src/ogscatalog.py:1733-1808 and :2326-2374.
+Per-format outputs use extensionless Parquet filenames:
+
+```text
+outputs/manual_catalog/.hpl/events/YYYY-MM-DD
+outputs/manual_catalog/.dat/assignments/YYYY-MM-DD
+outputs/manual_catalog/.all/events/YYYY-MM-DD
+outputs/manual_catalog/.all/assignments/YYYY-MM-DD
 ```
 
-### Run Sequence Clustering
+Available tables depend on the input format. `--merge` also invokes plotting.
+Writes can replace existing partitions, and some write failures are logged
+without being re-raised: check logs and output completeness.
+See [catalog ingestion and storage](OGS/README.md#catalog-ingestion-and-storage).
+
+### Download an approved waveform window
+
+This example contacts external services and writes files. The waveform and
+station directories must already exist. Provider/network/date availability
+must be checked independently.
+
 ```bash
-python ogssequence.py -i config.json -v
+python -m OGS.src.ogsdownloader \
+  --dates 20220101 20220101 \
+  --client INGV \
+  --network OX \
+  --station '*' \
+  --rectdomain 9.5 15.0 44.3 47.5 \
+  --waveforms inputs/waveform \
+  --stations inputs/station \
+  --threads 4 \
+  --timeout 60 \
+  --verbose
 ```
 
----
+The single date requests a full day ending at the next midnight. Waveforms
+are stored under `inputs/waveform/YYYY/MM/DD/`; StationXML is stored under
+`inputs/station`. Restricted data may require an approved token file through
+`--key`; never commit credentials.
 
-## Bipartite Graph Matching Algorithm (BGMA)
+Use the ObsPy backend. The downloader's `--pyrocko` implementation raises
+`NotImplementedError`; the separate Pyrocko/Squirrel ML data adapter is implemented.
 
-The matching engine behind catalog comparisons. It is implemented in
-`ogsutils.py` (classes `OGSBPGraph`, `OGSBPGraphPicks`, and
-`OGSBPGraphEvents`) and called by the comparison methods in `ogscatalog.py`.
+## ML processing on Leonardo
 
-### Purpose
+The checked-in Hydra configuration supplies data access, processing modules,
+merging, and output settings to external `ml_catalog` orchestration.
+This is a **configuration/dependency map**, not a verified execution-order
+diagram of the external runner.
 
-Solves "what matches what?" between two time-indexed collections:
-- **TRUE nodes** (reference catalog) vs **PRED nodes** (predictions)
-- Two domains: **Picks** (phase arrivals per station) and **Events** (earthquake hypotheses)
+```mermaid
+flowchart LR
+  H[Hydra defaults: L1] --> D[[Squirrel data adapter: L839]]
+  H --> G[Configured picker, association, QC, location, magnitude: L1]
+  H --> M[Merge configuration: L1]
+  H --> B[Declared events / assignments outputs: L1]
+  D -. data interface .-> R[[External ml_catalog orchestration]]
+  G -. module selection .-> R
+  M -. merger selection .-> R
+  B -. output contract .-> R
 
-### Distance Functions
-
-**Picks** (`dist_pick`): Composite score blending time proximity, phase agreement, and model probability ratio.
+  click H "OGS/conf/config.yaml#L1"
+  click D "OGS/src/ogsdata.py#L839"
+  click G "OGS/conf/group_modules/OGS.yaml#L1"
+  click M "OGS/conf/merge_module/default.yaml#L1"
+  click B "OGS/conf/builder/default.yaml#L1"
 ```
-dist_pick = 0.97 * dist_time + 0.02 * dist_phase + 0.01 * dist_prob
+
+The current Make registries contain PhaseNet/EQTransformer pickers,
+PyOcto/GaMMA associators, and NLL1D/NLL3D locators.
+REAL has configuration but is not registered as a generated Make target.
+Configuration defaults include site-specific paths and dates; inspect
+[configuration](OGS/conf/README.md) before deployment.
+
+Preview selected stages from the repository root:
+
+```bash
+make -C OGS/utils/Leonardo -n "PhaseNet[INSTANCE,0.1]" \
+  START_DATE=20220101 END_DATE=20220102
+
+make -C OGS/utils/Leonardo -n "PyOcto[PhaseNet,INSTANCE,0.1]" \
+  START_DATE=20220101 END_DATE=20220102
+
+make -C OGS/utils/Leonardo -n "NLL1D[PyOcto,PhaseNet,INSTANCE,0.1]" \
+  START_DATE=20220101 END_DATE=20220102
 ```
-- `dist_time`: `1 - |t_true - t_pred| / PICK_TIME_OFFSET` (0.5s window)
-- `dist_phase`: 1 if phases match, else 0
-- `dist_prob`: bounded probability ratio. The function `dist_prob(B, T)` computes `P_target / P_base` and clamps to `[0, 1]` (`ogsutils.py:181–206`). The call site in `dist_pick` passes arguments in `(T, B)` order (`ogsutils.py:471`), so the effective score is `P_base / P_target`. Division by zero is guarded by `eps=1e-6`.
 
-**Events** (`dist_event`): Weighted combination of temporal and spatial proximity.
+These are previews, not production submissions. Actual runs use the prepared
+`WORK_PATH` deployment, its launch files, reviewed Hydra configuration, and
+approved cluster allocations. They are not run by this README update.
+
+**Downstream targets do not submit upstream stages as prerequisites or attach
+scheduler dependencies.** Confirm upstream job completion and output contents
+before submitting association or location. The `all` target selects a locator
+recipe, not a complete download-to-location workflow. See the
+[utilities guide](OGS/utils/README.md#hpc-execution-workflow).
+
+## Catalog comparison and sequence analysis
+
+**Observed source behavior:** comparison and clustering are independent.
+The diagram summarizes their selected paths; unavailable comparison passes,
+empty event windows, and invalid clustering results can be skipped.
+
+```mermaid
+flowchart TD
+  C[/BASE and TARGET daily catalogs/] --> B[[BPGMA comparison: L2895]]
+  B --> R[/Review CSVs and diagnostic figures: L1564/]
+
+  J[/Sequence JSON: L1100/] --> W[[Load date windows and prepare features: L361]]
+  W --> A[[Optimize and refit algorithm / metric pairs: L386]]
+  A --> K[/Cluster-member CSVs and configured figures: L704/]
+
+  click B "OGS/src/ogscatalog.py#L2895"
+  click R "OGS/src/ogscatalog.py#L1564"
+  click J "OGS/src/ogssequence.py#L1100"
+  click W "OGS/src/ogssequence.py#L361"
+  click A "OGS/src/ogssequence.py#L386"
+  click K "OGS/src/ogssequence.py#L704"
 ```
-dist_event = 0.99 * dist_time + 0.01 * dist_space
-```
-- `dist_time`: `1 - |t_true - t_pred| / EVENT_TIME_OFFSET` (2s window)
-- `dist_space`: `1 - surface_distance / EVENT_DIST_OFFSET` (8 km cutoff)
 
-### Algorithm
+### Compare existing catalogs
 
-1. **Gating**: For each TRUE node, find PRED candidates within the time window (and spatial cutoff for events)
-2. **Edge creation**: Compute similarity weights for all feasible pairs
-3. **Maximum weight matching**: NetworkX `max_weight_matching` finds optimal 1-to-1 assignment
-4. **Confusion matrix**: Traverse matched/unmatched nodes to compute TP, FN, FP
-
-### Outputs
-
-- **Confusion matrix**: DataFrame with categories (P-wave/S-wave/None for picks; Event/None for events)
-- **TP set**: Matched pairs with rich metadata (index, timestamp, phase, station, location, magnitude, errors)
-- **FN list**: Unmatched TRUE entries (missed detections)
-- **FP set**: Unmatched PRED entries (false alarms)
-
-### Example
+Use the Python API rather than the workstation-specific executable example
+inside the catalog module. This example requires two existing catalog roots
+and StationXML metadata for pick comparison:
 
 ```python
-from ogsutils import OGSBPGraphEvents
+from datetime import datetime
+from pathlib import Path
 
-# TRUE and PRED are DataFrames with timestamp, latitude, longitude, depth columns
-graph = OGSBPGraphEvents(TRUE_df, PRED_df)
-# The graph exposes one-to-one matches; catalog-level review creates the
-# confusion matrix and MH/MS/PS(/SM/SP) partitions.
-matched_pairs = graph.matched_pairs_array()
-```
+from OGS import OGSCatalog
 
----
-
-## Clustering Framework
-
-### Overview
-
-The clustering framework (`ogsclustering.py`) provides a uniform interface for 14 registered algorithms with:
-- Integrated 2D and 3D visualization
-- Noise point handling (label = -1)
-- Colormap-based cluster coloring
-- Algorithm-specific plot features (cluster centers, exemplars, core samples, dendrograms, reachability plots)
-
-### Basic Usage
-
-```python
-from ogsclustering import OGSHDBSCAN, OGSKMeans, SilhouetteScore
-
-# Density-based clustering (no need to specify k)
-hdbscan = OGSHDBSCAN(min_cluster_size=15)
-labels = hdbscan.fit_predict(X)
-hdbscan.plot(xlabel="X (km)", ylabel="Y (km)")
-
-# Centroid-based clustering
-kmeans = OGSKMeans(n_clusters=5, random_state=42)
-labels = kmeans.fit_predict(X)
-kmeans.plot(show_centers=True)
-
-# Evaluate clustering quality
-score = SilhouetteScore(X, labels).compute()
-```
-
-### Algorithm Comparison with OGSClusteringZoo
-
-```python
-from ogsclustering import OGSClusteringZoo
-
-metadata = {
-    "algorithms": ["KMeans", "HDBSCAN", "DBSCAN", "Agglomerative"],
-    "eval_metrics": ["SilhouetteScore", "DaviesBouldinScore"],
-    "num_clusters_range": (2, 12, 1),
-    "cluster_size_range": (10, 80, 10),
-    "eps_range": (0.2, 0.8, 0.1),
-    "metric": "euclidean",
-    "n_jobs": -1,
-    "random_state": 42
+options = {
+    "start": datetime(2022, 1, 1),
+    "end": datetime(2022, 12, 31),
+    "polygon": None,
+    "output": Path("outputs/comparison"),
+    "verbose": True,
 }
 
-zoo = OGSClusteringZoo(metadata=metadata, verbose=True)
-zoo.run(X)  # Optimizes, compares, and plots all algorithms
+base = OGSCatalog(
+    input=Path("outputs/manual_catalog/.all"),
+    name="Reference",
+    **options,
+)
+target = OGSCatalog(
+    input=Path("inputs/target_catalog"),
+    name="Target",
+    **options,
+)
+
+base.bpgma(target, stations=Path("inputs/station"))
 ```
 
-### Parameter Ranges
+Provide dated files under `events/` and `assignments/` or `picks/`.
+Use explicit date bounds: the catalog constructor's default inverted window
+selects no days. Construction creates output/image directories despite lazy
+table loading.
 
-Each range is specified as `(start, stop, step)` and converted to a list via `np.arange`:
+For event-only comparison without station metadata, use
+`base.BPGMAEvents(target)` instead of `base.bpgma(...)`.
+Comparison uses daily maximum-weight one-to-one bipartite matching, not greedy
+nearest neighbours or cross-day matching. It writes review tables and figures;
+review the [matching rules and rates](OGS/README.md#catalog-comparison) before
+interpreting them. Logged read failures can yield empty frames.
 
-| Range Key | Used By | Parameter |
-|-----------|---------|-----------|
-| `num_clusters_range` | KMeans, MiniBatchKMeans, BisectingKMeans, Agglomerative, Spectral, Birch | `n_clusters` |
-| `cluster_size_range` | HDBSCAN | `min_cluster_size` |
-| `eps_range` | DBSCAN | `eps` |
-| `damping_range` | AffinityPropagation | `damping` |
-| `bandwidth_range` | MeanShift | `bandwidth` |
-| `min_samples_range` | OPTICS, DBSCAN, HDBSCAN | `min_samples` |
-| `Z_range` | AdvancedDensityPeaks | `Z` |
+### Analyze an existing event sequence
 
-### Seismic Applications
+Prepare a reviewed JSON configuration, then run:
 
-- **HDBSCAN/DBSCAN**: Earthquake sequence identification without knowing cluster count. Handles noise (isolated events) naturally. No assumption of cluster shape (can find elongated fault structures).
-- **K-Means**: Well-separated clusters with known count. Assumes spherical clusters of similar size.
-- **MiniBatch K-Means / BIRCH**: Large catalogs (>50k events) where full algorithms are too slow.
-- **Agglomerative**: Exploring hierarchical relationships between sequences. Dendrogram reveals sub-sequences within larger swarms.
-- **OPTICS**: Multi-scale clustering, identifying nested sequences within larger swarms.
-- **Spectral**: Non-convex clusters following complex spatial patterns (e.g., along curved fault traces).
+```bash
+python -m OGS.src.ogssequence \
+  --input inputs/sequence.json \
+  --verbose
+```
+
+The JSON needs an existing catalog `directory`, date `ranges`, and selected
+`eval_metrics`. Set `algorithms` explicitly: omitting it or supplying an empty
+selection enables all registered algorithms. Review
+[input.json](OGS/src/input.json) as a structural example, not a portable ready-to-run
+configuration; it contains workstation-specific values.
+
+The implementation builds and standardizes spatial/depth and inter-event-time
+features per window, then searches and refits algorithm/metric pairs.
+Cluster-member CSVs are written beneath `Clusters/`; configured `angles_deg`
+also enables figures. Working-directory-relative window/image directories
+are created. Run from a suitable analysis working directory with a valid
+package import path if these outputs should be outside the checkout.
+See [sequence clustering](OGS/README.md#sequence-clustering).
+
+## Validation
+
+Documentation-only checks from the repository root:
+
+```bash
+bash LLM/scripts/handler.sh validate --file README.md
+bash LLM/scripts/handler.sh validate --root "$PWD"
+git diff --check -- README.md
+```
+
+These check documentation/scaffold structure, local paths, and managed scripts.
+They do not validate Python dependencies, scientific accuracy, or Mermaid rendering.
+
+For software changes, activate the configured environment and select the
+smallest relevant test slice:
+
+```bash
+python -m pytest -q OGS/test/testogsdatafile.py OGS/test/testogsparser.py
+```
+
+Broader focused groups are available through `make -C OGS/test parser-tests`
+and `make -C OGS/test catalog-support-tests`. Consult the
+[tests guide](OGS/test/README.md) before running integration tests that require
+external binaries or datasets.
+
+## Scientific and operational boundaries
+
+- Waveforms and inventories are observations; reference picks and catalogs
+  contain analyst labels. ML picks, associations, locations, magnitudes,
+  and cluster assignments are derived outputs, not independent ground truth.
+- Record input provenance, configuration/model versions, date windows, output
+  completeness, and human review before reporting scientific results.
+- Passing software or documentation checks does not establish scientific
+  accuracy or successful production processing.
+- Downloads, inference, environment installation, workspace initialization,
+  destructive cleanup, and SLURM submission require separate approval.
+- Keep credentials and restricted/raw production inputs out of the repository.
+  Follow the [repository contract](AGENTS.md) and the
+  [LLM workspace evidence boundary](LLM/README.md#evidence-boundary).

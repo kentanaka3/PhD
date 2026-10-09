@@ -2,7 +2,7 @@
 
 """
 ===============================================================================
-OGS Downloader - ObsPy FDSN Waveform Retrieval CLI
+OGS Downloader - Multi-Backend FDSN Waveform Retrieval CLI
 ===============================================================================
 
 OVERVIEW:
@@ -46,9 +46,10 @@ AUTHORS:
 from abc import ABC, abstractmethod
 from argparse import Namespace
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 from fnmatch import fnmatchcase
 from pathlib import Path
+import tempfile
 from typing import Any
 
 from obspy import UTCDateTime
@@ -87,6 +88,15 @@ def daily_clipper(
 
 
 class BaseDownloader(ABC):
+  """Shared lifecycle and FDSN request helpers for downloader backends.
+
+  The base class normalizes the command-line namespace once, creates the
+  requested time windows, parses network and station filters, probes FDSN
+  services, and generates deterministic archive paths. Subclasses are
+  responsible for turning those prepared values into backend-specific
+  requests.
+  """
+
   def __init__(self, args: Namespace) -> None:
     """Initialize common downloader state from parsed CLI arguments."""
     self.args = args
@@ -101,9 +111,6 @@ class BaseDownloader(ABC):
             self.start + (index + 1) * OGS_C.ONE_DAY
         ) for index in range((self.end - self.start).days + 1)]
     )
-    # Store successfully probed providers in requested order; names are not
-    # deduplicated by this class.
-    self.clients: list[ObsPyFDSNClient] = []
     self.main_workers = min(4, args.threads)
     self.sub_workers = args.threads - self.main_workers
     self.networks, self.exclude_networks = self._filter(args.network)
@@ -262,15 +269,22 @@ class BaseDownloader(ABC):
             return True
     return False
 
+  @abstractmethod
   def download(self) -> None:
-    """Probe providers for eligible channels and retain usable ObsPy clients.
+    """Execute backend waveform and metadata download across all configured windows."""
+    pass
 
-    No waveform download occurs in this base method. Provider/query failures
-    are logged and skipped; ValueError is raised if none has eligible channels.
-    """
+
+class ObsPyDownloader(BaseDownloader):
+  def __init__(self, args: Namespace) -> None:
+    super().__init__(args)
+    self.clients: list[ObsPyFDSNClient] = []
+
+  def _probe_clients(self) -> None:
     query_window: TimeWindow = (self.ranges[0][0], self.ranges[-1][1])
     for name in self.args.client:
-      self.logger.info("Initializing FDSN client for provider '%s'.", name)
+      self.logger.info(
+          "Initializing ObsPy FDSN client for provider '%s'.", name)
       try:
         client = ObsPyFDSNClient(name, **self.client_kwargs)
         inventory = client.get_stations(
@@ -293,10 +307,8 @@ class BaseDownloader(ABC):
       self.logger.error("No FDSN clients have matching station channels.")
       raise ValueError(
           "At least one FDSN client must have matching station channels.")
-    self.logger.info("Initialized %d FDSN client(s).", len(self.clients))
+    self.logger.info("Initialized %d ObsPy FDSN client(s).", len(self.clients))
 
-
-class ObsPyDownloader(BaseDownloader):
   def _download_window(
       self,
       mass_downloader: MassDownloader,
@@ -318,7 +330,7 @@ class ObsPyDownloader(BaseDownloader):
     )
 
   def download(self) -> None:
-    super().download()
+    self._probe_clients()
     mass_downloader = MassDownloader(providers=self.clients)
     if self.args.circdomain:
       domain = CircularDomain(**self.domain_kwargs)
@@ -359,10 +371,195 @@ class ObsPyDownloader(BaseDownloader):
       self.logger.info("All %d download window(s) completed.", len(futures))
 
 
+PYROCKO_SITE_MAP = {
+    "OGS": OGS_C.OGS_CLIENT_STR,
+    "INGV": "ingv",
+    "ETH": "ethz",
+    "BGR": "bgr",
+    "IRIS": "iris",
+    "GEONET": "geonet",
+    "GFZ": "geofon",
+    "IPGP": "ipgp",
+    "ICGC": "icgc",
+    "RESIF": "resif",
+    "ORFEUS": "orfeus",
+}
+
+
 class PyrockoDownloader(BaseDownloader):
+  """Waveform and metadata retrieval backend using Pyrocko FDSN."""
+  from pyrocko import io as pyrocko_io
+  from pyrocko.client import fdsn as pyrocko_fdsn
+  from pyrocko.io import mseed as pyrocko_mseed, stationxml as pyrocko_sxml
+
+  def _resolve_site(self, name: str) -> str:
+    upper_name = name.strip().upper()
+    if name.startswith(("http://", "https://")):
+      return name
+    return PYROCKO_SITE_MAP.get(upper_name, name.lower())
+
+  def _query_stations_and_channels(
+      self, site: str, window: TimeWindow
+  ) -> tuple[pyrocko_sxml.FDSNStationXML | None, list[tuple[str, str, str, str]]]:
+    kwargs: dict[str, Any] = {
+        "site": site,
+        "level": "channel",
+        "parsed": True,
+        "timeout": getattr(self.args, "timeout", OGS_C.OGS_TIMEOUT),
+        **self.domain_kwargs,
+    }
+    if getattr(self.args, "key", None):
+      kwargs["token"] = self.args.key
+    tmin = window[0].replace(tzinfo=timezone.utc).timestamp()
+    tmax = window[1].replace(tzinfo=timezone.utc).timestamp()
+    try:
+      sxml = pyrocko_fdsn.station(
+          network=",".join(self.networks),
+          station=",".join(self.stations),
+          starttime=tmin,
+          endtime=tmax,
+          **kwargs,
+      )
+    except pyrocko_fdsn.EmptyResult:
+      self.logger.info(
+          "No station metadata for site %s matching the selection.", site)
+      return None, []
+    except Exception as error:
+      self.logger.warning(
+          "Pyrocko station query failed for site %s: %s", site, error)
+      return None, []
+
+    channels: list[tuple[str, str, str, str]] = []
+    for net, sta, cha in sxml.iter_network_station_channels():
+      if any(fnmatchcase(net.code, pat) for pat in self.exclude_networks):
+        continue
+      if any(fnmatchcase(sta.code, pat) for pat in self.exclude_stations):
+        continue
+      if cha.location_code not in LOCATION_PRIORITIES:
+        continue
+      if any(fnmatchcase(cha.code, pat) for pat in CHANNEL_PRIORITIES):
+        channels.append((net.code, sta.code, cha.location_code, cha.code))
+    return sxml, channels
+
+  def _download_window(self, window: TimeWindow) -> None:
+    self.logger.info(
+        "Starting Pyrocko download for window %s to %s.", window[0], window[1])
+    tmin = window[0].replace(tzinfo=timezone.utc).timestamp()
+    tmax = window[1].replace(tzinfo=timezone.utc).timestamp()
+
+    stations_dir = Path(self.args.stations)
+    stations_dir.mkdir(parents=True, exist_ok=True)
+
+    for client_name in self.args.client:
+      site = self._resolve_site(client_name)
+      sxml, eligible_channels = self._query_stations_and_channels(site, window)
+      if not sxml or not eligible_channels:
+        continue
+
+      # Save StationXML metadata per station
+      for net in sxml.network_list:
+        for sta in net.station_list:
+          xml_path = stations_dir / f"{net.code}.{sta.code}.xml"
+          if self.args.force or not xml_path.exists():
+            try:
+              sub_sxml = pyrocko_sxml.FDSNStationXML(
+                  source=sxml.source,
+                  sender=sxml.sender,
+                  network_list=[
+                      pyrocko_sxml.Network(
+                          code=net.code, start_date=net.start_date,
+                          end_date=net.end_date, station_list=[sta]
+                      )
+                  ],
+              )
+              sub_sxml.dump_xml(filename=str(xml_path))
+            except Exception as e:
+              self.logger.debug(
+                  "Failed saving StationXML for %s.%s: %s", net.code, sta.code, e)
+
+      # Filter channels whose daily waveform files already exist unless --force is given
+      needed_channels: list[tuple[str, str, str, str]] = []
+      for net, sta, loc, cha in eligible_channels:
+        dest = self.waveform_path((net, sta, loc, cha, window[0], window[1]))
+        if self.args.force or not dest.exists():
+          needed_channels.append((net, sta, loc, cha))
+
+      if not needed_channels:
+        self.logger.info(
+            "All waveforms already exist for site %s in window %s to %s.",
+            site, window[0], window[1]
+        )
+        continue
+
+      selection = [
+          (net, sta, loc, cha, tmin, tmax)
+          for (net, sta, loc, cha) in needed_channels
+      ]
+      try:
+        stream = pyrocko_fdsn.dataselect(
+            site=site,
+            selection=selection,
+            timeout=getattr(self.args, "timeout", OGS_C.OGS_TIMEOUT),
+            token=getattr(self.args, "key", None),
+        )
+        with tempfile.NamedTemporaryFile(suffix=".mseed") as tmp_file:
+          tmp_file.write(stream.read())
+          tmp_file.flush()
+          for tr in pyrocko_mseed.iload(tmp_file.name):
+            if tr.tmin >= tmax or tr.tmax <= tmin:
+              continue
+            # Slice strictly into the 24-hour day chunk [tmin, tmax]
+            try:
+              chopped_tr = tr.chop(tmin, tmax, inplace=False)
+            except Exception:
+              continue
+            if len(chopped_tr.ydata) == 0:
+              continue
+            target_path = self.waveform_path((
+                chopped_tr.network, chopped_tr.station,
+                chopped_tr.location, chopped_tr.channel,
+                window[0], window[1]
+            ))
+            if self.args.force or not target_path.exists():
+              target_path.parent.mkdir(parents=True, exist_ok=True)
+              pyrocko_io.save([chopped_tr], str(target_path), format="mseed")
+      except pyrocko_fdsn.EmptyResult:
+        self.logger.info(
+            "No waveform data from site %s in window %s to %s.",
+            site, window[0], window[1]
+        )
+      except Exception as error:
+        self.logger.warning(
+            "Waveform query error for client %s (%s): %s",
+            client_name, site, error
+        )
+
+    self.logger.info(
+        "Completed Pyrocko download for window %s to %s.", window[0], window[1])
+
   def download(self) -> None:
-    self.logger.error("The Pyrocko download backend is not implemented.")
-    raise NotImplementedError("The Pyrocko backend is not implemented.")
+    max_workers = max(1, min(self.main_workers, len(self.ranges)))
+    self.logger.info(
+        "Starting %d Pyrocko download window(s) with up to %d worker(s).",
+        len(self.ranges), max_workers
+    )
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+      futures = {
+          executor.submit(self._download_window, window): window
+          for window in self.ranges
+      }
+      for future in as_completed(futures):
+        window = futures[future]
+        try:
+          future.result()
+        except Exception as error:
+          self.logger.error(
+              "Pyrocko download failed for window %s to %s: %s",
+              window[0], window[1], error
+          )
+          raise
+    self.logger.info(
+        "All %d Pyrocko download window(s) completed.", len(futures))
 
 
 def data_downloader(args: Namespace) -> None:
