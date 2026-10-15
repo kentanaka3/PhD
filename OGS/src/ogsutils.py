@@ -178,7 +178,7 @@ def setup_logger(
   """
   logger = logging.getLogger(name)
   if not logger.handlers:
-    handler = logging.StreamHandler(sys.stderr)
+    handler = logging.StreamHandler(sys.stdout)
     formatter = ColorFormatter(
         fmt=ColorFormatter.BASE_FMT,
         datefmt="%Y-%m-%d %H:%M:%S",

@@ -78,12 +78,9 @@ WATER_LEVEL = 60
 
 # SNR parameters
 FREQ_RANGE = [1, 40]
-SNR_THRESHOLD = 1.3
-EPSILON_TIMEDELTA = td(seconds=0.1)
-
-TIME_BEFORE = 2.0  # seconds before the pick
-TIME_AFTER = 10.0  # seconds after the pick
-TIME_SLACK = 10.0  # seconds slack around the pick
+TIME_BEFORE = 2.0  # seconds before pick
+TIME_AFTER = 10.0  # seconds after pick
+TIME_SLACK = 10.0  # seconds slack around pick
 
 
 class OGSAmplitudeExtractor(AmplitudeExtractor):

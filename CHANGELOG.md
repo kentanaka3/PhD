@@ -1,8 +1,6 @@
 # Changelog
 
-This project follows Semantic Versioning once releases are tagged. Until the
-first release, entries describe the unreleased prototype and are not promises
-of production compatibility.
+This project follows Semantic Versioning once releases are tagged. Until the first release, entries describe the unreleased prototype and are not promises of production compatibility.
 
 ## [Unreleased]
 

@@ -1,10 +1,10 @@
-_target_: src.ogsdata.OGSSquirrelDataSource
+_target_: OGS.src.ogsdata.OGSSquirrelDataSource
 
 env: ogsDB
 persistent: v1
 check: false
 index_workers: null
-copy_to_tmp: true
+copy_to_tmp: false
 filesystem_groups: true
 paths:
   - /leonardo_work/IscrC_AISeism/WORK/waveform

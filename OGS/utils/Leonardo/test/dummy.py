@@ -51,8 +51,8 @@ class InitializedWorkspaceTests(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls) -> None:
-    # LAUNCHME.sh executes the payload after changing to WORK_PATH.
-    cls.workspace = Path.cwd()
+    # Prefer WORK_PATH from environment if exported, fallback to cwd.
+    cls.workspace = Path(os.environ.get("WORK_PATH", Path.cwd()))
 
   def test_running_from_workspace(self) -> None:
     """Ensure the payload is running in the copied workspace."""

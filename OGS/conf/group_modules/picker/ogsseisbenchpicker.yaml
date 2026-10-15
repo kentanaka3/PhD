@@ -1,4 +1,4 @@
-_target_: ml_catalog.modules.SeisBenchPicker
+_target_: OGS.src.ogspicker.OGSSeisBenchPicker
 
 model:
   _target_: seisbench.models.PhaseNet.from_pretrained
@@ -10,4 +10,6 @@ classify_args:
   batch_size: 16384
 
 amplitude_extractor:
-  _target_: src.ogspicker.OGSAmplitudeExtractor
+  _target_: OGS.src.ogspicker.OGSAmplitudeExtractor
+  parallel: true
+  n_jobs: 4

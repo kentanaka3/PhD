@@ -1,0 +1,258 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<FDSNStationXML xmlns="http://www.fdsn.org/xml/station/1" schemaVersion="1.2">
+  <Source>eXistDB</Source>
+  <Sender>INGV-ONT</Sender>
+  <Module>INGV-ONT WEB SERVICE: fdsnws-station | version: 1.1.64</Module>
+  <ModuleURI>/exist/apps/fdsn-station/fdsnws/station/1/query?starttime=2007-01-01T00%3A00%3A00.000000&amp;endtime=2007-12-31T00%3A00%3A00.000000&amp;network=%2A&amp;station=%2A&amp;minlatitude=44.3&amp;maxlatitude=47.5&amp;minlongitude=9.5&amp;maxlongitude=15.0&amp;level=channel</ModuleURI>
+  <Created>2026-09-23T02:54:17.830000Z</Created>
+  <Network code="NI" startDate="2002-01-01T00:00:00.000000Z" restrictedStatus="open">
+    <Description>North-East Italy Broadband Network</Description>
+    <Identifier type="DOI">10.7914/SN/NI</Identifier>
+    <TotalNumberStations>13</TotalNumberStations>
+    <SelectedNumberStations>5</SelectedNumberStations>
+    <Station code="PURA" startDate="2007-01-01T10:00:00.000000Z" restrictedStatus="open">
+      <ingv:AlternateNetworks xmlns:ingv="https://raw.githubusercontent.com/FDSN/StationXML/master/fdsn-station.xsd">
+        <ingv:AlternateNetwork>
+          <ingv:Description>The North-eastern Italy ThRust faults Observatory</ingv:Description>
+        </ingv:AlternateNetwork>
+      </ingv:AlternateNetworks>
+      <Latitude unit="DEGREES">46.4258</Latitude>
+      <Longitude unit="DEGREES">12.7419</Longitude>
+      <Elevation>1417.0</Elevation>
+      <Site>
+        <Name>Passo Pura, Italy</Name>
+      </Site>
+      <CreationDate>2007-01-01T00:00:00.000000Z</CreationDate>
+      <TotalNumberChannels>6</TotalNumberChannels>
+      <SelectedNumberChannels>6</SelectedNumberChannels>
+      <Channel code="HHE" startDate="2007-01-01T10:00:00.000000Z" restrictedStatus="open" locationCode="">
+        <Comment>
+          <Value>sts2_s/n s/n</Value>
+        </Comment>
+        <Latitude unit="DEGREES">46.4258</Latitude>
+        <Longitude unit="DEGREES">12.7419</Longitude>
+        <Elevation>1417.0</Elevation>
+        <Depth>0.0</Depth>
+        <Azimuth unit="DEGREES">90.0</Azimuth>
+        <Dip unit="DEGREES">0.0</Dip>
+        <SampleRate unit="SAMPLES/S">100.0</SampleRate>
+        <ClockDrift unit="SECONDS/SAMPLE">0.0001</ClockDrift>
+        <CalibrationUnits>
+          <Name>V</Name>
+        </CalibrationUnits>
+        <Sensor>
+          <Type>Velocimeter</Type>
+          <Description>STRECKEISEN STS-2-120S</Description>
+          <Manufacturer>STRECKEISEN</Manufacturer>
+          <Model>STS-2-120S</Model>
+        </Sensor>
+        <DataLogger>
+          <Description>QUANTERRA Q330</Description>
+        </DataLogger>
+        <Response>
+          <InstrumentSensitivity>
+            <Value>629919000.0</Value>
+            <Frequency>0.4</Frequency>
+            <InputUnits>
+              <Name>m/s</Name>
+              <Description>None</Description>
+            </InputUnits>
+            <OutputUnits>
+              <Name>count</Name>
+              <Description>None</Description>
+            </OutputUnits>
+          </InstrumentSensitivity>
+        </Response>
+      </Channel>
+      <Channel code="HHN" startDate="2007-01-01T10:00:00.000000Z" restrictedStatus="open" locationCode="">
+        <Comment>
+          <Value>sts2_s/n s/n</Value>
+        </Comment>
+        <Latitude unit="DEGREES">46.4258</Latitude>
+        <Longitude unit="DEGREES">12.7419</Longitude>
+        <Elevation>1417.0</Elevation>
+        <Depth>0.0</Depth>
+        <Azimuth unit="DEGREES">0.0</Azimuth>
+        <Dip unit="DEGREES">0.0</Dip>
+        <SampleRate unit="SAMPLES/S">100.0</SampleRate>
+        <ClockDrift unit="SECONDS/SAMPLE">0.0001</ClockDrift>
+        <CalibrationUnits>
+          <Name>V</Name>
+        </CalibrationUnits>
+        <Sensor>
+          <Type>Velocimeter</Type>
+          <Description>STRECKEISEN STS-2-120S</Description>
+          <Manufacturer>STRECKEISEN</Manufacturer>
+          <Model>STS-2-120S</Model>
+        </Sensor>
+        <DataLogger>
+          <Description>QUANTERRA Q330</Description>
+        </DataLogger>
+        <Response>
+          <InstrumentSensitivity>
+            <Value>629919000.0</Value>
+            <Frequency>0.4</Frequency>
+            <InputUnits>
+              <Name>m/s</Name>
+              <Description>None</Description>
+            </InputUnits>
+            <OutputUnits>
+              <Name>count</Name>
+              <Description>None</Description>
+            </OutputUnits>
+          </InstrumentSensitivity>
+        </Response>
+      </Channel>
+      <Channel code="HHZ" startDate="2007-01-01T10:00:00.000000Z" restrictedStatus="open" locationCode="">
+        <Comment>
+          <Value>sts2_s/n s/n</Value>
+        </Comment>
+        <Latitude unit="DEGREES">46.4258</Latitude>
+        <Longitude unit="DEGREES">12.7419</Longitude>
+        <Elevation>1417.0</Elevation>
+        <Depth>0.0</Depth>
+        <Azimuth unit="DEGREES">0.0</Azimuth>
+        <Dip unit="DEGREES">-90.0</Dip>
+        <SampleRate unit="SAMPLES/S">100.0</SampleRate>
+        <ClockDrift unit="SECONDS/SAMPLE">0.0001</ClockDrift>
+        <CalibrationUnits>
+          <Name>V</Name>
+        </CalibrationUnits>
+        <Sensor>
+          <Type>Velocimeter</Type>
+          <Description>STRECKEISEN STS-2-120S</Description>
+          <Manufacturer>STRECKEISEN</Manufacturer>
+          <Model>STS-2-120S</Model>
+        </Sensor>
+        <DataLogger>
+          <Description>QUANTERRA Q330</Description>
+        </DataLogger>
+        <Response>
+          <InstrumentSensitivity>
+            <Value>629919000.0</Value>
+            <Frequency>0.4</Frequency>
+            <InputUnits>
+              <Name>m/s</Name>
+              <Description>None</Description>
+            </InputUnits>
+            <OutputUnits>
+              <Name>count</Name>
+              <Description>None</Description>
+            </OutputUnits>
+          </InstrumentSensitivity>
+        </Response>
+      </Channel>
+      <Channel code="HGE" startDate="2007-01-01T10:00:00.000000Z" restrictedStatus="open" locationCode="">
+        <Comment>
+          <Value>epi_s/n s/n</Value>
+        </Comment>
+        <Latitude unit="DEGREES">46.4258</Latitude>
+        <Longitude unit="DEGREES">12.7419</Longitude>
+        <Elevation>1417.0</Elevation>
+        <Depth>0.0</Depth>
+        <Azimuth unit="DEGREES">90.0</Azimuth>
+        <Dip unit="DEGREES">0.0</Dip>
+        <SampleRate unit="SAMPLES/S">200.0</SampleRate>
+        <Sensor>
+          <Type>Accelerometer</Type>
+          <Description>Kinemetrics Episensor 200 Hz 10 Volt per g</Description>
+          <Manufacturer>Kinemetrics</Manufacturer>
+          <Model>Episensor</Model>
+        </Sensor>
+        <DataLogger>
+          <Description>Quanterra Q330 Linear</Description>
+          <Manufacturer>Quanterra</Manufacturer>
+          <Model>Q330</Model>
+        </DataLogger>
+        <Response>
+          <InstrumentSensitivity>
+            <Value>427818.59984829207</Value>
+            <Frequency>0.03</Frequency>
+            <InputUnits>
+              <Name>m/s**2</Name>
+              <Description>None</Description>
+            </InputUnits>
+            <OutputUnits>
+              <Name>count</Name>
+              <Description>None</Description>
+            </OutputUnits>
+          </InstrumentSensitivity>
+        </Response>
+      </Channel>
+      <Channel code="HGN" startDate="2007-01-01T10:00:00.000000Z" restrictedStatus="open" locationCode="">
+        <Comment>
+          <Value>epi_s/n s/n</Value>
+        </Comment>
+        <Latitude unit="DEGREES">46.4258</Latitude>
+        <Longitude unit="DEGREES">12.7419</Longitude>
+        <Elevation>1417.0</Elevation>
+        <Depth>0.0</Depth>
+        <Azimuth unit="DEGREES">0.0</Azimuth>
+        <Dip unit="DEGREES">0.0</Dip>
+        <SampleRate unit="SAMPLES/S">200.0</SampleRate>
+        <Sensor>
+          <Type>Accelerometr</Type>
+          <Description>Kinemetrics Episensor 200 Hz 10 Volt per g/Quanterra 330 Linea</Description>
+          <Manufacturer>Kinemetrics</Manufacturer>
+          <Model>Episensor</Model>
+        </Sensor>
+        <DataLogger>
+          <Description>Quanterra Q330 Linear</Description>
+          <Manufacturer>Quanterra</Manufacturer>
+          <Model>Q330</Model>
+        </DataLogger>
+        <Response>
+          <InstrumentSensitivity>
+            <Value>427818.59984829207</Value>
+            <Frequency>0.03</Frequency>
+            <InputUnits>
+              <Name>m/s**2</Name>
+              <Description>None</Description>
+            </InputUnits>
+            <OutputUnits>
+              <Name>count</Name>
+              <Description>None</Description>
+            </OutputUnits>
+          </InstrumentSensitivity>
+        </Response>
+      </Channel>
+      <Channel code="HGZ" startDate="2007-01-01T10:00:00.000000Z" restrictedStatus="open" locationCode="">
+        <Comment>
+          <Value>epi_s/n s/n</Value>
+        </Comment>
+        <Latitude unit="DEGREES">46.4258</Latitude>
+        <Longitude unit="DEGREES">12.7419</Longitude>
+        <Elevation>1417.0</Elevation>
+        <Depth>0.0</Depth>
+        <Azimuth unit="DEGREES">0.0</Azimuth>
+        <Dip unit="DEGREES">-90.0</Dip>
+        <SampleRate unit="SAMPLES/S">200.0</SampleRate>
+        <Sensor>
+          <Type>Accelerometer</Type>
+          <Description>Kinemetrics Episensor 200 Hz 10 Volt per g/Quanterra 330 Linea</Description>
+          <Manufacturer>Kinemetrics</Manufacturer>
+          <Model>Episensor</Model>
+        </Sensor>
+        <DataLogger>
+          <Description>Quanterra Q330 Linear</Description>
+          <Manufacturer>Quanterra</Manufacturer>
+          <Model>Q330</Model>
+        </DataLogger>
+        <Response>
+          <InstrumentSensitivity>
+            <Value>427818.59984829207</Value>
+            <Frequency>0.03</Frequency>
+            <InputUnits>
+              <Name>m/s**2</Name>
+              <Description>None</Description>
+            </InputUnits>
+            <OutputUnits>
+              <Name>count</Name>
+              <Description>None</Description>
+            </OutputUnits>
+          </InstrumentSensitivity>
+        </Response>
+      </Channel>
+    </Station>
+  </Network>
+</FDSNStationXML>

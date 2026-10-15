@@ -7,9 +7,9 @@ OGS Downloader - Multi-Backend FDSN Waveform Retrieval CLI
 
 OVERVIEW:
 Command-line tool that downloads waveform data (and associated station
-metadata) from FDSN-compatible data centers with ObsPy MassDownloader.
-The --pyrocko option selects an unimplemented backend and raises
-NotImplementedError. Downloads populate the daily OGS waveform archive.
+metadata) from FDSN-compatible data centers. Supports both ObsPy (default) and
+Pyrocko (--pyrocko) backends for retrieval. Downloads populate the daily OGS
+waveform archive.
 
 USAGE:
   python -m OGS.src.ogsdownloader --client INGV ETH \
@@ -26,6 +26,7 @@ USAGE:
 
 DEPENDENCIES:
   - ObsPy (clients.fdsn + mass_downloader): waveform and metadata retrieval
+  - Pyrocko (client.fdsn + io): alternative retrieval backend
   - ThreadPoolExecutor: per-day parallelism within a single backend run
   - ogsconstants: client name strings, separators, wildcard tokens
   - ogsutils: shared logging and validation helpers
@@ -45,15 +46,21 @@ AUTHORS:
 
 from abc import ABC, abstractmethod
 from argparse import Namespace
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import copy
 from datetime import datetime, time, timezone
 from fnmatch import fnmatchcase
+import multiprocessing
 from pathlib import Path
 import tempfile
 from typing import Any
 
 from obspy import UTCDateTime
-from obspy.clients.fdsn import Client as ObsPyFDSNClient
+from obspy.clients.fdsn import (
+    Client as ObsPyFDSNClient,
+    client as fdsn_client,
+)
+from obspy.clients.fdsn.header import FDSNNoDataException
 from obspy.clients.fdsn.mass_downloader import (
     CircularDomain,
     GlobalDomain,
@@ -61,6 +68,9 @@ from obspy.clients.fdsn.mass_downloader import (
     RectangularDomain,
     Restrictions,
 )
+from pyrocko import io as pyrocko_io
+from pyrocko.client import fdsn as pyrocko_fdsn
+from pyrocko.io import mseed as pyrocko_mseed, stationxml as pyrocko_sxml
 
 from . import ogsconstants as OGS_C, ogsutils as OGS_U
 
@@ -112,9 +122,10 @@ class BaseDownloader(ABC):
         ) for index in range((self.end - self.start).days + 1)]
     )
     self.main_workers = min(4, args.threads)
-    self.sub_workers = args.threads - self.main_workers
+    self.sub_workers = max(1, OGS_C.DEFAULT_CORES_COUNT // self.main_workers)
     self.networks, self.exclude_networks = self._filter(args.network)
     self.stations, self.exclude_stations = self._filter(args.station)
+    self.clients: list[Any] = []
     self.logger.info(
         "Prepared %s for %s through %s in %d time window(s), with up to "
         "%d main worker(s) and %d sub-worker(s).",
@@ -270,15 +281,76 @@ class BaseDownloader(ABC):
     return False
 
   @abstractmethod
+  def download_worker(self, window: TimeWindow) -> dict[str, Any]:
+    """Execute download for a single window inside a worker process."""
+    pass
+
+  def _probe_clients(self) -> None:
+    """Optional hook for upfront client verification."""
+    pass
+
   def download(self) -> None:
     """Execute backend waveform and metadata download across all configured windows."""
-    pass
+    self._probe_clients()
+    max_workers = max(1, min(self.main_workers, len(self.ranges)))
+    self.logger.info(
+        "Starting %d %s download window(s) with up to %d main worker(s) and "
+        "%d sub-worker(s) per active window.",
+        len(self.ranges), type(self).__name__, max_workers, self.sub_workers,
+    )
+    failures = 0
+    with ProcessPoolExecutor(
+        max_workers=max_workers,
+        mp_context=multiprocessing.get_context("spawn"),
+        max_tasks_per_child=1,
+    ) as executor:
+      futures = {
+          executor.submit(self.download_worker, window): window
+          for window in self.ranges
+      }
+      for future in as_completed(futures):
+        window = futures[future]
+        try:
+          future.result()
+        except Exception as error:
+          self.logger.error(
+              "[%s - %s] Download failed with error: %s",
+              window[0], window[1], error,
+          )
+          failures += 1
+      if failures:
+        self.logger.error(
+            "Completed %d download window(s) with %d failure(s).",
+            len(futures), failures,
+        )
+        raise SystemExit(1)
+      self.logger.info("All %d download window(s) completed.", len(futures))
 
 
 class ObsPyDownloader(BaseDownloader):
-  def __init__(self, args: Namespace) -> None:
-    super().__init__(args)
-    self.clients: list[ObsPyFDSNClient] = []
+  """Downloader implementation using the ObsPy FDSN client."""
+
+  _orig_raise_on_error = fdsn_client.raise_on_error
+
+  @staticmethod
+  def _safe_raise_on_error(code: Any, data: Any) -> Any:
+    if isinstance(data, Exception):
+      raise data
+    return ObsPyDownloader._orig_raise_on_error(code, data)
+
+  fdsn_client.raise_on_error = _safe_raise_on_error
+
+  def __getstate__(self) -> dict[str, Any]:
+    state = self.__dict__.copy()
+    state["clients"] = [copy.copy(c) for c in self.clients]
+    for c in state["clients"]:
+      c.__dict__.pop("_url_opener", None)
+    return state
+
+  def __setstate__(self, state: dict[str, Any]) -> None:
+    self.__dict__.update(state)
+    for c in self.clients:
+      c._set_opener(getattr(c, "user", None), None)
 
   def _probe_clients(self) -> None:
     query_window: TimeWindow = (self.ranges[0][0], self.ranges[-1][1])
@@ -290,9 +362,16 @@ class ObsPyDownloader(BaseDownloader):
         inventory = client.get_stations(
             **self.station_kwargs(query_window, level="channel"),
         )
+      except FDSNNoDataException:
+        self.logger.info(
+            "FDSN client '%s' has no data matching the requested constraints.",
+            name,
+        )
+        continue
       except Exception as error:
-        self.logger.error(
-            "Failed to query station metadata from FDSN client '%s': %s",
+        self.logger.warning(
+            "FDSN client '%s' unavailable during probe (%s); "
+            "skipping provider.",
             name, error,
         )
         continue
@@ -309,28 +388,10 @@ class ObsPyDownloader(BaseDownloader):
           "At least one FDSN client must have matching station channels.")
     self.logger.info("Initialized %d ObsPy FDSN client(s).", len(self.clients))
 
-  def _download_window(
-      self,
-      mass_downloader: MassDownloader,
-      domain: CircularDomain | GlobalDomain | RectangularDomain,
-      window: TimeWindow,
-  ) -> None:
+  def download_worker(self, window: TimeWindow) -> dict[str, Any]:
     self.logger.info(
-        "Starting download for window %s to %s.", window[0], window[1]
+        "[%s - %s] Window ObsPy download has started.", window[0], window[1]
     )
-    mass_downloader.download(
-        domain,
-        Restrictions(**self.download_kwargs(window)),
-        mseed_storage=self._waveform_storage,
-        stationxml_storage=str(self.args.stations),
-        threads_per_client=max(1, self.sub_workers),
-    )
-    self.logger.info(
-        "Completed download for window %s to %s.", window[0], window[1]
-    )
-
-  def download(self) -> None:
-    self._probe_clients()
     mass_downloader = MassDownloader(providers=self.clients)
     if self.args.circdomain:
       domain = CircularDomain(**self.domain_kwargs)
@@ -338,37 +399,20 @@ class ObsPyDownloader(BaseDownloader):
       domain = RectangularDomain(**self.domain_kwargs)
     else:
       domain = GlobalDomain()
-    self.logger.info(
-        "Using %s domain for waveform and station downloads: %s",
-        type(domain).__name__, self.domain_kwargs or "global",
+    mass_downloader.download(
+        domain,
+        Restrictions(**self.download_kwargs(window)),
+        mseed_storage=self._waveform_storage,
+        stationxml_storage=str(self.args.stations),
+        threads_per_client=max(1, self.sub_workers),
+        # 50 ch × 100 Hz × 86,400 s × (4/3 B/sample Steim) / 1024² B/MB
+        # ≈ 550 MB
+        download_chunk_size_in_mb=550,
     )
-
-    max_workers = max(1, min(self.main_workers, len(self.ranges)))
     self.logger.info(
-        "Starting %d download window(s) with up to %d main worker(s) and "
-        "%d sub-worker(s) per active window.",
-        len(self.ranges), max_workers, max(1, self.sub_workers),
+        "[%s - %s] Window ObsPy download completed.", window[0], window[1]
     )
-    with ThreadPoolExecutor(
-        max_workers=max_workers
-    ) as executor:
-      futures = {
-          executor.submit(
-              self._download_window, mass_downloader, domain, window
-          ): window
-          for window in self.ranges
-      }
-      for future in as_completed(futures):
-        window = futures[future]
-        try:
-          future.result()
-        except Exception as error:
-          self.logger.error(
-              "Download failed for date window %s to %s: %s",
-              window[0], window[1], error,
-          )
-          raise
-      self.logger.info("All %d download window(s) completed.", len(futures))
+    return {"window": window, "status": "SUCCESS"}
 
 
 PYROCKO_SITE_MAP = {
@@ -388,9 +432,6 @@ PYROCKO_SITE_MAP = {
 
 class PyrockoDownloader(BaseDownloader):
   """Waveform and metadata retrieval backend using Pyrocko FDSN."""
-  from pyrocko import io as pyrocko_io
-  from pyrocko.client import fdsn as pyrocko_fdsn
-  from pyrocko.io import mseed as pyrocko_mseed, stationxml as pyrocko_sxml
 
   def _resolve_site(self, name: str) -> str:
     upper_name = name.strip().upper()
@@ -422,11 +463,13 @@ class PyrockoDownloader(BaseDownloader):
       )
     except pyrocko_fdsn.EmptyResult:
       self.logger.info(
-          "No station metadata for site %s matching the selection.", site)
+          "No station metadata for site %s matching the selection.", site
+      )
       return None, []
     except Exception as error:
       self.logger.warning(
-          "Pyrocko station query failed for site %s: %s", site, error)
+          "Pyrocko station query failed for site %s: %s", site, error
+      )
       return None, []
 
     channels: list[tuple[str, str, str, str]] = []
@@ -441,9 +484,10 @@ class PyrockoDownloader(BaseDownloader):
         channels.append((net.code, sta.code, cha.location_code, cha.code))
     return sxml, channels
 
-  def _download_window(self, window: TimeWindow) -> None:
+  def download_worker(self, window: TimeWindow) -> dict[str, Any]:
     self.logger.info(
-        "Starting Pyrocko download for window %s to %s.", window[0], window[1])
+        "[%s - %s] Window Pyrocko download has started.", window[0], window[1]
+    )
     tmin = window[0].replace(tzinfo=timezone.utc).timestamp()
     tmax = window[1].replace(tzinfo=timezone.utc).timestamp()
 
@@ -475,7 +519,9 @@ class PyrockoDownloader(BaseDownloader):
               sub_sxml.dump_xml(filename=str(xml_path))
             except Exception as e:
               self.logger.debug(
-                  "Failed saving StationXML for %s.%s: %s", net.code, sta.code, e)
+                  "Failed saving StationXML for %s.%s: %s",
+                  net.code, sta.code, e
+              )
 
       # Filter channels whose daily waveform files already exist unless --force is given
       needed_channels: list[tuple[str, str, str, str]] = []
@@ -535,31 +581,9 @@ class PyrockoDownloader(BaseDownloader):
         )
 
     self.logger.info(
-        "Completed Pyrocko download for window %s to %s.", window[0], window[1])
-
-  def download(self) -> None:
-    max_workers = max(1, min(self.main_workers, len(self.ranges)))
-    self.logger.info(
-        "Starting %d Pyrocko download window(s) with up to %d worker(s).",
-        len(self.ranges), max_workers
+        "[%s - %s] Window Pyrocko download completed.", window[0], window[1]
     )
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-      futures = {
-          executor.submit(self._download_window, window): window
-          for window in self.ranges
-      }
-      for future in as_completed(futures):
-        window = futures[future]
-        try:
-          future.result()
-        except Exception as error:
-          self.logger.error(
-              "Pyrocko download failed for window %s to %s: %s",
-              window[0], window[1], error
-          )
-          raise
-    self.logger.info(
-        "All %d Pyrocko download window(s) completed.", len(futures))
+    return {"window": window, "status": "SUCCESS"}
 
 
 def data_downloader(args: Namespace) -> None:

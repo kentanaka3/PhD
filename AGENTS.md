@@ -3,7 +3,9 @@
 Shared rules for people and agents; [`CLAUDE.md`](CLAUDE.md), [`GEMINI.md`](GEMINI.md), and [`.github/copilot-instructions.md`](.github/copilot-instructions.md) may add guidance.
 
 > MUST ALWAYS ASK MANY QUESTIONS
-> Do not `git status`
+> Do not `git status` or `git diff` without explicit instruction.
+> Tests are always considered as legacy code in a development lifecycle workflow unless explicitly updated and verified.
+> Programming Style: Polymorphic Unification
 
 ## Authority and Evidence
 

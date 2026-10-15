@@ -203,11 +203,12 @@ configure_template() { # 13
 #   the active configuration. If no configuration is active, the function is
 #   a no-op. This makes it safe to call repeatedly from normal flow and from
 #   the EXIT trap.
-restore_template() { # 16
+restore_template() { # 17
   [ "$TEMPLATE_CONFIGURED" -eq 1 ] || return 0
   [[ $VERBOSE -ne 0 ]] && log "Restoring template"
+  local escaped_job_name=$(sed -E 's/\[|\]|\./\\&/g' <<< "$JOB_NAME")
   sed -i -E \
-    -e "s/(#SBATCH --job-name=\"${CURRENT_USER} )${JOB_NAME}/\1#/g" \
+    -e "s/(#SBATCH --job-name=\"${CURRENT_USER} )${escaped_job_name}/\1#/g" \
     -e "s/(#SBATCH --nodes=)${CURRENT_NODES}/\1#/g" \
     -e "s/(#SBATCH --tasks-per-node=)${CURRENT_TASKS}/\1#/g" \
     -e "s/(#SBATCH --gres=gpu:)${CURRENT_TASKS}/\1#/g" \

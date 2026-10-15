@@ -1,0 +1,53 @@
+# =============================================================================
+# OGS Test Pipeline Configuration - PhaseNet[INSTANCE,0.1] Rule Verification
+# =============================================================================
+# Corresponds to Makefile macro _PICKER_RULES:
+#   make PhaseNet[INSTANCE,0.1] YEAR=2024
+# Configured for offline local unit testing on staged March 27, 2024 waveforms.
+# =============================================================================
+
+log_level: DEBUG
+output_path: catalogs/Leonardo_Dev/PhaseNet/instance/0.1/2024
+
+builder:
+  _target_: OGS.src.ogsbuilder.OGSCatalogBuilder
+  outputs:
+    - picks
+
+data:
+  _target_: OGS.src.ogsdata.OGSSquirrelDataSource
+  paths:
+    - OGS/test/data/waveform
+    - OGS/test/data/station
+  channel_priorities:
+    - HH?
+    - EH?
+    - HN?
+    - HG?
+    - BH?
+  env: null
+  check: true
+  velocity_model:
+    _target_: pandas.read_csv
+    filepath_or_buffer: OGS/data/VelocityModel/1D/VelocityModel.csv
+  starttime: "2024-03-27"
+  endtime: "2024-03-27"
+
+group_modules:
+  picker:
+    _target_: OGS.src.ogspicker.OGSSeisBenchPicker
+    model:
+      _target_: seisbench.models.PhaseNet.from_pretrained
+      name: instance
+    classify_args:
+      P_threshold: 0.1
+      S_threshold: 0.1
+      batch_size: 1024
+    amplitude_extractor:
+      _target_: OGS.src.ogspicker.OGSAmplitudeExtractor
+      parallel: true
+      n_jobs: 4
+
+merge_module: null
+joint_modules: []
+

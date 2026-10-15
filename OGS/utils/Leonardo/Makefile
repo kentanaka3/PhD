@@ -2,22 +2,21 @@
 # AISeism Seismic Data Processing Pipeline for HPC workflow - Makefile
 # =============================================================================
 # Pipeline stages:
-#   1. DATA ACQUISITION   : download, compress, decompress, retrieve, station
+#   1. DATA ACQUISITION   : download, station, stations, Index, Indexes
 #   2. PHASE PICKING      : PhaseNet / EQTransformer with dataset+threshold args
 #   3. PHASE ASSOCIATION  : PyOcto / GaMMA / REAL with picker-input args
 #   4. EVENT LOCATION     : NLL1D / NLL3D with associator+picker-input args
-#   5. CATALOG MANAGEMENT : parse, clean
+#   5. CATALOG MANAGEMENT : parse, clean (resets workspace files)
 #
 # QUICK START / USAGE EXAMPLES:
 #   make help
 #   make init						    # Initialize the WORK directory structure
 #   make download           # Download waveforms for the default YEAR in $(STEP_DAYS)-day chunks
+#   make download BACKEND=pyrocko # Download waveforms using the Pyrocko backend
 #   make download START_DATE=20250127 STEP_DAYS=5
 #   make download OFFSET=5 END_DATE=20250213 STEP_DAYS=5 CORES=4
-#	  make compress           # Compress raw waveforms into yearly tar.gz files
-#	  make decompress         # Decompress yearly tar.gz files into raw waveforms
-#   make retrieve           # rsync waveforms to scratch for manual analysis
 #   make Index CORES=112    # Build/update Squirrel indexes for the waveform archive
+#   make Indexes CORES=112  # Submit indexing jobs for all YEARS
 #   make PyOcto             # Run PyOcto with the default picker input
 #   make GaMMA              # Run GaMMA with the default picker input
 #   make REAL               # Run REAL with the default picker input
@@ -29,7 +28,7 @@
 #   make stations YEARS="2005 2006 2007 2008 2009 2010" CORES=112
 #   make parse              # Merge manual OGS pick files into a unified catalog
 #   make parse START_DATE=20050101 END_DATE=20251231 CORES=112
-#   make clean              # WARNING: deletes generated catalogs
+#   make clean              # Reset initialized workspace links and launchers
 #   make MHPC               # Submit all registered models/assocs to SLURM for the given date range
 #   make PhD                # Submit all registered models/assocs to SLURM for the given date range
 #   make test               # Run a quick test of the ml_catalog_run entrypoint
@@ -75,6 +74,14 @@ NODES 		  ?= 1
 TASKS			  ?= 1
 CORES			  ?= 1
 CONDA_ENV   ?= SBC_3.12
+
+# Downloader Backend: strictly 'obspy' (default) or 'pyrocko'
+BACKEND     ?= obspy
+ifeq ($(filter obspy pyrocko,$(BACKEND)),)
+  $(error Invalid BACKEND '$(BACKEND)': must be either 'obspy' or 'pyrocko')
+endif
+DOWNLOAD_FLAG   := $(if $(filter pyrocko,$(BACKEND)),--pyrocko,)
+DOWNLOAD_SUFFIX := $(if $(filter pyrocko,$(BACKEND)),_Pyr,)
 
 # Date Variables
 YEAR        ?= 2026
@@ -148,8 +155,8 @@ LEARNING_RATE ?= 1e-2
 # -----------------------------------------------------------------------------
 .DEFAULT_GOAL := help
 
-.PHONY: help all init MHPC PhD parse test clean download station index \
-  Trainer $(MODELS) $(ASSOCS) $(NLLS)
+.PHONY: help all init MHPC PhD parse test clean download station stations \
+  Index Indexes Trainer $(MODELS) $(ASSOCS) $(NLLS) touch
 
 .SILENT: download
 
@@ -163,13 +170,15 @@ help: #
 	@echo "AISeism Makefile — common targets:"
 	@echo "  make init"
 	@echo "  make download                        (download waveforms in $(STEP_DAYS)-day chunks from $(START_DATE) to $(END_DATE))"
+	@echo "  make download   BACKEND=pyrocko      (download waveforms using the Pyrocko backend; default: obspy)"
 	@echo "  make download   YEAR=YYYY STEP_DAYS=N [CORES=N]"
 	@echo "  make download   START_DATE=YYYYMMDD END_DATE=YYYYMMDD STEP_DAYS=N [CORES=N]"
 	@echo "  make station    YEAR=YYYY            (generate station metadata for the given year)"
 	@echo "  make station    START_DATE=YYYYMMDD END_DATE=YYYYMMDD base=OGS/ALL [CORES=N]"
-	@echo "  make stations   											(submit station metadata jobs for all YEARS)"
+	@echo "  make stations                        (submit station metadata jobs for all YEARS)"
 	@echo "  make stations   YEARS=\"YYYY ...\" [CORES=N]"
 	@echo "  make Index                           (index the downloaded waveforms)"
+	@echo "  make Indexes                         (submit indexing jobs for all YEARS)"
 	@echo "  make Index      START_DATE=YYYYMMDD END_DATE=YYYYMMDD [CORES=N]"
 	@echo "  make PhaseNet | EQTransformer | ...	(picker models with default dataset/threshold)"
 	@echo "  make PhaseNet[INSTANCE,0.1] | EQTransformer[STEAD,0.2] | ...	(picker models with dataset/threshold overrides)"
@@ -184,7 +193,7 @@ help: #
 	@echo "  make MHPC                            (submit all registered models/assocs to SLURM for the given date range)"
 	@echo "  make PhD                             (submit all registered models/assocs to SLURM for the given date range)"
 	@echo "  make test                            (run a quick test of the SBC_RUN_BIN entrypoint)"
-	@echo "  make clean                           (WARNING: deletes generated catalogs)"
+	@echo "  make clean                           (WARNING: removes initialized workspace launchers and links)"
 	@echo "  make help                            (this message)"
 
 # =============================================================================
@@ -214,8 +223,9 @@ download: #
 		[ "$$end" -le "$(END_DATE)" ] || end="$(END_DATE)"; \
 		echo "Downloading waveforms $$start → $$end"; \
 		OVERRIDE_CORES=$(CORES) CORE_COUNT=$(CORES) \
-		bash LAUNCHME.sh download 1 1 "DownLoad_$${start}_$${end}" \
+		bash LAUNCHME.sh download 1 1 "DownLoad_$${start}_$${end}$(DOWNLOAD_SUFFIX)" \
 			$(PYTHON_BIN) -m OGS.src.ogsdownloader \
+				$(DOWNLOAD_FLAG) \
 				-D $$start $$end \
 				-W $(WAVEFORM_PATH) \
 				-S $(STATION_PATH) \
@@ -290,25 +300,6 @@ stations:
 INDEXER_YAML           ?= ogsdata.yaml
 PICKER                 ?= SeisBenchPicker
 PICKER_YAML            ?= ogsseisbenchpicker.yaml
-PICKER_YAML_PhaseNet      ?= $(PICKER_YAML)
-PICKER_YAML_EQTransformer ?= $(PICKER_YAML)
-
-ASSOC                  ?= OGSPickStatQC
-ASSOC_YAML             ?= ogspyocto.yaml
-ASSOC_YAML_PyOcto      ?= $(ASSOC_YAML)
-ASSOC_YAML_GaMMA       ?= ogsgamma.yaml
-ASSOC_YAML_REAL        ?= ogsreal.yaml
-
-LOCATOR                ?= OGSLocalMagnitude
-LOCATOR_YAML           ?= ogsnonlinloc1d.yaml
-LOCATOR_YAML_NLL1D     ?= $(LOCATOR_YAML)
-LOCATOR_YAML_NLL3D     ?= ogsnonlinloc3d.yaml
-
-# Reserved mapping for associator output folder names. The current locator
-# rules still symlink `OGSPickStatQC` directly.
-ASSOC_DIR_PyOcto       ?= PyOcto
-ASSOC_DIR_GaMMA        ?= GaMMA
-ASSOC_DIR_REAL         ?= REAL
 
 # =============================================================================
 # RULE GENERATORS
@@ -335,11 +326,13 @@ $1[%]:
 	mkdir -p "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$picker_id/SeisBenchPicker"; \
 	bash LAUNCHME.sh $$(SLURM_TEMPLATE) 1 1 "$$$$id" \
 	  $$(SBC_RUN_BIN) output_path="catalogs/$$(PROJECT)/$1/$$$$picker_id" \
-	  group_modules/picker=$(PICKER_YAML_$1) \
+	  group_modules=Picker \
+		group_modules/picker=$$(PICKER_YAML) \
 	  group_modules.picker.model._target_="seisbench.models.$1.from_pretrained" \
 	  group_modules.picker.model.name=$$$${dataset,,} \
 	  group_modules.picker.classify_args.P_threshold=$$$$threshold \
 	  group_modules.picker.classify_args.S_threshold=$$$$threshold \
+	  builder.outputs=[picks] \
 	  data.starttime="$(START_DATE_ISO)" data.endtime="$(END_DATE_ISO)"
 endef
 
@@ -361,7 +354,8 @@ $1[%]:
 	  "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$picker_id/SeisBenchPicker"; \
 	bash LAUNCHME.sh $$(SLURM_TEMPLATE) 1 1 "$$$$assoc_id" \
 	  $$(SBC_RUN_BIN) output_path="catalogs/$$(PROJECT)/$1/$$$$picker_id" \
-	  group_modules/associator=$(ASSOC_YAML_$1) \
+	  group_modules=Associator \
+		group_modules/associator=ogs$$(shell echo '$1' | tr '[:upper:]' '[:lower:]').yaml \
 	  data.starttime="$(START_DATE_ISO)" data.endtime="$(END_DATE_ISO)"
 endef
 
@@ -387,7 +381,8 @@ $1[%]:
 	  "$$(WORK_PATH)/catalogs/$$(PROJECT)/$1/$$$$assoc_id/SeisBenchPicker"; \
 	bash LAUNCHME.sh nonlinloc 1 1 "$$$$nll_id" \
 	  $$(SBC_RUN_BIN) output_path="catalogs/$$(PROJECT)/$1/$$$$assoc_id" \
-	  group_modules/nonlinloc=$(LOCATOR_YAML_$1) \
+	  group_modules=Locator \
+		group_modules/nonlinloc=ogs$$(shell echo '$1' | tr '[:upper:]' '[:lower:]').yaml \
 	  data.starttime="$(START_DATE_ISO)" data.endtime="$(END_DATE_ISO)"
 endef
 
@@ -483,7 +478,7 @@ parse: # 5
 test: # 2
 	$(SBC_RUN_BIN) output_path=$(base)/$(YEAR)
 
-# WARNING: deletes every generated catalog under $(WORK_PATH)/catalogs
+# WARNING: removes initialized workspace launchers and links under $(WORK_PATH)
 clean: #
 	@test -n "$(WORK_PATH)" && \
 	test "$(WORK_PATH)" != "/" || { \
@@ -495,6 +490,6 @@ clean: #
 	rm -rf -- conf data src test && \
 	rm -rf -- ACTIVATEME.sh common.sh download.sh dummy.sh index.sh init.sh \
 		ktanakah.sh LAUNCHME.sh LEONARDO.yml Makefile nonlinloc.sh parse.sh \
-		station.sh
+		station.sh touch.sh
 	#@echo "Removing generated catalogs below $(WORK_PATH)/catalogs"
 	#@test -n "$(WORK_PATH)" && rm -rf -- "$(WORK_PATH)/catalogs"/*

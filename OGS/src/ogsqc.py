@@ -146,8 +146,8 @@ class OGSEventStatQC(OGSPickStatQC):
       events = status.get_param("events")
       assignments = status.get_param("assignments")
       events_assignments = self._event_stats_qc(events, assignments)
-      status.set_cached_param(events_assignments[0], "events", self.name)
-      status.set_cached_param(events_assignments[1], "assignments", self.name)
+      status.set_param(events_assignments[0], "events", self.name)
+      status.set_param(events_assignments[1], "assignments", self.name)
 
   @dask.delayed
   def _event_stats_qc(
